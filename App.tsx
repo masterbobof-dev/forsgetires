@@ -8,6 +8,7 @@ import Footer from './components/Footer';
 import Gallery from './components/Gallery';
 import Prices from './components/Prices';
 import AdminPanel from './components/AdminPanel';
+import TyreShop from './components/TyreShop';
 import { ViewState } from './types';
 import { Lock, X, Loader2 } from 'lucide-react';
 import { supabase } from './supabaseClient';
@@ -20,6 +21,9 @@ const App: React.FC = () => {
   const [pinInput, setPinInput] = useState('');
   const [authError, setAuthError] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  
+  // Admin Mode: 'service' (Schedule/Clients) or 'tyre' (Shop/Orders)
+  const [adminMode, setAdminMode] = useState<'service' | 'tyre'>('service');
 
   const handleAdminAuth = () => {
      setShowAuthModal(true);
@@ -32,16 +36,21 @@ const App: React.FC = () => {
     setAuthError(false);
 
     try {
-      // Fetch PIN from DB
+      // Fetch PINs from DB
       const { data, error } = await supabase
         .from('settings')
-        .select('value')
-        .eq('key', 'admin_pin')
-        .single();
+        .select('key, value')
+        .in('key', ['admin_pin', 'tyre_admin_pin']);
       
-      const dbPin = data?.value || "1234"; // Fallback to 1234 if not set
+      const servicePin = data?.find(r => r.key === 'admin_pin')?.value || "1234";
+      const tyrePin = data?.find(r => r.key === 'tyre_admin_pin')?.value || "1994";
 
-      if (pinInput.trim() === dbPin) {
+      if (pinInput.trim() === servicePin) {
+        setAdminMode('service');
+        setCurrentView('admin');
+        setShowAuthModal(false);
+      } else if (pinInput.trim() === tyrePin) {
+        setAdminMode('tyre');
         setCurrentView('admin');
         setShowAuthModal(false);
       } else {
@@ -50,8 +59,13 @@ const App: React.FC = () => {
       }
     } catch (err) {
       console.error(err);
-      // Fallback in case of network error
+      // Fallback network error
       if (pinInput.trim() === "1234") {
+         setAdminMode('service');
+         setCurrentView('admin');
+         setShowAuthModal(false);
+      } else if (pinInput.trim() === "1994") {
+         setAdminMode('tyre');
          setCurrentView('admin');
          setShowAuthModal(false);
       } else {
@@ -65,11 +79,13 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (currentView) {
       case 'admin':
-        return <AdminPanel onLogout={() => setCurrentView('home')} />;
+        return <AdminPanel onLogout={() => setCurrentView('home')} mode={adminMode} />;
       case 'prices':
         return <Prices />;
       case 'gallery':
         return <Gallery />;
+      case 'shop':
+        return <TyreShop />;
       case 'home':
       default:
         return (

@@ -7,8 +7,15 @@ export const PHONE_NUMBER_2 = "063 582 38 58";
 export const PHONE_LINK_1 = "tel:+380991674424";
 export const PHONE_LINK_2 = "tel:+380635823858";
 
-// Google Maps Embed: Updated to point to "Sinelnikove, bldg 9"
-export const MAP_EMBED_URL = "https://maps.google.com/maps?q=%D0%BC.+%D0%A1%D0%B8%D0%BD%D0%B5%D0%BB%D1%8C%D0%BD%D0%B8%D0%BA%D0%BE%D0%B2%D0%B5,+%D0%B1%D1%83%D0%B4.+9&t=&z=15&ie=UTF8&iwloc=&output=embed";
+// Formspree Email Endpoint
+export const FORMSPREE_ENDPOINT = "https://formspree.io/f/xpweykjy";
+
+// Nova Poshta API Key (Replace with your own key from new.novaposhta.ua)
+// Leave empty if you don't have one yet, the UI will handle errors gracefully.
+export const NOVA_POSHTA_API_KEY = "3a2a7861937920721245786411516086"; 
+
+// Google Maps Embed: Updated to point to "Sinelnikove, vul. Kvitneva 9"
+export const MAP_EMBED_URL = "https://maps.google.com/maps?q=%D0%BC.+%D0%A1%D0%B8%D0%BD%D0%B5%D0%BB%D1%8C%D0%BD%D0%B8%D0%BA%D0%BE%D0%B2%D0%B5,+%D0%B2%D1%83%D0%BB.+%D0%9A%D0%B2%D1%96%D1%82%D0%BD%D0%B2%D0%B0+9&t=&z=15&ie=UTF8&iwloc=&output=embed";
 
 // Specific location link provided by user (for the "Get Directions" button)
 export const MAP_DIRECT_LINK = "https://share.google/PQZz6JyQrYR4Vayfv"; 

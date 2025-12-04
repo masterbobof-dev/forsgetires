@@ -7,15 +7,8 @@ export const PHONE_NUMBER_2 = "063 582 38 58";
 export const PHONE_LINK_1 = "tel:+380991674424";
 export const PHONE_LINK_2 = "tel:+380635823858";
 
-// Formspree Email Endpoint
-export const FORMSPREE_ENDPOINT = "https://formspree.io/f/xpweykjy";
-
-// Nova Poshta API Key (Replace with your own key from new.novaposhta.ua)
-// Leave empty if you don't have one yet, the UI will handle errors gracefully.
-export const NOVA_POSHTA_API_KEY = "3a2a7861937920721245786411516086"; 
-
-// Google Maps Embed: Updated to point to "Sinelnikove, vul. Kvitneva 9"
-export const MAP_EMBED_URL = "https://maps.google.com/maps?q=%D0%BC.+%D0%A1%D0%B8%D0%BD%D0%B5%D0%BB%D1%8C%D0%BD%D0%B8%D0%BA%D0%BE%D0%B2%D0%B5,+%D0%B2%D1%83%D0%BB.+%D0%9A%D0%B2%D1%96%D1%82%D0%BD%D0%B2%D0%B0+9&t=&z=15&ie=UTF8&iwloc=&output=embed";
+// Google Maps Embed: Updated to point to "Sinelnikove, bldg 9"
+export const MAP_EMBED_URL = "https://maps.google.com/maps?q=%D0%BC.+%D0%A1%D0%B8%D0%BD%D0%B5%D0%BB%D1%8C%D0%BD%D0%B8%D0%BA%D0%BE%D0%B2%D0%B5,+%D0%B1%D1%83%D0%B4.+9&t=&z=15&ie=UTF8&iwloc=&output=embed";
 
 // Specific location link provided by user (for the "Get Directions" button)
 export const MAP_DIRECT_LINK = "https://share.google/PQZz6JyQrYR4Vayfv"; 
@@ -59,7 +52,7 @@ export const BOOKING_SERVICES = [
   { id: 'repair', label: 'Ремонт 1 колеса', duration: 20 },
 ];
 
-export const WHEEL_RADII = ['R13', 'R14', 'R15', 'R16', 'R17', 'R18', 'R19', 'R20', 'R21'];
+export const WHEEL_RADII = ['R13', 'R14', 'R15', 'R16', 'R17', 'R18', 'R19', 'R20', 'R21', 'R22+'];
 
 export const ACCENT_COLOR = "#FFC300";
 
@@ -82,6 +75,7 @@ export const PRICING_DATA_CARS: PriceRow[] = [
   { radius: '19', removeInstall: '45', balancing: '90', mounting: '85', total1: '250', total4: '1000' },
   { radius: '20', removeInstall: '50', balancing: '95', mounting: '90', total1: '260', total4: '1040' },
   { radius: '21', removeInstall: '70', balancing: '100', mounting: '100', total1: '300', total4: '1200' },
+  { radius: '22', removeInstall: '75', balancing: '105', mounting: '110', total1: '320', total4: '1280' },
   { radius: 'Позашляховий протектор', removeInstall: '+10', balancing: '+5', mounting: '+10', total1: '+25', total4: '+100', isSurcharge: true },
 ];
 
@@ -94,6 +88,7 @@ export const PRICING_DATA_SUV: PriceRow[] = [
   { radius: '19', removeInstall: '60', balancing: '90', mounting: '95', total1: '270', total4: '1080' },
   { radius: '20', removeInstall: '65', balancing: '100', mounting: '100', total1: '290', total4: '1160' },
   { radius: '21', removeInstall: '70', balancing: '110', mounting: '110', total1: '320', total4: '1280' },
+  { radius: '22', removeInstall: '80', balancing: '120', mounting: '120', total1: '360', total4: '1440' },
   { radius: 'Позашляховий протектор', removeInstall: '+10', balancing: '+5', mounting: '+10', total1: '+25', total4: '+100', isSurcharge: true },
 ];
 

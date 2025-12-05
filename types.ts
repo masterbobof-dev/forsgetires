@@ -26,6 +26,8 @@ export interface TyreProduct {
   gallery?: string[];   // Array of image URLs
   radius?: string;
   created_at?: string;
+  in_stock?: boolean;   // Availability status
+  is_hot?: boolean;     // Hot deal / Sale status
   // Computed properties for filtering
   width?: string;
   height?: string;

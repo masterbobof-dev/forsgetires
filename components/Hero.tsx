@@ -1,13 +1,37 @@
 
-import React, { useState } from 'react';
-import { CreditCard, ShieldCheck, Coins, Coffee, Phone, AlertCircle, MapPin, CalendarDays } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { CreditCard, ShieldCheck, Coins, Coffee, Phone, AlertCircle, MapPin, CalendarDays, Flame, ChevronRight, ShoppingBag } from 'lucide-react';
 import { HERO_BG_IMAGE, PHONE_NUMBER_1, PHONE_NUMBER_2, PHONE_LINK_1, PHONE_LINK_2 } from '../constants';
 import BookingWizard from './BookingWizard';
+import { supabase } from '../supabaseClient';
+import { TyreProduct } from '../types';
 
-const Hero: React.FC = () => {
+interface HeroProps {
+  onShopRedirect: (tyre: TyreProduct) => void;
+}
+
+const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
   const [phone, setPhone] = useState('');
   const [showWizard, setShowWizard] = useState(false);
   const [error, setError] = useState('');
+  
+  // Hot Products State
+  const [hotTyres, setHotTyres] = useState<TyreProduct[]>([]);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const fetchHotTyres = async () => {
+      const { data } = await supabase
+        .from('tyres')
+        .select('*')
+        .eq('is_hot', true)
+        .order('created_at', { ascending: false })
+        .limit(10);
+      
+      if (data) setHotTyres(data);
+    };
+    fetchHotTyres();
+  }, []);
 
   const startBooking = () => {
     if (phone.length < 9) {
@@ -18,10 +42,20 @@ const Hero: React.FC = () => {
     setShowWizard(true);
   };
 
+  const handleScroll = (e: React.WheelEvent) => {
+    if (scrollRef.current) {
+      // If we scroll vertically with mouse wheel, translate it to horizontal scroll
+      if (e.deltaY !== 0) {
+         // e.preventDefault(); // Optional: Uncomment if you want to strictly lock page scroll while hovering
+         scrollRef.current.scrollLeft += e.deltaY;
+      }
+    }
+  };
+
   return (
-    <div className="relative w-full overflow-hidden">
+    <div className="relative w-full overflow-hidden pb-12">
       {/* Background Image Layer */}
-      <div className="absolute inset-0 z-0">
+      <div className="absolute inset-0 z-0 h-[120vh]">
         <img 
           src={HERO_BG_IMAGE}
           alt="Шиномонтаж Forsage Фасад" 
@@ -64,9 +98,9 @@ const Hero: React.FC = () => {
 
           {/* ONLINE BOOKING BLOCK */}
           <div className="w-full bg-[#18181b] border-l-4 border-[#FFC300] p-6 md:p-8 backdrop-blur-md rounded-r-lg shadow-[0_0_30px_rgba(255,195,0,0.15)]">
-            <h2 className="text-4xl md:text-6xl font-black text-[#FFC300] uppercase leading-tight mb-6 drop-shadow-md tracking-tight italic text-center md:text-left">
-              ОНЛАЙН ЗАПИС
-            </h2>
+            <h1 className="text-4xl md:text-6xl font-black text-[#FFC300] uppercase leading-tight mb-6 drop-shadow-md tracking-tight italic text-center md:text-left">
+              Професійний Шиномонтаж<br/><span className="text-white">в Синельникове (24/7)</span>
+            </h1>
             <div className="flex flex-col gap-4">
               <div className="flex flex-col md:flex-row gap-4 w-full">
                 <div className="relative flex-grow">
@@ -153,6 +187,58 @@ const Hero: React.FC = () => {
               </h3>
             </div>
           </div>
+
+          {/* HOT DEALS SLIDER */}
+          {hotTyres.length > 0 && (
+            <div className="mt-8">
+               <div className="flex items-center gap-3 mb-4 pl-1">
+                  <Flame className="text-orange-500 fill-orange-500 animate-pulse" size={28} />
+                  <h2 className="text-2xl md:text-3xl font-black text-white italic uppercase tracking-wide">
+                     Гарячі Пропозиції
+                  </h2>
+               </div>
+               
+               <div 
+                  ref={scrollRef}
+                  onWheel={handleScroll}
+                  className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory cursor-grab active:cursor-grabbing"
+                  style={{ scrollBehavior: 'smooth' }}
+               >
+                  {hotTyres.map((tyre) => (
+                     <div 
+                       key={tyre.id} 
+                       onClick={() => onShopRedirect(tyre)}
+                       className="flex-shrink-0 w-[33%] md:w-[20%] min-w-[140px] bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden hover:border-[#FFC300] transition-all snap-start group relative cursor-pointer hover:shadow-lg hover:shadow-yellow-900/10"
+                     >
+                        <div className="aspect-square bg-black relative">
+                           {tyre.image_url ? (
+                              <img src={tyre.image_url} alt={tyre.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                           ) : (
+                              <div className="w-full h-full flex items-center justify-center text-zinc-700">
+                                 <ShoppingBag size={24} />
+                              </div>
+                           )}
+                           <div className="absolute top-2 left-2 bg-orange-600 text-white text-[10px] font-black px-2 py-0.5 rounded uppercase">
+                              HOT
+                           </div>
+                        </div>
+                        <div className="p-3">
+                           <div className="h-9 mb-1 overflow-hidden">
+                              <h4 className="text-xs font-bold text-white leading-tight line-clamp-2">{tyre.title}</h4>
+                           </div>
+                           <div className="flex justify-between items-end mt-2">
+                              <span className="text-[#FFC300] font-black text-sm">{tyre.price} <span className="text-[10px] text-zinc-500 font-normal">грн</span></span>
+                              <div className="bg-zinc-800 p-1.5 rounded-lg text-zinc-400 group-hover:bg-[#FFC300] group-hover:text-black transition-colors">
+                                 <ChevronRight size={14} />
+                              </div>
+                           </div>
+                        </div>
+                     </div>
+                  ))}
+               </div>
+            </div>
+          )}
+
         </div>
       </div>
 

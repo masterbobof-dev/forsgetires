@@ -9,12 +9,14 @@ import Gallery from './components/Gallery';
 import Prices from './components/Prices';
 import AdminPanel from './components/AdminPanel';
 import TyreShop from './components/TyreShop';
-import { ViewState } from './types';
+import { ViewState, TyreProduct } from './types';
 import { Lock, X, Loader2 } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewState>('home');
+  const [shopCategory, setShopCategory] = useState<any>('all'); // State to pass to TyreShop
+  const [shopInitialProduct, setShopInitialProduct] = useState<TyreProduct | null>(null); // State for specific product
   
   // Auth Modal State
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -85,12 +87,17 @@ const App: React.FC = () => {
       case 'gallery':
         return <Gallery />;
       case 'shop':
-        return <TyreShop />;
+        return <TyreShop initialCategory={shopCategory} initialProduct={shopInitialProduct} />;
       case 'home':
       default:
         return (
           <>
-            <Hero />
+            <Hero onShopRedirect={(tyre) => {
+               setShopCategory('hot');
+               setShopInitialProduct(tyre);
+               setCurrentView('shop');
+               window.scrollTo({ top: 0, behavior: 'smooth' });
+            }} />
             <Services />
             <Contact />
           </>
@@ -103,7 +110,16 @@ const App: React.FC = () => {
       {currentView !== 'admin' && (
         <Header 
           currentView={currentView} 
-          onChangeView={setCurrentView} 
+          onChangeView={(view) => {
+             // Reset category to 'all' if user clicks standard nav buttons, 
+             // unless they specifically clicked Hot deal (which is handled in Hero prop)
+             if (view === 'shop') {
+                if (currentView !== 'home') setShopCategory('all');
+                // If navigating to shop manually (via menu), clear the specific product selection
+                setShopInitialProduct(null);
+             } 
+             setCurrentView(view);
+          }} 
           onAdminClick={handleAdminAuth} 
         />
       )}

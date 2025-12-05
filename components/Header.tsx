@@ -1,7 +1,8 @@
+
 import React from 'react';
 import Logo from './Logo';
 import { ViewState } from '../types';
-import { Menu, X, Phone, Lock } from 'lucide-react';
+import { Menu, X, Phone, Lock, ShoppingBag } from 'lucide-react';
 import { PHONE_NUMBER_1, PHONE_NUMBER_2, PHONE_LINK_1, PHONE_LINK_2 } from '../constants';
 
 interface HeaderProps {
@@ -15,6 +16,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick
 
   const navItems: { label: string; view: ViewState }[] = [
     { label: 'Головна', view: 'home' },
+    { label: 'Шини', view: 'shop' },
     { label: 'Ціни', view: 'prices' },
     { label: 'Фотогалерея', view: 'gallery' },
   ];
@@ -76,10 +78,11 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick
               <button
                 key={item.view}
                 onClick={() => handleNavClick(item.view)}
-                className={`text-sm lg:text-base font-bold uppercase tracking-wide transition-colors hover:text-[#FFC300] ${
+                className={`text-sm lg:text-base font-bold uppercase tracking-wide transition-colors hover:text-[#FFC300] flex items-center gap-1 ${
                   currentView === item.view ? 'text-[#FFC300]' : 'text-zinc-300'
                 }`}
               >
+                {item.view === 'shop' && <ShoppingBag size={16} className="-mt-1" />}
                 {item.label}
               </button>
             ))}
@@ -93,10 +96,13 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick
             </a>
             
             <button 
-              className="text-white p-1 active:scale-90 transition-transform"
+              className="flex items-center gap-2 bg-zinc-900 border border-zinc-700 hover:border-[#FFC300] text-white px-3 py-2 rounded-xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all group"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
             >
-              {isMenuOpen ? <X size={32} /> : <Menu size={32} />}
+              <span className="text-[#FFC300] group-hover:text-white transition-colors">
+                {isMenuOpen ? <X size={20} /> : <Menu size={20} />}
+              </span>
+              <span>Меню</span>
             </button>
           </div>
         </div>
@@ -131,10 +137,11 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick
               <button
                 key={item.view}
                 onClick={() => handleNavClick(item.view)}
-                className={`text-xl font-black uppercase italic tracking-wider text-left py-3 border-b border-white/5 ${
+                className={`text-xl font-black uppercase italic tracking-wider text-left py-3 border-b border-white/5 flex items-center gap-2 ${
                   currentView === item.view ? 'text-[#FFC300]' : 'text-zinc-300'
                 }`}
               >
+                {item.view === 'shop' && <ShoppingBag size={20} />}
                 {item.label}
               </button>
             ))}

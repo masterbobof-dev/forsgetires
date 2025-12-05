@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { TyreProduct, CartItem } from '../types';
-import { ShoppingBag, Loader2, Phone, X, Filter, Snowflake, Sun, CloudSun, Truck, Check, CreditCard, Wallet, ArrowDown, ShoppingCart, Plus, Minus, Trash2, ChevronLeft, ChevronRight, ZoomIn, Ban, Flame, Grid, ArrowUpDown, Search } from 'lucide-react';
+import { ShoppingBag, Loader2, Phone, X, Filter, Snowflake, Sun, CloudSun, Truck, Check, CreditCard, Wallet, ArrowDown, ShoppingCart, Plus, Minus, Trash2, ChevronLeft, ChevronRight, ZoomIn, Ban, Flame, Grid, ArrowUpDown, Search, Car, Mountain } from 'lucide-react';
 import { PHONE_LINK_1, PHONE_NUMBER_1, FORMSPREE_ENDPOINT } from '../constants';
 
 const MOCK_REGIONS = [
@@ -34,11 +34,13 @@ const formatPrice = (priceStr: string | undefined) => {
 };
 
 const CATEGORIES = [
-  { id: 'all', label: 'Всі шини', icon: Grid },
+  { id: 'all', label: 'Всі', icon: Grid },
+  { id: 'car', label: 'Легкові', icon: Car },
+  { id: 'suv', label: 'SUV 4x4', icon: Mountain },
+  { id: 'cargo', label: 'Вантажні (C)', icon: Truck },
   { id: 'winter', label: 'Зимові', icon: Snowflake },
   { id: 'summer', label: 'Літні', icon: Sun },
-  { id: 'all-season', label: 'Всесезонні', icon: CloudSun },
-  { id: 'cargo', label: 'Вантажні (C)', icon: Truck },
+  { id: 'all-season', label: 'Всесезон', icon: CloudSun },
   { id: 'hot', label: 'HOT Знижки', icon: Flame },
 ] as const;
 
@@ -165,7 +167,17 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
       }
 
       // 2. CATEGORY FILTERS
-      if (activeCategory === 'hot') {
+      if (activeCategory === 'car') {
+         // Show explicitly 'car', OR legacy items (null), EXCLUDING cargo/suv/C-types
+         query = query.or('vehicle_type.eq.car,vehicle_type.is.null')
+                      .neq('vehicle_type', 'cargo')
+                      .neq('vehicle_type', 'suv')
+                      .not('radius', 'ilike', '%C%');
+      } else if (activeCategory === 'suv') {
+         query = query.eq('vehicle_type', 'suv');
+      } else if (activeCategory === 'cargo') {
+         query = query.or('vehicle_type.eq.cargo,radius.ilike.%C%');
+      } else if (activeCategory === 'hot') {
          query = query.eq('is_hot', true);
       } else if (activeCategory === 'winter') {
          query = query.or('title.ilike.%winter%,title.ilike.%зима%,description.ilike.%winter%,description.ilike.%зима%');
@@ -173,9 +185,6 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
          query = query.or('title.ilike.%summer%,title.ilike.%літо%,description.ilike.%summer%,description.ilike.%літо%');
       } else if (activeCategory === 'all-season') {
          query = query.or('title.ilike.%all season%,title.ilike.%всесезон%,description.ilike.%all season%,description.ilike.%всесезон%');
-      } else if (activeCategory === 'cargo') {
-         // Check both DB column OR title keywords
-         query = query.or('vehicle_type.eq.cargo,radius.ilike.%C%,title.ilike.%R12C%,title.ilike.%R13C%,title.ilike.%R14C%,title.ilike.%R15C%,title.ilike.%R16C%,title.ilike.%R17C%,title.ilike.%R18C%,title.ilike.%R19C%,title.ilike.%LT%,title.ilike.%Cargo%,title.ilike.%Bus%');
       }
 
       // 3. SORTING
@@ -423,6 +432,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                         {tyre.season === 'summer' && <div className="bg-orange-500 text-white p-1 rounded shadow-lg" title="Літо"><Sun size={14} /></div>}
                         {tyre.season === 'all-season' && <div className="bg-green-600 text-white p-1 rounded shadow-lg" title="Всесезон"><CloudSun size={14} /></div>}
                         {tyre.vehicle_type === 'cargo' && <div className="bg-purple-600 text-white p-1 rounded shadow-lg" title="Вантажна"><Truck size={14} /></div>}
+                        {tyre.vehicle_type === 'suv' && <div className="bg-green-700 text-white p-1 rounded shadow-lg" title="SUV/4x4"><Mountain size={14} /></div>}
                      </div>
 
                      {tyre.in_stock === false && (

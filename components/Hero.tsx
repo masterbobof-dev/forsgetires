@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { CreditCard, ShieldCheck, Coins, Coffee, Phone, AlertCircle, MapPin, CalendarDays, Flame, ChevronRight, ShoppingBag } from 'lucide-react';
+import { CreditCard, ShieldCheck, Coins, Coffee, Phone, AlertCircle, MapPin, CalendarDays, Flame, ChevronRight, ChevronLeft, ShoppingBag } from 'lucide-react';
 import { HERO_BG_IMAGE, PHONE_NUMBER_1, PHONE_NUMBER_2, PHONE_LINK_1, PHONE_LINK_2 } from '../constants';
 import BookingWizard from './BookingWizard';
 import { supabase } from '../supabaseClient';
@@ -48,6 +48,17 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
       if (e.deltaY !== 0) {
          // e.preventDefault(); // Optional: Uncomment if you want to strictly lock page scroll while hovering
          scrollRef.current.scrollLeft += e.deltaY;
+      }
+    }
+  };
+
+  const scrollSlider = (direction: 'left' | 'right') => {
+    if (scrollRef.current) {
+      const scrollAmount = 300;
+      if (direction === 'left') {
+        scrollRef.current.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
+      } else {
+        scrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
       }
     }
   };
@@ -190,51 +201,75 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
 
           {/* HOT DEALS SLIDER */}
           {hotTyres.length > 0 && (
-            <div className="mt-8">
-               <div className="flex items-center gap-3 mb-4 pl-1">
-                  <Flame className="text-orange-500 fill-orange-500 animate-pulse" size={28} />
-                  <h2 className="text-2xl md:text-3xl font-black text-white italic uppercase tracking-wide">
-                     Гарячі Пропозиції
-                  </h2>
+            <div className="mt-8 group/slider-container">
+               <div className="flex items-center justify-between mb-4 pl-1">
+                  <div className="flex items-center gap-3">
+                    <Flame className="text-orange-500 fill-orange-500 animate-pulse" size={28} />
+                    <h2 className="text-2xl md:text-3xl font-black text-white italic uppercase tracking-wide">
+                       Гарячі Пропозиції
+                    </h2>
+                  </div>
+                  {/* Mobile Hint */}
+                  <span className="text-xs text-zinc-500 font-bold uppercase md:hidden flex items-center gap-1 animate-pulse">
+                    Гортайте <ChevronRight size={14} />
+                  </span>
                </div>
                
-               <div 
-                  ref={scrollRef}
-                  onWheel={handleScroll}
-                  className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory cursor-grab active:cursor-grabbing"
-                  style={{ scrollBehavior: 'smooth' }}
-               >
-                  {hotTyres.map((tyre) => (
-                     <div 
-                       key={tyre.id} 
-                       onClick={() => onShopRedirect(tyre)}
-                       className="flex-shrink-0 w-[33%] md:w-[20%] min-w-[140px] bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden hover:border-[#FFC300] transition-all snap-start group relative cursor-pointer hover:shadow-lg hover:shadow-yellow-900/10"
-                     >
-                        <div className="aspect-square bg-black relative">
-                           {tyre.image_url ? (
-                              <img src={tyre.image_url} alt={tyre.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                           ) : (
-                              <div className="w-full h-full flex items-center justify-center text-zinc-700">
-                                 <ShoppingBag size={24} />
+               <div className="relative">
+                  {/* Left Arrow */}
+                  <button 
+                    onClick={() => scrollSlider('left')}
+                    className="absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-black/70 hover:bg-[#FFC300] hover:text-black text-white p-3 rounded-r-xl backdrop-blur-sm transition-all opacity-0 group-hover/slider-container:opacity-100 hidden md:flex items-center justify-center shadow-lg border border-white/10"
+                  >
+                    <ChevronLeft size={28} strokeWidth={3} />
+                  </button>
+
+                  <div 
+                      ref={scrollRef}
+                      onWheel={handleScroll}
+                      className="flex gap-4 overflow-x-auto pb-6 pt-2 px-1 scrollbar-hide snap-x snap-mandatory cursor-grab active:cursor-grabbing"
+                      style={{ scrollBehavior: 'smooth' }}
+                  >
+                      {hotTyres.map((tyre) => (
+                        <div 
+                          key={tyre.id} 
+                          onClick={() => onShopRedirect(tyre)}
+                          className="flex-shrink-0 w-[40%] sm:w-[33%] md:w-[20%] min-w-[160px] bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden hover:border-[#FFC300] transition-all snap-start group relative cursor-pointer hover:shadow-lg hover:shadow-yellow-900/10 hover:-translate-y-1 duration-300"
+                        >
+                            <div className="aspect-square bg-black relative overflow-hidden">
+                              {tyre.image_url ? (
+                                  <img src={tyre.image_url} alt={tyre.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                              ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-zinc-700">
+                                    <ShoppingBag size={32} />
+                                  </div>
+                              )}
+                              <div className="absolute top-2 left-2 bg-orange-600 text-white text-[10px] font-black px-2 py-1 rounded uppercase shadow-md flex items-center gap-1">
+                                  <Flame size={10} className="fill-white" /> HOT
                               </div>
-                           )}
-                           <div className="absolute top-2 left-2 bg-orange-600 text-white text-[10px] font-black px-2 py-0.5 rounded uppercase">
-                              HOT
-                           </div>
-                        </div>
-                        <div className="p-3">
-                           <div className="h-9 mb-1 overflow-hidden">
-                              <h4 className="text-xs font-bold text-white leading-tight line-clamp-2">{tyre.title}</h4>
-                           </div>
-                           <div className="flex justify-between items-end mt-2">
-                              <span className="text-[#FFC300] font-black text-sm">{tyre.price} <span className="text-[10px] text-zinc-500 font-normal">грн</span></span>
-                              <div className="bg-zinc-800 p-1.5 rounded-lg text-zinc-400 group-hover:bg-[#FFC300] group-hover:text-black transition-colors">
-                                 <ChevronRight size={14} />
+                            </div>
+                            <div className="p-3 bg-zinc-900">
+                              <div className="h-10 mb-2 overflow-hidden">
+                                  <h4 className="text-xs font-bold text-white leading-tight line-clamp-2 group-hover:text-[#FFC300] transition-colors">{tyre.title}</h4>
                               </div>
-                           </div>
+                              <div className="flex justify-between items-end border-t border-zinc-800 pt-2">
+                                  <span className="text-[#FFC300] font-black text-base">{tyre.price} <span className="text-[10px] text-zinc-500 font-normal">грн</span></span>
+                                  <div className="bg-zinc-800 p-1.5 rounded-lg text-zinc-400 group-hover:bg-[#FFC300] group-hover:text-black transition-colors shadow-lg">
+                                    <ChevronRight size={16} />
+                                  </div>
+                              </div>
+                            </div>
                         </div>
-                     </div>
-                  ))}
+                      ))}
+                  </div>
+
+                  {/* Right Arrow */}
+                  <button 
+                    onClick={() => scrollSlider('right')}
+                    className="absolute right-0 top-1/2 -translate-y-1/2 z-20 bg-black/70 hover:bg-[#FFC300] hover:text-black text-white p-3 rounded-l-xl backdrop-blur-sm transition-all opacity-0 group-hover/slider-container:opacity-100 hidden md:flex items-center justify-center shadow-lg border border-white/10"
+                  >
+                    <ChevronRight size={28} strokeWidth={3} />
+                  </button>
                </div>
             </div>
           )}

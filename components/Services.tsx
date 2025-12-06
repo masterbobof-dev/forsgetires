@@ -19,9 +19,9 @@ const Services: React.FC = () => {
               <div className="bg-zinc-950 p-3 rounded-full border border-zinc-800 group-hover:border-[#FFC300] transition-colors">
                 <service.icon className="w-8 h-8 text-[#FFC300]" />
               </div>
-              <span className="text-xl font-bold text-zinc-100 group-hover:text-white leading-tight">
+              <h3 className="text-xl font-bold text-zinc-100 group-hover:text-white leading-tight">
                 {service.title}
-              </span>
+              </h3>
             </div>
           ))}
         </div>

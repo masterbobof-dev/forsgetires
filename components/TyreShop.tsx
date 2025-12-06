@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { TyreProduct, CartItem } from '../types';
-import { ShoppingBag, Loader2, Phone, X, Filter, Snowflake, Sun, CloudSun, Truck, Check, CreditCard, Wallet, ArrowDown, ShoppingCart, Plus, Minus, Trash2, ChevronLeft, ChevronRight, ZoomIn, Ban, Flame, Grid, ArrowUpDown, Search } from 'lucide-react';
+import { ShoppingBag, Loader2, Phone, X, Filter, Snowflake, Sun, CloudSun, Truck, Check, CreditCard, Wallet, ArrowDown, ShoppingCart, Plus, Minus, Trash2, ChevronLeft, ChevronRight, ZoomIn, Ban, Flame, Grid, ArrowUpDown, Search, DollarSign } from 'lucide-react';
 import { PHONE_LINK_1, PHONE_NUMBER_1, FORMSPREE_ENDPOINT } from '../constants';
 
 const MOCK_REGIONS = [
@@ -40,6 +40,7 @@ const CATEGORIES = [
   { id: 'all-season', label: 'Всесезонні', icon: CloudSun },
   { id: 'cargo', label: 'Вантажні (C)', icon: Truck },
   { id: 'hot', label: 'HOT Знижки', icon: Flame },
+  { id: 'out_of_stock', label: 'Немає в наявності', icon: Ban },
 ] as const;
 
 type CategoryType = typeof CATEGORIES[number]['id'];
@@ -71,6 +72,10 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   const [filterWidth, setFilterWidth] = useState('');
   const [filterHeight, setFilterHeight] = useState('');
   const [filterRadius, setFilterRadius] = useState('');
+  
+  // Price Range State
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
 
   const [orderName, setOrderName] = useState('');
   const [orderPhone, setOrderPhone] = useState('');
@@ -166,19 +171,31 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
 
       // 2. CATEGORY FILTERS
       if (activeCategory === 'hot') {
-         query = query.eq('is_hot', true);
+         query = query.eq('is_hot', true).neq('in_stock', false);
       } else if (activeCategory === 'winter') {
-         query = query.or('title.ilike.%winter%,title.ilike.%зима%,description.ilike.%winter%,description.ilike.%зима%');
+         query = query.or('title.ilike.%winter%,title.ilike.%зима%,description.ilike.%winter%,description.ilike.%зима%').neq('in_stock', false);
       } else if (activeCategory === 'summer') {
-         query = query.or('title.ilike.%summer%,title.ilike.%літо%,description.ilike.%summer%,description.ilike.%літо%');
+         query = query.or('title.ilike.%summer%,title.ilike.%літо%,description.ilike.%summer%,description.ilike.%літо%').neq('in_stock', false);
       } else if (activeCategory === 'all-season') {
-         query = query.or('title.ilike.%all season%,title.ilike.%всесезон%,description.ilike.%all season%,description.ilike.%всесезон%');
+         query = query.or('title.ilike.%all season%,title.ilike.%всесезон%,description.ilike.%all season%,description.ilike.%всесезон%').neq('in_stock', false);
       } else if (activeCategory === 'cargo') {
-         // Check both DB column OR title keywords
-         query = query.or('vehicle_type.eq.cargo,radius.ilike.%C%,title.ilike.%R12C%,title.ilike.%R13C%,title.ilike.%R14C%,title.ilike.%R15C%,title.ilike.%R16C%,title.ilike.%R17C%,title.ilike.%R18C%,title.ilike.%R19C%,title.ilike.%LT%,title.ilike.%Cargo%,title.ilike.%Bus%');
+         query = query.or('vehicle_type.eq.cargo,radius.ilike.%C%,title.ilike.%R12C%,title.ilike.%R13C%,title.ilike.%R14C%,title.ilike.%R15C%,title.ilike.%R16C%,title.ilike.%R17C%,title.ilike.%R18C%,title.ilike.%R19C%,title.ilike.%LT%,title.ilike.%Cargo%,title.ilike.%Bus%').neq('in_stock', false);
+      } else if (activeCategory === 'out_of_stock') {
+         query = query.eq('in_stock', false);
+      } else {
+         // Default 'all' - only in stock
+         query = query.neq('in_stock', false);
       }
 
-      // 3. SORTING
+      // 3. PRICE FILTERS
+      if (minPrice) {
+         query = query.gte('price', parseInt(minPrice));
+      }
+      if (maxPrice) {
+         query = query.lte('price', parseInt(maxPrice));
+      }
+
+      // 4. SORTING
       if (activeSort === 'with_photo') {
          query = query.order('image_url', { ascending: false, nullsFirst: false })
                       .order('created_at', { ascending: false });
@@ -290,7 +307,15 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   }, [tyres]);
 
   const filteredTyres = tyres.filter(t => (!filterWidth || t.width === filterWidth) && (!filterHeight || t.height === filterHeight) && (!filterRadius || t.radius === filterRadius));
-  const resetFilters = () => { setFilterWidth(''); setFilterHeight(''); setFilterRadius(''); setSearchQuery(''); handleForceSearch(); };
+  const resetFilters = () => { 
+      setFilterWidth(''); 
+      setFilterHeight(''); 
+      setFilterRadius(''); 
+      setSearchQuery(''); 
+      setMinPrice('');
+      setMaxPrice('');
+      handleForceSearch(); 
+  };
 
   return (
     <div className="min-h-screen bg-[#09090b] py-8 md:py-12 animate-in fade-in duration-500 pb-32">
@@ -362,8 +387,10 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
 
               {/* Bottom Row: Dropdowns */}
               <div className="flex flex-col lg:flex-row gap-4">
-                 {/* Size Filters - Expanded */}
-                 <div className="flex items-center gap-2 w-full lg:flex-grow">
+                 
+                 {/* Filters Container */}
+                 <div className="flex flex-col sm:flex-row gap-2 w-full lg:flex-grow">
+                    {/* Size Filters */}
                     <div className="grid grid-cols-3 gap-0 bg-black/50 rounded-xl border border-zinc-800 flex-grow overflow-hidden divide-x divide-zinc-800">
                        <div className="relative group">
                           <Filter size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-[#FFC300] hidden sm:block" />
@@ -376,13 +403,34 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                           <select value={filterRadius} onChange={(e) => setFilterRadius(e.target.value)} className="bg-transparent text-white text-xs md:text-sm font-bold p-3 w-full outline-none cursor-pointer hover:bg-zinc-800/50 transition-colors text-center"><option value="">Радіус</option>{options.radii.map(r => <option key={r} value={r}>{r}</option>)}</select>
                        </div>
                     </div>
-                    {(filterWidth || filterHeight || filterRadius || searchQuery) && (
+
+                    {/* Price Range Inputs */}
+                    <div className="flex items-center gap-2 bg-black/50 p-1 rounded-xl border border-zinc-800 px-3 sm:w-auto w-full justify-center">
+                        <span className="text-zinc-500 text-xs font-bold whitespace-nowrap">Ціна:</span>
+                        <input 
+                            type="number" 
+                            placeholder="Від" 
+                            value={minPrice} 
+                            onChange={(e) => setMinPrice(e.target.value)} 
+                            className="w-16 bg-transparent text-white text-sm font-bold p-2 outline-none text-center border-b border-zinc-700 focus:border-[#FFC300]"
+                        />
+                        <span className="text-zinc-600">-</span>
+                        <input 
+                            type="number" 
+                            placeholder="До" 
+                            value={maxPrice} 
+                            onChange={(e) => setMaxPrice(e.target.value)} 
+                            className="w-16 bg-transparent text-white text-sm font-bold p-2 outline-none text-center border-b border-zinc-700 focus:border-[#FFC300]"
+                        />
+                    </div>
+
+                    {(filterWidth || filterHeight || filterRadius || searchQuery || minPrice || maxPrice) && (
                        <button onClick={resetFilters} className="bg-zinc-800 text-white p-3 rounded-xl hover:bg-red-900/50 transition-colors flex-shrink-0 border border-zinc-700"><X size={20}/></button>
                     )}
                  </div>
 
                  {/* Sort */}
-                 <div className="w-full lg:w-auto lg:min-w-[220px]">
+                 <div className="w-full lg:w-auto lg:min-w-[200px]">
                     <div className="flex items-center gap-2 bg-black/50 p-1 rounded-xl border border-zinc-800 w-full">
                        <ArrowUpDown size={16} className="text-zinc-500 ml-2 flex-shrink-0" />
                        <select value={activeSort} onChange={(e) => setActiveSort(e.target.value as any)} className="bg-transparent text-white text-sm font-bold p-2 outline-none w-full cursor-pointer hover:text-[#FFC300]">

@@ -1,12 +1,13 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { Article } from '../types';
-import { Lightbulb, ChevronRight, X, Calendar } from 'lucide-react';
+import { Lightbulb, ChevronRight, ChevronLeft, X, Calendar } from 'lucide-react';
 
 const Tips: React.FC = () => {
   const [articles, setArticles] = useState<Article[]>([]);
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchArticles = async () => {
@@ -18,6 +19,28 @@ const Tips: React.FC = () => {
     };
     fetchArticles();
   }, []);
+
+  const handleScroll = (e: React.WheelEvent) => {
+    if (scrollRef.current) {
+      if (e.deltaY !== 0) {
+         scrollRef.current.scrollLeft += e.deltaY;
+      }
+    }
+  };
+
+  const scrollLeft = () => {
+    if (scrollRef.current) {
+      const cardWidth = scrollRef.current.firstChild instanceof HTMLElement ? scrollRef.current.firstChild.clientWidth : 300;
+      scrollRef.current.scrollBy({ left: -cardWidth, behavior: 'smooth' });
+    }
+  };
+
+  const scrollRight = () => {
+    if (scrollRef.current) {
+      const cardWidth = scrollRef.current.firstChild instanceof HTMLElement ? scrollRef.current.firstChild.clientWidth : 300;
+      scrollRef.current.scrollBy({ left: cardWidth, behavior: 'smooth' });
+    }
+  };
 
   if (articles.length === 0) return null;
 
@@ -31,43 +54,66 @@ const Tips: React.FC = () => {
            </h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {articles.map((article) => (
-            <div 
-              key={article.id} 
-              className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden hover:border-[#FFC300] transition-all group flex flex-col h-full"
+        <div className="relative group">
+            {/* Left Arrow (Desktop Only) */}
+            <button 
+              onClick={scrollLeft} 
+              className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 z-20 w-12 h-12 bg-black/80 rounded-full border border-zinc-700 items-center justify-center text-white hover:bg-[#FFC300] hover:text-black hover:border-[#FFC300] transition-all shadow-[0_0_20px_rgba(0,0,0,0.5)] opacity-0 group-hover:opacity-100 -translate-x-1/2 duration-300"
             >
-              <div className="h-48 overflow-hidden relative">
-                {article.image_url ? (
-                  <img 
-                    src={article.image_url} 
-                    alt={article.title} 
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-zinc-800 flex items-center justify-center text-zinc-600">
-                    <Lightbulb size={48} />
-                  </div>
-                )}
-                <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm text-zinc-300 text-xs px-2 py-1 rounded flex items-center gap-1">
-                   <Calendar size={12} /> {new Date(article.created_at).toLocaleDateString('uk-UA')}
-                </div>
-              </div>
-              
-              <div className="p-5 flex flex-col flex-grow">
-                <h3 className="text-xl font-bold text-white mb-3 line-clamp-2">{article.title}</h3>
-                <p className="text-zinc-400 text-sm line-clamp-3 mb-4 flex-grow">
-                  {article.content}
-                </p>
-                <button 
-                  onClick={() => setSelectedArticle(article)}
-                  className="mt-auto flex items-center gap-2 text-[#FFC300] font-bold text-sm hover:underline"
+                <ChevronLeft size={28} />
+            </button>
+
+            {/* Right Arrow (Desktop Only) */}
+            <button 
+              onClick={scrollRight} 
+              className="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-20 w-12 h-12 bg-black/80 rounded-full border border-zinc-700 items-center justify-center text-white hover:bg-[#FFC300] hover:text-black hover:border-[#FFC300] transition-all shadow-[0_0_20px_rgba(0,0,0,0.5)] opacity-0 group-hover:opacity-100 translate-x-1/2 duration-300"
+            >
+                <ChevronRight size={28} />
+            </button>
+
+            <div 
+              ref={scrollRef}
+              onWheel={handleScroll}
+              className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory cursor-grab active:cursor-grabbing px-1"
+            >
+              {articles.map((article) => (
+                <div 
+                  key={article.id} 
+                  className="flex-shrink-0 w-[45%] md:w-[32%] bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden hover:border-[#FFC300] transition-all group/card flex flex-col h-auto snap-start select-none"
                 >
-                  Читати повністю <ChevronRight size={16} />
-                </button>
-              </div>
+                  <div className="h-32 md:h-48 overflow-hidden relative">
+                    {article.image_url ? (
+                      <img 
+                        src={article.image_url} 
+                        alt={article.title} 
+                        className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-500"
+                        draggable="false"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-zinc-800 flex items-center justify-center text-zinc-600">
+                        <Lightbulb size={32} />
+                      </div>
+                    )}
+                    <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm text-zinc-300 text-[10px] md:text-xs px-2 py-1 rounded flex items-center gap-1">
+                      <Calendar size={10} /> {new Date(article.created_at).toLocaleDateString('uk-UA')}
+                    </div>
+                  </div>
+                  
+                  <div className="p-4 flex flex-col flex-grow">
+                    <h3 className="text-sm md:text-xl font-bold text-white mb-2 line-clamp-2 leading-tight">{article.title}</h3>
+                    <p className="text-zinc-400 text-xs md:text-sm line-clamp-3 mb-4 flex-grow leading-relaxed">
+                      {article.content}
+                    </p>
+                    <button 
+                      onClick={() => setSelectedArticle(article)}
+                      className="mt-auto flex items-center gap-2 text-[#FFC300] font-bold text-xs md:text-sm hover:underline"
+                    >
+                      Читати повністю <ChevronRight size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
         </div>
       </div>
 
@@ -94,7 +140,7 @@ const Tips: React.FC = () => {
                   <h3 className="text-2xl md:text-4xl font-black text-white mb-6 leading-tight">
                     {selectedArticle.title}
                   </h3>
-                  <div className="prose prose-invert prose-lg max-w-none text-zinc-300 whitespace-pre-line">
+                  <div className="prose prose-invert prose-lg max-w-none text-zinc-300 whitespace-pre-line text-sm md:text-base">
                     {selectedArticle.content}
                   </div>
                   <div className="mt-8 pt-6 border-t border-zinc-800 text-zinc-500 text-sm">

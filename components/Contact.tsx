@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { PhoneCall, MapPin, Navigation } from 'lucide-react';
 import { PHONE_NUMBER_1, PHONE_NUMBER_2, PHONE_LINK_1, PHONE_LINK_2, MAP_EMBED_URL, MAP_DIRECT_LINK } from '../constants';
@@ -16,7 +17,7 @@ const Contact: React.FC = () => {
              <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800">
                 <div className="flex items-center gap-3 mb-4 text-zinc-400">
                   <PhoneCall className="w-5 h-5" />
-                  <span className="uppercase tracking-widest text-sm font-bold">Телефонуйте</span>
+                  <h3 className="uppercase tracking-widest text-sm font-bold">Телефонуйте</h3>
                 </div>
                 
                 <div className="flex flex-col gap-4">
@@ -38,7 +39,7 @@ const Contact: React.FC = () => {
              <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800">
                <div className="flex items-center gap-3 mb-4 text-zinc-400">
                   <MapPin className="w-5 h-5" />
-                  <span className="uppercase tracking-widest text-sm font-bold">Навігація</span>
+                  <h3 className="uppercase tracking-widest text-sm font-bold">Навігація</h3>
                </div>
                <a href={MAP_DIRECT_LINK} target="_blank" rel="noopener noreferrer" className="block w-full">
                   <button className="w-full py-4 px-6 bg-[#FFC300] hover:bg-[#e6b000] text-black font-black text-xl rounded-xl transition-transform active:scale-95 flex items-center justify-center gap-3 animate-pulse">

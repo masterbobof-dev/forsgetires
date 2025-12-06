@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Lock, Trash2, Calendar, Users, Search, Plus, X, Image as ImageIcon, Settings, Upload, Save, Phone, AlertTriangle, DollarSign, Loader2, TrendingUp, ShoppingBag, FileSpreadsheet, CheckSquare, Square, Edit2, ArrowRight, ArrowLeft, ArrowDown, Clock, Move, History, Wand2, Percent, Printer, Filter, Flame, KeyRound, FileCheck, FileWarning, CheckCircle, Package, RotateCcw, ImagePlus, Eye, Menu, Folder, FolderOpen, Truck, Car, Mountain, Sparkles, HelpCircle, FileUp, ChevronDown, Copy, ArrowUpDown, Tag, ClipboardList, Lightbulb, FileText } from 'lucide-react';
+import { Lock, Trash2, Calendar, Users, Search, Plus, X, Image as ImageIcon, Settings, Upload, Save, Phone, AlertTriangle, DollarSign, Loader2, TrendingUp, ShoppingBag, FileSpreadsheet, CheckSquare, Square, Edit2, ArrowRight, ArrowLeft, ArrowDown, Clock, Move, History, Wand2, Percent, Printer, Filter, Flame, KeyRound, FileCheck, FileWarning, CheckCircle, Package, RotateCcw, ImagePlus, Eye, Menu, Folder, FolderOpen, Truck, Car, Mountain, Sparkles, HelpCircle, FileUp, ChevronDown, Copy, ArrowUpDown, Tag, ClipboardList, Lightbulb, FileText, Ban } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { BOOKING_SERVICES, WHEEL_RADII, WORK_START_HOUR, WORK_END_HOUR, PRICING_DATA_CARS, PRICING_DATA_SUV, ADDITIONAL_SERVICES, PriceRow } from '../constants';
 import { TyreProduct, TyreOrder, Article } from '../types';
@@ -92,9 +92,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
   const [tyrePage, setTyrePage] = useState(0);
   
   // Category / Folder State
-  const [tyreCategoryTab, setTyreCategoryTab] = useState<'all' | 'car' | 'cargo' | 'suv' | 'hot'>('all');
+  const [tyreCategoryTab, setTyreCategoryTab] = useState<'all' | 'car' | 'cargo' | 'suv' | 'hot' | 'out_of_stock'>('all');
   const [showCategoryMenu, setShowCategoryMenu] = useState(false);
-  const [categoryCounts, setCategoryCounts] = useState({ all: 0, car: 0, cargo: 0, suv: 0, hot: 0 });
+  const [categoryCounts, setCategoryCounts] = useState({ all: 0, car: 0, cargo: 0, suv: 0, hot: 0, out: 0 });
   
   // Sorting with Photos
   const [tyreSort, setTyreSort] = useState<'newest' | 'oldest' | 'price_asc' | 'price_desc' | 'with_photo' | 'no_photo'>('newest');
@@ -517,6 +517,23 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
   const [editingClient, setEditingClient] = useState<any | null>(null);
   const handleEditClientSave = async () => { if(!editingClient) return; const oldPhone = selectedClientHistory[0]?.customer_phone; if (oldPhone) { await supabase.from('bookings').update({ customer_name: editingClient.customer_name, customer_phone: editingClient.customer_phone }).eq('customer_phone', oldPhone); setEditingClient(null); setShowHistoryModal(false); fetchClients(); } };
   const deleteFromHistory = async (id: number) => { const { error } = await supabase.from('bookings').delete().eq('id', id); if (!error) { setClients(prev => prev.filter(c => c.id !== id)); setSelectedClientHistory(prev => prev.filter(c => c.id !== id)); } else showError("Помилка видалення"); };
+  
+  const handleDeleteClient = (phone: string) => {
+      setConfirmDialog({
+          isOpen: true,
+          title: "Видалити клієнта",
+          message: `Ви впевнені, що хочете видалити клієнта з телефоном ${phone}? Це призведе до видалення ВСІЄЇ історії його відвідувань.`,
+          action: async () => {
+              const { error } = await supabase.from('bookings').delete().eq('customer_phone', phone);
+              if (error) {
+                  showError("Помилка видалення: " + error.message);
+              } else {
+                  fetchClients();
+                  showError("Клієнта та його історію видалено.");
+              }
+          }
+      });
+  };
 
   const fetchGallery = async () => { const { data } = await supabase.from('gallery').select('*').order('created_at', { ascending: false }); if (data) setGalleryImages(data); };
   const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -583,12 +600,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
     try {
         const base = supabase.from('tyres').select('*', { count: 'exact', head: true });
         
-        const [all, car, cargo, suv, hot] = await Promise.all([
+        const [all, car, cargo, suv, hot, out] = await Promise.all([
             base.then(r => r.count),
-            supabase.from('tyres').select('*', { count: 'exact', head: true }).or('vehicle_type.eq.car,vehicle_type.is.null').neq('vehicle_type', 'cargo').neq('vehicle_type', 'suv').not('radius', 'ilike', '%C%').then(r => r.count),
-            supabase.from('tyres').select('*', { count: 'exact', head: true }).or('vehicle_type.eq.cargo,radius.ilike.%C%').then(r => r.count),
-            supabase.from('tyres').select('*', { count: 'exact', head: true }).eq('vehicle_type', 'suv').then(r => r.count),
-            supabase.from('tyres').select('*', { count: 'exact', head: true }).eq('is_hot', true).then(r => r.count)
+            supabase.from('tyres').select('*', { count: 'exact', head: true }).or('vehicle_type.eq.car,vehicle_type.is.null').neq('vehicle_type', 'cargo').neq('vehicle_type', 'suv').not('radius', 'ilike', '%C%').neq('in_stock', false).then(r => r.count),
+            supabase.from('tyres').select('*', { count: 'exact', head: true }).or('vehicle_type.eq.cargo,radius.ilike.%C%').neq('in_stock', false).then(r => r.count),
+            supabase.from('tyres').select('*', { count: 'exact', head: true }).eq('vehicle_type', 'suv').neq('in_stock', false).then(r => r.count),
+            supabase.from('tyres').select('*', { count: 'exact', head: true }).eq('is_hot', true).neq('in_stock', false).then(r => r.count),
+            supabase.from('tyres').select('*', { count: 'exact', head: true }).eq('in_stock', false).then(r => r.count)
         ]);
 
         setCategoryCounts({ 
@@ -596,7 +614,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
             car: car || 0, 
             cargo: cargo || 0, 
             suv: suv || 0, 
-            hot: hot || 0 
+            hot: hot || 0,
+            out: out || 0
         });
     } catch (e) { console.error("Category counts error", e); }
   };
@@ -818,13 +837,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
        if (tyreSearch.trim().length > 0) query = query.or(`title.ilike.%${tyreSearch.trim()}%,catalog_number.ilike.%${tyreSearch.trim()}%,radius.ilike.%${tyreSearch.trim()}%`);
        
        if (tyreCategoryTab === 'car') {
-           query = query.or('vehicle_type.eq.car,vehicle_type.is.null').neq('vehicle_type', 'cargo').neq('vehicle_type', 'suv').not('radius', 'ilike', '%C%');
+           query = query.or('vehicle_type.eq.car,vehicle_type.is.null').neq('vehicle_type', 'cargo').neq('vehicle_type', 'suv').not('radius', 'ilike', '%C%').neq('in_stock', false);
        } else if (tyreCategoryTab === 'cargo') {
-           query = query.or('vehicle_type.eq.cargo,radius.ilike.%C%'); 
+           query = query.or('vehicle_type.eq.cargo,radius.ilike.%C%').neq('in_stock', false); 
        } else if (tyreCategoryTab === 'suv') {
-           query = query.eq('vehicle_type', 'suv');
+           query = query.eq('vehicle_type', 'suv').neq('in_stock', false);
        } else if (tyreCategoryTab === 'hot') {
-           query = query.eq('is_hot', true);
+           query = query.eq('is_hot', true).neq('in_stock', false);
+       } else if (tyreCategoryTab === 'out_of_stock') {
+           query = query.eq('in_stock', false);
+       } else {
+           query = query.neq('in_stock', false); // Default 'all' shows only in_stock
        }
 
        // Sorting Logic
@@ -1196,19 +1219,77 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
     }
   };
 
-  const applyBulkMarkup = async () => {
-    if (!bulkMarkup || selectedTyreIds.size === 0) return;
-    setIsApplyingBulk(true);
-    try {
-        const { data: currentItems } = await supabase.from('tyres').select('id, price, base_price').in('id', Array.from(selectedTyreIds));
-        if (currentItems) {
-            for (const item of currentItems) {
-                const base = item.base_price ? parseFloat(item.base_price) : parseFloat(item.price);
-                if (!isNaN(base)) await supabase.from('tyres').update({ price: Math.round(base * (1 + parseFloat(bulkMarkup.replace(',', '.')) / 100)).toString() }).eq('id', item.id);
-            }
-            showError("Ціни оновлено!"); fetchTyres(0, true); setSelectedTyreIds(new Set()); setBulkMarkup('');
-        }
-    } catch (err: any) { showError(err.message); } finally { setIsApplyingBulk(false); }
+  const processBulkPriceUpdate = async (percent: number) => {
+      setIsApplyingBulk(true);
+      try {
+          const factor = 1 + (percent / 100);
+          const updateItem = async (item: any) => {
+              const currentPrice = parseFloat(item.price);
+              if (!isNaN(currentPrice)) {
+                  const newPrice = Math.round(currentPrice * factor).toString();
+                  await supabase.from('tyres').update({ price: newPrice }).eq('id', item.id);
+              }
+          };
+
+          if (selectedTyreIds.size > 0) {
+              // Update selected only
+              const { data: items } = await supabase.from('tyres').select('id, price').in('id', Array.from(selectedTyreIds));
+              if (items) {
+                  for (const item of items) await updateItem(item);
+                  showError(`Оновлено цін: ${items.length}`);
+              }
+          } else {
+              // Update ALL matching current filters
+              // We need to fetch IDs based on current filter state
+              let query = supabase.from('tyres').select('id, price');
+              // Re-apply filters from fetchTyres logic (simplified)
+              if (tyreSearch.trim().length > 0) query = query.or(`title.ilike.%${tyreSearch.trim()}%,catalog_number.ilike.%${tyreSearch.trim()}%,radius.ilike.%${tyreSearch.trim()}%`);
+              
+              if (tyreCategoryTab === 'car') query = query.or('vehicle_type.eq.car,vehicle_type.is.null').neq('vehicle_type', 'cargo').neq('vehicle_type', 'suv').not('radius', 'ilike', '%C%').neq('in_stock', false);
+              else if (tyreCategoryTab === 'cargo') query = query.or('vehicle_type.eq.cargo,radius.ilike.%C%').neq('in_stock', false);
+              else if (tyreCategoryTab === 'suv') query = query.eq('vehicle_type', 'suv').neq('in_stock', false);
+              else if (tyreCategoryTab === 'hot') query = query.eq('is_hot', true).neq('in_stock', false);
+              else if (tyreCategoryTab === 'out_of_stock') query = query.eq('in_stock', false);
+              else query = query.neq('in_stock', false);
+
+              const { data: allItems } = await query;
+              
+              if (allItems && allItems.length > 0) {
+                  // Confirm massive update if > 10 items
+                  if (allItems.length > 10 && !confirm(`Ви збираєтесь змінити ціни для ${allItems.length} товарів. Продовжити?`)) {
+                      setIsApplyingBulk(false);
+                      return;
+                  }
+                  
+                  const BATCH = 50;
+                  for (let i = 0; i < allItems.length; i += BATCH) {
+                      const chunk = allItems.slice(i, i + BATCH);
+                      await Promise.all(chunk.map(updateItem));
+                  }
+                  showError(`Масово оновлено ${allItems.length} товарів.`);
+              } else {
+                  showError("Немає товарів для оновлення за поточними фільтрами.");
+              }
+          }
+          
+          fetchTyres(0, true);
+          setSelectedTyreIds(new Set());
+          setBulkMarkup('');
+      } catch (e: any) {
+          showError("Помилка: " + e.message);
+      } finally {
+          setIsApplyingBulk(false);
+      }
+  };
+
+  const handleBulkPriceUpdate = (multiplier: number) => {
+      if (!bulkMarkup) {
+          showError("Введіть відсоток!");
+          return;
+      }
+      const val = parseFloat(bulkMarkup.replace(',', '.'));
+      if (isNaN(val)) return;
+      processBulkPriceUpdate(val * multiplier);
   };
 
   const TablePriceEditor = ({ data, category }: { data: PriceRow[], category: 'cars' | 'suv' }) => (
@@ -1227,6 +1308,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
           case 'cargo': return `Вантажні (C) (${categoryCounts.cargo})`;
           case 'suv': return `Позашляховики (${categoryCounts.suv})`;
           case 'hot': return `HOT Знижки (${categoryCounts.hot})`;
+          case 'out_of_stock': return `Немає в наявності (${categoryCounts.out})`;
           default: return `Всі Товари (${categoryCounts.all})`;
       }
   };
@@ -1293,7 +1375,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
             <div className="animate-in fade-in">
                <h3 className="text-2xl font-black text-white mb-6 flex items-center gap-2"><Users className="text-[#FFC300]"/> База Клієнтів</h3>
                <div className="mb-4 relative max-w-md"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={18} /><input type="text" placeholder="Пошук за номером телефону..." value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} className="w-full bg-zinc-900 border border-zinc-700 rounded-xl pl-10 pr-4 py-3 outline-none focus:border-[#FFC300] text-white"/></div>
-               <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-xl"><table className="w-full text-left text-sm"><thead className="bg-black text-zinc-500 uppercase font-bold text-xs"><tr><th className="p-4">Ім'я</th><th className="p-4">Телефон</th><th className="p-4">Візитів</th><th className="p-4 text-right">Останній візит</th><th className="p-4"></th></tr></thead><tbody className="divide-y divide-zinc-800">{uniqueClients.map((c, idx) => (<tr key={idx} className="hover:bg-zinc-800/50 cursor-pointer group" onClick={() => openClientHistory(c.customer_phone)}><td className="p-4 font-bold text-white text-lg">{c.customer_name}</td><td className="p-4 font-mono text-[#FFC300] font-bold">{c.customer_phone}</td><td className="p-4 text-zinc-400 font-bold">{c.total_visits}</td><td className="p-4 text-right text-zinc-400">{c.booking_date}</td><td className="p-4 text-right"><History className="inline text-zinc-600 group-hover:text-[#FFC300]" size={18} /></td></tr>))}</tbody></table></div>
+               <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-xl"><table className="w-full text-left text-sm"><thead className="bg-black text-zinc-500 uppercase font-bold text-xs"><tr><th className="p-4">Ім'я</th><th className="p-4">Телефон</th><th className="p-4">Візитів</th><th className="p-4 text-right">Останній візит</th><th className="p-4"></th></tr></thead><tbody className="divide-y divide-zinc-800">{uniqueClients.map((c, idx) => (<tr key={idx} className="hover:bg-zinc-800/50 cursor-pointer group" onClick={() => openClientHistory(c.customer_phone)}><td className="p-4 font-bold text-white text-lg">{c.customer_name}</td><td className="p-4 font-mono text-[#FFC300] font-bold">{c.customer_phone}</td><td className="p-4 text-zinc-400 font-bold">{c.total_visits}</td><td className="p-4 text-right text-zinc-400">{c.booking_date}</td><td className="p-4 text-right flex justify-end gap-2"><button onClick={(e) => { e.stopPropagation(); openClientHistory(c.customer_phone); }} className="p-2 rounded bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700"><History size={18} /></button><button onClick={(e) => { e.stopPropagation(); handleDeleteClient(c.customer_phone); }} className="p-2 rounded bg-red-900/20 text-red-500 hover:bg-red-600 hover:text-white transition-colors"><Trash2 size={18} /></button></td></tr>))}</tbody></table></div>
             </div>
          )}
          
@@ -1475,8 +1557,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
                            <button onClick={() => { setTyreCategoryTab('suv'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 transition-colors border-b border-zinc-800/50">
                               <Mountain size={18} className="text-green-400"/> Позашляховики <span className="ml-auto bg-green-900/50 text-xs px-2 py-0.5 rounded-full text-green-200">{categoryCounts.suv}</span>
                            </button>
-                           <button onClick={() => { setTyreCategoryTab('hot'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 transition-colors">
+                           <button onClick={() => { setTyreCategoryTab('hot'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 transition-colors border-b border-zinc-800/50">
                               <Flame size={18} className="text-orange-500"/> HOT Знижки <span className="ml-auto bg-orange-900/50 text-xs px-2 py-0.5 rounded-full text-orange-200">{categoryCounts.hot}</span>
+                           </button>
+                           <button onClick={() => { setTyreCategoryTab('out_of_stock'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-red-900/20 flex items-center gap-3 transition-colors text-red-400">
+                              <Ban size={18}/> Немає в наявності <span className="ml-auto bg-red-900/50 text-xs px-2 py-0.5 rounded-full text-red-200">{categoryCounts.out}</span>
                            </button>
                         </div>
                      )}
@@ -1550,8 +1635,32 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
                   </div>
                </div>
                
-               {/* List View */}
-               {selectedTyreIds.size > 0 && <div className="bg-[#FFC300] text-black p-3 rounded-xl flex items-center justify-between mb-4"><div className="font-bold flex items-center gap-2"><CheckSquare size={18}/> Обрано: {selectedTyreIds.size}</div><div className="flex items-center gap-2"><input type="text" value={bulkMarkup} onChange={e => setBulkMarkup(e.target.value)} placeholder="%" className="w-24 p-2 rounded bg-white border border-black/20 text-center font-bold" /><button onClick={applyBulkMarkup} disabled={isApplyingBulk} className="bg-black text-white px-4 py-2 rounded-lg font-bold">{isApplyingBulk ? '...' : 'Ок'}</button></div></div>}
+               {/* Bulk Price Management */}
+               <div className="bg-zinc-800 border border-zinc-700 rounded-xl p-3 mb-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="text-zinc-400 font-bold text-sm uppercase flex items-center gap-2">
+                     <Settings size={16} className="text-[#FFC300]" /> 
+                     <span>Масове управління цінами</span>
+                     <span className="text-xs normal-case opacity-50 ml-1">(для {selectedTyreIds.size > 0 ? `обраних: ${selectedTyreIds.size}` : 'всіх у списку'})</span>
+                  </div>
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                     <input 
+                        type="text" 
+                        value={bulkMarkup} 
+                        onChange={e => setBulkMarkup(e.target.value)} 
+                        placeholder="%" 
+                        className="w-16 p-2 rounded-lg bg-black border border-zinc-600 text-white text-center font-bold outline-none focus:border-[#FFC300]" 
+                     />
+                     <button onClick={() => handleBulkPriceUpdate(1)} disabled={isApplyingBulk} className="flex-1 sm:flex-none bg-green-900/50 text-green-200 px-4 py-2 rounded-lg font-bold border border-green-800 hover:bg-green-800 flex items-center justify-center gap-1 transition-colors">
+                        <ArrowRight size={14} className="-rotate-45"/> + Ціна
+                     </button>
+                     <button onClick={() => handleBulkPriceUpdate(-1)} disabled={isApplyingBulk} className="flex-1 sm:flex-none bg-red-900/50 text-red-200 px-4 py-2 rounded-lg font-bold border border-red-800 hover:bg-red-800 flex items-center justify-center gap-1 transition-colors">
+                        <ArrowRight size={14} className="rotate-45"/> - Ціна
+                     </button>
+                  </div>
+               </div>
+               
+               {/* List View Info */}
+               {selectedTyreIds.size > 0 && <div className="bg-[#FFC300] text-black p-3 rounded-xl flex items-center justify-between mb-4"><div className="font-bold flex items-center gap-2"><CheckSquare size={18}/> Обрано: {selectedTyreIds.size}</div></div>}
                
                <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-x-auto min-h-[500px]">
                   <table className="w-full text-left text-sm">
@@ -1570,7 +1679,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
                      </thead>
                      <tbody className="divide-y divide-zinc-800">
                         {tyres.map(t => (
-                           <tr key={t.id} className={`hover:bg-zinc-800/50 ${selectedTyreIds.has(t.id) ? 'bg-[#FFC300]/10' : ''}`}>
+                           <tr key={t.id} className={`hover:bg-zinc-800/50 ${selectedTyreIds.has(t.id) ? 'bg-[#FFC300]/10' : ''} ${t.in_stock === false ? 'opacity-50 grayscale' : ''}`}>
                               <td className="p-4"><button onClick={() => {const n=new Set(selectedTyreIds); if(n.has(t.id))n.delete(t.id); else n.add(t.id); setSelectedTyreIds(n);}}>{selectedTyreIds.has(t.id)?<CheckSquare size={16} className="text-[#FFC300]"/>:<Square size={16}/>}</button></td>
                               
                               <td className="p-4 w-40 relative">
@@ -1583,6 +1692,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
                                     ) : (
                                        <div className="w-full h-full flex items-center justify-center text-[10px]">NO</div>
                                     )}
+                                    {t.in_stock === false && <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-red-500 font-bold uppercase text-[10px] border-2 border-red-500 m-2">Немає</div>}
                                  </div>
                               </td>
                               

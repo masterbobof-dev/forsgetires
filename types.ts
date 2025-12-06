@@ -18,8 +18,9 @@ export interface TyreProduct {
   id: number;
   title: string;
   description: string;
-  price: string;        // Retail Price (Роздріб)
-  base_price?: string;  // Base Price (Ваша ціна)
+  price: string;        // Retail Price (New/Current Price)
+  base_price?: string;  // Base Price (Cost)
+  old_price?: string;   // Old Price (Crossed out)
   catalog_number?: string; // Catalog Number
   manufacturer?: string;
   image_url: string;
@@ -56,4 +57,12 @@ export interface TyreOrder {
   delivery_city?: string;
   delivery_warehouse?: string;
   payment_method?: 'prepayment' | 'full';
+}
+
+export interface Article {
+  id: number;
+  title: string;
+  content: string;
+  image_url?: string;
+  created_at: string;
 }

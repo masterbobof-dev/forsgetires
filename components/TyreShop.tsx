@@ -417,12 +417,16 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
         ) : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6 px-2">
-               {filteredTyres.map((tyre) => (
+               {filteredTyres.map((tyre) => {
+                  // Determine display price logic
+                  const hasDiscount = tyre.old_price && parseFloat(tyre.old_price) > parseFloat(tyre.price);
+                  return (
                   <div key={tyre.id} className={`bg-zinc-900 border rounded-xl overflow-hidden hover:border-[#FFC300] transition-colors group flex flex-col relative ${tyre.in_stock === false ? 'border-zinc-800 opacity-70' : 'border-zinc-800'}`}>
                      
                      {/* BADGES */}
                      <div className="absolute top-2 left-2 z-10 flex flex-wrap gap-1 max-w-[80%]">
                         {tyre.is_hot && <div className="bg-orange-600 text-white p-1 rounded shadow-lg flex items-center gap-1 text-[10px] font-bold px-2 uppercase"><Flame size={12} className="fill-current"/> HOT</div>}
+                        {hasDiscount && <div className="bg-red-600 text-white p-1 rounded shadow-lg flex items-center gap-1 text-[10px] font-bold px-2 uppercase">SALE</div>}
                         {tyre.season === 'winter' && <div className="bg-blue-600 text-white p-1 rounded shadow-lg" title="Зима"><Snowflake size={14} /></div>}
                         {tyre.season === 'summer' && <div className="bg-orange-500 text-white p-1 rounded shadow-lg" title="Літо"><Sun size={14} /></div>}
                         {tyre.season === 'all-season' && <div className="bg-green-600 text-white p-1 rounded shadow-lg" title="Всесезон"><CloudSun size={14} /></div>}
@@ -464,9 +468,20 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
 
                         <div className="mt-auto pt-3 border-t border-zinc-800">
                            <div className="flex flex-col justify-between gap-2">
-                              <span className={`text-xl font-black ${tyre.in_stock === false ? 'text-zinc-500' : 'text-[#FFC300]'}`}>
-                                 {formatPrice(tyre.price)} <span className="text-xs font-normal text-zinc-500">грн</span>
-                              </span>
+                              {/* Price Display Logic */}
+                              {hasDiscount ? (
+                                <div className="flex flex-col items-start leading-none">
+                                   <span className="text-zinc-500 text-xs line-through decoration-zinc-500 mb-1">{formatPrice(tyre.old_price)} грн</span>
+                                   <span className={`text-xl font-black ${tyre.in_stock === false ? 'text-zinc-500' : 'text-red-500'}`}>
+                                      {formatPrice(tyre.price)} <span className="text-xs font-normal text-zinc-500">грн</span>
+                                   </span>
+                                </div>
+                              ) : (
+                                <span className={`text-xl font-black ${tyre.in_stock === false ? 'text-zinc-500' : 'text-[#FFC300]'}`}>
+                                   {formatPrice(tyre.price)} <span className="text-xs font-normal text-zinc-500">грн</span>
+                                </span>
+                              )}
+
                               <button 
                                  onClick={() => addToCart(tyre)} 
                                  disabled={tyre.in_stock === false} 
@@ -482,7 +497,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                         </div>
                      </div>
                   </div>
-               ))}
+               )})}
             </div>
             
             {hasMore && (

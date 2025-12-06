@@ -233,7 +233,9 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
                       className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory cursor-grab active:cursor-grabbing px-1"
                       style={{ scrollBehavior: 'smooth' }}
                   >
-                      {hotTyres.map((tyre) => (
+                      {hotTyres.map((tyre) => {
+                        const hasDiscount = tyre.old_price && parseFloat(tyre.old_price) > parseFloat(tyre.price);
+                        return (
                         <div 
                           key={tyre.id} 
                           onClick={() => onShopRedirect(tyre)}
@@ -256,14 +258,23 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
                                   <h4 className="text-xs font-bold text-white leading-tight line-clamp-2">{tyre.title}</h4>
                               </div>
                               <div className="flex justify-between items-end mt-2">
-                                  <span className="text-[#FFC300] font-black text-sm">{tyre.price} <span className="text-[10px] text-zinc-500 font-normal">грн</span></span>
+                                  <div className="flex flex-col items-start leading-none">
+                                      {hasDiscount && (
+                                          <span className="text-zinc-500 text-[10px] line-through decoration-zinc-500 mb-0.5">
+                                              {Math.round(parseFloat(tyre.old_price!))} грн
+                                          </span>
+                                      )}
+                                      <span className={`font-black text-sm ${hasDiscount ? 'text-red-500' : 'text-[#FFC300]'}`}>
+                                          {tyre.price} <span className="text-[10px] text-zinc-500 font-normal">грн</span>
+                                      </span>
+                                  </div>
                                   <div className="bg-zinc-800 p-1.5 rounded-lg text-zinc-400 group-hover/card:bg-[#FFC300] group-hover/card:text-black transition-colors">
                                     <ChevronRight size={14} />
                                   </div>
                               </div>
                             </div>
                         </div>
-                      ))}
+                      )})}
                   </div>
                </div>
             </div>

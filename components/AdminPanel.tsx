@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Lock, Trash2, Calendar, Users, Search, Plus, X, Image as ImageIcon, Settings, Upload, Save, Phone, AlertTriangle, DollarSign, Loader2, TrendingUp, ShoppingBag, FileSpreadsheet, CheckSquare, Square, Edit2, ArrowRight, ArrowLeft, ArrowDown, Clock, Move, History, Wand2, Percent, Printer, Filter, Flame, KeyRound, FileCheck, FileWarning, CheckCircle, Package, RotateCcw, ImagePlus, Eye, Menu, Folder, FolderOpen, Truck, Car, Mountain, Sparkles, HelpCircle, Layers } from 'lucide-react';
+import { Lock, Trash2, Calendar, Users, Search, Plus, X, Image as ImageIcon, Settings, Upload, Save, Phone, AlertTriangle, DollarSign, Loader2, TrendingUp, ShoppingBag, FileSpreadsheet, CheckSquare, Square, Edit2, ArrowRight, ArrowLeft, ArrowDown, Clock, Move, History, Wand2, Percent, Printer, Filter, Flame, KeyRound, FileCheck, FileWarning, CheckCircle, Package, RotateCcw, ImagePlus, Eye, Menu, Folder, FolderOpen, Truck, Car, Mountain, Sparkles, HelpCircle, FileUp, ChevronDown, Copy } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { BOOKING_SERVICES, WHEEL_RADII, WORK_START_HOUR, WORK_END_HOUR, PRICING_DATA_CARS, PRICING_DATA_SUV, ADDITIONAL_SERVICES, PriceRow } from '../constants';
 import { TyreProduct, TyreOrder } from '../types';
@@ -32,42 +32,14 @@ const minsToTime = (m: number) => {
   return `${h}:${min}`;
 };
 
-const generateTimeOptions = (selectedDate?: string) => {
+const generateTimeOptions = () => {
   const options = [];
-  const todayStr = getKyivDateString();
-  const isToday = selectedDate === todayStr;
-  
-  // Calculate current minutes if it's today
-  let currentMins = -1;
-  if (isToday) {
-     const now = getKyivDateObj();
-     currentMins = now.getHours() * 60 + now.getMinutes();
-  }
-
   for (let h = WORK_START_HOUR; h < WORK_END_HOUR; h++) {
     for (let m = 0; m < 60; m += 10) {
-      // If it's today, skip times that have already passed
-      if (isToday && (h * 60 + m) < currentMins) {
-          continue;
-      }
       options.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
     }
   }
   return options;
-};
-
-// Helper to convert index to Excel column name (0->A, 1->B, etc.)
-const getExcelColumnName = (index: number) => {
-    let columnName = "";
-    let dividend = index + 1;
-    let modulo;
-
-    while (dividend > 0) {
-        modulo = (dividend - 1) % 26;
-        columnName = String.fromCharCode(65 + modulo) + columnName;
-        dividend = Math.floor((dividend - 1) / 26);
-    }
-    return columnName;
 };
 
 // --- TYPES FOR UPLOAD REPORT ---
@@ -78,6 +50,18 @@ interface UploadReportItem {
   productName?: string;
   previewUrl?: string;
 }
+
+// Available fields for mapping
+const IMPORT_FIELDS = [
+  { value: 'ignore', label: '--- Пропустити ---', color: 'bg-zinc-800 text-zinc-500' },
+  { value: 'catalog_number', label: 'АРТИКУЛ (Код)', color: 'bg-blue-900/40 text-blue-200 border-blue-500' },
+  { value: 'price', label: 'ЦІНА (Роздріб)', color: 'bg-green-900/40 text-green-200 border-green-500' },
+  { value: 'base_price', label: 'БАЗОВА ЦІНА (Закуп)', color: 'bg-yellow-900/40 text-yellow-200 border-yellow-500' },
+  { value: 'title', label: 'Назва товару', color: 'bg-purple-900/40 text-purple-200 border-purple-500' },
+  { value: 'manufacturer', label: 'Виробник (Бренд)', color: 'bg-pink-900/40 text-pink-200 border-pink-500' },
+  { value: 'radius', label: 'Радіус (R)', color: 'bg-cyan-900/40 text-cyan-200 border-cyan-500' },
+  { value: 'season', label: 'Сезон', color: 'bg-orange-900/40 text-orange-200 border-orange-500' },
+];
 
 const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
   const [activeTab, setActiveTab] = useState<'schedule' | 'clients' | 'gallery' | 'prices' | 'settings' | 'tyres' | 'orders' | 'stats'>(
@@ -91,6 +75,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
         setActiveTab('tyres');
      }
   }, [mode]);
+
+  // --- CONFIRMATION DIALOG STATE ---
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    action: () => void;
+  }>({ isOpen: false, title: '', message: '', action: () => {} });
 
   // --- SCHEDULE STATE ---
   const [displayDate1, setDisplayDate1] = useState('');
@@ -122,12 +114,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
   const [showAddTyreModal, setShowAddTyreModal] = useState(false);
   const [editingTyreId, setEditingTyreId] = useState<number | null>(null);
   const [selectedTyreIds, setSelectedTyreIds] = useState<Set<number>>(new Set());
-  
-  // Bulk Actions
   const [bulkMarkup, setBulkMarkup] = useState('');
-  const [bulkCategory, setBulkCategory] = useState<'car' | 'suv' | 'cargo' | ''>(''); // New Bulk Category State
   const [isApplyingBulk, setIsApplyingBulk] = useState(false);
-  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const smartUploadInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -135,12 +123,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
   
   // Form State
   const [tyreForm, setTyreForm] = useState({ 
-      title: '', // ADDED TITLE FIELD FOR DIRECT EDITING
       manufacturer: '', 
-      name: '', // Used only for parsing/display if needed, but Title is primary
+      name: '', 
       radius: 'R15', 
       season: 'winter', 
-      vehicle_type: 'car' as 'car' | 'cargo' | 'suv', 
+      vehicle_type: 'car' as 'car' | 'cargo' | 'suv', // Added vehicle_type
       price: '', 
       base_price: '', 
       catalog_number: '', 
@@ -165,9 +152,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
   const [excelPreview, setExcelPreview] = useState<any[]>([]);
   const [importingExcel, setImportingExcel] = useState(false);
   const [importStatus, setImportStatus] = useState('');
-  // Added optional mappings: radius, season, vehicle_type
-  const [columnMapping, setColumnMapping] = useState<{ [key: string]: number }>({ catalog_number: 0, manufacturer: 1, title: 2, base_price: 4, price: 5 });
-  const [markMissingOutOfStock, setMarkMissingOutOfStock] = useState(false);
+  // New: Mapping logic where Key is Column Index, Value is Field Name
+  const [excelColumnMap, setExcelColumnMap] = useState<Record<number, string>>({});
 
   // Other Tabs
   const [clients, setClients] = useState<any[]>([]);
@@ -186,16 +172,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
   const [statsData, setStatsData] = useState({ totalOrders: 0, totalRevenue: 0, totalTyres: 0, totalBookings: 0 });
   const [errorMessage, setErrorMessage] = useState('');
 
-  // Custom Confirmation Modal State (To replace window.confirm)
-  const [confirmModal, setConfirmModal] = useState<{
-    isOpen: boolean;
-    title: string;
-    message: string;
-    onConfirm: () => void;
-  } | null>(null);
-
   const showError = (msg: string) => { setErrorMessage(msg); setTimeout(() => setErrorMessage(''), 6000); };
-  const closeConfirmModal = () => setConfirmModal(null);
 
   // --- SCHEDULE DATE LOGIC ---
   useEffect(() => {
@@ -315,19 +292,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
     setDraggedBookingId(null);
   };
 
-  const openAddModal = (date: string, time?: string) => { 
-      // Intelligent time selection: if adding manually without clicking on a specific slot,
-      // and it's today, try to pick the first available time instead of hardcoded 08:00
-      let initialTime = time || '08:00';
-      
-      if (!time && date === getKyivDateString()) {
-         const available = generateTimeOptions(date);
-         if (available.length > 0) initialTime = available[0];
-      }
-
-      setBookingForm({ id: null, name: '', phone: '', time: initialTime, date: date, serviceId: BOOKING_SERVICES[0].id, radius: WHEEL_RADII[2], duration: 30 }); 
-      setShowEditModal(true); 
-  };
+  const openAddModal = (date: string, time?: string) => { setBookingForm({ id: null, name: '', phone: '', time: time || '08:00', date: date, serviceId: BOOKING_SERVICES[0].id, radius: WHEEL_RADII[2], duration: 30 }); setShowEditModal(true); };
   const openEditModal = (b: any) => { setBookingForm({ id: b.id, name: b.customer_name, phone: b.customer_phone, time: b.start_time, date: b.booking_date, serviceId: b.service_type || BOOKING_SERVICES[0].id, radius: b.radius || WHEEL_RADII[2], duration: b.duration_minutes || 30 }); setShowEditModal(true); };
 
   const handleSaveBooking = async () => {
@@ -341,22 +306,29 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
   
   const handleDeleteBooking = async () => { if (bookingForm.id) { await supabase.from('bookings').delete().eq('id', bookingForm.id); setShowEditModal(false); fetchSchedule(); } };
 
+  const handleDeleteTyre = async () => {
+    if (bookingToDelete) {
+        await supabase.from('tyres').delete().eq('id', bookingToDelete);
+        setBookingToDelete(null);
+        setShowDeleteModal(false);
+        fetchTyres(0, true);
+    }
+  };
+
   const openEditTyreModal = (t: TyreProduct) => {
     try {
       setEditingTyreId(t.id);
       
       const manufacturer = t.manufacturer || '';
       const title = t.title || '';
-      // Safe string replacement attempt for display, but main editing is done via 'title' field now
+      // Safe string replacement
       const name = manufacturer ? title.replace(manufacturer, '').trim() : title;
       
       // Determine season safely
-      let season = t.season || 'all-season';
-      if (!t.season) {
-          const desc = (t.description || '').toLowerCase();
-          if (desc.includes('winter') || desc.includes('зима')) season = 'winter';
-          else if (desc.includes('summer') || desc.includes('літо')) season = 'summer';
-      }
+      let season = 'all-season';
+      const desc = (t.description || '').toLowerCase();
+      if (desc.includes('winter') || desc.includes('зима')) season = 'winter';
+      else if (desc.includes('summer') || desc.includes('літо')) season = 'summer';
       
       // Determine vehicle type safely
       let vehicleType = 'car';
@@ -369,7 +341,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
       }
 
       setTyreForm({ 
-        title: title, // SET TITLE EXPLICITLY
         manufacturer, 
         name, 
         radius: t.radius || 'R15', 
@@ -404,18 +375,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
       const { count: bookingCount } = await supabase.from('bookings').select('*', { count: 'exact', head: true });
       
       const { data: orders } = await supabase.from('tyre_orders').select('items');
-      // Fetch title for fallback matching
-      const { data: allTyres } = await supabase.from('tyres').select('id, base_price, title');
+      const { data: allTyres } = await supabase.from('tyres').select('id, base_price');
       
       const basePriceMap = new Map();
-      const titleMap = new Map();
-
-      const normalize = (s: string) => s ? String(s).trim().toLowerCase() : '';
-
-      allTyres?.forEach(t => {
-          basePriceMap.set(t.id, t.base_price);
-          if (t.title) titleMap.set(normalize(t.title), t.base_price);
-      });
+      allTyres?.forEach(t => basePriceMap.set(t.id, t.base_price)); // Store raw value
 
       let profit = 0;
       
@@ -426,28 +389,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
       };
 
       orders?.forEach((o: any) => { 
-          if (o.items && Array.isArray(o.items)) {
-              o.items.forEach((i: any) => { 
-                  const sellPrice = parseVal(i.price);
-                  let basePriceVal = i.base_price; // Check item snapshot first
-
-                  // If snapshot missing, check ID map
-                  if (!basePriceVal && i.id) {
-                      basePriceVal = basePriceMap.get(i.id);
-                  }
-
-                  // If still missing, check Title map (fallback for re-imported items)
-                  if (!basePriceVal && i.title) {
-                      basePriceVal = titleMap.get(normalize(i.title));
-                  }
-
-                  const basePrice = parseVal(basePriceVal);
-                  const qty = i.quantity || 1;
-                  
-                  const margin = sellPrice - basePrice;
-                  profit += margin * qty; 
-              }); 
-          }
+          if (o.items) o.items.forEach((i: any) => { 
+              const sellPrice = parseVal(i.price);
+              // Prefer base_price stored in order history (if available), fallback to current database price
+              const basePrice = parseVal(i.base_price) || parseVal(basePriceMap.get(i.id)); 
+              
+              const qty = i.quantity || 1;
+              const margin = sellPrice - basePrice;
+              
+              // Only count if data looks valid to avoid huge negative numbers on data errors
+              profit += margin * qty; 
+          }); 
       });
       
       setStatsData({ totalOrders: ordersCount || 0, totalTyres: tyresCount || 0, totalBookings: bookingCount || 0, totalRevenue: profit });
@@ -532,20 +484,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
 
   // --- TYRE SHOP & STATS ---
   const fetchStockStats = async () => {
-     try {
-       const { count: total } = await supabase.from('tyres').select('*', { count: 'exact', head: true });
-       // Use try/catch specifically for the filter query which might fail if schema is old
-       try {
-           const { count: inStock } = await supabase.from('tyres').select('*', { count: 'exact', head: true }).neq('in_stock', false);
-           const outStock = (total || 0) - (inStock || 0);
-           setStockStats({ total: total || 0, inStock: inStock || 0, outStock: outStock || 0 });
-       } catch (err) {
-           console.warn("Stock filter failed (schema mismatch likely)", err);
-           setStockStats({ total: total || 0, inStock: 0, outStock: 0 });
-       }
-     } catch (e) {
-       console.error("Fetch stats failed", e);
-     }
+     const { count: total } = await supabase.from('tyres').select('*', { count: 'exact', head: true });
+     const { count: inStock } = await supabase.from('tyres').select('*', { count: 'exact', head: true }).neq('in_stock', false);
+     const outStock = (total || 0) - (inStock || 0);
+     setStockStats({ total: total || 0, inStock: inStock || 0, outStock: outStock || 0 });
   };
   
   // NEW: Fetch Counts per category with proper logic
@@ -553,29 +495,34 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
     try {
         const base = supabase.from('tyres').select('*', { count: 'exact', head: true });
         
-        // Wrap complex queries in individual try/catches to prevent one failure (e.g. missing vehicle_type) from blocking UI
-        const getAll = base.then(r => r.count).catch(() => 0);
-        
-        const getCar = supabase.from('tyres').select('*', { count: 'exact', head: true })
+        // Parallel requests for speed
+        const [all, car, cargo, suv, hot] = await Promise.all([
+            // ALL
+            base.then(r => r.count),
+            
+            // CAR: 'car' OR NULL (legacy) AND NOT 'cargo' AND NOT 'suv' AND NOT 'C' radius
+            supabase.from('tyres').select('*', { count: 'exact', head: true })
                 .or('vehicle_type.eq.car,vehicle_type.is.null')
                 .neq('vehicle_type', 'cargo')
                 .neq('vehicle_type', 'suv')
                 .not('radius', 'ilike', '%C%') 
-                .then(r => r.count).catch(() => 0);
+                .then(r => r.count),
 
-        const getCargo = supabase.from('tyres').select('*', { count: 'exact', head: true })
+            // CARGO
+            supabase.from('tyres').select('*', { count: 'exact', head: true })
                 .or('vehicle_type.eq.cargo,radius.ilike.%C%')
-                .then(r => r.count).catch(() => 0);
+                .then(r => r.count),
 
-        const getSuv = supabase.from('tyres').select('*', { count: 'exact', head: true })
+            // SUV
+            supabase.from('tyres').select('*', { count: 'exact', head: true })
                 .eq('vehicle_type', 'suv')
-                .then(r => r.count).catch(() => 0);
+                .then(r => r.count),
 
-        const getHot = supabase.from('tyres').select('*', { count: 'exact', head: true })
+            // HOT
+            supabase.from('tyres').select('*', { count: 'exact', head: true })
                 .eq('is_hot', true)
-                .then(r => r.count).catch(() => 0);
-
-        const [all, car, cargo, suv, hot] = await Promise.all([getAll, getCar, getCargo, getSuv, getHot]);
+                .then(r => r.count)
+        ]);
 
         setCategoryCounts({ 
             all: all || 0, 
@@ -587,116 +534,253 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
     } catch (e) { console.error("Category counts error", e); }
   };
 
-  const handleResetStock = async () => {
-     setConfirmModal({
-        isOpen: true,
-        title: "Скинути склад",
-        message: "Ви впевнені? Це зробить ВСІ товари 'В наявності'.",
-        onConfirm: async () => {
-             try {
-                const { data } = await supabase.from('tyres').select('id').eq('in_stock', false);
-                if (data && data.length > 0) {
-                   const chunkSize = 50;
-                   for (let i = 0; i < data.length; i += chunkSize) {
-                      const chunk = data.slice(i, i + chunkSize).map(d => d.id);
-                      await supabase.from('tyres').update({ in_stock: true }).in('id', chunk);
-                   }
-                }
-                showError("Всі товари тепер в наявності!");
-                fetchStockStats();
-                fetchCategoryCounts();
-             } catch (e: any) { showError(e.message); }
-             closeConfirmModal();
+  const processResetStock = async () => {
+     try {
+        const { data } = await supabase.from('tyres').select('id').eq('in_stock', false);
+        if (data && data.length > 0) {
+           const chunkSize = 50;
+           for (let i = 0; i < data.length; i += chunkSize) {
+              const chunk = data.slice(i, i + chunkSize).map(d => d.id);
+              await supabase.from('tyres').update({ in_stock: true }).in('id', chunk);
+           }
         }
-     });
+        showError("Всі товари тепер в наявності!");
+        fetchStockStats();
+        fetchCategoryCounts();
+     } catch (e: any) { showError(e.message); }
   };
 
-  const handleAutoCategorize = async () => {
-    setConfirmModal({
-        isOpen: true,
-        title: "Авто-сортування",
-        message: "Ви впевнені? Це автоматично розсортує ВСІ існуючі товари по папках (Легкові/Вантажні/SUV) на основі їх назви та радіусу. Це може зайняти деякий час.",
-        onConfirm: async () => {
-            try {
-                showError("Завантаження та аналіз бази товарів...");
-                
-                // 1. Fetch all items (paginate to be safe)
-                let allTyres: any[] = [];
-                let from = 0;
-                const step = 1000;
-                
-                while(true) {
-                    const { data, error } = await supabase.from('tyres').select('id, title, radius, vehicle_type').range(from, from + step - 1);
-                    if (error) throw error;
-                    if (!data || data.length === 0) break;
-                    allTyres.push(...data);
-                    if (data.length < step) break;
-                    from += step;
-                }
+  const handleResetStockClick = () => {
+      setConfirmDialog({
+          isOpen: true,
+          title: "Скинути склад",
+          message: "Ви впевнені? Це зробить ВСІ товари 'В наявності'.",
+          action: processResetStock
+      });
+  };
 
-                // 2. Analyze
-                const toUpdate: any[] = [];
-                let carCount = 0;
-                let cargoCount = 0;
-                let suvCount = 0;
-                
-                for (const t of allTyres) {
-                    const title = (t.title || '').toUpperCase();
-                    const radiusStr = (t.radius || '').toUpperCase();
-                    
-                    let newType = 'car'; // Default
-
-                    // IMPROVED LOGIC
-                    // Check for 'C' suffix in the title (e.g. R15C) even if radius column is just "R15"
-                    const radiusRegex = /R\d{2}C/i;
-                    const hasC_in_Title = radiusRegex.test(title);
-                    const hasC_in_Radius = radiusStr.includes('C');
-                    
-                    const isCargoKeyword = title.includes('CARGO') || title.includes('BUS') || title.includes('LT') || title.includes('TRANS') || title.includes('VAN');
-
-                    const isCargo = hasC_in_Title || hasC_in_Radius || isCargoKeyword;
-                    
-                    const isSuv = !isCargo && (title.includes('SUV') || title.includes('4X4') || title.includes('JEEP') || title.includes('OFF-ROAD') || title.includes('AWD') || title.includes('CR-V') || title.includes('RAV4') || title.includes('PRADO') || title.includes('LAND CRUISER'));
-
-                    if (isCargo) { newType = 'cargo'; cargoCount++; }
-                    else if (isSuv) { newType = 'suv'; suvCount++; }
-                    else { carCount++; }
-
-                    // Only update if changed or null
-                    if (t.vehicle_type !== newType) {
-                        toUpdate.push({ id: t.id, vehicle_type: newType });
-                    }
-                }
-
-                // 3. Batch Update - FORCE UPDATE via Loop for maximum reliability
-                if (toUpdate.length > 0) {
-                    const total = toUpdate.length;
-                    showError(`Знайдено змін: ${total}. Оновлення...`);
-                    
-                    // Chunking for UI responsiveness
-                    const batchSize = 50;
-                    for (let i = 0; i < total; i += batchSize) {
-                        const chunk = toUpdate.slice(i, i + batchSize);
-                        await Promise.all(chunk.map((item: any) => 
-                            supabase.from('tyres').update({ vehicle_type: item.vehicle_type }).eq('id', item.id)
-                        ));
-                    }
-                    showError(`Успішно оновлено ${total} товарів! (Легкові: ${carCount}, Вантажні: ${cargoCount}, SUV: ${suvCount})`);
-                } else {
-                    showError(`Аналіз завершено. Змін не знайдено. (Легкові: ${carCount}, Вантажні: ${cargoCount}, SUV: ${suvCount})`);
-                }
-
-                fetchStockStats();
-                fetchCategoryCounts();
-                fetchTyres(0, true);
-
-            } catch (e: any) {
-                console.error(e);
-                showError("Помилка (можливо відсутня колонка vehicle_type в базі): " + e.message);
-            }
-            closeConfirmModal();
+  const processAutoCategorize = async () => {
+    try {
+        showError("Завантаження та аналіз бази товарів...");
+        
+        // 1. Fetch all items (paginate to be safe)
+        let allTyres: any[] = [];
+        let from = 0;
+        const step = 1000;
+        
+        while(true) {
+            const { data, error } = await supabase.from('tyres').select('id, title, radius, vehicle_type').range(from, from + step - 1);
+            if (error) throw error;
+            if (!data || data.length === 0) break;
+            allTyres.push(...data);
+            if (data.length < step) break;
+            from += step;
         }
-    });
+
+        // 2. Analyze
+        const toUpdate: any[] = [];
+        let carCount = 0;
+        let cargoCount = 0;
+        let suvCount = 0;
+        
+        for (const t of allTyres) {
+            const title = (t.title || '').toUpperCase();
+            const radiusStr = (t.radius || '').toUpperCase();
+            
+            let newType = 'car'; // Default
+
+            // IMPROVED LOGIC
+            // Check for 'C' suffix in the title (e.g. R15C) even if radius column is just "R15"
+            const radiusRegex = /R\d{2}C/i;
+            const hasC_in_Title = radiusRegex.test(title);
+            const hasC_in_Radius = radiusStr.includes('C');
+            
+            const isCargoKeyword = title.includes('CARGO') || title.includes('BUS') || title.includes('LT') || title.includes('TRANS') || title.includes('VAN');
+
+            const isCargo = hasC_in_Title || hasC_in_Radius || isCargoKeyword;
+            
+            const isSuv = !isCargo && (title.includes('SUV') || title.includes('4X4') || title.includes('JEEP') || title.includes('OFF-ROAD') || title.includes('AWD') || title.includes('CR-V') || title.includes('RAV4') || title.includes('PRADO') || title.includes('LAND CRUISER'));
+
+            if (isCargo) { newType = 'cargo'; cargoCount++; }
+            else if (isSuv) { newType = 'suv'; suvCount++; }
+            else { carCount++; }
+
+            // Only update if changed or null
+            if (t.vehicle_type !== newType) {
+                toUpdate.push({ id: t.id, vehicle_type: newType });
+            }
+        }
+
+        // 3. Batch Update - FORCE UPDATE via Loop for maximum reliability
+        if (toUpdate.length > 0) {
+            const total = toUpdate.length;
+            showError(`Знайдено змін: ${total}. Оновлення...`);
+            
+            // Chunking for UI responsiveness
+            const batchSize = 50;
+            for (let i = 0; i < total; i += batchSize) {
+                const chunk = toUpdate.slice(i, i + batchSize);
+                
+                // Use Promise.all for parallel updates within the chunk
+                // This avoids "upsert" constraints issues if any
+                await Promise.all(chunk.map((item: any) => 
+                    supabase.from('tyres').update({ vehicle_type: item.vehicle_type }).eq('id', item.id)
+                ));
+            }
+            showError(`Успішно оновлено ${total} товарів! (Легкові: ${carCount}, Вантажні: ${cargoCount}, SUV: ${suvCount})`);
+        } else {
+            showError(`Аналіз завершено. Змін не знайдено. (Легкові: ${carCount}, Вантажні: ${cargoCount}, SUV: ${suvCount})`);
+        }
+
+        fetchStockStats();
+        fetchCategoryCounts();
+        fetchTyres(0, true);
+
+    } catch (e: any) {
+        console.error(e);
+        showError("Помилка (можливо відсутня колонка vehicle_type в базі): " + e.message);
+    }
+  };
+
+  const handleAutoCategorizeClick = () => {
+      setConfirmDialog({
+          isOpen: true,
+          title: "Авто-сортування категорій",
+          message: "Ви впевнені? Це автоматично розсортує ВСІ існуючі товари по папках (Легкові/Вантажні/SUV) на основі їх назви та радіусу. Це може зайняти деякий час.",
+          action: processAutoCategorize
+      });
+  };
+
+  const processSmartPhotoSort = async () => {
+    setUploading(true);
+    showError("Аналіз бази даних... Це може зайняти хвилину.");
+    
+    try {
+        // Fetch all items
+        let allTyres: any[] = [];
+        let from = 0;
+        const step = 1000;
+        
+        while(true) {
+            const { data, error } = await supabase.from('tyres').select('id, title, manufacturer, image_url, gallery').range(from, from + step - 1);
+            if (error) throw error;
+            if (!data || data.length === 0) break;
+            allTyres.push(...data);
+            if (data.length < step) break;
+            from += step;
+        }
+
+        // Helper to extract clean Model signature from Title
+        const getModelSignature = (t: any) => {
+            let s = t.title.toUpperCase();
+            
+            // 1. Extract manufacturer
+            let manufacturer = t.manufacturer ? t.manufacturer.toUpperCase() : '';
+            
+            // Try to find in parens if missing
+            if (!manufacturer) {
+               const match = s.match(/\(([^)]+)\)/);
+               if (match) manufacturer = match[1].trim();
+            }
+
+            // Fallback: If still no manufacturer, try taking the FIRST word if it's text
+            if (!manufacturer) {
+                const firstWord = s.split(' ')[0];
+                if (firstWord && isNaN(parseInt(firstWord)) && firstWord.length > 2) {
+                    manufacturer = firstWord;
+                }
+            }
+
+            // Remove manufacturer from string to find model
+            if (manufacturer) {
+                s = s.replace(manufacturer, '');
+            }
+            s = s.replace(/\(.*\)/, ''); // Remove content in parens
+
+            // Remove Size pattern (e.g. 215/50R17, 215/50 ZR 17, R14)
+            // \d{3} = width, \d{2} = height, R = radius
+            s = s.replace(/\b\d{3}[\/\s]\d{2}[\s]?[Z]?R\d{2}[C]?\b/gi, '');
+            s = s.replace(/\bR\d{2}[C]?\b/gi, '');
+
+            // Remove Index pattern (e.g. 95S, 82T, 100V)
+            s = s.replace(/\b\d{2,3}[A-Z]\b/gi, '');
+
+            // Remove common keywords
+            s = s.replace(/\b(XL|SUV|CARGO|LT|M\+S|TUBELESS|TUBE|ZR|RF|FR)\b/gi, '');
+
+            // Cleanup remaining noise
+            const model = s.replace(/[^A-Z0-9]/g, '').trim();
+            
+            // Require both manufacturer and model to avoid bad matches
+            if (manufacturer && model.length > 1) {
+               // console.log(`Signature: ${manufacturer}_${model} for ${t.title}`);
+               return `${manufacturer}_${model}`;
+            }
+            return null;
+        };
+
+        // 1. Build Source Map (Items WITH photos)
+        const photoSource: Record<string, { image_url: string, gallery: string[] }> = {};
+        let sourcesFound = 0;
+
+        allTyres.forEach(t => {
+            if (t.image_url) {
+                const sig = getModelSignature(t);
+                if (sig && !photoSource[sig]) {
+                    photoSource[sig] = { image_url: t.image_url, gallery: t.gallery };
+                    sourcesFound++;
+                }
+            }
+        });
+
+        // 2. Identify Targets (Items WITHOUT photos)
+        const toUpdate: any[] = [];
+        
+        allTyres.forEach(t => {
+            if (!t.image_url) {
+                const sig = getModelSignature(t);
+                if (sig && photoSource[sig]) {
+                    toUpdate.push({
+                        id: t.id,
+                        image_url: photoSource[sig].image_url,
+                        gallery: photoSource[sig].gallery
+                    });
+                }
+            }
+        });
+
+        if (toUpdate.length === 0) {
+            showError(`Перевірено ${allTyres.length} товарів. Схожих пар без фото не знайдено.`);
+        } else {
+            showError(`Знайдено ${toUpdate.length} товарів для оновлення. Зберігаємо...`);
+            
+            const batchSize = 50;
+            for (let i = 0; i < toUpdate.length; i += batchSize) {
+                const chunk = toUpdate.slice(i, i + batchSize);
+                await Promise.all(chunk.map((item: any) => 
+                    supabase.from('tyres').update({ image_url: item.image_url, gallery: item.gallery }).eq('id', item.id)
+                ));
+            }
+            
+            showError(`Успішно оновлено ${toUpdate.length} товарів!`);
+            fetchTyres(0, true);
+        }
+
+    } catch (e: any) {
+        console.error(e);
+        showError("Помилка: " + e.message);
+    } finally {
+        setUploading(false);
+    }
+  };
+
+  const handleSmartPhotoSortClick = () => {
+      setConfirmDialog({
+          isOpen: true,
+          title: "Авто-фото (Дублі)",
+          message: "Це автоматично копіює фото для товарів з однаковою Моделлю та Виробником (наприклад, з R17 на R14). Продовжити?",
+          action: processSmartPhotoSort
+      });
   };
 
   const fetchTyres = async (pageIdx: number, isRefresh = false) => {
@@ -763,15 +847,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
       const cleanPrice = Math.round(parseFloat(tyreForm.price.replace(/[^\d.]/g, '')) || 0).toString();
       const cleanBasePrice = Math.round(parseFloat(tyreForm.base_price.replace(/[^\d.]/g, '')) || 0).toString();
 
-      // IMPORTANT: Use Title as the primary source of truth if editing
-      // If title is empty (new item), construct it.
-      let finalTitle = tyreForm.title;
-      if (!finalTitle || finalTitle.trim() === '') {
-          finalTitle = `${tyreForm.manufacturer} ${tyreForm.name} ${tyreForm.radius} ${seasonLabel}`;
-      }
-
       const payload: any = {
-        title: finalTitle,
+        title: `${tyreForm.manufacturer} ${tyreForm.name} ${tyreForm.radius} ${seasonLabel}`,
         description: tyreForm.description || `Сезон: ${seasonLabel}.`,
         price: cleanPrice, 
         base_price: cleanBasePrice, 
@@ -784,36 +861,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
         gallery: finalGallery, 
         is_hot: tyreForm.is_hot 
       };
-      
-      try {
-          if (editingTyreId) await supabase.from('tyres').update(payload).eq('id', editingTyreId).throwOnError();
-          else await supabase.from('tyres').insert([payload]).throwOnError();
-      } catch (dbError: any) {
-          // Fallback logic: Catch missing column errors (PGRST102/204 or 400 Bad Request)
-          if (dbError.code === '400' || dbError.code === 'PGRST102' || dbError.code === 'PGRST204' || dbError.message?.includes('column')) {
-              console.warn("Retrying save without 'season' and 'vehicle_type' (Columns likely missing)");
-              
-              const fallbackPayload = { ...payload };
-              delete fallbackPayload.vehicle_type; 
-              delete fallbackPayload.season;
-              
-              if (editingTyreId) await supabase.from('tyres').update(fallbackPayload).eq('id', editingTyreId);
-              else await supabase.from('tyres').insert([fallbackPayload]);
-              
-              showError("УВАГА: Товар збережено, АЛЕ Категорія та Сезон не оновились. Запустіть SQL-скрипт оновлення бази!");
-          } else {
-              throw dbError;
-          }
-      }
+      if (editingTyreId) await supabase.from('tyres').update(payload).eq('id', editingTyreId);
+      else await supabase.from('tyres').insert([payload]);
       
       fetchTyres(0, true); 
       fetchStockStats(); 
       fetchCategoryCounts();
       setShowAddTyreModal(false);
-    } catch (err: any) { 
-        console.error(err);
-        showError(err.message); 
-    } finally { setUploading(false); }
+    } catch (err: any) { showError(err.message); } finally { setUploading(false); }
   };
 
   const toggleHotStatus = async (id: number, current: boolean) => {
@@ -890,6 +945,21 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
     }
   };
 
+  const autoMapColumns = (headers: string[]) => {
+    const newMap: Record<number, string> = {};
+    headers.forEach((header, index) => {
+       const h = header.toLowerCase().trim();
+       if (h.includes('код') || h.includes('артикул') || h.includes('catalog')) newMap[index] = 'catalog_number';
+       else if (h.includes('ціна') || h.includes('price') || h.includes('роздріб')) newMap[index] = 'price';
+       else if (h.includes('закуп') || h.includes('base') || h.includes('вхід')) newMap[index] = 'base_price';
+       else if (h.includes('назва') || h.includes('name') || h.includes('title') || h.includes('модель')) newMap[index] = 'title';
+       else if (h.includes('бренд') || h.includes('виробник') || h.includes('manufacturer')) newMap[index] = 'manufacturer';
+       else if (h.includes('радіус') || h.includes('radius') || h === 'r') newMap[index] = 'radius';
+       else if (h.includes('сезон') || h.includes('season')) newMap[index] = 'season';
+    });
+    setExcelColumnMap(newMap);
+  };
+
   const handleExcelFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
      const file = e.target.files?.[0];
      if (!file) return;
@@ -897,17 +967,42 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
      setShowExcelModal(true);
      setExcelPreview([]);
      setImportStatus(''); // Reset status
+     setExcelColumnMap({});
      
      try {
         const rows = await readXlsxFile(file);
         setExcelPreview(rows.slice(0, 20)); // Preview first 20 rows
+        if (rows.length > 0) {
+            autoMapColumns(rows[0].map(String));
+        }
      } catch (e) {
         console.error("Error reading excel for preview", e);
         showError("Помилка читання файлу для попереднього перегляду");
      }
   };
 
-  const processExcelImport = async () => {
+  const handleExcelDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      setExcelFile(file);
+      setShowExcelModal(true);
+      setExcelPreview([]);
+      setImportStatus('');
+      setExcelColumnMap({});
+      try {
+        const rows = await readXlsxFile(file);
+        setExcelPreview(rows.slice(0, 20));
+        if (rows.length > 0) {
+            autoMapColumns(rows[0].map(String));
+        }
+      } catch (err) {
+        showError("Помилка читання файлу");
+      }
+    }
+  };
+
+  const processSmartExcelImport = async () => {
     if (!excelFile) {
         showError("Файл не вибрано!");
         return;
@@ -916,7 +1011,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
     setImportStatus("Зчитування та обробка файлу...");
 
     try {
-        const rows = await readXlsxFile(excelFile);
+        // Validate required fields
+        const mapValues = Object.values(excelColumnMap);
+        if (!mapValues.includes('catalog_number')) {
+            throw new Error("Не обрано колонку 'АРТИКУЛ'. Це обов'язкове поле для синхронізації.");
+        }
+        if (!mapValues.includes('price')) {
+             throw new Error("Не обрано колонку 'ЦІНА'.");
+        }
+
+        const rows = (await readXlsxFile(excelFile)) as any[]; // Explicit cast to any[] to avoid index type errors
         if (!rows || rows.length < excelStartRow) {
             throw new Error("Файл порожній або некоректний формат.");
         }
@@ -944,71 +1048,93 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
         setImportStatus("Аналіз даних...");
         const toInsert: any[] = [];
         const toUpdate: any[] = [];
-        const seenIds = new Set<number>();
         const processedCats = new Set<string>(); // To handle duplicates within the file
 
+        // Invert map for easier lookup: FieldName -> ColumnIndex
+        const fieldToColIndex: Record<string, number> = {};
+        Object.entries(excelColumnMap).forEach(([idx, field]) => {
+            if (field !== 'ignore') fieldToColIndex[String(field)] = parseInt(idx);
+        });
+
         for (let i = excelStartRow - 1; i < rows.length; i++) {
-            const row = rows[i];
-            const getValue = (colIndex: number) => {
-               const val = row[colIndex];
-               return val !== null && val !== undefined ? String(val).trim() : '';
+            const row = rows[i] as any;
+            const getValue = (fieldName: string) => {
+                const idx = fieldToColIndex[fieldName];
+                if (idx === undefined) return '';
+                const val = row[idx];
+                return val !== null && val !== undefined ? String(val).trim() : '';
             };
             
-            const catNum = getValue(columnMapping.catalog_number);
+            const catNum = getValue('catalog_number');
             if (!catNum) continue;
 
             const normalizedCat = normalize(catNum);
             
-            // Skip if we've already processed this catalog number in this file (prevent duplicate inserts/updates)
             if (processedCats.has(normalizedCat)) continue;
             processedCats.add(normalizedCat);
             
-            const manufacturer = getValue(columnMapping.manufacturer);
-            const titleRaw = getValue(columnMapping.title);
+            const manufacturer = getValue('manufacturer');
+            const titleRaw = getValue('title');
             
-            const rawBasePrice = getValue(columnMapping.base_price).replace(/,/g, '.').replace(/[^\d.]/g, '');
-            const rawRetailPrice = getValue(columnMapping.price).replace(/,/g, '.').replace(/[^\d.]/g, '');
+            const rawBasePrice = getValue('base_price').replace(/,/g, '.').replace(/[^\d.]/g, '');
+            const rawRetailPrice = getValue('price').replace(/,/g, '.').replace(/[^\d.]/g, '');
             
             const basePrice = rawBasePrice ? Math.round(parseFloat(rawBasePrice)).toString() : '0';
             const retailPrice = rawRetailPrice ? Math.round(parseFloat(rawRetailPrice)).toString() : '0';
 
-            // Logic for season/type
-            let season = 'all-season';
-            const lowerTitle = titleRaw.toLowerCase();
-            if (lowerTitle.includes('winter') || lowerTitle.includes('зима') || lowerTitle.includes('ice')) season = 'winter';
-            else if (lowerTitle.includes('summer') || lowerTitle.includes('літо')) season = 'summer';
-            
-            let radius = 'R15'; let isCargo = false;
-            const radMatch = titleRaw.match(/R\d{2}[C]?/i);
-            if (radMatch) { radius = radMatch[0].toUpperCase(); if (radius.includes('C')) isCargo = true; }
-
-            // Auto-detect vehicle type
-            let vehicleType: 'car' | 'cargo' | 'suv' = 'car';
-            if (isCargo) {
-                vehicleType = 'cargo';
-            } else if (lowerTitle.includes('suv') || lowerTitle.includes('jeep') || lowerTitle.includes('4x4')) {
-                vehicleType = 'suv';
-            }
-
-            const newItem = { 
-                catalog_number: catNum, 
-                manufacturer: manufacturer, 
-                title: manufacturer ? `${manufacturer} ${titleRaw}` : titleRaw, 
-                description: `Сезон: ${season}. ${isCargo ? 'Вантажні.' : ''}`, 
-                radius: radius, 
-                price: retailPrice, 
-                base_price: basePrice, 
-                in_stock: true,
-                vehicle_type: vehicleType 
-            };
-
             const existing = dbMap.get(normalizedCat);
 
             if (existing) {
-                seenIds.add(existing.id);
-                toUpdate.push({ ...newItem, id: existing.id });
+                // UPDATE LOGIC: Only update prices and stock status. Preserve other fields.
+                toUpdate.push({ 
+                    id: existing.id,
+                    price: retailPrice,
+                    base_price: basePrice,
+                    in_stock: true 
+                });
             } else {
-                toInsert.push(newItem);
+                 // CREATE LOGIC: Create full card
+                let season = getValue('season') || 'all-season';
+                
+                // Auto-detect season if missing
+                if (!getValue('season')) {
+                    const lowerTitle = titleRaw.toLowerCase();
+                    if (lowerTitle.includes('winter') || lowerTitle.includes('зима') || lowerTitle.includes('ice')) season = 'winter';
+                    else if (lowerTitle.includes('summer') || lowerTitle.includes('літо')) season = 'summer';
+                }
+                
+                let radius = getValue('radius') || 'R15'; 
+                let isCargo = false;
+
+                // Auto-detect radius/cargo if missing or just safety check
+                const radMatch = titleRaw.match(/R\d{2}[C]?/i);
+                if (radMatch) { 
+                    const detectedR = radMatch[0].toUpperCase();
+                    if (!getValue('radius')) radius = detectedR;
+                    if (detectedR.includes('C')) isCargo = true;
+                }
+                if (radius.toUpperCase().includes('C')) isCargo = true;
+
+                // Auto-detect vehicle type
+                let vehicleType: 'car' | 'cargo' | 'suv' = 'car';
+                const lowerTitle = titleRaw.toLowerCase();
+                if (isCargo) {
+                    vehicleType = 'cargo';
+                } else if (lowerTitle.includes('suv') || lowerTitle.includes('jeep') || lowerTitle.includes('4x4')) {
+                    vehicleType = 'suv';
+                }
+
+                toInsert.push({ 
+                    catalog_number: catNum, 
+                    manufacturer: manufacturer, 
+                    title: manufacturer ? `${manufacturer} ${titleRaw}` : titleRaw, 
+                    description: `Сезон: ${season}. ${isCargo ? 'Вантажні.' : ''}`, 
+                    radius: radius, 
+                    price: retailPrice, 
+                    base_price: basePrice, 
+                    in_stock: true,
+                    vehicle_type: vehicleType 
+                });
             }
         }
 
@@ -1017,7 +1143,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
         // INSERTS
         if (toInsert.length > 0) {
             for (let i = 0; i < toInsert.length; i += batchSize) {
-                setImportStatus(`Додавання нових товарів: ${Math.min(i + batchSize, toInsert.length)} з ${toInsert.length}`);
+                setImportStatus(`Створення нових карток: ${Math.min(i + batchSize, toInsert.length)} з ${toInsert.length}`);
                 const chunk = toInsert.slice(i, i + batchSize);
                 const { error } = await supabase.from('tyres').insert(chunk);
                 if (error) {
@@ -1029,39 +1155,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
 
         // UPDATES
         if (toUpdate.length > 0) {
-            let processedUpdates = 0;
             for (let i = 0; i < toUpdate.length; i += batchSize) {
-                setImportStatus(`Оновлення цін та наявності: ${Math.min(i + batchSize, toUpdate.length)} з ${toUpdate.length}`);
+                setImportStatus(`Оновлення цін: ${Math.min(i + batchSize, toUpdate.length)} з ${toUpdate.length}`);
                 const chunk = toUpdate.slice(i, i + batchSize);
                 
-                // Using Promise.all for parallel updates is safer than bulk upsert if upsert is causing [object Object] errors due to constraints
-                const results = await Promise.all(chunk.map((item: any) => 
+                await Promise.all(chunk.map((item: any) => 
                     supabase.from('tyres').update(item).eq('id', item.id)
                 ));
-                
-                // Check for errors in results
-                const err = results.find(r => r.error);
-                if (err && err.error) {
-                     console.error("Update error", err.error);
-                     showError(`Помилка оновлення: ${err.error.message}`);
-                }
             }
         }
 
-        // DELETE MISSING
-        if (markMissingOutOfStock) {
-           const idsToDelete = allDbTyres.filter(t => !seenIds.has(t.id)).map(t => t.id);
-           if (idsToDelete.length > 0) {
-               setImportStatus(`Видалення відсутніх товарів: ${idsToDelete.length}...`);
-               for (let i = 0; i < idsToDelete.length; i += batchSize) {
-                   const chunk = idsToDelete.slice(i, i + batchSize);
-                   const { error } = await supabase.from('tyres').delete().in('id', chunk);
-                   if (error) showError(`Помилка видалення: ${error.message}`);
-               }
-           }
-        }
-
-        showError(`Операцію завершено! Додано: ${toInsert.length}, Оновлено: ${toUpdate.length}`); 
+        showError(`Розумне завантаження завершено! Створено: ${toInsert.length}, Оновлено цін: ${toUpdate.length}`); 
         setShowExcelModal(false); 
         fetchTyres(0, true); 
         fetchStockStats();
@@ -1089,38 +1193,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
             showError("Ціни оновлено!"); fetchTyres(0, true); setSelectedTyreIds(new Set()); setBulkMarkup('');
         }
     } catch (err: any) { showError(err.message); } finally { setIsApplyingBulk(false); }
-  };
-  
-  // NEW: Bulk Category Change
-  const applyBulkCategory = async () => {
-    if (!bulkCategory || selectedTyreIds.size === 0) return;
-    
-    setConfirmModal({
-        isOpen: true,
-        title: "Масова зміна категорії",
-        message: `Перенести ${selectedTyreIds.size} товарів у категорію "${bulkCategory.toUpperCase()}"?`,
-        onConfirm: async () => {
-             setIsApplyingBulk(true);
-             try {
-                 const ids = Array.from(selectedTyreIds);
-                 const { error } = await supabase.from('tyres').update({ vehicle_type: bulkCategory }).in('id', ids);
-                 
-                 if (error) throw error;
-                 
-                 showError(`Успішно оновлено категорію для ${ids.length} товарів!`);
-                 fetchTyres(0, true);
-                 fetchCategoryCounts();
-                 fetchStockStats();
-                 setSelectedTyreIds(new Set());
-                 setBulkCategory('');
-             } catch (err: any) {
-                 showError("Помилка масового оновлення: " + err.message);
-             } finally {
-                 setIsApplyingBulk(false);
-             }
-             closeConfirmModal();
-        }
-    });
   };
 
   const TablePriceEditor = ({ data, category }: { data: PriceRow[], category: 'cars' | 'suv' }) => (
@@ -1223,8 +1295,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
                <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800">
                   <h4 className="text-white text-lg font-bold mb-4">Інші дії</h4>
                   <div className="flex flex-col md:flex-row gap-4 flex-wrap">
-                     <button onClick={handleResetStock} className="flex-1 bg-blue-900/30 text-blue-200 px-6 py-3 rounded-xl font-bold border border-blue-900/50 hover:bg-blue-900/50 flex items-center justify-center gap-2 min-w-[200px]"><RotateCcw size={20}/> Скинути склад (Всі в наявності)</button>
-                     <button onClick={handleAutoCategorize} className="flex-1 bg-orange-900/30 text-orange-200 px-6 py-3 rounded-xl font-bold border border-orange-900/50 hover:bg-orange-900/50 flex items-center justify-center gap-2 min-w-[200px]"><Sparkles size={20}/> Авто-сортування категорій</button>
+                     <button onClick={handleResetStockClick} className="flex-1 bg-blue-900/30 text-blue-200 px-6 py-3 rounded-xl font-bold border border-blue-900/50 hover:bg-blue-900/50 flex items-center justify-center gap-2 min-w-[200px]"><RotateCcw size={20}/> Скинути склад (Всі в наявності)</button>
+                     <button onClick={handleAutoCategorizeClick} className="flex-1 bg-orange-900/30 text-orange-200 px-6 py-3 rounded-xl font-bold border border-orange-900/50 hover:bg-orange-900/50 flex items-center justify-center gap-2 min-w-[200px]"><Sparkles size={20}/> Авто-сортування категорій</button>
                      <button onClick={handlePrint} className="flex-1 bg-zinc-800 text-white px-6 py-3 rounded-xl font-bold border border-zinc-700 hover:bg-zinc-700 flex items-center justify-center gap-2 min-w-[200px]"><Printer size={20}/> Друк Прайс-листа</button>
                      <button onClick={saveAllPrices} className="flex-1 bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-500 flex items-center justify-center gap-2 shadow-lg min-w-[200px]"><Save size={20}/> Зберегти все</button>
                   </div>
@@ -1285,127 +1357,70 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
 
                   <div className="relative flex-grow max-w-md"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={16}/><input type="text" placeholder="Пошук шин..." value={tyreSearch} onChange={e => setTyreSearch(e.target.value)} onKeyDown={e => e.key==='Enter' && fetchTyres(0,true)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-10 pr-4 py-3 outline-none focus:border-[#FFC300] text-lg font-bold" /></div>
                   <div className="flex gap-2 flex-wrap">
+                     <button onClick={handleSmartPhotoSortClick} disabled={uploading} className="bg-purple-900/50 text-purple-200 font-bold px-3 py-2 rounded-lg flex items-center gap-2 border border-purple-800 hover:bg-purple-800 text-xs md:text-sm whitespace-nowrap">
+                        {uploading ? <Loader2 className="animate-spin" size={16}/> : <Copy size={16}/>} 
+                        Авто-фото (Дублі)
+                     </button>
                      <button onClick={() => smartUploadInputRef.current?.click()} className="bg-blue-900 text-blue-200 font-bold px-3 py-2 rounded-lg flex items-center gap-2 border border-blue-800 hover:bg-blue-800 text-xs md:text-sm whitespace-nowrap"><Wand2 size={16}/> Розумне фото</button><input type="file" ref={smartUploadInputRef} onChange={handleSmartImageUpload} className="hidden" multiple accept="image/*" />
                      <button onClick={() => fileInputRef.current?.click()} className="bg-zinc-800 text-white font-bold px-4 py-2 rounded-lg flex items-center gap-2 border border-zinc-700 hover:bg-zinc-700"><FileSpreadsheet size={18}/></button><input type="file" ref={fileInputRef} onChange={handleExcelFileSelect} className="hidden" accept=".xlsx" />
-                     <button onClick={() => {setEditingTyreId(null); setTyreForm({ title: '', manufacturer: '', name: '', radius: 'R15', season: 'winter', vehicle_type: 'car', price: '', base_price: '', catalog_number: '', description: '', is_hot: false }); setExistingGallery([]); setTyreUploadFiles([]); setShowAddTyreModal(true);}} className="bg-[#FFC300] text-black font-bold px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#e6b000]"><Plus size={18}/> Додати</button>
+                     <button onClick={() => {setEditingTyreId(null); setTyreForm({ manufacturer: '', name: '', radius: 'R15', season: 'winter', vehicle_type: 'car', price: '', base_price: '', catalog_number: '', description: '', is_hot: false }); setExistingGallery([]); setTyreUploadFiles([]); setShowAddTyreModal(true);}} className="bg-[#FFC300] text-black font-bold px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#e6b000]"><Plus size={18}/> Додати</button>
                   </div>
                </div>
                
-               {/* BULK ACTIONS BAR */}
-               {selectedTyreIds.size > 0 && (
-                  <div className="bg-white/10 p-3 rounded-xl flex flex-col md:flex-row items-center justify-between mb-4 gap-4 border border-zinc-700">
-                     <div className="font-bold flex items-center gap-2 text-white"><CheckSquare size={18} className="text-[#FFC300]"/> Обрано: {selectedTyreIds.size}</div>
-                     
-                     <div className="flex flex-wrap items-center gap-4">
-                        {/* Bulk Price */}
-                        <div className="flex items-center gap-2 bg-black/50 p-1.5 rounded-lg border border-zinc-700">
-                           <span className="text-xs font-bold text-zinc-400 pl-2">Націнка:</span>
-                           <input type="text" value={bulkMarkup} onChange={e => setBulkMarkup(e.target.value)} placeholder="%" className="w-12 p-1 rounded bg-zinc-800 text-white text-center font-bold outline-none border border-zinc-600 focus:border-[#FFC300]" />
-                           <button onClick={applyBulkMarkup} disabled={isApplyingBulk || !bulkMarkup} className="bg-[#FFC300] text-black px-3 py-1 rounded font-bold text-sm disabled:opacity-50 hover:bg-[#e6b000]">OK</button>
-                        </div>
-
-                        {/* Bulk Category */}
-                        <div className="flex items-center gap-2 bg-black/50 p-1.5 rounded-lg border border-zinc-700">
-                           <span className="text-xs font-bold text-zinc-400 pl-2 flex items-center gap-1"><Layers size={14}/> Категорія:</span>
-                           <select value={bulkCategory} onChange={e => setBulkCategory(e.target.value as any)} className="bg-zinc-800 text-white text-sm p-1 rounded outline-none border border-zinc-600 focus:border-[#FFC300] cursor-pointer w-32">
-                              <option value="">Оберіть...</option>
-                              <option value="car">Легкові</option>
-                              <option value="suv">SUV / 4x4</option>
-                              <option value="cargo">Вантажні</option>
-                           </select>
-                           <button onClick={applyBulkCategory} disabled={isApplyingBulk || !bulkCategory} className="bg-blue-600 text-white px-3 py-1 rounded font-bold text-sm disabled:opacity-50 hover:bg-blue-500">OK</button>
-                        </div>
-                     </div>
-                  </div>
-               )}
+               {selectedTyreIds.size > 0 && <div className="bg-[#FFC300] text-black p-3 rounded-xl flex items-center justify-between mb-4"><div className="font-bold flex items-center gap-2"><CheckSquare size={18}/> Обрано: {selectedTyreIds.size}</div><div className="flex items-center gap-2"><input type="text" value={bulkMarkup} onChange={e => setBulkMarkup(e.target.value)} placeholder="%" className="w-24 p-2 rounded bg-white border border-black/20 text-center font-bold" /><button onClick={applyBulkMarkup} disabled={isApplyingBulk} className="bg-black text-white px-4 py-2 rounded-lg font-bold">{isApplyingBulk ? '...' : 'Ок'}</button></div></div>}
                
-               <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-x-auto min-h-[500px] shadow-2xl">
+               <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-x-auto min-h-[500px]">
                   <table className="w-full text-left text-sm">
-                     <thead className="bg-black text-zinc-500 uppercase font-bold text-xs sticky top-0 z-10 shadow-lg">
+                     <thead className="bg-black text-zinc-500 uppercase font-bold text-xs">
                         <tr>
                            <th className="p-4 w-10"><button onClick={() => setSelectedTyreIds(selectedTyreIds.size===tyres.length ? new Set() : new Set(tyres.map(t=>t.id)))}>{selectedTyreIds.size===tyres.length ? <CheckSquare size={16}/> : <Square size={16}/>}</button></th>
-                           <th className="p-4 w-24">Фото</th>
-                           <th className="p-4">Товар (Інфо)</th>
-                           <th className="p-4 text-center">Радіус</th>
+                           <th className="p-4">Фото</th>
+                           <th className="p-4">Код</th>
+                           <th className="p-4 text-center">Категорія</th>
+                           <th className="p-4 text-center">HOT</th>
+                           <th className="p-4">Назва</th>
+                           <th className="p-4 text-center">R</th>
                            <th className="p-4 text-right">Ціна</th>
-                           <th className="p-4 text-right w-24">Дії</th>
+                           <th className="p-4 text-right">Дії</th>
                         </tr>
                      </thead>
                      <tbody className="divide-y divide-zinc-800">
                         {tyres.map(t => (
-                           <tr key={t.id} className={`group hover:bg-zinc-900 transition-colors ${selectedTyreIds.has(t.id) ? 'bg-[#FFC300]/5' : ''}`}>
-                              {/* CHECKBOX */}
-                              <td className="p-4 align-middle">
-                                 <button onClick={() => {const n=new Set(selectedTyreIds); if(n.has(t.id))n.delete(t.id); else n.add(t.id); setSelectedTyreIds(n);}} className="text-zinc-600 hover:text-white transition-colors">
-                                    {selectedTyreIds.has(t.id) ? <CheckSquare size={18} className="text-[#FFC300]"/> : <Square size={18}/>}
-                                 </button>
-                              </td>
+                           <tr key={t.id} className={`hover:bg-zinc-800/50 ${selectedTyreIds.has(t.id) ? 'bg-[#FFC300]/10' : ''}`}>
+                              <td className="p-4"><button onClick={() => {const n=new Set(selectedTyreIds); if(n.has(t.id))n.delete(t.id); else n.add(t.id); setSelectedTyreIds(n);}}>{selectedTyreIds.has(t.id)?<CheckSquare size={16} className="text-[#FFC300]"/>:<Square size={16}/>}</button></td>
                               
-                              {/* COMPACT IMAGE */}
-                              <td className="p-2 align-middle">
-                                 <div className="w-16 h-16 bg-black rounded-lg relative group/img cursor-pointer border border-zinc-800 overflow-hidden">
+                              {/* IMAGE CELL WITH HOVER ZOOM - INCREASED SIZE TO 2x (w-32 h-32) */}
+                              <td className="p-4 w-40 relative">
+                                 <div className="w-32 h-32 bg-black rounded relative group cursor-pointer border border-zinc-800">
                                     {t.image_url ? (
                                        <img 
                                           src={t.image_url} 
-                                          className="w-full h-full object-cover transition-transform duration-200 group-hover/img:scale-110 origin-center" 
+                                          className="w-full h-full object-cover rounded transition-all duration-200 group-hover:scale-[3] group-hover:z-50 group-hover:shadow-2xl group-hover:border-2 group-hover:border-[#FFC300] origin-top-left absolute top-0 left-0" 
                                        />
                                     ) : (
-                                       <div className="w-full h-full flex items-center justify-center text-[10px] text-zinc-700">NO</div>
-                                    )}
-                                    {/* HOVER ZOOM POPUP */}
-                                    {t.image_url && (
-                                       <div className="hidden group-hover/img:block absolute top-0 left-full ml-2 w-48 h-48 bg-black rounded-xl border-2 border-[#FFC300] z-50 shadow-2xl overflow-hidden pointer-events-none">
-                                          <img src={t.image_url} className="w-full h-full object-cover" />
-                                       </div>
+                                       <div className="w-full h-full flex items-center justify-center text-[10px]">NO</div>
                                     )}
                                  </div>
                               </td>
                               
-                              {/* MERGED INFO COLUMN (Title, Code, Badges) */}
-                              <td className="p-4 align-middle">
-                                 <div className="font-bold text-white text-base leading-tight mb-1.5">{t.title}</div>
-                                 
-                                 <div className="flex flex-wrap items-center gap-2">
-                                    {/* Catalog Number Badge */}
-                                    {t.catalog_number && (
-                                       <span className="text-xs font-mono text-zinc-400 bg-black/50 px-1.5 py-0.5 rounded border border-zinc-800">
-                                          {t.catalog_number}
-                                       </span>
-                                    )}
-
-                                    {/* Category Icon */}
-                                    {t.vehicle_type === 'cargo' && <span title="Вантажні" className="text-purple-400 flex items-center gap-1 text-[10px] uppercase font-bold bg-purple-900/20 px-1.5 py-0.5 rounded"><Truck size={12}/> Вант.</span>}
-                                    {t.vehicle_type === 'suv' && <span title="SUV" className="text-green-400 flex items-center gap-1 text-[10px] uppercase font-bold bg-green-900/20 px-1.5 py-0.5 rounded"><Mountain size={12}/> SUV</span>}
-                                    {t.vehicle_type === 'car' && <span title="Легкові" className="text-blue-400 flex items-center gap-1 text-[10px] uppercase font-bold bg-blue-900/20 px-1.5 py-0.5 rounded"><Car size={12}/> Легк.</span>}
-
-                                    {/* Hot Button */}
-                                    <button onClick={() => toggleHotStatus(t.id, !!t.is_hot)} className={`flex items-center gap-1 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded transition-colors ${t.is_hot ? 'bg-orange-600 text-white shadow-orange-500/20 shadow-lg' : 'bg-zinc-800 text-zinc-600 hover:bg-zinc-700 hover:text-zinc-400'}`}>
-                                       <Flame size={10} className={t.is_hot ? 'fill-white' : ''}/> HOT
-                                    </button>
-                                 </div>
+                              <td className="p-4 text-zinc-400 font-mono text-xs">{t.catalog_number}</td>
+                              <td className="p-4 text-center">
+                                 {t.vehicle_type === 'car' ? <div title="Легкові" className="flex flex-col items-center text-blue-400"><Car size={20}/><span className="text-[10px] font-bold mt-1">Легкові</span></div> :
+                                  t.vehicle_type === 'cargo' ? <div title="Вантажні" className="flex flex-col items-center text-purple-400"><Truck size={20}/><span className="text-[10px] font-bold mt-1">Вантажні</span></div> :
+                                  t.vehicle_type === 'suv' ? <div title="SUV" className="flex flex-col items-center text-green-400"><Mountain size={20}/><span className="text-[10px] font-bold mt-1">SUV</span></div> :
+                                  <div title="Категорія не визначена" className="flex flex-col items-center text-red-500 animate-pulse"><HelpCircle size={20}/><span className="text-[10px] font-bold mt-1">Не вказано</span></div>}
+                              </td>
+                              <td className="p-4 text-center"><button onClick={() => toggleHotStatus(t.id, !!t.is_hot)} className={`p-1 rounded-full transition-colors ${t.is_hot ? 'text-orange-500 bg-orange-900/20' : 'text-zinc-700 hover:text-zinc-500'}`}><Flame size={18} className={t.is_hot ? 'fill-current' : ''}/></button></td>
+                              
+                              <td className="p-4 font-bold max-w-[200px] truncate">
+                                 {t.title}
+                                 {t.vehicle_type === 'cargo' && <Truck size={12} className="inline ml-2 text-purple-400"/>}
+                                 {t.vehicle_type === 'suv' && <Mountain size={12} className="inline ml-2 text-green-400"/>}
                               </td>
                               
-                              {/* RADIUS */}
-                              <td className="p-4 text-center align-middle">
-                                 <span className="text-[#FFC300] font-black text-lg block">{t.radius}</span>
-                                 <span className="text-[10px] text-zinc-500 uppercase">{t.season === 'winter' ? 'Зима' : t.season === 'summer' ? 'Літо' : 'Всесез.'}</span>
-                              </td>
-
-                              {/* PRICE */}
-                              <td className="p-4 text-right align-middle">
-                                 <div className="font-mono text-white font-bold text-lg">{t.price}</div>
-                                 {t.base_price && parseFloat(t.base_price) > 0 && (
-                                    <div className="text-[10px] text-zinc-600 line-through font-mono mt-0.5" title="Базова ціна">{t.base_price}</div>
-                                 )}
-                              </td>
-
-                              {/* ACTIONS */}
-                              <td className="p-4 text-right align-middle">
-                                 <div className="flex justify-end gap-1">
-                                    <button onClick={() => openEditTyreModal(t)} className="p-2 bg-zinc-800 rounded-lg hover:bg-blue-900/30 hover:text-blue-400 transition-colors"><Edit2 size={16}/></button>
-                                    <button onClick={() => {setBookingToDelete(t.id); setShowDeleteModal(true);}} className="p-2 bg-zinc-800 rounded-lg hover:bg-red-900/30 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
-                                 </div>
-                              </td>
+                              <td className="p-4 text-center text-[#FFC300] font-bold">{t.radius}</td>
+                              <td className="p-4 text-right font-mono text-white">{t.price}</td>
+                              <td className="p-4 text-right flex justify-end gap-2"><button onClick={() => openEditTyreModal(t)} className="p-2 bg-zinc-800 rounded hover:text-white"><Edit2 size={16}/></button><button onClick={() => {setBookingToDelete(t.id); setShowDeleteModal(true);}} className="p-2 bg-zinc-800 rounded hover:text-red-500"><Trash2 size={16}/></button></td>
                            </tr>
                         ))}
                      </tbody>
@@ -1433,7 +1448,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
                         <div className="flex gap-2">
                            <input type="date" value={bookingForm.date} onChange={e => setBookingForm({...bookingForm, date: e.target.value})} className="bg-black border border-zinc-700 rounded-lg p-3 text-white flex-grow font-bold"/>
                            <select value={bookingForm.time} onChange={e => setBookingForm({...bookingForm, time: e.target.value})} className="bg-black border border-zinc-700 rounded-lg p-3 text-white font-bold">
-                              {generateTimeOptions(bookingForm.date).map(t => <option key={t} value={t}>{t}</option>)}
+                              {generateTimeOptions().map(t => <option key={t} value={t}>{t}</option>)}
                            </select>
                         </div>
                      </div>
@@ -1473,88 +1488,85 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
                      <button onClick={() => setShowAddTyreModal(false)}><X className="text-zinc-500 hover:text-white"/></button>
                   </div>
                   
-                  <div className="mb-4">
-                     <label className="block text-xs font-bold text-zinc-400 mb-1 uppercase text-[#FFC300]">Повна назва товару (Головне поле)</label>
-                     <input type="text" value={tyreForm.title} onChange={e => setTyreForm({...tyreForm, title: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white focus:border-[#FFC300] outline-none font-bold text-lg" placeholder="Наприклад: Michelin Pilot Sport 4 205/55 R16"/>
-                     <p className="text-[10px] text-zinc-500 mt-1">Це саме те, що побачить клієнт. Якщо заповнено, поля "Виробник" та "Модель" використовуються тільки для пошуку.</p>
-                  </div>
-
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                      <div>
                         <label className="block text-xs font-bold text-zinc-400 mb-1 uppercase">Виробник</label>
                         <input type="text" value={tyreForm.manufacturer} onChange={e => setTyreForm({...tyreForm, manufacturer: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white focus:border-[#FFC300] outline-none" placeholder="Michelin"/>
                      </div>
                      <div>
-                        <label className="block text-xs font-bold text-zinc-400 mb-1 uppercase">Категорія (Папка)</label>
-                        <select value={tyreForm.vehicle_type} onChange={e => setTyreForm({...tyreForm, vehicle_type: e.target.value as any})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white focus:border-[#FFC300] outline-none cursor-pointer">
-                           <option value="car">🚗 Легкові</option>
-                           <option value="cargo">🚚 Вантажні (C)</option>
-                           <option value="suv">🏔️ Позашляховики (SUV)</option>
-                        </select>
+                        <label className="block text-xs font-bold text-zinc-400 mb-1 uppercase">Модель (Назва)</label>
+                        <input type="text" value={tyreForm.name} onChange={e => setTyreForm({...tyreForm, name: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white focus:border-[#FFC300] outline-none" placeholder="Alpin 6"/>
                      </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                      <div>
-                        <label className="block text-xs font-bold text-zinc-400 mb-1 uppercase">Сезонність</label>
-                        <select value={tyreForm.season} onChange={e => setTyreForm({...tyreForm, season: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white focus:border-[#FFC300] outline-none cursor-pointer">
-                           <option value="winter">❄️ Зима</option>
-                           <option value="summer">☀️ Літо</option>
-                           <option value="all-season">🌤️ Всесезон</option>
-                        </select>
-                     </div>
-                     <div>
-                        <label className="block text-xs font-bold text-zinc-400 mb-1 uppercase">Радіус (напр. R15)</label>
+                        <label className="block text-xs font-bold text-zinc-400 mb-1 uppercase">Радіус</label>
                         <input type="text" value={tyreForm.radius} onChange={e => setTyreForm({...tyreForm, radius: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white focus:border-[#FFC300] outline-none" placeholder="R15"/>
                      </div>
                      <div>
-                        <label className="block text-xs font-bold text-zinc-400 mb-1 uppercase">Каталожний номер</label>
-                        <input type="text" value={tyreForm.catalog_number} onChange={e => setTyreForm({...tyreForm, catalog_number: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white focus:border-[#FFC300] outline-none font-mono"/>
+                        <label className="block text-xs font-bold text-zinc-400 mb-1 uppercase">Сезон</label>
+                        <select value={tyreForm.season} onChange={e => setTyreForm({...tyreForm, season: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white focus:border-[#FFC300] outline-none">
+                            <option value="winter">Зима</option>
+                            <option value="summer">Літо</option>
+                            <option value="all-season">Всесезон</option>
+                        </select>
                      </div>
                      <div>
-                        <label className="block text-xs font-bold text-zinc-400 mb-1 uppercase text-[#FFC300]">Ціна (Роздріб)</label>
-                        <input type="text" value={tyreForm.price} onChange={e => setTyreForm({...tyreForm, price: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white focus:border-[#FFC300] outline-none font-bold text-lg"/>
+                        <label className="block text-xs font-bold text-zinc-400 mb-1 uppercase">Тип авто</label>
+                        <select value={tyreForm.vehicle_type} onChange={e => setTyreForm({...tyreForm, vehicle_type: e.target.value as any})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white focus:border-[#FFC300] outline-none">
+                            <option value="car">Легковий</option>
+                            <option value="cargo">Вантажний (C)</option>
+                            <option value="suv">Позашляховик</option>
+                        </select>
                      </div>
                      <div>
-                        <label className="block text-xs font-bold text-zinc-400 mb-1 uppercase">Базова ціна (Закуп)</label>
-                        <input type="text" value={tyreForm.base_price} onChange={e => setTyreForm({...tyreForm, base_price: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white focus:border-[#FFC300] outline-none font-mono"/>
+                        <label className="block text-xs font-bold text-zinc-400 mb-1 uppercase">Артикул (Код)</label>
+                        <input type="text" value={tyreForm.catalog_number} onChange={e => setTyreForm({...tyreForm, catalog_number: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white focus:border-[#FFC300] outline-none"/>
                      </div>
                   </div>
-                  
+
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                     <div>
+                        <label className="block text-xs font-bold text-zinc-400 mb-1 uppercase">Ціна (Роздріб)</label>
+                        <input type="text" value={tyreForm.price} onChange={e => setTyreForm({...tyreForm, price: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-[#FFC300] font-bold text-xl focus:border-[#FFC300] outline-none"/>
+                     </div>
+                     <div>
+                        <label className="block text-xs font-bold text-zinc-400 mb-1 uppercase">Базова Ціна (Закуп)</label>
+                        <input type="text" value={tyreForm.base_price} onChange={e => setTyreForm({...tyreForm, base_price: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-zinc-400 font-bold focus:border-[#FFC300] outline-none"/>
+                     </div>
+                  </div>
+
                   <div className="mb-4">
                      <label className="block text-xs font-bold text-zinc-400 mb-1 uppercase">Опис</label>
-                     <textarea value={tyreForm.description} onChange={e => setTyreForm({...tyreForm, description: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white focus:border-[#FFC300] outline-none h-24" placeholder="Детальний опис товару..."/>
-                  </div>
-                  
-                  <div className="mb-6">
-                     <label className="flex items-center gap-3 cursor-pointer bg-black border border-zinc-700 p-3 rounded-lg hover:border-[#FFC300] transition-colors w-max">
-                        <input type="checkbox" checked={tyreForm.is_hot} onChange={e => setTyreForm({...tyreForm, is_hot: e.target.checked})} className="w-5 h-5 rounded border-zinc-600 bg-zinc-900 text-[#FFC300] focus:ring-0 focus:ring-offset-0" />
-                        <span className="text-white font-bold flex items-center gap-2"><Flame size={18} className={tyreForm.is_hot ? "text-orange-500 fill-orange-500" : "text-zinc-600"}/> HOT Пропозиція (Розпродаж)</span>
-                     </label>
+                     <textarea value={tyreForm.description} onChange={e => setTyreForm({...tyreForm, description: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white focus:border-[#FFC300] outline-none h-24"></textarea>
                   </div>
 
-                  {/* Gallery Section */}
-                  <div className="mb-6 bg-black/30 p-4 rounded-xl border border-zinc-800">
-                     <label className="block text-sm font-bold text-zinc-400 mb-3 flex items-center gap-2"><ImageIcon size={16}/> Фотографії товару</label>
-                     <div className="flex flex-wrap gap-3">
-                        {existingGallery.map((url, i) => (
-                           <div key={i} className="relative w-24 h-24 rounded-lg overflow-hidden border border-zinc-700 group shadow-lg">
-                              <img src={url} className="w-full h-full object-cover"/>
-                              <button onClick={() => setExistingGallery(g => g.filter((_, idx) => idx !== i))} className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"><X size={14}/></button>
-                           </div>
-                        ))}
-                        <label className="w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-zinc-700 rounded-lg cursor-pointer hover:border-[#FFC300] hover:text-[#FFC300] text-zinc-500 transition-all bg-black/50 hover:bg-black">
-                           <Plus size={28}/>
-                           <span className="text-[10px] uppercase font-bold mt-1">Додати</span>
-                           <input type="file" multiple accept="image/*" onChange={e => e.target.files && setTyreUploadFiles(prev => [...prev, ...Array.from(e.target.files!)])} className="hidden"/>
-                        </label>
-                     </div>
-                     {tyreUploadFiles.length > 0 && (
-                        <div className="mt-3 text-xs bg-blue-900/20 text-blue-300 p-2 rounded border border-blue-900/50 flex items-center gap-2">
-                           <Loader2 size={12} className="animate-spin"/> Обрано нових файлів для завантаження: {tyreUploadFiles.length}
-                        </div>
-                     )}
+                  <div className="flex items-center gap-4 mb-6">
+                      <label className="flex items-center gap-2 cursor-pointer bg-zinc-800 px-4 py-2 rounded-lg border border-zinc-700">
+                          <input type="checkbox" checked={tyreForm.is_hot} onChange={e => setTyreForm({...tyreForm, is_hot: e.target.checked})} className="w-5 h-5 accent-[#FFC300]"/>
+                          <span className="font-bold text-white">HOT Пропозиція</span>
+                      </label>
+                      
+                      <div className="flex-grow">
+                         <label className="block text-xs font-bold text-zinc-400 mb-1 uppercase">Фото (Додати нові)</label>
+                         <input type="file" multiple onChange={e => setTyreUploadFiles(Array.from(e.target.files || []))} className="w-full bg-black border border-zinc-700 rounded-lg p-2 text-white text-sm"/>
+                      </div>
                   </div>
 
-                  <button onClick={handleSaveTyre} disabled={uploading} className="w-full bg-[#FFC300] text-black font-black text-lg py-4 rounded-xl hover:bg-[#e6b000] flex justify-center items-center gap-2 shadow-lg transition-transform active:scale-95 disabled:opacity-50 disabled:scale-100">
-                     {uploading ? <Loader2 className="animate-spin"/> : <Save size={20}/>} Зберегти Товар
+                  {existingGallery.length > 0 && (
+                      <div className="flex gap-2 overflow-x-auto mb-6 pb-2">
+                          {existingGallery.map((url, idx) => (
+                              <div key={idx} className="w-20 h-20 relative flex-shrink-0">
+                                  <img src={url} className="w-full h-full object-cover rounded"/>
+                                  <button onClick={() => setExistingGallery(prev => prev.filter((_, i) => i !== idx))} className="absolute top-0 right-0 bg-red-600 text-white p-1 rounded-full"><X size={12}/></button>
+                              </div>
+                          ))}
+                      </div>
+                  )}
+
+                  <button onClick={handleSaveTyre} disabled={uploading} className="w-full bg-[#FFC300] text-black font-black py-4 rounded-xl hover:bg-[#e6b000] flex justify-center items-center gap-2">
+                      {uploading ? <Loader2 className="animate-spin"/> : <Save size={20}/>} Зберегти Товар
                   </button>
                </div>
             </div>
@@ -1562,237 +1574,173 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
 
          {/* Delete Confirmation Modal */}
          {showDeleteModal && (
-            <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in zoom-in-95 duration-200">
-               <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-sm text-center shadow-2xl">
-                  <div className="w-16 h-16 bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-900/50">
-                     <AlertTriangle size={32} className="text-red-500"/>
-                  </div>
-                  <h3 className="text-2xl font-bold text-white mb-2">Видалити товар?</h3>
-                  <p className="text-zinc-400 mb-8">Цю дію неможливо скасувати. Товар буде видалено з бази даних назавжди.</p>
-                  <div className="flex gap-3">
-                     <button onClick={() => setShowDeleteModal(false)} className="flex-1 py-3 bg-zinc-800 text-white rounded-xl font-bold hover:bg-zinc-700 transition-colors">Скасувати</button>
-                     <button onClick={async () => {
-                        if (bookingToDelete) {
-                           await supabase.from('tyres').delete().eq('id', bookingToDelete);
-                           fetchTyres(0, true);
-                           fetchStockStats();
-                           fetchCategoryCounts();
-                           setShowDeleteModal(false);
-                           setBookingToDelete(null);
-                        }
-                     }} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-500 transition-colors shadow-lg shadow-red-900/20">Видалити</button>
-                  </div>
-               </div>
+            <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-sm text-center">
+                    <AlertTriangle className="text-red-500 w-16 h-16 mx-auto mb-4"/>
+                    <h3 className="text-xl font-bold text-white mb-2">Видалити товар?</h3>
+                    <p className="text-zinc-400 mb-6">Цю дію неможливо відмінити.</p>
+                    <div className="flex gap-2">
+                        <button onClick={() => setShowDeleteModal(false)} className="flex-1 bg-zinc-800 text-white font-bold py-3 rounded-xl hover:bg-zinc-700">Скасувати</button>
+                        <button onClick={handleDeleteTyre} className="flex-1 bg-red-600 text-white font-bold py-3 rounded-xl hover:bg-red-500">Видалити</button>
+                    </div>
+                </div>
             </div>
          )}
-
-         {/* NEW: Custom Confirmation Modal */}
-         {confirmModal && confirmModal.isOpen && (
-            <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in zoom-in-95 duration-200">
-                <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-sm text-center shadow-2xl">
-                    <div className="w-16 h-16 bg-[#FFC300]/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-[#FFC300]/50">
-                        <HelpCircle size={32} className="text-[#FFC300]"/>
+         
+         {/* Excel Import Modal */}
+         {showExcelModal && (
+            <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-4xl h-[80vh] flex flex-col">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-xl font-bold text-white flex items-center gap-2"><FileSpreadsheet className="text-[#FFC300]"/> Імпорт Excel</h3>
+                        <button onClick={() => setShowExcelModal(false)}><X className="text-zinc-500 hover:text-white"/></button>
                     </div>
-                    <h3 className="text-2xl font-bold text-white mb-2">{confirmModal.title}</h3>
-                    <p className="text-zinc-400 mb-8">{confirmModal.message}</p>
-                    <div className="flex gap-3">
-                        <button onClick={closeConfirmModal} className="flex-1 py-3 bg-zinc-800 text-white rounded-xl font-bold hover:bg-zinc-700 transition-colors">Скасувати</button>
-                        <button onClick={confirmModal.onConfirm} className="flex-1 py-3 bg-[#FFC300] text-black rounded-xl font-bold hover:bg-[#e6b000] transition-colors shadow-lg">Підтвердити</button>
+                    
+                    {importStatus && <div className="bg-blue-900/20 text-blue-200 p-4 rounded-xl mb-4 font-mono text-sm border border-blue-900/50 flex items-center gap-2"><Loader2 className="animate-spin" size={16}/> {importStatus}</div>}
+
+                    <div className="flex-grow overflow-auto border border-zinc-800 rounded-xl mb-4 bg-black/50">
+                        <table className="w-full text-xs text-left">
+                            <thead>
+                                <tr>
+                                    {Array.from({length: maxPreviewCols}).map((_, i) => (
+                                        <th key={i} className="p-2 border-b border-zinc-800 min-w-[150px]">
+                                            <div className="mb-2 text-zinc-500 font-mono">Col {i+1}</div>
+                                            <select 
+                                                value={excelColumnMap[i] || 'ignore'} 
+                                                onChange={(e) => setExcelColumnMap({...excelColumnMap, [i]: e.target.value})}
+                                                className={`w-full p-1 rounded text-xs font-bold outline-none border border-transparent focus:border-[#FFC300] ${IMPORT_FIELDS.find(f => f.value === excelColumnMap[i])?.color || 'bg-zinc-800 text-zinc-400'}`}
+                                            >
+                                                {IMPORT_FIELDS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                                            </select>
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {excelPreview.map((row, rIdx) => (
+                                    <tr key={rIdx} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
+                                        {Array.from({length: maxPreviewCols}).map((_, cIdx) => (
+                                            <td key={cIdx} className="p-2 text-zinc-300 truncate max-w-[150px]" title={String(row[cIdx])}>
+                                                {row[cIdx] !== null && row[cIdx] !== undefined ? String(row[cIdx]) : ''}
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                         <div className="flex items-center gap-2">
+                            <label className="text-zinc-400 text-sm">Почати з рядка:</label>
+                            <input type="number" value={excelStartRow} onChange={e => setExcelStartRow(parseInt(e.target.value))} className="bg-black border border-zinc-700 rounded p-2 text-white w-16 text-center" min="1"/>
+                         </div>
+                         <button onClick={processSmartExcelImport} disabled={importingExcel} className="flex-grow bg-[#FFC300] text-black font-bold py-3 rounded-xl hover:bg-[#e6b000] disabled:opacity-50">
+                            {importingExcel ? 'Імпорт...' : 'Запустити Імпорт'}
+                         </button>
                     </div>
                 </div>
             </div>
          )}
 
-         {/* Upload Report Modal */}
+         {/* Smart Upload Report Modal */}
          {showUploadReport && (
             <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
-               <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col shadow-2xl">
-                  <div className="flex justify-between items-center mb-4">
-                     <h3 className="text-xl font-bold text-white flex items-center gap-2"><Wand2 className="text-blue-400"/> Звіт Розумного Фото</h3>
-                     <button onClick={() => setShowUploadReport(false)}><X className="text-zinc-500 hover:text-white"/></button>
-                  </div>
-                  <div className="flex-grow overflow-y-auto space-y-2 pr-2">
-                     {uploading && <div className="text-center py-4 text-zinc-400 flex flex-col items-center"><Loader2 className="animate-spin mb-2 text-[#FFC300]" size={32}/> Обробка фотографій...</div>}
-                     {uploadReport.map((item, idx) => (
-                        <div key={idx} className={`p-3 rounded-lg border flex items-center gap-3 ${item.status === 'success' ? 'bg-green-900/10 border-green-900/30' : item.status === 'skipped' ? 'bg-zinc-800/50 border-zinc-700' : 'bg-red-900/10 border-red-900/30'}`}>
-                           {item.previewUrl && <img src={item.previewUrl} className="w-10 h-10 object-cover rounded border border-zinc-700" />}
-                           <div className="flex-grow min-w-0">
-                              <div className="text-xs font-mono text-zinc-500 truncate">{item.fileName}</div>
-                              <div className={`text-sm font-bold truncate ${item.status === 'success' ? 'text-green-400' : item.status === 'error' ? 'text-red-400' : 'text-zinc-300'}`}>{item.message}</div>
-                              {item.productName && <div className="text-xs text-zinc-400 truncate">→ {item.productName}</div>}
-                           </div>
-                           <div className="text-xl">
-                              {item.status === 'success' ? <CheckCircle className="text-green-500" size={20}/> : item.status === 'error' ? <AlertTriangle className="text-red-500" size={20}/> : <span className="text-zinc-600 font-bold text-xs">SKIP</span>}
-                           </div>
-                        </div>
-                     ))}
-                  </div>
-                  <button onClick={() => setShowUploadReport(false)} className="mt-4 w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-xl">Закрити</button>
-               </div>
+                <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-2xl h-[80vh] flex flex-col">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-xl font-bold text-white flex items-center gap-2"><Wand2 className="text-[#FFC300]"/> Звіт: Розумне Фото</h3>
+                        <button onClick={() => setShowUploadReport(false)}><X className="text-zinc-500 hover:text-white"/></button>
+                    </div>
+                    
+                    <div className="flex-grow overflow-y-auto space-y-2 mb-4 pr-2">
+                        {uploadReport.map((item, idx) => (
+                            <div key={idx} className={`p-3 rounded-xl border flex gap-3 items-center ${item.status === 'success' ? 'bg-green-900/20 border-green-900/50' : item.status === 'skipped' ? 'bg-zinc-800 border-zinc-700' : 'bg-red-900/20 border-red-900/50'}`}>
+                                <div className="w-12 h-12 bg-black rounded overflow-hidden flex-shrink-0">
+                                    {item.previewUrl && <img src={item.previewUrl} className="w-full h-full object-cover"/>}
+                                </div>
+                                <div className="flex-grow min-w-0">
+                                    <div className="text-white font-bold truncate">{item.fileName}</div>
+                                    <div className={`text-xs ${item.status === 'success' ? 'text-green-400' : item.status === 'skipped' ? 'text-zinc-500' : 'text-red-400'}`}>{item.message}</div>
+                                    {item.productName && <div className="text-xs text-[#FFC300] truncate">→ {item.productName}</div>}
+                                </div>
+                                {item.status === 'success' ? <CheckCircle className="text-green-500 flex-shrink-0"/> : item.status === 'skipped' ? <FileWarning className="text-zinc-600 flex-shrink-0"/> : <AlertTriangle className="text-red-500 flex-shrink-0"/>}
+                            </div>
+                        ))}
+                    </div>
+                    <button onClick={() => setShowUploadReport(false)} className="bg-zinc-800 text-white font-bold py-3 rounded-xl hover:bg-zinc-700">Закрити</button>
+                </div>
             </div>
          )}
-
-         {/* Excel Import Modal */}
-         {showExcelModal && (
-            <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
-               <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-7xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
-                  
-                  {/* TOP HEADER & CONTROLS */}
-                  <div className="bg-black p-4 border-b border-zinc-800">
-                     <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-2xl font-black text-white flex items-center gap-2 uppercase italic"><FileSpreadsheet className="text-[#FFC300]"/> Імпорт з Excel</h3>
-                        <button onClick={() => setShowExcelModal(false)} className="text-zinc-500 hover:text-white p-2 rounded-full hover:bg-zinc-800 transition-colors"><X size={24}/></button>
-                     </div>
-
-                     <div className="flex flex-col md:flex-row gap-6 items-end justify-between">
-                        <div className="flex gap-6 items-end">
-                           <div className="flex flex-col gap-1">
-                              <label className="text-xs font-bold text-zinc-400 uppercase">Почати з рядка</label>
-                              <div className="flex items-center bg-zinc-800 rounded-lg p-1 border border-zinc-700">
-                                 <input type="number" value={excelStartRow} onChange={e => setExcelStartRow(parseInt(e.target.value) || 1)} className="w-16 bg-transparent text-white font-bold text-center outline-none" min="1" />
-                              </div>
-                           </div>
-
-                           <label className="flex items-center gap-3 cursor-pointer bg-zinc-800/50 p-2.5 rounded-lg border border-zinc-700 hover:border-red-500/50 transition-colors h-full">
-                              <input type="checkbox" checked={markMissingOutOfStock} onChange={e => setMarkMissingOutOfStock(e.target.checked)} className="w-5 h-5 rounded border-zinc-600 bg-black text-red-500 focus:ring-0 focus:ring-offset-0" />
-                              <span className="text-sm font-bold text-zinc-300">Видалити товари, яких немає в файлі? <span className="block text-[10px] text-zinc-500 font-normal">Синхронізація прайсу</span></span>
-                           </label>
-                        </div>
-
-                        <button onClick={processExcelImport} disabled={importingExcel} className="bg-green-600 hover:bg-green-500 text-white font-black py-3 px-8 rounded-xl shadow-lg flex items-center justify-center gap-2 uppercase tracking-wide transition-all active:scale-95 disabled:opacity-50 disabled:scale-100">
-                           {importingExcel ? <Loader2 className="animate-spin"/> : <Upload size={20}/>} ЗАВАНТАЖИТИ В БАЗУ
-                        </button>
-                     </div>
-                  </div>
-
-                  {/* PREVIEW TABLE */}
-                  <div className="flex-grow overflow-auto bg-zinc-900 relative">
-                     {excelPreview.length > 0 ? (
-                        <table className="w-full text-xs text-left border-collapse">
-                           <thead className="sticky top-0 z-20 shadow-xl">
-                              {/* Row 1: Column Letters */}
-                              <tr className="bg-zinc-950 text-zinc-500 font-mono text-center">
-                                 <th className="p-2 border-b border-r border-zinc-800 w-10 bg-zinc-950 sticky left-0 z-30">#</th>
-                                 {Array.from({length: maxPreviewCols}).map((_, i) => (
-                                    <th key={i} className="p-2 border-b border-r border-zinc-800 min-w-[150px] font-bold text-[#FFC300]">
-                                       {getExcelColumnName(i)}
-                                    </th>
-                                 ))}
-                              </tr>
-                              {/* Row 2: Selectors */}
-                              <tr className="bg-black border-b border-zinc-800">
-                                 <th className="p-2 border-r border-zinc-800 bg-black sticky left-0 z-30"></th>
-                                 {Array.from({length: maxPreviewCols}).map((_, colIndex) => {
-                                    // Reverse lookup: find which field is mapped to this column index
-                                    const mappedField = Object.keys(columnMapping).find(key => columnMapping[key] === colIndex) || "";
-                                    
-                                    return (
-                                       <th key={colIndex} className="p-2 border-r border-zinc-800">
-                                          <select 
-                                             value={mappedField} 
-                                             onChange={(e) => {
-                                                const newField = e.target.value;
-                                                const newMapping = { ...columnMapping };
-                                                
-                                                // Clear existing mapping for this column if exists
-                                                const fieldPointingHere = Object.keys(newMapping).find(k => newMapping[k] === colIndex);
-                                                if (fieldPointingHere) delete newMapping[fieldPointingHere];
-                                                
-                                                if (newField !== "") {
-                                                   newMapping[newField] = colIndex;
-                                                }
-                                                setColumnMapping(newMapping);
-                                             }} 
-                                             className={`w-full bg-zinc-900 border text-xs font-bold rounded p-1.5 outline-none cursor-pointer uppercase ${mappedField ? 'border-[#FFC300] text-[#FFC300]' : 'border-zinc-700 text-zinc-500'}`}
-                                          >
-                                             <option value="">-- Не імпортувати --</option>
-                                             <option value="catalog_number" className="font-bold text-white">★ Артикул (Код)</option>
-                                             <option value="title" className="font-bold text-white">★ Назва товару</option>
-                                             <option value="manufacturer">Виробник</option>
-                                             <option value="price" className="font-bold text-green-400">Ціна (Роздріб)</option>
-                                             <option value="base_price">Ціна (Закуп)</option>
-                                             <option value="radius">Радіус (R)</option>
-                                             <option value="season">Сезон</option>
-                                             <option value="vehicle_type">Тип авто</option>
-                                          </select>
-                                       </th>
-                                    );
-                                 })}
-                              </tr>
-                           </thead>
-                           <tbody className="divide-y divide-zinc-800 font-mono text-zinc-300 bg-zinc-900">
-                              {excelPreview.map((row, idx) => {
-                                 const rowNum = idx + 1;
-                                 const isIgnored = rowNum < excelStartRow;
-                                 return (
-                                    <tr key={idx} className={isIgnored ? 'opacity-30 bg-red-900/5' : 'hover:bg-zinc-800'}>
-                                       <td className={`p-2 border-r border-zinc-800 text-center font-bold sticky left-0 z-10 ${isIgnored ? 'bg-zinc-900 text-red-500' : 'bg-zinc-900 text-zinc-500'}`}>{rowNum}</td>
-                                       {row.map((cell: any, cIdx: number) => {
-                                          const isMapped = Object.values(columnMapping).includes(cIdx);
-                                          return (
-                                             <td key={cIdx} className={`p-2 border-r border-zinc-800 truncate max-w-[200px] ${isMapped && !isIgnored ? 'text-white' : ''} ${!isMapped ? 'opacity-50' : ''}`}>
-                                                {cell !== null && cell !== undefined ? String(cell) : ''}
-                                             </td>
-                                          );
-                                       })}
-                                    </tr>
-                                 );
-                              })}
-                           </tbody>
-                        </table>
-                     ) : (
-                        <div className="flex flex-col items-center justify-center h-full text-zinc-500 gap-4">
-                           <Loader2 className="animate-spin" size={48}/>
-                           <p>Зчитування файлу...</p>
-                        </div>
-                     )}
-                  </div>
-                  {importStatus && <div className="text-center font-mono text-sm text-black font-bold bg-[#FFC300] p-2 border-t border-[#e6b000]">{importStatus}</div>}
-               </div>
-            </div>
-         )}
-
+         
          {/* Client History Modal */}
          {showHistoryModal && (
-            <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
-               <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-y-auto shadow-2xl">
-                  <div className="flex justify-between items-center mb-6">
-                     <div>
+            <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+                     <div className="flex justify-between items-center mb-6">
                         <h3 className="text-xl font-bold text-white flex items-center gap-2"><History className="text-[#FFC300]"/> Історія Клієнта</h3>
-                        {selectedClientHistory.length > 0 && (
-                           <div className="flex items-center gap-2 mt-1">
-                              {editingClient ? (
-                                 <div className="flex gap-2">
-                                    <input value={editingClient.customer_name} onChange={e => setEditingClient({...editingClient, customer_name: e.target.value})} className="bg-black border border-zinc-700 rounded px-2 py-1 text-white"/>
-                                    <input value={editingClient.customer_phone} onChange={e => setEditingClient({...editingClient, customer_phone: e.target.value})} className="bg-black border border-zinc-700 rounded px-2 py-1 text-white font-mono"/>
-                                    <button onClick={handleEditClientSave} className="bg-green-600 text-white px-3 rounded font-bold">OK</button>
-                                    <button onClick={() => setEditingClient(null)} className="bg-zinc-800 text-white px-3 rounded">X</button>
-                                 </div>
-                              ) : (
-                                 <>
-                                    <span className="text-zinc-400">{selectedClientHistory[0].customer_name}</span>
-                                    <span className="text-zinc-500 font-mono">{selectedClientHistory[0].customer_phone}</span>
-                                    <button onClick={() => setEditingClient(selectedClientHistory[0])} className="text-blue-400 hover:text-white"><Edit2 size={14}/></button>
-                                 </>
-                              )}
-                           </div>
-                        )}
+                        <button onClick={() => setShowHistoryModal(false)}><X className="text-zinc-500 hover:text-white"/></button>
                      </div>
-                     <button onClick={() => setShowHistoryModal(false)}><X className="text-zinc-500 hover:text-white"/></button>
-                  </div>
-                  
-                  <div className="space-y-3">
-                     {selectedClientHistory.map(item => (
-                        <div key={item.id} className="bg-black/50 p-4 rounded-xl border border-zinc-800 flex justify-between items-center">
-                           <div>
-                              <div className="text-[#FFC300] font-bold text-lg">{item.booking_date} <span className="text-sm text-zinc-500 font-normal">({item.start_time})</span></div>
-                              <div className="text-white font-bold">{item.service_label} <span className="text-zinc-500 font-normal">| {item.radius} | {item.duration_minutes} хв</span></div>
-                           </div>
-                           <button onClick={() => deleteFromHistory(item.id)} className="p-2 bg-zinc-800 rounded-lg text-zinc-500 hover:text-red-500 hover:bg-red-900/20 transition-colors"><Trash2 size={18}/></button>
+                     
+                     {selectedClientHistory.length > 0 && (
+                        <div className="bg-zinc-800/50 p-4 rounded-xl border border-zinc-700 mb-4 flex justify-between items-center">
+                            <div>
+                                <div className="text-2xl font-bold text-white">{selectedClientHistory[0].customer_name}</div>
+                                <div className="text-[#FFC300] font-mono text-lg">{selectedClientHistory[0].customer_phone}</div>
+                            </div>
+                            <div className="text-right">
+                                <div className="text-zinc-400 text-sm font-bold uppercase">Всього візитів</div>
+                                <div className="text-3xl font-black text-white">{selectedClientHistory.length}</div>
+                            </div>
                         </div>
-                     ))}
-                  </div>
-               </div>
+                     )}
+
+                     <div className="flex-grow overflow-y-auto space-y-2 pr-2">
+                        {selectedClientHistory.map(booking => (
+                            <div key={booking.id} className="bg-black border border-zinc-800 p-4 rounded-xl flex justify-between items-center group">
+                                <div>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="text-white font-bold">{booking.booking_date}</span>
+                                        <span className="text-zinc-500 font-mono">/</span>
+                                        <span className="text-[#FFC300] font-bold">{booking.start_time}</span>
+                                    </div>
+                                    <div className="text-zinc-300 text-sm">{booking.service_label}</div>
+                                    {booking.radius && <div className="inline-block bg-zinc-800 px-2 py-0.5 rounded text-xs text-zinc-500 mt-1">{booking.radius}</div>}
+                                </div>
+                                <button onClick={() => deleteFromHistory(booking.id)} className="p-2 bg-zinc-900 rounded-lg text-zinc-600 hover:text-red-500 hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={16}/></button>
+                            </div>
+                        ))}
+                     </div>
+                </div>
+            </div>
+         )}
+
+         {/* Confirm Dialog Modal */}
+         {confirmDialog.isOpen && (
+            <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in zoom-in-95 duration-200">
+                <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-sm text-center shadow-2xl">
+                    <div className="w-16 h-16 bg-blue-900/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-900/50">
+                        <HelpCircle size={32} className="text-blue-400"/>
+                    </div>
+                    <h3 className="text-xl font-bold text-white mb-2">{confirmDialog.title}</h3>
+                    <p className="text-zinc-400 mb-6 text-sm">{confirmDialog.message}</p>
+                    <div className="flex gap-3">
+                        <button 
+                            onClick={() => setConfirmDialog({ ...confirmDialog, isOpen: false })} 
+                            className="flex-1 py-3 bg-zinc-800 text-white rounded-xl font-bold hover:bg-zinc-700 transition-colors"
+                        >
+                            Скасувати
+                        </button>
+                        <button 
+                            onClick={() => {
+                                confirmDialog.action();
+                                setConfirmDialog({ ...confirmDialog, isOpen: false });
+                            }} 
+                            className="flex-1 py-3 bg-[#FFC300] text-black rounded-xl font-bold hover:bg-[#e6b000] transition-colors shadow-lg"
+                        >
+                            Продовжити
+                        </button>
+                    </div>
+                </div>
             </div>
          )}
 

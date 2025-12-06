@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { TyreProduct, CartItem } from '../types';
-import { ShoppingBag, Loader2, Phone, X, Filter, Snowflake, Sun, CloudSun, Truck, Check, CreditCard, Wallet, ArrowDown, ShoppingCart, Plus, Minus, Trash2, ChevronLeft, ChevronRight, ZoomIn, Ban, Flame, Grid, ArrowUpDown, Search, Car, Mountain } from 'lucide-react';
+import { ShoppingBag, Loader2, Phone, X, Filter, Snowflake, Sun, CloudSun, Truck, Check, CreditCard, Wallet, ArrowDown, ShoppingCart, Plus, Minus, Trash2, ChevronLeft, ChevronRight, ZoomIn, Ban, Flame, Grid, ArrowUpDown, Search } from 'lucide-react';
 import { PHONE_LINK_1, PHONE_NUMBER_1, FORMSPREE_ENDPOINT } from '../constants';
 
 const MOCK_REGIONS = [
@@ -34,13 +34,11 @@ const formatPrice = (priceStr: string | undefined) => {
 };
 
 const CATEGORIES = [
-  { id: 'all', label: 'Всі', icon: Grid },
-  { id: 'car', label: 'Легкові', icon: Car },
-  { id: 'suv', label: 'SUV 4x4', icon: Mountain },
-  { id: 'cargo', label: 'Вантажні (C)', icon: Truck },
+  { id: 'all', label: 'Всі шини', icon: Grid },
   { id: 'winter', label: 'Зимові', icon: Snowflake },
   { id: 'summer', label: 'Літні', icon: Sun },
-  { id: 'all-season', label: 'Всесезон', icon: CloudSun },
+  { id: 'all-season', label: 'Всесезонні', icon: CloudSun },
+  { id: 'cargo', label: 'Вантажні (C)', icon: Truck },
   { id: 'hot', label: 'HOT Знижки', icon: Flame },
 ] as const;
 
@@ -167,17 +165,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
       }
 
       // 2. CATEGORY FILTERS
-      if (activeCategory === 'car') {
-         // Show explicitly 'car', OR legacy items (null), EXCLUDING cargo/suv/C-types
-         query = query.or('vehicle_type.eq.car,vehicle_type.is.null')
-                      .neq('vehicle_type', 'cargo')
-                      .neq('vehicle_type', 'suv')
-                      .not('radius', 'ilike', '%C%');
-      } else if (activeCategory === 'suv') {
-         query = query.eq('vehicle_type', 'suv');
-      } else if (activeCategory === 'cargo') {
-         query = query.or('vehicle_type.eq.cargo,radius.ilike.%C%');
-      } else if (activeCategory === 'hot') {
+      if (activeCategory === 'hot') {
          query = query.eq('is_hot', true);
       } else if (activeCategory === 'winter') {
          query = query.or('title.ilike.%winter%,title.ilike.%зима%,description.ilike.%winter%,description.ilike.%зима%');
@@ -185,6 +173,9 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
          query = query.or('title.ilike.%summer%,title.ilike.%літо%,description.ilike.%summer%,description.ilike.%літо%');
       } else if (activeCategory === 'all-season') {
          query = query.or('title.ilike.%all season%,title.ilike.%всесезон%,description.ilike.%all season%,description.ilike.%всесезон%');
+      } else if (activeCategory === 'cargo') {
+         // Check both DB column OR title keywords
+         query = query.or('vehicle_type.eq.cargo,radius.ilike.%C%,title.ilike.%R12C%,title.ilike.%R13C%,title.ilike.%R14C%,title.ilike.%R15C%,title.ilike.%R16C%,title.ilike.%R17C%,title.ilike.%R18C%,title.ilike.%R19C%,title.ilike.%LT%,title.ilike.%Cargo%,title.ilike.%Bus%');
       }
 
       // 3. SORTING
@@ -321,8 +312,8 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
         </div>
         
         {/* CATEGORY NAV */}
-        <div className="mb-6 overflow-x-auto pb-2 scrollbar-hide">
-           <div className="flex gap-3 md:gap-4 min-w-max px-2">
+        <div className="mb-8 px-2">
+           <div className="grid grid-cols-3 md:flex md:flex-wrap md:justify-center gap-2 md:gap-4">
               {CATEGORIES.map(cat => {
                  const isActive = activeCategory === cat.id;
                  return (
@@ -330,14 +321,14 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                        key={cat.id} 
                        onClick={() => handleCategoryChange(cat.id)}
                        className={`
-                          flex flex-col items-center justify-center gap-2 p-4 rounded-2xl min-w-[100px] md:min-w-[120px] transition-all duration-300 border
+                          flex flex-col items-center justify-center gap-2 p-2 md:p-4 rounded-xl transition-all duration-300 border
                           ${isActive 
                              ? 'bg-[#FFC300] border-[#FFC300] text-black shadow-lg scale-105' 
                              : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:border-zinc-600 hover:text-white'}
                        `}
                     >
-                       <cat.icon size={24} className={isActive ? 'animate-bounce' : ''} />
-                       <span className="font-bold text-xs md:text-sm uppercase tracking-wide">{cat.label}</span>
+                       <cat.icon size={20} className={`md:w-6 md:h-6 ${isActive ? 'animate-bounce' : ''}`} />
+                       <span className="font-bold text-[10px] md:text-sm uppercase tracking-wide text-center leading-tight">{cat.label}</span>
                     </button>
                  );
               })}
@@ -370,26 +361,30 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
               </div>
 
               {/* Bottom Row: Dropdowns */}
-              <div className="flex flex-col lg:flex-row gap-4 justify-between items-center">
-                 {/* Size Filters */}
-                 <div className="flex gap-2 w-full lg:w-auto overflow-x-auto pb-2 lg:pb-0">
-                    <div className="flex items-center gap-2 bg-black/50 p-1 rounded-lg border border-zinc-800 flex-grow lg:flex-grow-0">
-                       <Filter size={16} className="text-[#FFC300] ml-2" />
-                       <select value={filterWidth} onChange={(e) => setFilterWidth(e.target.value)} className="bg-transparent text-white text-sm font-bold p-2 outline-none w-full lg:w-auto cursor-pointer hover:text-[#FFC300]"><option value="">Ширина</option>{options.widths.map(w => <option key={w} value={w}>{w}</option>)}</select>
-                       <div className="w-px h-4 bg-zinc-700"></div>
-                       <select value={filterHeight} onChange={(e) => setFilterHeight(e.target.value)} className="bg-transparent text-white text-sm font-bold p-2 outline-none w-full lg:w-auto cursor-pointer hover:text-[#FFC300]"><option value="">Висота</option>{options.heights.map(h => <option key={h} value={h}>{h}</option>)}</select>
-                       <div className="w-px h-4 bg-zinc-700"></div>
-                       <select value={filterRadius} onChange={(e) => setFilterRadius(e.target.value)} className="bg-transparent text-white text-sm font-bold p-2 outline-none w-full lg:w-auto cursor-pointer hover:text-[#FFC300]"><option value="">Радіус</option>{options.radii.map(r => <option key={r} value={r}>{r}</option>)}</select>
+              <div className="flex flex-col lg:flex-row gap-4">
+                 {/* Size Filters - Expanded */}
+                 <div className="flex items-center gap-2 w-full lg:flex-grow">
+                    <div className="grid grid-cols-3 gap-0 bg-black/50 rounded-xl border border-zinc-800 flex-grow overflow-hidden divide-x divide-zinc-800">
+                       <div className="relative group">
+                          <Filter size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-[#FFC300] hidden sm:block" />
+                          <select value={filterWidth} onChange={(e) => setFilterWidth(e.target.value)} className="bg-transparent text-white text-xs md:text-sm font-bold p-3 sm:pl-8 w-full outline-none cursor-pointer hover:bg-zinc-800/50 transition-colors text-center sm:text-left appearance-none sm:appearance-auto"><option value="">Ширина</option>{options.widths.map(w => <option key={w} value={w}>{w}</option>)}</select>
+                       </div>
+                       <div className="relative group">
+                          <select value={filterHeight} onChange={(e) => setFilterHeight(e.target.value)} className="bg-transparent text-white text-xs md:text-sm font-bold p-3 w-full outline-none cursor-pointer hover:bg-zinc-800/50 transition-colors text-center"><option value="">Висота</option>{options.heights.map(h => <option key={h} value={h}>{h}</option>)}</select>
+                       </div>
+                       <div className="relative group">
+                          <select value={filterRadius} onChange={(e) => setFilterRadius(e.target.value)} className="bg-transparent text-white text-xs md:text-sm font-bold p-3 w-full outline-none cursor-pointer hover:bg-zinc-800/50 transition-colors text-center"><option value="">Радіус</option>{options.radii.map(r => <option key={r} value={r}>{r}</option>)}</select>
+                       </div>
                     </div>
                     {(filterWidth || filterHeight || filterRadius || searchQuery) && (
-                       <button onClick={resetFilters} className="bg-zinc-800 text-white p-2 rounded-lg hover:bg-red-900/50 transition-colors flex-shrink-0"><X size={20}/></button>
+                       <button onClick={resetFilters} className="bg-zinc-800 text-white p-3 rounded-xl hover:bg-red-900/50 transition-colors flex-shrink-0 border border-zinc-700"><X size={20}/></button>
                     )}
                  </div>
 
                  {/* Sort */}
-                 <div className="flex items-center gap-2 w-full lg:w-auto">
-                    <div className="flex items-center gap-2 bg-black/50 p-1 rounded-lg border border-zinc-800 w-full">
-                       <ArrowUpDown size={16} className="text-zinc-500 ml-2" />
+                 <div className="w-full lg:w-auto lg:min-w-[220px]">
+                    <div className="flex items-center gap-2 bg-black/50 p-1 rounded-xl border border-zinc-800 w-full">
+                       <ArrowUpDown size={16} className="text-zinc-500 ml-2 flex-shrink-0" />
                        <select value={activeSort} onChange={(e) => setActiveSort(e.target.value as any)} className="bg-transparent text-white text-sm font-bold p-2 outline-none w-full cursor-pointer hover:text-[#FFC300]">
                           <option value="newest">Спочатку нові</option>
                           <option value="oldest">Спочатку старі</option>
@@ -432,7 +427,6 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                         {tyre.season === 'summer' && <div className="bg-orange-500 text-white p-1 rounded shadow-lg" title="Літо"><Sun size={14} /></div>}
                         {tyre.season === 'all-season' && <div className="bg-green-600 text-white p-1 rounded shadow-lg" title="Всесезон"><CloudSun size={14} /></div>}
                         {tyre.vehicle_type === 'cargo' && <div className="bg-purple-600 text-white p-1 rounded shadow-lg" title="Вантажна"><Truck size={14} /></div>}
-                        {tyre.vehicle_type === 'suv' && <div className="bg-green-700 text-white p-1 rounded shadow-lg" title="SUV/4x4"><Mountain size={14} /></div>}
                      </div>
 
                      {tyre.in_stock === false && (

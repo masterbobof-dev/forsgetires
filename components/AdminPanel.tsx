@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Lock, Trash2, Calendar, Users, Search, Plus, X, Image as ImageIcon, Settings, Upload, Save, Phone, AlertTriangle, DollarSign, Loader2, TrendingUp, ShoppingBag, FileSpreadsheet, CheckSquare, Square, Edit2, ArrowRight, ArrowLeft, ArrowDown, Clock, Move, History, Wand2, Percent, Printer, Filter, Flame, KeyRound, FileCheck, FileWarning, CheckCircle, Package, RotateCcw, ImagePlus, Eye, Menu, Folder, FolderOpen, Truck, Car, Mountain, Sparkles, HelpCircle, FileUp, ChevronDown, Copy, ArrowUpDown, Tag, ClipboardList, Lightbulb, FileText, Ban, Briefcase, ToggleLeft, ToggleRight, Ruler } from 'lucide-react';
+import { Lock, Trash2, Calendar, Users, Search, Plus, X, Image as ImageIcon, Settings, Upload, Save, Phone, AlertTriangle, DollarSign, Loader2, TrendingUp, ShoppingBag, FileSpreadsheet, CheckSquare, Square, Edit2, ArrowRight, ArrowLeft, ArrowDown, Clock, Move, History, Wand2, Percent, Printer, Filter, Flame, KeyRound, FileCheck, FileWarning, CheckCircle, Package, RotateCcw, ImagePlus, Eye, Menu, Folder, FolderOpen, Truck, Car, Mountain, Sparkles, HelpCircle, FileUp, ChevronDown, Copy, ArrowUpDown, Tag, ClipboardList, Lightbulb, FileText, Ban, Briefcase, ToggleLeft, ToggleRight, Ruler, RefreshCw, CloudDownload } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { BOOKING_SERVICES, WHEEL_RADII, WORK_START_HOUR, WORK_END_HOUR, PRICING_DATA_CARS, PRICING_DATA_SUV, ADDITIONAL_SERVICES, PriceRow } from '../constants';
 import { TyreProduct, TyreOrder, Article, Supplier } from '../types';
@@ -166,6 +166,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
   const [excelColumnMap, setExcelColumnMap] = useState<Record<number, string>>({});
   const [importSupplierId, setImportSupplierId] = useState<string>('');
 
+  // Omega Sync State
+  const [showOmegaModal, setShowOmegaModal] = useState(false);
+  const [omegaApiKey, setOmegaApiKey] = useState('LYA37jgXHEJy9EOY7fkkIIs5Mg75aueD');
+  const [omegaMarkup, setOmegaMarkup] = useState('0');
+  const [omegaSyncStatus, setOmegaSyncStatus] = useState<string[]>([]);
+  const [isOmegaSyncing, setIsOmegaSyncing] = useState(false);
+  const [useProxy, setUseProxy] = useState(true);
+
   // Other Tabs
   const [clients, setClients] = useState<any[]>([]);
   const [clientSearch, setClientSearch] = useState('');
@@ -279,6 +287,151 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
       const newVal = !enableStockQty;
       setEnableStockQty(newVal);
       await supabase.from('settings').upsert({ key: 'enable_stock_quantity', value: String(newVal) });
+  };
+
+  const runOmegaSync = async () => {
+    setIsOmegaSyncing(true);
+    setOmegaSyncStatus(["Запуск синхронізації..."]);
+    let hasError = false;
+    
+    try {
+        // 1. Get DB Tyres
+        setOmegaSyncStatus(prev => [...prev, "Завантаження локальної бази шин..."]);
+        const { data: dbTyres, error: dbError } = await supabase
+            .from('tyres')
+            .select('id, catalog_number');
+            
+        if (dbError) throw new Error(dbError.message);
+        
+        const dbMap = new Map();
+        const normalize = (s: string) => String(s).trim().replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        
+        dbTyres?.forEach(t => {
+            if (t.catalog_number) dbMap.set(normalize(t.catalog_number), t.id);
+        });
+        
+        setOmegaSyncStatus(prev => [...prev, `Знайдено ${dbTyres?.length || 0} товарів у базі.`]);
+
+        // 2. Find/Create Supplier
+        let supplierId: number | null = null;
+        const { data: supData } = await supabase.from('suppliers').select('id').ilike('name', 'Omega').single();
+        if (supData) {
+             supplierId = supData.id;
+        } else {
+             const { data: newSup } = await supabase.from('suppliers').insert([{ name: 'Omega' }]).select('id').single();
+             if (newSup) supplierId = newSup.id;
+        }
+
+        // 3. Loop API
+        let page = 1;
+        let updatedCount = 0;
+        let processedCount = 0;
+        const markup = parseFloat(omegaMarkup) || 0;
+        const multiplier = 1 + (markup / 100);
+
+        while (true) {
+            setOmegaSyncStatus(prev => {
+                const newLog = [...prev];
+                if (newLog.length > 5) newLog.shift(); // Keep log short
+                return [...newLog, `Запит сторінки ${page}...`];
+            });
+
+            try {
+                const targetUrl = "https://public.omega.page/public/api/v1.0/product/pricelist/paged";
+                const fetchUrl = useProxy ? `https://corsproxy.io/?${encodeURIComponent(targetUrl)}` : targetUrl;
+
+                const response = await fetch(fetchUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        "Key": omegaApiKey,
+                        "ProductId": 0,
+                        "Number": page
+                    })
+                });
+
+                if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                
+                const json = await response.json();
+                const items = Array.isArray(json) ? json : (json.products || json.data || []);
+                
+                if (items.length === 0) {
+                    setOmegaSyncStatus(prev => [...prev, "Отримано порожній список. Завершення."]);
+                    break;
+                }
+
+                const batchUpdates = [];
+
+                for (const item of items) {
+                    // Try to guess fields: PascalCase is common in Omega API
+                    const code = item.Code || item.code || item.artikul || item.article;
+                    const price = item.Price || item.price || item.cost; // Base Price
+                    const qty = item.Quantity || item.quantity || item.stock || item.rest; // Stock
+                    
+                    if (code) {
+                        const normCode = normalize(String(code));
+                        const matchId = dbMap.get(normCode);
+                        
+                        if (matchId) {
+                            const basePriceVal = parseFloat(price);
+                            const qtyVal = parseInt(qty);
+                            
+                            if (!isNaN(basePriceVal)) {
+                                const payload: any = {
+                                    id: matchId,
+                                    base_price: Math.round(basePriceVal).toString(),
+                                    stock_quantity: !isNaN(qtyVal) ? qtyVal : 0,
+                                    in_stock: !isNaN(qtyVal) && qtyVal > 0,
+                                    supplier_id: supplierId
+                                };
+                                
+                                if (markup !== 0) {
+                                    payload.price = Math.round(basePriceVal * multiplier).toString();
+                                }
+                                
+                                batchUpdates.push(payload);
+                            }
+                        }
+                    }
+                }
+                
+                // Perform updates
+                if (batchUpdates.length > 0) {
+                    const chunkSize = 10;
+                    for (let i = 0; i < batchUpdates.length; i += chunkSize) {
+                        const chunk = batchUpdates.slice(i, i + chunkSize);
+                        await Promise.all(chunk.map(u => supabase.from('tyres').update(u).eq('id', u.id)));
+                    }
+                    updatedCount += batchUpdates.length;
+                }
+                
+                processedCount += items.length;
+                setOmegaSyncStatus(prev => [...prev, `Сторінка ${page}: Оброблено ${items.length}, Оновлено ${batchUpdates.length}. Всього оновлено: ${updatedCount}`]);
+                
+                page++;
+                if (page > 500) break; // Safety break
+                
+            } catch (err: any) {
+                setOmegaSyncStatus(prev => [...prev, `Помилка на сторінці ${page}: ${err.message}`]);
+                hasError = true;
+                break;
+            }
+        }
+        
+        if (!hasError) {
+            setOmegaSyncStatus(prev => [...prev, "Синхронізацію завершено успішно!"]);
+            fetchTyres(0, true);
+            fetchStockStats();
+            fetchCategoryCounts();
+        } else {
+            setOmegaSyncStatus(prev => [...prev, "Синхронізацію перервано через помилку."]);
+        }
+        
+    } catch (e: any) {
+        setOmegaSyncStatus(prev => [...prev, `Критична помилка: ${e.message}`]);
+    } finally {
+        setIsOmegaSyncing(false);
+    }
   };
 
   // --- ARTICLES LOGIC ---
@@ -1477,9 +1630,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
            </div>
          )}
          
-         {/* ... (Other tabs code remains similar, mostly skipped for brevity unless changes needed, but keeping the structure) ... */}
-         {/* For the sake of the XML, I will output the FULL updated AdminPanel content to avoid breaking anything */}
-         
          {/* CLIENTS TAB */}
          {activeTab === 'clients' && (
             <div className="animate-in fade-in">
@@ -1773,6 +1923,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
                            <Briefcase size={20}/>
                         </div>
                      </div>
+                     
+                     <button onClick={() => setShowOmegaModal(true)} className="bg-gradient-to-r from-blue-900/50 to-blue-800/50 text-blue-200 font-bold px-3 py-2 rounded-lg flex items-center gap-2 border border-blue-800 hover:bg-blue-800/80 text-xs md:text-sm whitespace-nowrap">
+                        <CloudDownload size={16}/>
+                        <span className="hidden md:inline">Синхр. Omega</span>
+                     </button>
 
                      <button onClick={handleSmartPhotoSortClick} disabled={uploading} className="bg-purple-900/50 text-purple-200 font-bold px-3 py-2 rounded-lg flex items-center gap-2 border border-purple-800 hover:bg-purple-800 text-xs md:text-sm whitespace-nowrap">
                         {uploading ? <Loader2 className="animate-spin" size={16}/> : <Copy size={16}/>} 
@@ -1902,11 +2057,75 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
             </div>
          )}
          
-         {/* ... (Modals Section) ... */}
-         {/* ... (Article Modal) ... */}
-         {/* ... (Edit Booking Modal) ... */}
-         {/* ... (Delete Tyre Modal) ... */}
+         {/* Omega Sync Modal */}
+         {showOmegaModal && (
+            <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
+               <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-lg relative shadow-2xl flex flex-col max-h-[90vh]">
+                  <div className="flex justify-between items-center mb-6">
+                     <h3 className="text-xl font-black text-white uppercase italic flex items-center gap-2"><CloudDownload className="text-[#FFC300]"/> Синхронізація Omega Auto</h3>
+                     {!isOmegaSyncing && <button onClick={() => setShowOmegaModal(false)} className="text-zinc-500 hover:text-white"><X size={24}/></button>}
+                  </div>
 
+                  <div className="mb-6 space-y-4">
+                      <div>
+                          <label className="block text-sm font-bold text-zinc-400 mb-1">API Key</label>
+                          <input 
+                             type="text" 
+                             value={omegaApiKey} 
+                             onChange={e => setOmegaApiKey(e.target.value)} 
+                             className="w-full bg-black border border-zinc-700 rounded p-3 text-white font-mono text-sm"
+                             disabled={isOmegaSyncing}
+                          />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-bold text-zinc-400 mb-1">Націнка (%)</label>
+                          <div className="flex items-center gap-2">
+                              <input 
+                                 type="number" 
+                                 value={omegaMarkup} 
+                                 onChange={e => setOmegaMarkup(e.target.value)} 
+                                 className="w-24 bg-black border border-zinc-700 rounded p-3 text-[#FFC300] font-bold text-center"
+                                 disabled={isOmegaSyncing}
+                              />
+                              <span className="text-zinc-500 text-xs">Автоматично оновить роздрібну ціну: (Базова * (1 + %))</span>
+                          </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                          <input 
+                              type="checkbox" 
+                              id="useProxy" 
+                              checked={useProxy} 
+                              onChange={(e) => setUseProxy(e.target.checked)}
+                              className="w-5 h-5 accent-[#FFC300]"
+                              disabled={isOmegaSyncing}
+                          />
+                          <label htmlFor="useProxy" className="text-zinc-400 text-xs md:text-sm font-bold select-none cursor-pointer">
+                              Використовувати CORS-проксі (Для роботи з браузера)
+                          </label>
+                      </div>
+                  </div>
+
+                  <div className="flex-grow bg-black border border-zinc-800 rounded-xl p-4 overflow-y-auto mb-6 font-mono text-xs text-zinc-300 min-h-[200px]">
+                      {omegaSyncStatus.length === 0 ? (
+                          <div className="text-center text-zinc-600 mt-10">Очікування запуску...</div>
+                      ) : (
+                          omegaSyncStatus.map((log, idx) => <div key={idx} className="mb-1 border-b border-zinc-900/50 pb-1 last:border-0">{log}</div>)
+                      )}
+                      <div ref={(el) => el?.scrollIntoView({ behavior: 'smooth' })} />
+                  </div>
+
+                  <button 
+                      onClick={runOmegaSync} 
+                      disabled={isOmegaSyncing || !omegaApiKey}
+                      className="w-full bg-[#FFC300] hover:bg-[#e6b000] text-black font-black py-4 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                      {isOmegaSyncing ? <Loader2 className="animate-spin" /> : 'ЗАПУСТИТИ СИНХРОНІЗАЦІЮ'}
+                  </button>
+               </div>
+            </div>
+         )}
+         
+         {/* ... (Other Modals) ... */}
          {/* Add/Edit Tyre Modal - IMPROVED LAYOUT */}
          {showAddTyreModal && (
             <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">

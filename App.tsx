@@ -10,6 +10,7 @@ import Gallery from './components/Gallery';
 import Prices from './components/Prices';
 import AdminPanel from './components/AdminPanel';
 import TyreShop from './components/TyreShop';
+import Sitemap from './components/Sitemap';
 import { ViewState, TyreProduct } from './types';
 import { Lock, X, Loader2 } from 'lucide-react';
 import { supabase } from './supabaseClient';
@@ -89,6 +90,8 @@ const App: React.FC = () => {
         return <Gallery />;
       case 'shop':
         return <TyreShop initialCategory={shopCategory} initialProduct={shopInitialProduct} />;
+      case 'sitemap':
+        return <Sitemap onNavigate={setCurrentView} />;
       case 'home':
       default:
         return (
@@ -130,7 +133,9 @@ const App: React.FC = () => {
         {renderContent()}
       </main>
       
-      {currentView !== 'admin' && <Footer />}
+      {currentView !== 'admin' && (
+        <Footer onNavigate={setCurrentView} />
+      )}
 
       {/* CUSTOM AUTH MODAL */}
       {showAuthModal && (

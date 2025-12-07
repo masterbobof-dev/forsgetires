@@ -7,7 +7,7 @@ const Services: React.FC = () => {
     <section className="py-12 bg-[#09090b]">
       <div className="max-w-4xl mx-auto px-4">
         <h2 className="text-3xl font-black text-white mb-8 border-b-2 border-[#FFC300] inline-block pb-2">
-          Ремонт дисків та шин: Наші послуги
+          Послуги Шиномонтажу та Ремонту Дисків
         </h2>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

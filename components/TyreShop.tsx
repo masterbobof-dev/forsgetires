@@ -324,8 +324,8 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
         {/* HEADER SECTION */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 px-2">
            <div>
-              <h2 className="text-3xl md:text-4xl font-black text-white mb-2 border-b-2 border-[#FFC300] inline-block pb-2">Магазин Шин</h2>
-              <p className="text-zinc-400">Широкий вибір шин для будь-якого сезону.</p>
+              <h2 className="text-3xl md:text-4xl font-black text-white mb-2 border-b-2 border-[#FFC300] inline-block pb-2">Магазин Шин та Дисків</h2>
+              <p className="text-zinc-400">Широкий вибір нових та б/в шин у Синельниковому.</p>
            </div>
            <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex items-center gap-4 w-full md:w-auto">
               <div className="p-2 bg-[#FFC300] rounded-full text-black"><Phone size={20}/></div>

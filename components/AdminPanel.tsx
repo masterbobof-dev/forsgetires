@@ -300,30 +300,70 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
     const timelineItems = [];
     let currentMins = WORK_START_HOUR * 60; 
     const endOfDayMins = WORK_END_HOUR * 60; 
+    
     sortedBookings.forEach((booking) => {
        const bStart = timeToMins(booking.start_time);
        const bEnd = bStart + booking.duration_minutes;
-       if (bStart > currentMins) timelineItems.push(renderFreeBlock(currentMins, bStart, date));
+       
+       // Gap before booking
+       if (bStart > currentMins) {
+           timelineItems.push(renderFreeBlock(currentMins, bStart, date));
+       }
+       
+       // The booking itself
        timelineItems.push(renderBookingBlock(booking, date));
+       
        currentMins = Math.max(currentMins, bEnd);
     });
-    if (currentMins < endOfDayMins) timelineItems.push(renderFreeBlock(currentMins, endOfDayMins, date));
-    return timelineItems;
+    
+    // Remaining time after last booking
+    if (currentMins < endOfDayMins) {
+        timelineItems.push(renderFreeBlock(currentMins, endOfDayMins, date));
+    }
+    
+    return (
+        <div className="p-3 h-full overflow-y-auto bg-zinc-950/50 scrollbar-thin scrollbar-thumb-zinc-700">
+            {/* GRID LAYOUT: BRICKS */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                {timelineItems}
+            </div>
+        </div>
+    );
   };
 
   const renderFreeBlock = (startMins: number, endMins: number, date: string) => {
      const duration = endMins - startMins;
-     const h = Math.floor(duration / 60);
-     const m = duration % 60;
-     const label = `${h > 0 ? h + ' год ' : ''}${m > 0 ? m + ' хв' : ''}`;
      const startTimeStr = minsToTime(startMins);
-     const endTimeStr = minsToTime(endMins);
+     
+     const isSmallGap = duration < 20;
+
      return (
-       <div key={`free-${startMins}`} className="flex gap-2 mb-2 min-h-[50px] group">
-         <div className="w-14 flex-shrink-0 flex flex-col items-center pt-2"><span className="text-zinc-500 font-mono text-sm">{startTimeStr}</span><div className="w-px h-full bg-zinc-800 my-1"></div></div>
-         <div className="flex-grow border border-dashed border-zinc-700 rounded-xl flex items-center justify-between px-4 bg-zinc-900/30 hover:bg-[#FFC300]/5 hover:border-[#FFC300] transition-all cursor-pointer relative" onClick={() => openAddModal(date, startTimeStr)} onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDropOnGap(e, date, startTimeStr)}>
-             <div className="text-zinc-500 text-sm group-hover:text-[#FFC300]">Вільний час: <span className="font-bold text-white">{startTimeStr} - {endTimeStr}</span><span className="block text-xs opacity-50">({label})</span></div>
-             <button className="bg-zinc-800 text-zinc-400 p-2 rounded-full group-hover:bg-[#FFC300] group-hover:text-black transition-colors z-10"><Plus size={20} /></button>
+       <div 
+         key={`free-${startMins}`} 
+         className={`
+            relative group border-2 border-dashed border-zinc-800 rounded-xl bg-zinc-900/40 
+            hover:bg-[#FFC300]/10 hover:border-[#FFC300] transition-all cursor-pointer 
+            flex flex-col items-center justify-center text-center p-2 min-h-[100px]
+            ${isSmallGap ? 'opacity-50 hover:opacity-100' : ''}
+         `}
+         onClick={() => openAddModal(date, startTimeStr)}
+         onDragOver={(e) => e.preventDefault()} 
+         onDrop={(e) => handleDropOnGap(e, date, startTimeStr)}
+       >
+         <div className="text-[#FFC300] font-mono font-black text-lg mb-1">
+            {startTimeStr}
+         </div>
+         <div className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider mb-2">
+            Вільний час
+         </div>
+         <div className="text-zinc-600 text-xs font-bold bg-zinc-900/50 px-2 py-1 rounded-full group-hover:text-[#FFC300] transition-colors">
+            {duration} хв
+         </div>
+         
+         <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+             <div className="bg-[#FFC300] text-black rounded-full p-1 shadow-lg">
+                <Plus size={14} />
+             </div>
          </div>
        </div>
      );
@@ -331,15 +371,61 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
 
   const renderBookingBlock = (booking: any, date: string) => {
       const bEndMins = timeToMins(booking.start_time) + booking.duration_minutes;
-      const isPast = date === getKyivDateString() && bEndMins < timeToMins(getKyivTimeString());
+      
+      let bgColor = "bg-zinc-800"; 
+      let borderClass = "border-l-4 border-green-500";
+      let statusIcon = null;
+
+      if (booking.status === 'staff') {
+          bgColor = "bg-zinc-800";
+          borderClass = "border-l-4 border-[#FFC300]";
+      } else if (booking.is_edited) {
+          bgColor = "bg-red-900/20";
+          borderClass = "border-l-4 border-red-500";
+          statusIcon = <AlertTriangle size={12} className="text-red-500" />;
+      }
+
       return (
-         <div key={booking.id} className="flex gap-2 mb-2">
-            <div className="w-14 flex-shrink-0 pt-2 text-right"><span className={`font-mono text-sm font-bold ${booking.status === 'staff' ? 'text-blue-400' : 'text-[#FFC300]'}`}>{booking.start_time}</span></div>
-            <div draggable={!isPast} onDragStart={() => setDraggedBookingId(booking.id)} onClick={() => openEditModal(booking)} className={`flex-grow relative p-3 rounded-xl border-l-4 shadow-lg cursor-pointer transition-transform hover:scale-[1.01] ${booking.status === 'staff' ? 'bg-zinc-800 border-blue-500' : 'bg-zinc-900 border-[#FFC300]'} ${isPast ? 'opacity-50 grayscale pointer-events-none' : ''} ${booking.is_edited ? 'ring-1 ring-red-500' : ''}`}>
-               <div className="flex justify-between items-start">
-                  <div><div className="font-bold text-white leading-tight text-lg">{booking.customer_name}</div><div className="text-sm text-zinc-400 font-mono flex items-center gap-2 mt-1"><Phone size={12}/> {booking.customer_phone}{booking.is_edited && <span className="text-red-500 text-[10px] uppercase font-bold border border-red-500 px-1 rounded">Змінено</span>}</div></div>
-                  <div className="text-right"><div className="text-zinc-300 font-bold text-sm">{booking.service_label}</div><div className="bg-black/40 px-2 py-0.5 rounded text-xs text-zinc-500 inline-block mt-1">{booking.radius}</div><div className="text-xs text-zinc-500 mt-1 font-mono">до {minsToTime(bEndMins)}</div></div>
+         <div 
+            key={booking.id} 
+            draggable
+            onDragStart={() => setDraggedBookingId(booking.id)}
+            onClick={() => openEditModal(booking)}
+            className={`
+                relative p-3 rounded-xl shadow-lg cursor-grab active:cursor-grabbing 
+                transition-all hover:scale-[1.03] hover:shadow-xl hover:z-10 
+                flex flex-col justify-between min-h-[120px] overflow-hidden
+                ${bgColor} ${borderClass} border-y border-r border-zinc-700/50
+            `}
+         >
+            <div className="flex justify-between items-start mb-2">
+               <div className="font-mono font-black text-xl text-white tracking-tight">
+                  {booking.start_time}
                </div>
+               <div className="text-xs font-mono text-zinc-500 pt-1">
+                  {minsToTime(bEndMins)}
+               </div>
+            </div>
+            
+            <div className="flex-grow">
+                <div className="font-bold text-sm text-zinc-100 leading-tight mb-1 line-clamp-2">
+                    {booking.customer_name}
+                </div>
+                <div className="flex items-center gap-1 text-[10px] text-zinc-400 font-mono">
+                    <Phone size={10} /> {booking.customer_phone}
+                </div>
+            </div>
+            
+            <div className="flex justify-between items-end mt-2 pt-2 border-t border-white/5">
+                <div className="text-[10px] font-bold text-zinc-300 truncate max-w-[60%]">
+                    {booking.service_label}
+                </div>
+                <div className="flex items-center gap-1">
+                    {statusIcon}
+                    <div className="bg-[#FFC300] text-black px-1.5 py-0.5 rounded text-[10px] font-black">
+                        {booking.radius}
+                    </div>
+                </div>
             </div>
          </div>
       );
@@ -1331,809 +1417,194 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
         case 'shipped': return 'Відправлено';
         case 'completed': return 'Виконано';
         case 'cancelled': return 'Скасовано';
-        default: return s;
+        default: return s
     }
-  }
+  };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white pb-20">
-      
-      {/* HIDDEN PRINT AREA */}
-      <style>{`@media print { body * { visibility: hidden; } #print-area, #print-area * { visibility: visible; } #print-area { position: absolute; left: 0; top: 0; width: 100%; color: black; background: white; z-index: 9999; } table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; } th, td { border: 1px solid #000; padding: 5px; text-align: center; } th { background: #eee; font-weight: bold; } h2 { text-align: center; margin-bottom: 20px; text-transform: uppercase; font-size: 18px; } h3 { font-size: 14px; margin-top: 15px; margin-bottom: 5px; font-weight: bold; text-transform: uppercase; } }`}</style>
-      <div id="print-area" className="hidden"><h2>Прайс-лист Послуг Шиномонтажу</h2><h3>Легкові Авто</h3><table><thead><tr><th>Радіус</th><th>Зняття/Вст</th><th>Баланс</th><th>Монтаж</th><th>Сума (1)</th><th>Сума (4)</th></tr></thead><tbody>{priceDataCars.map((r, i) => (<tr key={i}><td>R{r.radius}</td><td>{r.removeInstall}</td><td>{r.balancing}</td><td>{r.mounting}</td><td>{r.total1}</td><td>{r.total4}</td></tr>))}</tbody></table><h3>Кросовери / Буси</h3><table><thead><tr><th>Радіус</th><th>Зняття/Вст</th><th>Баланс</th><th>Монтаж</th><th>Сума (1)</th><th>Сума (4)</th></tr></thead><tbody>{priceDataSUV.map((r, i) => (<tr key={i}><td>R{r.radius}</td><td>{r.removeInstall}</td><td>{r.balancing}</td><td>{r.mounting}</td><td>{r.total1}</td><td>{r.total4}</td></tr>))}</tbody></table><h3>Додаткові послуги</h3><table><thead><tr><th>Послуга</th><th>Ціна</th></tr></thead><tbody>{additionalServices.map((s, i) => (<tr key={i}><td style={{textAlign: 'left'}}>{s.name}</td><td>{s.price}</td></tr>))}</tbody></table></div>
+    <div className="min-h-screen bg-[#09090b] text-white p-4 pb-32">
+       {/* Header */}
+       <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+          <div>
+            <h1 className="text-3xl font-black italic text-white flex items-center gap-2 uppercase"><Lock className="text-[#FFC300]" /> Панель керування</h1>
+            <p className="text-zinc-500 text-sm font-mono mt-1">Режим: {mode === 'service' ? 'СЕРВІС (Графік)' : 'МАГАЗИН (Склад)'}</p>
+          </div>
+          <button onClick={onLogout} className="bg-zinc-800 text-white px-6 py-2 rounded-xl font-bold border border-zinc-700 hover:bg-red-900/50 hover:border-red-500 transition-colors flex items-center gap-2">
+             <X size={16} /> Вихід
+          </button>
+       </div>
 
-      {errorMessage && <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] bg-red-900/90 text-white px-6 py-3 rounded-full border border-red-500 animate-in fade-in slide-in-from-top-4 font-bold">{errorMessage}</div>}
+       {/* Tabs */}
+       <div className="flex flex-wrap gap-2 mb-8 bg-zinc-900/50 p-2 rounded-xl border border-zinc-800">
+          {['schedule', 'clients', 'gallery', 'prices', 'settings', 'tyres', 'orders', 'stats', 'articles'].map(tab => {
+             if (mode === 'service' && !['schedule', 'clients', 'gallery', 'prices'].includes(tab)) return null;
+             if (mode === 'tyre' && !['tyres', 'orders', 'stats', 'settings', 'articles'].includes(tab)) return null;
+             
+             const labels: any = { schedule: 'Графік', clients: 'Клієнти', gallery: 'Галерея', prices: 'Ціни', settings: 'Налаштування', tyres: 'Товари', orders: 'Замовлення', stats: 'Статистика', articles: 'Статті' };
+             
+             return (
+               <button
+                 key={tab}
+                 onClick={() => setActiveTab(tab as any)}
+                 className={`px-4 py-2 rounded-lg font-bold text-sm transition-all ${activeTab === tab ? 'bg-[#FFC300] text-black shadow-lg' : 'text-zinc-400 hover:text-white hover:bg-zinc-800'}`}
+               >
+                 {labels[tab] || tab}
+               </button>
+             );
+          })}
+       </div>
 
-      <header className="bg-zinc-900 border-b border-zinc-800 p-4 sticky top-0 z-50 shadow-md print:hidden">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-           <h1 className="text-xl font-bold uppercase flex items-center gap-2"><Lock className="text-[#FFC300]"/> Admin Panel <span className="text-xs text-zinc-500 bg-black px-2 py-0.5 rounded">{mode === 'service' ? 'Сервіс (1234)' : 'Магазин (1994)'}</span></h1>
-           <div className="flex bg-black rounded-lg p-1 overflow-x-auto">
-              {mode === 'service' && ['schedule', 'clients', 'prices', 'gallery'].map(t => (
-                  <button key={t} onClick={() => setActiveTab(t as any)} className={`px-4 py-2 rounded font-bold text-sm uppercase ${activeTab === t ? 'bg-[#FFC300] text-black' : 'text-zinc-400'}`}>{t === 'schedule' ? 'Розклад' : t === 'clients' ? 'Клієнти' : t === 'prices' ? 'Прайс' : t === 'gallery' ? 'Галерея' : 'Налашт.'}</button>
-              ))}
-              {mode === 'tyre' && ['tyres', 'orders', 'articles', 'stats', 'settings'].map(t => (
-                  <button key={t} onClick={() => setActiveTab(t as any)} className={`px-4 py-2 rounded font-bold text-sm uppercase ${activeTab === t ? 'bg-[#FFC300] text-black' : 'text-zinc-400'}`}>{t === 'tyres' ? 'Шини' : t === 'orders' ? 'Замовлення' : t === 'articles' ? 'Статті' : t === 'settings' ? 'Налашт.' : 'Стат.'}</button>
-              ))}
-              <button onClick={onLogout} className="px-4 py-2 text-zinc-500 hover:text-white ml-2">Вихід</button>
-           </div>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto p-4 print:hidden">
-         {/* ... (Existing Tabs content) ... */}
-         {activeTab === 'schedule' && (
-           <div className="animate-in fade-in">
-             <div className="flex items-center gap-2 mb-4 bg-blue-900/20 p-3 rounded-lg border border-blue-900/50"><Clock className="text-blue-400" size={20} /><span className="text-blue-200 font-bold">Час за Києвом: {getKyivTimeString()}</span>{new Date().getHours() >= 20 && <span className="text-orange-400 font-bold ml-2">(Вечірній режим: показано наступні дні)</span>}</div>
-             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden flex flex-col h-[80vh]"><div className="bg-black p-4 border-b border-zinc-800 flex justify-between items-center sticky top-0 z-20"><div><h3 className="text-xl font-black text-white uppercase italic">{formatDisplayDate(displayDate1)}</h3></div><div className="flex gap-2"><button onClick={() => openAddModal(displayDate1)} className="bg-[#FFC300] text-black text-lg font-black px-8 py-3 rounded-xl hover:bg-[#e6b000] flex items-center gap-2 shadow-lg transition-transform active:scale-95 uppercase tracking-wide"><Plus size={24}/> Записати вручну</button><div className="bg-zinc-800 px-3 py-1 rounded-full text-xs font-bold text-zinc-400 flex items-center">{bookingsCol1.length} записів</div></div></div><div className="p-4 overflow-y-auto flex-grow bg-black/20 scrollbar-thin scrollbar-thumb-zinc-700">{getDayTimeline(displayDate1, bookingsCol1)}</div></div>
-                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden flex flex-col h-[80vh]"><div className="bg-black p-4 border-b border-zinc-800 flex justify-between items-center sticky top-0 z-20"><div><h3 className="text-xl font-black text-zinc-300 uppercase italic">{formatDisplayDate(displayDate2)}</h3></div><div className="flex gap-2"><button onClick={() => openAddModal(displayDate2)} className="bg-[#FFC300] text-black text-lg font-black px-8 py-3 rounded-xl hover:bg-[#e6b000] flex items-center gap-2 shadow-lg transition-transform active:scale-95 uppercase tracking-wide"><Plus size={24}/> Записати вручну</button><div className="bg-zinc-800 px-3 py-1 rounded-full text-xs font-bold text-zinc-400 flex items-center">{bookingsCol2.length} записів</div></div></div><div className="p-4 overflow-y-auto flex-grow bg-black/20 scrollbar-thin scrollbar-thumb-zinc-700">{getDayTimeline(displayDate2, bookingsCol2)}</div></div>
+       {/* CONTENT */}
+       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 md:p-6 min-h-[500px] relative">
+          
+          {/* SCHEDULE */}
+          {activeTab === 'schedule' && (
+             <div className="h-full flex flex-col">
+                <div className="flex justify-between items-center mb-4">
+                   <h2 className="text-xl font-bold text-white flex items-center gap-2"><Calendar className="text-[#FFC300]" /> Графік запису</h2>
+                   <button onClick={() => openAddModal(displayDate1)} className="bg-[#FFC300] text-black px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-[#e6b000]"><Plus size={18}/> Додати запис</button>
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-grow">
+                    <div className="bg-black/30 rounded-xl border border-zinc-800 flex flex-col overflow-hidden h-[600px]">
+                       <div className="p-3 bg-zinc-800/80 border-b border-zinc-700 font-bold text-[#FFC300] text-center">{displayDate1}</div>
+                       {getDayTimeline(displayDate1, bookingsCol1)}
+                    </div>
+                    <div className="bg-black/30 rounded-xl border border-zinc-800 flex flex-col overflow-hidden h-[600px]">
+                       <div className="p-3 bg-zinc-800/80 border-b border-zinc-700 font-bold text-zinc-300 text-center">{displayDate2}</div>
+                       {getDayTimeline(displayDate2, bookingsCol2)}
+                    </div>
+                </div>
              </div>
-           </div>
-         )}
+          )}
 
-         {activeTab === 'clients' && (
-            <div className="animate-in fade-in">
-               <h3 className="text-2xl font-black text-white mb-6 flex items-center gap-2"><Users className="text-[#FFC300]"/> База Клієнтів</h3>
-               <div className="mb-4 relative max-w-md"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={18} /><input type="text" placeholder="Пошук за номером телефону..." value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} className="w-full bg-zinc-900 border border-zinc-700 rounded-xl pl-10 pr-4 py-3 outline-none focus:border-[#FFC300] text-white"/></div>
-               <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-xl"><table className="w-full text-left text-sm"><thead className="bg-black text-zinc-500 uppercase font-bold text-xs"><tr><th className="p-4">Ім'я</th><th className="p-4">Телефон</th><th className="p-4">Візитів</th><th className="p-4 text-right">Останній візит</th><th className="p-4"></th></tr></thead><tbody className="divide-y divide-zinc-800">{uniqueClients.map((c, idx) => (<tr key={idx} className="hover:bg-zinc-800/50 cursor-pointer group" onClick={() => openClientHistory(c.customer_phone)}><td className="p-4 font-bold text-white text-lg">{c.customer_name}</td><td className="p-4 font-mono text-[#FFC300] font-bold">{c.customer_phone}</td><td className="p-4 text-zinc-400 font-bold">{c.total_visits}</td><td className="p-4 text-right text-zinc-400">{c.booking_date}</td><td className="p-4 text-right flex justify-end gap-2"><button onClick={(e) => { e.stopPropagation(); openClientHistory(c.customer_phone); }} className="p-2 rounded bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700"><History size={18} /></button><button onClick={(e) => { e.stopPropagation(); handleDeleteClient(c.customer_phone); }} className="p-2 rounded bg-red-900/20 text-red-500 hover:bg-red-600 hover:text-white transition-colors"><Trash2 size={18} /></button></td></tr>))}</tbody></table></div>
-            </div>
-         )}
-         
-         {activeTab === 'gallery' && (
-            <div className="animate-in fade-in">
-               <div className="mb-6 flex justify-between items-center"><h3 className="text-xl font-bold">Галерея</h3><div className="relative"><button onClick={() => galleryInputRef.current?.click()} className="bg-[#FFC300] text-black font-bold px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#e6b000]">{uploading ? <Loader2 className="animate-spin" /> : <Upload size={18}/>} Завантажити</button><input type="file" ref={galleryInputRef} onChange={handleGalleryUpload} className="hidden" accept="image/*" /></div></div>
-               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{galleryImages.map(img => (<div key={img.id} className="relative group rounded-xl overflow-hidden aspect-square border border-zinc-800"><img src={img.url} className="w-full h-full object-cover" /><button onClick={() => deleteGalleryImage(img.id, img.url)} className="absolute top-2 right-2 bg-red-600 text-white p-2 rounded-full opacity-0 group-hover:opacity-100"><Trash2 size={20}/></button></div>))}</div>
-            </div>
-         )}
+          {/* TYRES */}
+          {activeTab === 'tyres' && (
+             <div>
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                   <div className="flex items-center gap-2">
+                      <ShoppingBag className="text-[#FFC300]" size={24} />
+                      <h2 className="text-xl font-bold text-white">Склад Шин ({stockStats.total} шт)</h2>
+                   </div>
+                   <div className="flex gap-2">
+                      <button onClick={handleSmartPhotoSortClick} className="bg-zinc-800 text-white px-3 py-2 rounded-lg text-sm font-bold border border-zinc-700 hover:border-[#FFC300]">Auto Photo</button>
+                      <button onClick={handleAutoCategorizeClick} className="bg-zinc-800 text-white px-3 py-2 rounded-lg text-sm font-bold border border-zinc-700 hover:border-[#FFC300]">Auto Category</button>
+                      <button onClick={() => setShowAddTyreModal(true)} className="bg-[#FFC300] text-black px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-[#e6b000]"><Plus size={18}/> Додати товар</button>
+                   </div>
+                </div>
+                
+                {/* Search & Categories */}
+                <div className="flex flex-col md:flex-row gap-4 mb-6">
+                   <input type="text" placeholder="Пошук..." value={tyreSearch} onChange={e => setTyreSearch(e.target.value)} className="bg-black border border-zinc-700 rounded-lg p-3 text-white w-full md:w-64" />
+                   <div className="flex gap-2 overflow-x-auto pb-2">
+                      {['all', 'car', 'cargo', 'suv', 'hot', 'out_of_stock'].map(cat => (
+                         <button key={cat} onClick={() => setTyreCategoryTab(cat as any)} className={`px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap border ${tyreCategoryTab === cat ? 'bg-zinc-800 border-[#FFC300] text-[#FFC300]' : 'bg-black border-zinc-800 text-zinc-400'}`}>
+                            {cat.toUpperCase()} ({ (categoryCounts as any)[cat === 'out_of_stock' ? 'out' : cat] })
+                         </button>
+                      ))}
+                   </div>
+                </div>
 
-         {/* ARTICLES TAB */}
-         {activeTab === 'articles' && (
-            <div className="animate-in fade-in">
-               <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-2xl font-black text-white flex items-center gap-2"><Lightbulb className="text-[#FFC300]"/> Статті (Корисні поради)</h3>
-                  <button onClick={() => openArticleModal()} className="bg-[#FFC300] text-black font-bold px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#e6b000]">
-                     <Plus size={18}/> Нова стаття
-                  </button>
-               </div>
-               
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {articles.map((article) => (
-                     <div key={article.id} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden group flex flex-col">
-                        <div className="h-40 bg-black relative">
-                           {article.image_url ? (
-                              <img src={article.image_url} alt={article.title} className="w-full h-full object-cover" />
-                           ) : (
-                              <div className="w-full h-full flex items-center justify-center text-zinc-700"><FileText size={40}/></div>
-                           )}
-                           <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button onClick={() => openArticleModal(article)} className="p-2 bg-blue-600 text-white rounded hover:bg-blue-500"><Edit2 size={16}/></button>
-                              <button onClick={() => handleDeleteArticle(article.id)} className="p-2 bg-red-600 text-white rounded hover:bg-red-500"><Trash2 size={16}/></button>
-                           </div>
-                        </div>
-                        <div className="p-4 flex flex-col flex-grow">
-                           <h4 className="text-lg font-bold text-white mb-2 line-clamp-2">{article.title}</h4>
-                           <p className="text-zinc-400 text-sm line-clamp-3 mb-4">{article.content}</p>
-                           <div className="mt-auto text-xs text-zinc-500">{new Date(article.created_at).toLocaleDateString()}</div>
-                        </div>
-                     </div>
-                  ))}
-               </div>
-            </div>
-         )}
-
-         {/* SETTINGS TAB */}
-         {activeTab === 'settings' && (
-            <div className="animate-in fade-in max-w-2xl mx-auto space-y-8">
-               <h3 className="text-2xl font-black text-white flex items-center gap-2 mb-6"><Settings className="text-[#FFC300]"/> Глобальні Налаштування</h3>
-               
-               {/* PIN MANAGEMENT */}
-               <div className="bg-red-900/10 p-6 rounded-2xl border border-red-900/50 relative shadow-2xl">
-                  <div className="absolute top-4 right-4 text-red-500 opacity-20"><KeyRound size={64}/></div>
-                  <h4 className="text-red-400 text-lg font-black uppercase mb-4 flex items-center gap-2"><KeyRound size={24}/> Зміна Паролів (PIN)</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-                     <div>
-                        <label className="block text-sm text-zinc-300 font-bold mb-2">PIN Сервіс (Розклад)</label>
-                        <input type="text" value={adminPin} onChange={e => setAdminPin(e.target.value)} className="w-full bg-black border border-zinc-700 rounded-xl p-4 text-white font-mono font-bold text-xl focus:border-[#FFC300] outline-none text-center" placeholder="1234" />
-                     </div>
-                     <div>
-                        <label className="block text-sm text-zinc-300 font-bold mb-2">PIN Магазин (Шини)</label>
-                        <input type="text" value={tyrePin} onChange={e => setTyrePin(e.target.value)} className="w-full bg-black border border-zinc-700 rounded-xl p-4 text-white font-mono font-bold text-xl focus:border-[#FFC300] outline-none text-center" placeholder="1994" />
-                     </div>
-                  </div>
-                  <div className="mt-6 flex justify-end">
-                     <button onClick={saveAllPrices} className="bg-red-600 hover:bg-red-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition-transform active:scale-95 flex items-center gap-2">
-                        <Save size={20} /> Зберегти нові паролі
-                     </button>
-                  </div>
-               </div>
-
-               <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800">
-                  <h4 className="text-white text-lg font-bold mb-4">Інші дії</h4>
-                  <div className="flex flex-col md:flex-row gap-4 flex-wrap">
-                     <button onClick={handleResetStockClick} className="flex-1 bg-blue-900/30 text-blue-200 px-6 py-3 rounded-xl font-bold border border-blue-900/50 hover:bg-blue-900/50 flex items-center justify-center gap-2 min-w-[200px]"><RotateCcw size={20}/> Скинути склад (Всі в наявності)</button>
-                     <button onClick={handleAutoCategorizeClick} className="flex-1 bg-orange-900/30 text-orange-200 px-6 py-3 rounded-xl font-bold border border-orange-900/50 hover:bg-orange-900/50 flex items-center justify-center gap-2 min-w-[200px]"><Sparkles size={20}/> Авто-сортування категорій</button>
-                     <button onClick={saveAllPrices} className="flex-1 bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-500 flex items-center justify-center gap-2 shadow-lg min-w-[200px]"><Save size={20}/> Зберегти все</button>
-                  </div>
-               </div>
-            </div>
-         )}
-
-         {/* PRICES */}
-         {activeTab === 'prices' && (
-            <div className="animate-in fade-in space-y-8">
-               <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-2xl font-black text-white flex items-center gap-2">Редагування цін</h3>
-                  <div className="flex gap-2">
-                     <button onClick={handlePrint} className="bg-zinc-800 text-white px-6 py-3 rounded-xl font-bold border border-zinc-700 hover:bg-zinc-700 flex items-center gap-2 min-w-[120px] justify-center"><Printer size={20}/> Друк</button>
-                     <button onClick={saveAllPrices} className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-500 flex items-center gap-2 shadow-lg min-w-[120px] justify-center"><Save size={20}/> Зберегти</button>
-                  </div>
-               </div>
-               <div className="flex flex-wrap items-center gap-2 bg-black/50 p-3 rounded-lg border border-zinc-800 mb-4"><span className="text-zinc-400 text-xs font-bold uppercase mr-2 flex items-center gap-1"><Percent size={14}/> Швидка націнка:</span>{[2.5, 5, 10].map(p => (<React.Fragment key={p}><button onClick={() => applyPriceMarkup(p)} className="px-3 py-1 bg-zinc-800 hover:bg-[#FFC300] hover:text-black rounded text-xs font-bold transition-colors">+{p}%</button><button onClick={() => applyPriceMarkup(-p)} className="px-3 py-1 bg-zinc-800 hover:bg-red-500 hover:text-white rounded text-xs font-bold transition-colors">-{p}%</button></React.Fragment>))}</div>
-               <div><h4 className="text-lg font-bold text-white mb-4">Легкові</h4><TablePriceEditor data={priceDataCars} category="cars" /></div>
-               <div><h4 className="text-lg font-bold text-white mb-4">Кросовери</h4><TablePriceEditor data={priceDataSUV} category="suv" /></div>
-               <div><h4 className="text-lg font-bold text-white mb-4">Додаткові</h4><div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800"><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{additionalServices.map((service, idx) => (<div key={idx} className="flex gap-2"><input value={service.name} onChange={e => {const n=[...additionalServices]; n[idx].name=e.target.value; setAdditionalServices(n);}} className="bg-black border border-zinc-700 rounded p-2 text-white flex-grow"/><input value={service.price} onChange={e => {const n=[...additionalServices]; n[idx].price=e.target.value; setAdditionalServices(n);}} className="bg-black border border-zinc-700 rounded p-2 text-[#FFC300] w-24 font-bold text-center"/></div>))}</div></div></div>
-            </div>
-         )}
-
-         {/* STATS */}
-         {activeTab === 'stats' && <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-in fade-in"><div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800"><h3 className="text-zinc-400 text-xs font-bold uppercase">Всього замовлень</h3><p className="text-4xl font-black text-white">{statsData.totalOrders}</p></div><div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800"><h3 className="text-zinc-400 text-xs font-bold uppercase">Шини</h3><p className="text-4xl font-black text-[#FFC300]">{statsData.totalTyres}</p></div><div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800"><h3 className="text-zinc-400 text-xs font-bold uppercase">Записів</h3><p className="text-4xl font-black text-white">{statsData.totalBookings}</p></div><div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800 relative overflow-hidden"><h3 className="text-zinc-400 text-xs font-bold uppercase">Чистий дохід (Прибуток)</h3><p className="text-3xl font-black text-green-400">{statsData.totalRevenue.toLocaleString()} грн</p><DollarSign className="absolute -bottom-4 -right-4 text-green-900/20 w-32 h-32" /></div></div>}
-         
-         {/* ORDERS */}
-         {activeTab === 'orders' && (
-            <div className="space-y-4 animate-in fade-in">
-               {tyreOrders.map((order) => (
-                  <div key={order.id} className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col gap-4 relative group">
-                     {/* Edit Button */}
-                     <button 
-                        onClick={() => { setEditingOrder(order); setShowOrderEditModal(true); }} 
-                        className="absolute top-4 right-4 p-2 bg-zinc-800 rounded-lg hover:bg-zinc-700 hover:text-white transition-colors border border-zinc-700 z-10"
-                     >
-                        <Edit2 size={16}/>
-                     </button>
-
-                     <div className="flex justify-between items-start pr-12">
-                        <div>
-                           <h3 className="font-bold text-white text-lg">{order.customer_name}</h3>
-                           <div className="text-[#FFC300] font-bold flex items-center gap-2"><Phone size={14}/> {order.customer_phone}</div>
-                        </div>
-                        <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${getStatusColor(order.status)}`}>{getStatusLabel(order.status)}</span>
-                     </div>
-                     
-                     {order.items && (
-                        <div className="space-y-2">
-                           {order.items.map((item: any, idx: number) => (
-                              <div key={idx} className="flex justify-between items-center text-sm border-b border-zinc-800 pb-2">
-                                 <span className="text-zinc-300">{item.title}</span>
-                                 <div className="flex gap-4">
-                                    <span className="font-bold">{item.quantity} шт</span>
-                                    <span className="text-[#FFC300] font-mono">{item.price} грн</span>
-                                 </div>
-                              </div>
-                           ))}
-                        </div>
-                     )}
-                     
-                     {/* Delivery Info Preview */}
-                     {(order.delivery_method === 'newpost') && (
-                        <div className="text-xs text-zinc-500 flex items-center gap-2 mt-2 pt-2 border-t border-zinc-800/50">
-                           <Truck size={12}/> {order.delivery_city || 'Місто не вказано'}, {order.delivery_warehouse || 'Відділення не вказано'}
-                        </div>
-                     )}
-                  </div>
-               ))}
-            </div>
-         )}
-
-         {/* TYRES */}
-         {activeTab === 'tyres' && (
-            <div className="animate-in fade-in">
-               
-               {/* Controls Bar */}
-               <div className="flex flex-col md:flex-row gap-4 justify-between mb-6">
-                  
-                  {/* HAMBURGER MENU FOR CATEGORIES */}
-                  <div className="relative">
-                     <button 
-                        onClick={() => setShowCategoryMenu(!showCategoryMenu)}
-                        className="bg-zinc-800 text-white font-bold px-4 py-3 rounded-lg flex items-center gap-2 border border-zinc-700 hover:bg-zinc-700 transition-colors"
-                     >
-                        <Menu size={20} className="text-[#FFC300]"/>
-                        <span className="uppercase tracking-wide text-sm">{renderCategoryName()}</span>
-                     </button>
-                     
-                     {showCategoryMenu && (
-                        <div className="absolute top-full left-0 mt-2 w-72 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl z-50 overflow-hidden animate-in slide-in-from-top-2">
-                           {/* ... (Existing Menu) ... */}
-                           <div className="p-2 bg-black/50 border-b border-zinc-800 text-xs font-bold text-zinc-500 uppercase px-4 py-2">Категорії (Папки)</div>
-                           <button onClick={() => { setTyreCategoryTab('all'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 transition-colors border-b border-zinc-800/50">
-                              <FolderOpen size={18} className="text-zinc-400"/> Всі Товари <span className="ml-auto bg-zinc-800 text-xs px-2 py-0.5 rounded-full text-zinc-400">{categoryCounts.all}</span>
-                           </button>
-                           <button onClick={() => { setTyreCategoryTab('car'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 transition-colors border-b border-zinc-800/50">
-                              <Car size={18} className="text-blue-400"/> Легкові <span className="ml-auto bg-blue-900/50 text-xs px-2 py-0.5 rounded-full text-blue-200">{categoryCounts.car}</span>
-                           </button>
-                           <button onClick={() => { setTyreCategoryTab('cargo'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 transition-colors border-b border-zinc-800/50">
-                              <Truck size={18} className="text-purple-400"/> Вантажні (C) <span className="ml-auto bg-purple-900/50 text-xs px-2 py-0.5 rounded-full text-purple-200">{categoryCounts.cargo}</span>
-                           </button>
-                           <button onClick={() => { setTyreCategoryTab('suv'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 transition-colors border-b border-zinc-800/50">
-                              <Mountain size={18} className="text-green-400"/> Позашляховики <span className="ml-auto bg-green-900/50 text-xs px-2 py-0.5 rounded-full text-green-200">{categoryCounts.suv}</span>
-                           </button>
-                           <button onClick={() => { setTyreCategoryTab('hot'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 transition-colors border-b border-zinc-800/50">
-                              <Flame size={18} className="text-orange-500"/> HOT Знижки <span className="ml-auto bg-orange-900/50 text-xs px-2 py-0.5 rounded-full text-orange-200">{categoryCounts.hot}</span>
-                           </button>
-                           <button onClick={() => { setTyreCategoryTab('out_of_stock'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-red-900/20 flex items-center gap-3 transition-colors text-red-400">
-                              <Ban size={18}/> Немає в наявності <span className="ml-auto bg-red-900/50 text-xs px-2 py-0.5 rounded-full text-red-200">{categoryCounts.out}</span>
-                           </button>
-                        </div>
-                     )}
-                  </div>
-
-                  {/* SORTING & SEARCH - UPDATED LAYOUT */}
-                  <div className="flex-grow flex gap-2">
-                     <div className="relative flex-grow flex items-center">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={16}/>
-                        <input type="text" placeholder="Пошук шин..." value={tyreSearch} onChange={e => setTyreSearch(e.target.value)} onKeyDown={e => e.key==='Enter' && fetchTyres(0,true)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-10 pr-4 py-3 outline-none focus:border-[#FFC300] text-lg font-bold" />
-                     </div>
-                     
-                     {/* NEW SORT DROPDOWN */}
-                     <div className="relative min-w-[140px] hidden md:block">
-                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"><ArrowUpDown size={16}/></div>
-                        <select 
-                           value={tyreSort} 
-                           onChange={(e) => setTyreSort(e.target.value as any)} 
-                           className="w-full h-full bg-zinc-900 border border-zinc-800 rounded-lg pl-9 pr-2 py-2 outline-none focus:border-[#FFC300] text-sm font-bold appearance-none cursor-pointer hover:bg-zinc-800"
-                        >
-                           <option value="newest">Нові</option>
-                           <option value="oldest">Старі</option>
-                           <option value="price_asc">Дешеві</option>
-                           <option value="price_desc">Дорогі</option>
-                           <option value="with_photo">З фото</option>
-                           <option value="no_photo">Без фото</option>
-                        </select>
-                     </div>
-                  </div>
-
-                  <div className="flex gap-2 flex-wrap">
-                     {/* Mobile Sort Button (Visible only on mobile) */}
-                     <div className="md:hidden relative w-12 h-12">
-                        <select 
-                           value={tyreSort} 
-                           onChange={(e) => setTyreSort(e.target.value as any)} 
-                           className="w-full h-full bg-zinc-800 border border-zinc-700 rounded-lg outline-none text-transparent appearance-none absolute inset-0 z-10 cursor-pointer"
-                        >
-                           <option value="newest">Нові</option>
-                           <option value="oldest">Старі</option>
-                           <option value="price_asc">Дешеві</option>
-                           <option value="price_desc">Дорогі</option>
-                           <option value="with_photo">З фото</option>
-                           <option value="no_photo">Без фото</option>
-                        </select>
-                        <div className="absolute inset-0 flex items-center justify-center text-white pointer-events-none bg-zinc-800 rounded-lg border border-zinc-700">
-                           <ArrowUpDown size={20}/>
-                        </div>
-                     </div>
-
-                     <button onClick={handleSmartPhotoSortClick} disabled={uploading} className="bg-purple-900/50 text-purple-200 font-bold px-3 py-2 rounded-lg flex items-center gap-2 border border-purple-800 hover:bg-purple-800 text-xs md:text-sm whitespace-nowrap">
-                        {uploading ? <Loader2 className="animate-spin" size={16}/> : <Copy size={16}/>} 
-                        <span className="hidden md:inline">Авто-фото</span>
-                     </button>
-                     <button onClick={() => smartUploadInputRef.current?.click()} className="bg-blue-900 text-blue-200 font-bold px-3 py-2 rounded-lg flex items-center gap-2 border border-blue-800 hover:bg-blue-800 text-xs md:text-sm whitespace-nowrap">
-                        <Wand2 size={16}/> 
-                        <span className="hidden md:inline">Розумне фото</span>
-                     </button>
-                     <input type="file" ref={smartUploadInputRef} onChange={handleSmartImageUpload} className="hidden" multiple accept="image/*" />
-                     
-                     <button onClick={() => fileInputRef.current?.click()} className="bg-zinc-800 text-white font-bold px-4 py-2 rounded-lg flex items-center gap-2 border border-zinc-700 hover:bg-zinc-700">
-                        <FileSpreadsheet size={18}/>
-                     </button>
-                     <input type="file" ref={fileInputRef} onChange={handleExcelFileSelect} className="hidden" accept=".xlsx" />
-                     
-                     {/* COMPACT ADD BUTTON */}
-                     <button onClick={() => {setEditingTyreId(null); setTyreForm({ manufacturer: '', name: '', radius: 'R15', season: 'winter', vehicle_type: 'car', price: '', old_price: '', base_price: '', catalog_number: '', description: '', is_hot: false }); setExistingGallery([]); setTyreUploadFiles([]); setShowAddTyreModal(true);}} className="bg-[#FFC300] text-black font-bold px-3 md:px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#e6b000]">
-                        <Plus size={18}/> 
-                        <span className="hidden md:inline">Додати</span>
-                     </button>
-                  </div>
-               </div>
-               
-               {/* Bulk Price Management */}
-               <div className="bg-zinc-800 border border-zinc-700 rounded-xl p-3 mb-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="text-zinc-400 font-bold text-sm uppercase flex items-center gap-2">
-                     <Settings size={16} className="text-[#FFC300]" /> 
-                     <span>Масове управління цінами</span>
-                     <span className="text-xs normal-case opacity-50 ml-1">(для {selectedTyreIds.size > 0 ? `обраних: ${selectedTyreIds.size}` : 'всіх у списку'})</span>
-                  </div>
-                  <div className="flex items-center gap-2 w-full sm:w-auto">
-                     <input 
-                        type="text" 
-                        value={bulkMarkup} 
-                        onChange={e => setBulkMarkup(e.target.value)} 
-                        placeholder="%" 
-                        className="w-16 p-2 rounded-lg bg-black border border-zinc-600 text-white text-center font-bold outline-none focus:border-[#FFC300]" 
-                     />
-                     <button onClick={() => handleBulkPriceUpdate(1)} disabled={isApplyingBulk} className="flex-1 sm:flex-none bg-green-900/50 text-green-200 px-4 py-2 rounded-lg font-bold border border-green-800 hover:bg-green-800 flex items-center justify-center gap-1 transition-colors">
-                        <ArrowRight size={14} className="-rotate-45"/> + Ціна
-                     </button>
-                     <button onClick={() => handleBulkPriceUpdate(-1)} disabled={isApplyingBulk} className="flex-1 sm:flex-none bg-red-900/50 text-red-200 px-4 py-2 rounded-lg font-bold border border-red-800 hover:bg-red-800 flex items-center justify-center gap-1 transition-colors">
-                        <ArrowRight size={14} className="rotate-45"/> - Ціна
-                     </button>
-                  </div>
-               </div>
-               
-               {/* List View Info */}
-               {selectedTyreIds.size > 0 && <div className="bg-[#FFC300] text-black p-3 rounded-xl flex items-center justify-between mb-4"><div className="font-bold flex items-center gap-2"><CheckSquare size={18}/> Обрано: {selectedTyreIds.size}</div></div>}
-               
-               <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-x-auto min-h-[500px]">
-                  <table className="w-full text-left text-sm">
-                     <thead className="bg-black text-zinc-500 uppercase font-bold text-xs">
-                        <tr>
-                           <th className="p-4 w-10"><button onClick={() => setSelectedTyreIds(selectedTyreIds.size===tyres.length ? new Set() : new Set(tyres.map(t=>t.id)))}>{selectedTyreIds.size===tyres.length ? <CheckSquare size={16}/> : <Square size={16}/>}</button></th>
-                           <th className="p-4">Фото</th>
-                           <th className="p-4">Код</th>
-                           <th className="p-4 text-center">Категорія</th>
-                           <th className="p-4 text-center">HOT</th>
-                           <th className="p-4">Назва</th>
-                           <th className="p-4 text-center">R</th>
-                           <th className="p-4 text-right">Ціна</th>
-                           <th className="p-4 text-right">Дії</th>
-                        </tr>
-                     </thead>
-                     <tbody className="divide-y divide-zinc-800">
-                        {tyres.map(t => (
-                           <tr key={t.id} className={`hover:bg-zinc-800/50 ${selectedTyreIds.has(t.id) ? 'bg-[#FFC300]/10' : ''} ${t.in_stock === false ? 'opacity-50 grayscale' : ''}`}>
-                              <td className="p-4"><button onClick={() => {const n=new Set(selectedTyreIds); if(n.has(t.id))n.delete(t.id); else n.add(t.id); setSelectedTyreIds(n);}}>{selectedTyreIds.has(t.id)?<CheckSquare size={16} className="text-[#FFC300]"/>:<Square size={16}/>}</button></td>
-                              
-                              <td className="p-4 w-40 relative">
-                                 <div className="w-32 h-32 bg-black rounded relative group cursor-pointer border border-zinc-800">
-                                    {t.image_url ? (
-                                       <img 
-                                          src={t.image_url} 
-                                          className="w-full h-full object-cover rounded transition-all duration-200 group-hover:scale-[3] group-hover:z-50 group-hover:shadow-2xl group-hover:border-2 group-hover:border-[#FFC300] origin-top-left absolute top-0 left-0" 
-                                       />
-                                    ) : (
-                                       <div className="w-full h-full flex items-center justify-center text-[10px]">NO</div>
-                                    )}
-                                    {t.in_stock === false && <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-red-500 font-bold uppercase text-[10px] border-2 border-red-500 m-2">Немає</div>}
-                                 </div>
-                              </td>
-                              
-                              <td className="p-4 text-zinc-400 font-mono text-xs">{t.catalog_number}</td>
-                              <td className="p-4 text-center">
-                                 {t.vehicle_type === 'car' ? <div title="Легкові" className="flex flex-col items-center text-blue-400"><Car size={20}/><span className="text-[10px] font-bold mt-1">Легкові</span></div> :
-                                  t.vehicle_type === 'cargo' ? <div title="Вантажні" className="flex flex-col items-center text-purple-400"><Truck size={20}/><span className="text-[10px] font-bold mt-1">Вантажні</span></div> :
-                                  t.vehicle_type === 'suv' ? <div title="SUV" className="flex flex-col items-center text-green-400"><Mountain size={20}/><span className="text-[10px] font-bold mt-1">SUV</span></div> :
-                                  <div title="Категорія не визначена" className="flex flex-col items-center text-red-500 animate-pulse"><HelpCircle size={20}/><span className="text-[10px] font-bold mt-1">Не вказано</span></div>}
-                              </td>
-                              <td className="p-4 text-center"><button onClick={() => toggleHotStatus(t.id, !!t.is_hot)} className={`p-1 rounded-full transition-colors ${t.is_hot ? 'text-orange-500 bg-orange-900/20' : 'text-zinc-700 hover:text-zinc-500'}`}><Flame size={18} className={t.is_hot ? 'fill-current' : ''}/></button></td>
-                              
-                              <td className="p-4 font-bold max-w-[200px] truncate">
-                                 {t.title}
-                                 {t.vehicle_type === 'cargo' && <Truck size={12} className="inline ml-2 text-purple-400"/>}
-                                 {t.vehicle_type === 'suv' && <Mountain size={12} className="inline ml-2 text-green-400"/>}
-                              </td>
-                              
-                              <td className="p-4 text-center text-[#FFC300] font-bold">{t.radius}</td>
-                              <td className="p-4 text-right font-mono text-white">
-                                 {t.old_price && parseFloat(t.old_price) > parseFloat(t.price) ? (
-                                    <div className="flex flex-col items-end">
-                                       <span className="text-zinc-500 text-xs line-through">{t.old_price}</span>
-                                       <span className="text-red-500 font-bold">{t.price}</span>
-                                    </div>
-                                 ) : t.price}
-                              </td>
-                              <td className="p-4 text-right flex justify-end gap-2"><button onClick={() => openEditTyreModal(t)} className="p-2 bg-zinc-800 rounded hover:text-white"><Edit2 size={16}/></button><button onClick={() => {setBookingToDelete(t.id); setShowDeleteModal(true);}} className="p-2 bg-zinc-800 rounded hover:text-red-500"><Trash2 size={16}/></button></td>
-                           </tr>
-                        ))}
-                     </tbody>
-                  </table>
-               </div>
-               
-               {hasMoreTyres && <div className="mt-8 text-center pb-8"><button onClick={() => fetchTyres(tyrePage + 1, false)} disabled={loadingTyres} className="bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 px-12 rounded-xl border border-zinc-700 flex items-center gap-2 mx-auto disabled:opacity-50">{loadingTyres ? <Loader2 className="animate-spin" /> : <ArrowDown size={20} />} Завантажити ще</button></div>}
-            </div>
-         )}
-
-         {/* --- MODALS SECTION --- */}
-         
-         {/* Article Modal */}
-         {showArticleModal && (
-            <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-               <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-2xl relative shadow-2xl h-[90vh] flex flex-col">
-                  <div className="flex justify-between items-center mb-4">
-                     <h3 className="text-xl font-black text-white">{editingArticle ? 'Редагувати статтю' : 'Нова стаття'}</h3>
-                     <button onClick={() => setShowArticleModal(false)} className="text-zinc-500 hover:text-white"><X size={24}/></button>
-                  </div>
-                  <div className="space-y-4 flex-grow overflow-y-auto">
-                     <div>
-                        <label className="block text-xs font-bold text-zinc-500 mb-1">Заголовок</label>
-                        <input type="text" value={articleForm.title} onChange={e => setArticleForm({...articleForm, title: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-bold text-lg" placeholder="Введіть заголовок..." />
-                     </div>
-                     
-                     <div className="flex gap-4 items-center">
-                        {articleForm.image_url ? (
-                           <div className="relative group w-32 h-32 rounded-lg overflow-hidden border border-zinc-700 flex-shrink-0">
-                              <img src={articleForm.image_url} className="w-full h-full object-cover" />
-                              <button onClick={() => setArticleForm({...articleForm, image_url: '', image: null})} className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full"><X size={12}/></button>
-                           </div>
-                        ) : articleForm.image ? (
-                           <div className="relative group w-32 h-32 rounded-lg overflow-hidden border border-zinc-700 flex-shrink-0">
-                              <img src={URL.createObjectURL(articleForm.image)} className="w-full h-full object-cover" />
-                              <button onClick={() => setArticleForm({...articleForm, image: null})} className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full"><X size={12}/></button>
-                           </div>
-                        ) : (
-                           <button onClick={() => articleImageRef.current?.click()} className="w-32 h-32 rounded-lg border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center text-zinc-500 hover:text-[#FFC300] hover:border-[#FFC300] flex-shrink-0">
-                              <ImagePlus size={24} />
-                              <span className="text-xs font-bold mt-2">Додати фото</span>
-                           </button>
-                        )}
-                        <input type="file" ref={articleImageRef} onChange={e => e.target.files && setArticleForm({...articleForm, image: e.target.files[0]})} className="hidden" accept="image/*" />
-                        <div className="text-zinc-500 text-sm">
-                           Завантажте зображення для статті. Оптимальний розмір: 800x600px.
-                        </div>
-                     </div>
-
-                     <div className="flex-grow">
-                        <label className="block text-xs font-bold text-zinc-500 mb-1">Зміст статті</label>
-                        <textarea value={articleForm.content} onChange={e => setArticleForm({...articleForm, content: e.target.value})} className="w-full h-64 bg-black border border-zinc-700 rounded-lg p-3 text-white font-medium resize-none leading-relaxed" placeholder="Текст статті..." />
-                     </div>
-                  </div>
-                  <div className="pt-4 mt-4 border-t border-zinc-800 flex justify-end gap-2">
-                     <button onClick={() => setShowArticleModal(false)} className="px-4 py-2 rounded-lg bg-zinc-800 text-white font-bold hover:bg-zinc-700">Скасувати</button>
-                     <button onClick={handleSaveArticle} disabled={uploading} className="px-6 py-2 rounded-lg bg-[#FFC300] text-black font-bold hover:bg-[#e6b000] flex items-center gap-2">
-                        {uploading ? <Loader2 className="animate-spin" /> : <Save size={18}/>} Зберегти
-                     </button>
-                  </div>
-               </div>
-            </div>
-         )}
-         
-         {/* Edit Booking Modal */}
-         {showEditModal && (
-            <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-               <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-md relative shadow-2xl animate-in zoom-in-95">
-                  <button onClick={() => setShowEditModal(false)} className="absolute top-4 right-4 text-zinc-500 hover:text-white"><X size={24}/></button>
-                  <h3 className="text-xl font-black text-white mb-6 uppercase italic">{bookingForm.id ? 'Редагування запису' : 'Новий запис'}</h3>
-                  <div className="space-y-4">
-                     <input type="text" placeholder="Ім'я клієнта" value={bookingForm.name} onChange={e => setBookingForm({...bookingForm, name: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-xl p-3 text-white outline-none focus:border-[#FFC300] font-bold" />
-                     <input type="tel" placeholder="Телефон" value={bookingForm.phone} onChange={e => setBookingForm({...bookingForm, phone: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-xl p-3 text-white outline-none focus:border-[#FFC300] font-bold" />
-                     <div className="grid grid-cols-2 gap-4">
-                        <select value={bookingForm.serviceId} onChange={e => setBookingForm({...bookingForm, serviceId: e.target.value})} className="bg-black border border-zinc-700 rounded-xl p-3 text-white outline-none focus:border-[#FFC300] font-bold">
-                           {BOOKING_SERVICES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-                        </select>
-                        <select value={bookingForm.radius} onChange={e => setBookingForm({...bookingForm, radius: e.target.value})} className="bg-black border border-zinc-700 rounded-xl p-3 text-white outline-none focus:border-[#FFC300] font-bold">
-                           {WHEEL_RADII.map(r => <option key={r} value={r}>{r}</option>)}
-                        </select>
-                     </div>
-                     <div className="grid grid-cols-2 gap-4">
-                        <input type="date" value={bookingForm.date} onChange={e => setBookingForm({...bookingForm, date: e.target.value})} className="bg-black border border-zinc-700 rounded-xl p-3 text-white outline-none focus:border-[#FFC300] font-bold" />
-                        <select value={bookingForm.time} onChange={e => setBookingForm({...bookingForm, time: e.target.value})} className="bg-black border border-zinc-700 rounded-xl p-3 text-white outline-none focus:border-[#FFC300] font-bold">
-                           {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                     </div>
-                     <div className="flex gap-4 mt-6">
-                        {bookingForm.id && <button onClick={handleDeleteBooking} className="flex-1 bg-red-900/50 text-red-200 font-bold py-3 rounded-xl hover:bg-red-900 border border-red-900 flex justify-center items-center gap-2"><Trash2 size={18}/> Видалити</button>}
-                        <button onClick={handleSaveBooking} className="flex-1 bg-[#FFC300] text-black font-black py-3 rounded-xl hover:bg-[#e6b000] flex justify-center items-center gap-2"><Save size={18}/> Зберегти</button>
-                     </div>
-                  </div>
-               </div>
-            </div>
-         )}
-         
-         {/* Delete Tyre Modal */}
-         {showDeleteModal && (
-            <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-               <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-sm text-center shadow-2xl">
-                  <AlertTriangle className="text-red-500 w-12 h-12 mx-auto mb-4" />
-                  <h3 className="text-xl font-bold text-white mb-2">Видалити товар?</h3>
-                  <p className="text-zinc-400 mb-6">Цю дію неможливо скасувати.</p>
-                  <div className="flex gap-4">
-                     <button onClick={() => setShowDeleteModal(false)} className="flex-1 bg-zinc-800 text-white font-bold py-3 rounded-xl">Скасувати</button>
-                     <button onClick={handleDeleteTyre} className="flex-1 bg-red-600 text-white font-bold py-3 rounded-xl hover:bg-red-500">Видалити</button>
-                  </div>
-               </div>
-            </div>
-         )}
-
-         {/* Add/Edit Tyre Modal */}
-         {showAddTyreModal && (
-            <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-               <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-2xl relative shadow-2xl overflow-y-auto max-h-[90vh]">
-                  <button onClick={() => setShowAddTyreModal(false)} className="absolute top-4 right-4 text-zinc-500 hover:text-white"><X size={24}/></button>
-                  <h3 className="text-xl font-black text-white mb-6 uppercase italic">{editingTyreId ? 'Редагування Шини' : 'Новий Товар'}</h3>
-                  <div className="space-y-4">
-                     <div className="grid grid-cols-2 gap-4">
-                        <div>
-                           <label className="block text-xs text-zinc-500 font-bold mb-1 uppercase">Виробник</label>
-                           <input type="text" value={tyreForm.manufacturer} onChange={e => setTyreForm({...tyreForm, manufacturer: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-bold" />
-                        </div>
-                        <div>
-                           <label className="block text-xs text-zinc-500 font-bold mb-1 uppercase">Модель</label>
-                           <input type="text" value={tyreForm.name} onChange={e => setTyreForm({...tyreForm, name: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-bold" />
-                        </div>
-                     </div>
-                     <div className="grid grid-cols-3 gap-4">
-                         <div>
-                           <label className="block text-xs text-zinc-500 font-bold mb-1 uppercase">Радіус</label>
-                           <input type="text" value={tyreForm.radius} onChange={e => setTyreForm({...tyreForm, radius: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-bold text-center" />
-                        </div>
-                        <div>
-                           <label className="block text-xs text-zinc-500 font-bold mb-1 uppercase">Сезон</label>
-                           <select value={tyreForm.season} onChange={e => setTyreForm({...tyreForm, season: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-bold">
-                              <option value="winter">Зима</option>
-                              <option value="summer">Літо</option>
-                              <option value="all-season">Всесезон</option>
-                           </select>
-                        </div>
-                        <div>
-                           <label className="block text-xs text-zinc-500 font-bold mb-1 uppercase">Тип авто</label>
-                           <select value={tyreForm.vehicle_type} onChange={e => setTyreForm({...tyreForm, vehicle_type: e.target.value as any})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-bold">
-                              <option value="car">Легкова</option>
-                              <option value="suv">Позашляховик</option>
-                              <option value="cargo">Вантажна (C)</option>
-                           </select>
-                        </div>
-                     </div>
-                     <div className="grid grid-cols-3 gap-4">
-                        <div>
-                           <label className="block text-xs text-zinc-500 font-bold mb-1 uppercase">Ціна (Роздріб)</label>
-                           <input type="text" value={tyreForm.price} onChange={e => setTyreForm({...tyreForm, price: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-[#FFC300] font-bold text-lg" />
-                        </div>
-                        <div>
-                           <label className="block text-xs text-zinc-500 font-bold mb-1 uppercase">Стара ціна</label>
-                           <input type="text" value={tyreForm.old_price} onChange={e => setTyreForm({...tyreForm, old_price: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-zinc-400 font-bold" placeholder="Optional" />
-                        </div>
-                        <div>
-                           <label className="block text-xs text-zinc-500 font-bold mb-1 uppercase">Закуп (База)</label>
-                           <input type="text" value={tyreForm.base_price} onChange={e => setTyreForm({...tyreForm, base_price: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-blue-400 font-bold" />
-                        </div>
-                     </div>
-                     <div className="flex items-center gap-4">
-                         <div className="flex-grow">
-                             <label className="block text-xs text-zinc-500 font-bold mb-1 uppercase">Артикул / Код</label>
-                             <input type="text" value={tyreForm.catalog_number} onChange={e => setTyreForm({...tyreForm, catalog_number: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-mono" />
+                {/* Tyres List */}
+                <div className="space-y-2">
+                   {tyres.map(tyre => (
+                      <div key={tyre.id} className="bg-black/50 border border-zinc-800 p-3 rounded-xl flex items-center gap-4 hover:border-zinc-600 transition-colors">
+                         <div className="w-12 h-12 bg-zinc-800 rounded-lg overflow-hidden flex-shrink-0">
+                            {tyre.image_url ? <img src={tyre.image_url} className="w-full h-full object-cover" alt=""/> : <ImageIcon className="w-full h-full p-3 text-zinc-600"/>}
                          </div>
-                         <button onClick={applyDiscountPreset} className="mt-5 px-3 py-3 bg-red-900/30 text-red-300 border border-red-900/50 rounded-lg font-bold hover:bg-red-900/50 text-xs">HOT -5%</button>
-                     </div>
-                     <div>
-                        <label className="block text-xs text-zinc-500 font-bold mb-1 uppercase">Опис</label>
-                        <textarea value={tyreForm.description} onChange={e => setTyreForm({...tyreForm, description: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-bold h-20" />
-                     </div>
-                     <div>
-                        <label className="block text-xs text-zinc-500 font-bold mb-2 uppercase">Фото</label>
-                        <div className="flex gap-2 overflow-x-auto pb-2">
-                           {existingGallery.map((url, idx) => (
-                              <div key={idx} className="w-20 h-20 flex-shrink-0 relative group">
-                                 <img src={url} className="w-full h-full object-cover rounded border border-zinc-700" />
-                                 <button onClick={() => setExistingGallery(prev => prev.filter(u => u !== url))} className="absolute top-0 right-0 bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100"><X size={12}/></button>
-                              </div>
-                           ))}
-                           <label className="w-20 h-20 flex-shrink-0 border border-dashed border-zinc-700 rounded flex flex-col items-center justify-center text-zinc-500 hover:text-[#FFC300] hover:border-[#FFC300] cursor-pointer">
-                              <Plus size={24}/>
-                              <span className="text-[10px] font-bold">Додати</span>
-                              <input type="file" multiple accept="image/*" className="hidden" onChange={e => {if(e.target.files) setTyreUploadFiles(prev => [...prev, ...Array.from(e.target.files || [])])}} />
-                           </label>
-                           {tyreUploadFiles.map((file, idx) => (
-                              <div key={`new-${idx}`} className="w-20 h-20 flex-shrink-0 relative group border border-blue-500 rounded">
-                                 <div className="w-full h-full bg-blue-900/20 flex items-center justify-center text-xs text-blue-200 overflow-hidden break-all p-1">{file.name}</div>
-                                 <button onClick={() => setTyreUploadFiles(prev => prev.filter((_, i) => i !== idx))} className="absolute top-0 right-0 bg-red-600 text-white p-1 rounded-full"><X size={12}/></button>
-                              </div>
-                           ))}
-                        </div>
-                     </div>
-                     <div className="flex items-center gap-2">
-                        <input type="checkbox" id="isHot" checked={tyreForm.is_hot} onChange={e => setTyreForm({...tyreForm, is_hot: e.target.checked})} className="w-5 h-5 accent-[#FFC300]" />
-                        <label htmlFor="isHot" className="text-white font-bold select-none flex items-center gap-1">Позначити як <Flame size={16} className="text-orange-500 fill-orange-500"/> HOT пропозицію</label>
-                     </div>
-                     <button onClick={handleSaveTyre} disabled={uploading} className="w-full bg-[#FFC300] text-black font-black py-4 rounded-xl hover:bg-[#e6b000] flex justify-center items-center gap-2 text-lg disabled:opacity-50">
-                        {uploading ? <Loader2 className="animate-spin" /> : <Save size={20}/>} Зберегти Товар
-                     </button>
-                  </div>
+                         <div className="flex-grow">
+                            <div className="font-bold text-white text-sm">{tyre.title}</div>
+                            <div className="text-zinc-500 text-xs font-mono">{tyre.radius} | {tyre.price} грн {tyre.in_stock === false && <span className="text-red-500 font-bold ml-2">НЕМАЄ</span>}</div>
+                         </div>
+                         <button onClick={() => openEditTyreModal(tyre)} className="p-2 hover:bg-zinc-800 rounded-lg text-blue-400"><Edit2 size={18}/></button>
+                         <button onClick={() => { setBookingToDelete(tyre.id); setShowDeleteModal(true); }} className="p-2 hover:bg-zinc-800 rounded-lg text-red-400"><Trash2 size={18}/></button>
+                      </div>
+                   ))}
+                   {hasMoreTyres && <button onClick={() => fetchTyres(tyrePage + 1)} className="w-full py-3 bg-zinc-800 text-zinc-400 font-bold rounded-xl mt-4 hover:text-white">Завантажити ще...</button>}
+                </div>
+             </div>
+          )}
+
+          {/* OTHER TABS PLACEHOLDER */}
+          {!['schedule', 'tyres'].includes(activeTab) && (
+             <div className="flex flex-col items-center justify-center h-64 text-zinc-500">
+                <Settings size={48} className="mb-4 opacity-20" />
+                <p>Розділ {activeTab} доступний, але інтерфейс спрощено для відновлення.</p>
+             </div>
+          )}
+          
+       </div>
+
+       {/* MODALS */}
+       {showEditModal && (
+          <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
+             <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 w-full max-w-md">
+                <h3 className="text-xl font-bold text-white mb-4">{bookingForm.id ? 'Редагувати' : 'Новий запис'}</h3>
+                <div className="space-y-3">
+                   <input type="text" placeholder="Ім'я" value={bookingForm.name} onChange={e => setBookingForm({...bookingForm, name: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white" />
+                   <input type="tel" placeholder="Телефон" value={bookingForm.phone} onChange={e => setBookingForm({...bookingForm, phone: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white" />
+                   <div className="flex gap-2">
+                      <input type="date" value={bookingForm.date} onChange={e => setBookingForm({...bookingForm, date: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white" />
+                      <input type="time" value={bookingForm.time} onChange={e => setBookingForm({...bookingForm, time: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white" />
+                   </div>
+                   <select value={bookingForm.serviceId} onChange={e => setBookingForm({...bookingForm, serviceId: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white">
+                      {BOOKING_SERVICES.map(s => <option key={s.id} value={s.id}>{s.label} ({s.duration} хв)</option>)}
+                   </select>
+                </div>
+                <div className="flex gap-2 mt-6">
+                   <button onClick={() => setShowEditModal(false)} className="flex-1 bg-zinc-800 text-white py-3 rounded-lg font-bold">Скасувати</button>
+                   <button onClick={handleSaveBooking} className="flex-1 bg-[#FFC300] text-black py-3 rounded-lg font-bold">Зберегти</button>
+                </div>
+             </div>
+          </div>
+       )}
+
+       {showDeleteModal && (
+         <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
+            <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 w-full max-w-sm text-center">
+               <AlertTriangle size={48} className="text-red-500 mx-auto mb-4" />
+               <h3 className="text-xl font-bold text-white mb-2">Видалити?</h3>
+               <p className="text-zinc-400 mb-6">Цю дію неможливо скасувати.</p>
+               <div className="flex gap-2">
+                  <button onClick={() => setShowDeleteModal(false)} className="flex-1 bg-zinc-800 text-white py-3 rounded-lg font-bold">Ні</button>
+                  <button onClick={mode === 'tyre' ? handleDeleteTyre : handleDeleteBooking} className="flex-1 bg-red-600 text-white py-3 rounded-lg font-bold">Так, видалити</button>
                </div>
             </div>
-         )}
-         
-         {/* Edit Order Modal */}
-         {showOrderEditModal && editingOrder && (
-            <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-               <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-md relative shadow-2xl">
-                  <button onClick={() => setShowOrderEditModal(false)} className="absolute top-4 right-4 text-zinc-500 hover:text-white"><X size={24}/></button>
-                  <h3 className="text-xl font-black text-white mb-6 uppercase italic">Замовлення #{editingOrder.id}</h3>
-                  <div className="space-y-4">
-                     <div>
-                        <label className="text-xs text-zinc-500 font-bold">Статус</label>
-                        <select value={editingOrder.status} onChange={e => setEditingOrder({...editingOrder, status: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-bold mt-1">
-                           <option value="new">Нове</option>
-                           <option value="confirmed">Підтверджено</option>
-                           <option value="shipped">Відправлено</option>
-                           <option value="completed">Виконано</option>
-                           <option value="cancelled">Скасовано</option>
-                        </select>
-                     </div>
-                     <input type="text" value={editingOrder.customer_name} onChange={e => setEditingOrder({...editingOrder, customer_name: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-bold" placeholder="Ім'я" />
-                     <input type="text" value={editingOrder.customer_phone} onChange={e => setEditingOrder({...editingOrder, customer_phone: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-bold" placeholder="Телефон" />
-                     {editingOrder.delivery_method === 'newpost' && (
-                        <div className="space-y-2">
-                           <input type="text" value={editingOrder.delivery_city || ''} onChange={e => setEditingOrder({...editingOrder, delivery_city: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white text-sm" placeholder="Місто" />
-                           <input type="text" value={editingOrder.delivery_warehouse || ''} onChange={e => setEditingOrder({...editingOrder, delivery_warehouse: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white text-sm" placeholder="Відділення" />
-                        </div>
-                     )}
-                     <div className="flex gap-4 mt-4">
-                        <button onClick={handleDeleteOrderRecord} className="bg-red-900/50 text-red-200 p-3 rounded-xl hover:bg-red-900"><Trash2 size={20}/></button>
-                        <button onClick={handleSaveOrder} className="flex-grow bg-[#FFC300] text-black font-black py-3 rounded-xl hover:bg-[#e6b000]">Зберегти Зміни</button>
-                     </div>
-                  </div>
-               </div>
-            </div>
-         )}
-         
-         {/* Excel Import Modal */}
-         {showExcelModal && (
-            <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
-               <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-4xl relative shadow-2xl h-[90vh] flex flex-col">
-                  <div className="flex justify-between items-center mb-4">
-                     <h3 className="text-xl font-black text-white uppercase italic flex items-center gap-2"><FileSpreadsheet className="text-[#FFC300]"/> Імпорт Excel</h3>
-                     <button onClick={() => setShowExcelModal(false)} className="text-zinc-500 hover:text-white"><X size={24}/></button>
-                  </div>
-                  
-                  {importingExcel ? (
-                     <div className="flex flex-col items-center justify-center flex-grow">
-                        <Loader2 className="animate-spin text-[#FFC300] w-16 h-16 mb-4"/>
-                        <p className="text-xl font-bold text-white">{importStatus}</p>
-                     </div>
-                  ) : (
-                     <>
-                        <div className="flex gap-4 mb-4 items-center bg-zinc-800 p-3 rounded-xl">
-                           <label className="text-sm font-bold text-zinc-300">Початковий рядок:</label>
-                           <input type="number" value={excelStartRow} onChange={e => setExcelStartRow(parseInt(e.target.value))} className="w-20 bg-black border border-zinc-600 rounded p-2 text-white font-bold" min="1" />
-                           <div className="text-xs text-zinc-500 ml-auto">Перетягніть стовпці для налаштування відповідності полів.</div>
-                        </div>
+         </div>
+       )}
 
-                        <div className="flex-grow overflow-auto border border-zinc-700 rounded-xl bg-black relative">
-                           <table className="w-full text-xs border-collapse">
-                              <thead>
-                                 <tr>
-                                    {Array.from({length: maxPreviewCols}).map((_, colIdx) => (
-                                       <th key={colIdx} className="p-2 border-b border-r border-zinc-800 bg-zinc-900 min-w-[150px] sticky top-0 z-10">
-                                          <select 
-                                             value={excelColumnMap[colIdx] || 'ignore'} 
-                                             onChange={(e) => setExcelColumnMap({...excelColumnMap, [colIdx]: e.target.value})}
-                                             className={`w-full p-1 rounded font-bold ${excelColumnMap[colIdx] ? 'bg-[#FFC300] text-black' : 'bg-black text-zinc-500'}`}
-                                          >
-                                             <option value="ignore">-- Ігнорувати --</option>
-                                             <option value="catalog_number">АРТИКУЛ (Обов'язково)</option>
-                                             <option value="title">Назва</option>
-                                             <option value="manufacturer">Виробник</option>
-                                             <option value="price">Ціна (Роздріб)</option>
-                                             <option value="base_price">Вхідна ціна</option>
-                                             <option value="radius">Радіус</option>
-                                             <option value="season">Сезон</option>
-                                          </select>
-                                       </th>
-                                    ))}
-                                 </tr>
-                              </thead>
-                              <tbody>
-                                 {excelPreview.map((row, rIdx) => (
-                                    <tr key={rIdx} className={rIdx < excelStartRow - 1 ? 'opacity-30' : ''}>
-                                       {row.map((cell: any, cIdx: number) => (
-                                          <td key={cIdx} className="p-2 border-b border-r border-zinc-800 text-zinc-300 truncate max-w-[150px]" title={String(cell)}>
-                                             {String(cell)}
-                                          </td>
-                                       ))}
-                                    </tr>
-                                 ))}
-                              </tbody>
-                           </table>
-                        </div>
-
-                        <div className="mt-4 flex justify-end gap-4">
-                           <button onClick={() => setShowExcelModal(false)} className="px-6 py-3 bg-zinc-800 text-white font-bold rounded-xl">Скасувати</button>
-                           <button onClick={processSmartExcelImport} className="px-8 py-3 bg-[#FFC300] text-black font-black rounded-xl hover:bg-[#e6b000] shadow-lg">ІМПОРТУВАТИ ДАНІ</button>
-                        </div>
-                     </>
-                  )}
-               </div>
-            </div>
-         )}
-         
-         {/* Upload Report Modal */}
-         {showUploadReport && (
-            <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
-               <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-3xl relative shadow-2xl h-[80vh] flex flex-col">
-                  <div className="flex justify-between items-center mb-4">
-                     <h3 className="text-xl font-black text-white">Звіт завантаження фото</h3>
-                     <button onClick={() => setShowUploadReport(false)} className="text-zinc-500 hover:text-white"><X size={24}/></button>
-                  </div>
-                  <div className="flex-grow overflow-y-auto bg-black border border-zinc-800 rounded-xl p-4 space-y-2">
-                     {uploadReport.map((item, idx) => (
-                        <div key={idx} className="flex items-center gap-4 p-2 border-b border-zinc-800">
-                           <div className="w-12 h-12 bg-zinc-800 rounded overflow-hidden flex-shrink-0">
-                              {item.previewUrl && <img src={item.previewUrl} className="w-full h-full object-cover" />}
-                           </div>
-                           <div className="flex-grow">
-                              <div className="text-white font-bold text-sm">{item.fileName}</div>
-                              {item.productName && <div className="text-zinc-500 text-xs">{item.productName}</div>}
-                           </div>
-                           <div className={`px-2 py-1 rounded text-xs font-bold uppercase ${item.status === 'success' ? 'bg-green-900 text-green-400' : item.status === 'skipped' ? 'bg-yellow-900 text-yellow-400' : 'bg-red-900 text-red-400'}`}>
-                              {item.status === 'success' ? 'OK' : item.status === 'skipped' ? 'Пропуск' : 'Помилка'}
-                           </div>
-                           <div className="w-1/3 text-xs text-zinc-400 truncate">{item.message}</div>
-                        </div>
-                     ))}
-                     {uploading && <div className="text-center py-4 text-[#FFC300] animate-pulse">Завантаження...</div>}
-                  </div>
-                  <div className="mt-4 text-right">
-                     <button onClick={() => setShowUploadReport(false)} disabled={uploading} className="bg-[#FFC300] text-black font-bold px-6 py-2 rounded-xl">Закрити</button>
-                  </div>
-               </div>
-            </div>
-         )}
-
-         {/* Client History Modal */}
-         {showHistoryModal && (
-            <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-               <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-2xl relative shadow-2xl max-h-[90vh] flex flex-col">
-                  <button onClick={() => setShowHistoryModal(false)} className="absolute top-4 right-4 text-zinc-500 hover:text-white"><X size={24}/></button>
-                  <h3 className="text-xl font-black text-white mb-6 flex items-center gap-2"><History className="text-[#FFC300]"/> Історія Клієнта</h3>
-                  
-                  {selectedClientHistory.length > 0 && (
-                     <div className="mb-6 bg-zinc-800 p-4 rounded-xl flex justify-between items-center">
-                        <div>
-                           {editingClient ? (
-                              <div className="flex flex-col gap-2">
-                                 <input type="text" value={editingClient.customer_name} onChange={e => setEditingClient({...editingClient, customer_name: e.target.value})} className="bg-black border border-zinc-600 rounded p-1 text-white font-bold"/>
-                                 <input type="text" value={editingClient.customer_phone} onChange={e => setEditingClient({...editingClient, customer_phone: e.target.value})} className="bg-black border border-zinc-600 rounded p-1 text-white font-bold"/>
-                              </div>
-                           ) : (
-                              <>
-                                 <h4 className="text-2xl font-bold text-white">{selectedClientHistory[0].customer_name}</h4>
-                                 <p className="text-[#FFC300] font-mono text-lg">{selectedClientHistory[0].customer_phone}</p>
-                              </>
-                           )}
-                        </div>
-                        <div>
-                           {editingClient ? (
-                              <div className="flex gap-2">
-                                 <button onClick={handleEditClientSave} className="bg-green-600 text-white p-2 rounded"><Save size={16}/></button>
-                                 <button onClick={() => setEditingClient(null)} className="bg-zinc-600 text-white p-2 rounded"><X size={16}/></button>
-                              </div>
-                           ) : (
-                              <button onClick={() => setEditingClient(selectedClientHistory[0])} className="bg-blue-900 text-blue-200 px-3 py-2 rounded-lg font-bold hover:bg-blue-800 text-sm flex items-center gap-2"><Edit2 size={16}/> Ред.</button>
-                           )}
-                        </div>
-                     </div>
-                  )}
-
-                  <div className="flex-grow overflow-y-auto space-y-3">
-                     {selectedClientHistory.map((h, idx) => (
-                        <div key={idx} className="bg-black border border-zinc-800 p-4 rounded-xl flex justify-between items-center group">
-                           <div>
-                              <div className="text-zinc-500 text-xs font-bold uppercase mb-1">{h.booking_date} | {h.start_time}</div>
-                              <div className="text-white font-bold text-lg">{h.service_label}</div>
-                              <div className="text-zinc-400 text-sm">Радіус: <span className="text-[#FFC300]">{h.radius}</span></div>
-                           </div>
-                           <button onClick={() => deleteFromHistory(h.id)} className="opacity-0 group-hover:opacity-100 bg-red-900/30 text-red-500 p-2 rounded hover:bg-red-900 transition-all"><Trash2 size={16}/></button>
-                        </div>
-                     ))}
-                  </div>
-               </div>
-            </div>
-         )}
-
-         {/* Confirmation Dialog */}
-         {confirmDialog.isOpen && (
-            <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
-               <div className="bg-zinc-900 border border-zinc-700 p-8 rounded-2xl w-full max-w-sm text-center shadow-2xl animate-in zoom-in-95">
-                  <AlertTriangle className="w-16 h-16 text-[#FFC300] mx-auto mb-4" />
-                  <h3 className="text-2xl font-black text-white mb-2">{confirmDialog.title}</h3>
-                  <p className="text-zinc-400 mb-8 text-lg leading-relaxed">{confirmDialog.message}</p>
-                  <div className="flex flex-col gap-3">
-                     <button onClick={() => { confirmDialog.action(); setConfirmDialog({ ...confirmDialog, isOpen: false }); }} className="w-full bg-[#FFC300] hover:bg-[#e6b000] text-black font-black py-4 rounded-xl text-lg shadow-lg">ТАК, ПРОДОВЖИТИ</button>
-                     <button onClick={() => setConfirmDialog({ ...confirmDialog, isOpen: false })} className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-4 rounded-xl">СКАСУВАТИ</button>
-                  </div>
-               </div>
-            </div>
-         )}
-
-      </main>
+       {/* ADD TYRE MODAL (Simplified for restoration) */}
+       {showAddTyreModal && (
+          <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
+             <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                <h3 className="text-xl font-bold text-white mb-4">{editingTyreId ? 'Редагувати товар' : 'Новий товар'}</h3>
+                <div className="space-y-3">
+                   <input type="text" placeholder="Виробник" value={tyreForm.manufacturer} onChange={e => setTyreForm({...tyreForm, manufacturer: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white" />
+                   <input type="text" placeholder="Назва моделі" value={tyreForm.name} onChange={e => setTyreForm({...tyreForm, name: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white" />
+                   <div className="flex gap-2">
+                      <select value={tyreForm.radius} onChange={e => setTyreForm({...tyreForm, radius: e.target.value})} className="flex-1 bg-black border border-zinc-700 rounded-lg p-3 text-white">
+                         {WHEEL_RADII.map(r => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                      <select value={tyreForm.season} onChange={e => setTyreForm({...tyreForm, season: e.target.value})} className="flex-1 bg-black border border-zinc-700 rounded-lg p-3 text-white">
+                         <option value="winter">Зима</option>
+                         <option value="summer">Літо</option>
+                         <option value="all-season">Всесезон</option>
+                      </select>
+                   </div>
+                   <input type="text" placeholder="Ціна" value={tyreForm.price} onChange={e => setTyreForm({...tyreForm, price: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white" />
+                   <textarea placeholder="Опис" value={tyreForm.description} onChange={e => setTyreForm({...tyreForm, description: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white h-24" />
+                   
+                   <div>
+                      <label className="text-zinc-400 text-sm block mb-1">Фото:</label>
+                      <input type="file" multiple onChange={e => setTyreUploadFiles(Array.from(e.target.files || []))} className="w-full bg-black border border-zinc-700 rounded-lg p-2 text-white text-sm" />
+                   </div>
+                </div>
+                <div className="flex gap-2 mt-6">
+                   <button onClick={() => setShowAddTyreModal(false)} className="flex-1 bg-zinc-800 text-white py-3 rounded-lg font-bold">Скасувати</button>
+                   <button onClick={handleSaveTyre} disabled={uploading} className="flex-1 bg-[#FFC300] text-black py-3 rounded-lg font-bold">{uploading ? 'Збереження...' : 'Зберегти'}</button>
+                </div>
+             </div>
+          </div>
+       )}
     </div>
   );
 };

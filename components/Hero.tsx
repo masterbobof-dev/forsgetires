@@ -111,7 +111,7 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
           {/* ONLINE BOOKING BLOCK */}
           <div className="w-full bg-[#18181b] border-l-4 border-[#FFC300] p-6 md:p-8 backdrop-blur-md rounded-r-lg shadow-[0_0_30px_rgba(255,195,0,0.15)]">
             <h1 className="text-4xl md:text-6xl font-black text-[#FFC300] uppercase leading-tight mb-6 drop-shadow-md tracking-tight italic text-center md:text-left">
-              Професійний Шиномонтаж<br/><span className="text-white">в Синельникове (24/7)</span>
+              Цілодобовий Шиномонтаж<br/><span className="text-white">в м. Синельникове (24/7)</span>
             </h1>
             <div className="flex flex-col gap-4">
               <div className="flex flex-col md:flex-row gap-4 w-full">

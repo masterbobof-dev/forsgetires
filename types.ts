@@ -1,7 +1,7 @@
 
 import React from 'react';
 
-export type ViewState = 'home' | 'prices' | 'gallery' | 'admin' | 'shop' | 'sitemap';
+export type ViewState = 'home' | 'prices' | 'gallery' | 'admin' | 'shop';
 
 export interface ServiceItem {
   id: string;
@@ -12,6 +12,12 @@ export interface ServiceItem {
 export interface NavItem {
   label: string;
   view: ViewState;
+}
+
+export interface Supplier {
+  id: number;
+  name: string;
+  contact_info?: string;
 }
 
 export interface TyreProduct {
@@ -29,6 +35,11 @@ export interface TyreProduct {
   created_at?: string;
   in_stock?: boolean;   // Availability status
   is_hot?: boolean;     // Hot deal / Sale status
+  
+  // New fields
+  supplier_id?: number;
+  stock_quantity?: number;
+
   // Computed properties for filtering
   width?: string;
   height?: string;

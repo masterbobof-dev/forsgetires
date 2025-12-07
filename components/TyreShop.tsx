@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { TyreProduct, CartItem } from '../types';
-import { ShoppingBag, Loader2, Phone, X, Filter, Snowflake, Sun, CloudSun, Truck, Check, CreditCard, Wallet, ArrowDown, ShoppingCart, Plus, Minus, Trash2, ChevronLeft, ChevronRight, ZoomIn, Ban, Flame, Grid, ArrowUpDown, Search, DollarSign } from 'lucide-react';
+import { ShoppingBag, Loader2, Phone, X, Filter, Snowflake, Sun, CloudSun, Truck, Check, CreditCard, Wallet, ArrowDown, ShoppingCart, Plus, Minus, Trash2, ChevronLeft, ChevronRight, ZoomIn, Ban, Flame, Grid, ArrowUpDown, Search, DollarSign, AlertCircle } from 'lucide-react';
 import { PHONE_LINK_1, PHONE_NUMBER_1, FORMSPREE_ENDPOINT } from '../constants';
 
 const MOCK_REGIONS = [
@@ -77,6 +77,9 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
 
+  // Stock Quantity Logic
+  const [enableStockQty, setEnableStockQty] = useState(false);
+
   const [orderName, setOrderName] = useState('');
   const [orderPhone, setOrderPhone] = useState('');
   const [deliveryMethod, setDeliveryMethod] = useState<'pickup' | 'newpost'>('pickup');
@@ -93,6 +96,17 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   const touchStartRef = useRef<number | null>(null);
   const touchEndRef = useRef<number | null>(null);
 
+  // Fetch Settings
+  useEffect(() => {
+    const fetchSettings = async () => {
+      const { data } = await supabase.from('settings').select('value').eq('key', 'enable_stock_quantity').single();
+      if (data && data.value === 'true') {
+        setEnableStockQty(true);
+      }
+    };
+    fetchSettings();
+  }, []);
+
   // Update active category if prop changes (e.g. from Home navigation)
   useEffect(() => {
     if (initialCategory) {
@@ -105,7 +119,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
     setPage(0);
     setTyres([]); 
     fetchTyres(0, true);
-  }, [activeCategory, activeSort]);
+  }, [activeCategory, activeSort, enableStockQty]); // Added enableStockQty dependency
 
   const parseTyreSpecs = (tyre: TyreProduct): TyreProduct => {
     const sizeRegex = /(\d{3})[\/\s](\d{2})[\s\w]*R(\d{2}[C|c]?)/; 
@@ -147,7 +161,14 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
     else if (lowerTitle.includes('літо') || lowerTitle.includes('summer')) season = 'summer';
     else if (lowerTitle.includes('всесезон') || lowerTitle.includes('all season')) season = 'all-season';
     
-    const in_stock = tyre.in_stock !== false; 
+    // Logic for in_stock based on setting
+    let in_stock = tyre.in_stock !== false;
+    
+    if (enableStockQty && tyre.stock_quantity !== undefined && tyre.stock_quantity !== null) {
+        if (tyre.stock_quantity <= 0) {
+            in_stock = false;
+        }
+    }
     
     return { ...tyre, width, height, radius: parsedRadius, season, vehicle_type, in_stock };
   };
@@ -165,26 +186,46 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
       // 1. TEXT SEARCH FILTER (If exists)
       if (searchQuery.trim()) {
          const term = searchQuery.trim();
-         // Search in title, catalog_number, or manufacturer
          query = query.or(`title.ilike.%${term}%,catalog_number.ilike.%${term}%,manufacturer.ilike.%${term}%`);
       }
 
       // 2. CATEGORY FILTERS
+      // Base logic for Stock: 
+      // If enableStockQty is true:
+      //   - Normal categories: exclude items where in_stock is false OR stock_quantity is 0
+      //   - Out of Stock category: include items where in_stock is false OR stock_quantity is 0
+      
+      const stockCondition = enableStockQty 
+        ? `.or(in_stock.eq.false,stock_quantity.eq.0)` // Defines "Out of Stock"
+        : `.eq(in_stock,false)`;
+
       if (activeCategory === 'hot') {
-         query = query.eq('is_hot', true).neq('in_stock', false);
+         query = query.eq('is_hot', true);
+         if (enableStockQty) query = query.or('stock_quantity.gt.0,stock_quantity.is.null').neq('in_stock', false);
+         else query = query.neq('in_stock', false);
       } else if (activeCategory === 'winter') {
-         query = query.or('title.ilike.%winter%,title.ilike.%зима%,description.ilike.%winter%,description.ilike.%зима%').neq('in_stock', false);
+         query = query.or('title.ilike.%winter%,title.ilike.%зима%,description.ilike.%winter%,description.ilike.%зима%');
+         if (enableStockQty) query = query.or('stock_quantity.gt.0,stock_quantity.is.null').neq('in_stock', false);
+         else query = query.neq('in_stock', false);
       } else if (activeCategory === 'summer') {
-         query = query.or('title.ilike.%summer%,title.ilike.%літо%,description.ilike.%summer%,description.ilike.%літо%').neq('in_stock', false);
+         query = query.or('title.ilike.%summer%,title.ilike.%літо%,description.ilike.%summer%,description.ilike.%літо%');
+         if (enableStockQty) query = query.or('stock_quantity.gt.0,stock_quantity.is.null').neq('in_stock', false);
+         else query = query.neq('in_stock', false);
       } else if (activeCategory === 'all-season') {
-         query = query.or('title.ilike.%all season%,title.ilike.%всесезон%,description.ilike.%all season%,description.ilike.%всесезон%').neq('in_stock', false);
+         query = query.or('title.ilike.%all season%,title.ilike.%всесезон%,description.ilike.%all season%,description.ilike.%всесезон%');
+         if (enableStockQty) query = query.or('stock_quantity.gt.0,stock_quantity.is.null').neq('in_stock', false);
+         else query = query.neq('in_stock', false);
       } else if (activeCategory === 'cargo') {
-         query = query.or('vehicle_type.eq.cargo,radius.ilike.%C%,title.ilike.%R12C%,title.ilike.%R13C%,title.ilike.%R14C%,title.ilike.%R15C%,title.ilike.%R16C%,title.ilike.%R17C%,title.ilike.%R18C%,title.ilike.%R19C%,title.ilike.%LT%,title.ilike.%Cargo%,title.ilike.%Bus%').neq('in_stock', false);
+         query = query.or('vehicle_type.eq.cargo,radius.ilike.%C%,title.ilike.%R12C%,title.ilike.%R13C%,title.ilike.%R14C%,title.ilike.%R15C%,title.ilike.%R16C%,title.ilike.%R17C%,title.ilike.%R18C%,title.ilike.%R19C%,title.ilike.%LT%,title.ilike.%Cargo%,title.ilike.%Bus%');
+         if (enableStockQty) query = query.or('stock_quantity.gt.0,stock_quantity.is.null').neq('in_stock', false);
+         else query = query.neq('in_stock', false);
       } else if (activeCategory === 'out_of_stock') {
-         query = query.eq('in_stock', false);
+         if (enableStockQty) query = query.or('in_stock.eq.false,stock_quantity.eq.0');
+         else query = query.eq('in_stock', false);
       } else {
          // Default 'all' - only in stock
-         query = query.neq('in_stock', false);
+         if (enableStockQty) query = query.or('stock_quantity.gt.0,stock_quantity.is.null').neq('in_stock', false);
+         else query = query.neq('in_stock', false);
       }
 
       // 3. PRICE FILTERS
@@ -245,7 +286,6 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   const handleCategoryChange = (cat: CategoryType) => {
      setActiveCategory(cat);
      if (cat === 'all') setActiveSort('newest');
-     // We do NOT clear searchQuery here intentionally, allowing "Winter" + "Michelin" search combo.
   };
 
   const handleForceSearch = () => {
@@ -255,8 +295,50 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   };
 
   const loadMore = () => { const nextPage = page + 1; fetchTyres(nextPage); };
-  const addToCart = (tyre: TyreProduct) => { if (tyre.in_stock === false) return; setCart(prev => { const existing = prev.find(item => item.id === tyre.id); if (existing) return prev.map(item => item.id === tyre.id ? { ...item, quantity: item.quantity + 1 } : item); return [...prev, { ...tyre, quantity: 1 }]; }); setIsCartOpen(true); };
-  const updateQuantity = (id: number, delta: number) => { setCart(prev => prev.map(item => { if (item.id === id) { const newQty = Math.max(1, item.quantity + delta); return { ...item, quantity: newQty }; } return item; })); };
+  
+  const addToCart = (tyre: TyreProduct) => { 
+      if (tyre.in_stock === false) return; 
+      
+      setCart(prev => { 
+          const existing = prev.find(item => item.id === tyre.id);
+          const currentQty = existing ? existing.quantity : 0;
+
+          // Stock Limit Check
+          if (enableStockQty && tyre.stock_quantity !== undefined && tyre.stock_quantity !== null && tyre.stock_quantity > 0) {
+              if (currentQty + 1 > tyre.stock_quantity) {
+                  alert(`Вибачте, доступно лише ${tyre.stock_quantity} шт. цього товару.`);
+                  return prev;
+              }
+          }
+
+          if (existing) {
+              return prev.map(item => item.id === tyre.id ? { ...item, quantity: item.quantity + 1 } : item); 
+          }
+          return [...prev, { ...tyre, quantity: 1 }]; 
+      }); 
+      
+      setIsCartOpen(true); 
+  };
+
+  const updateQuantity = (id: number, delta: number) => { 
+      setCart(prev => prev.map(item => { 
+          if (item.id === id) {
+              const newQty = item.quantity + delta;
+              
+              // Stock Limit Check
+              if (delta > 0 && enableStockQty && item.stock_quantity !== undefined && item.stock_quantity !== null && item.stock_quantity > 0) {
+                  if (newQty > item.stock_quantity) {
+                      // alert(`Максимальна кількість: ${item.stock_quantity}`);
+                      return item;
+                  }
+              }
+
+              return { ...item, quantity: Math.max(1, newQty) }; 
+          } 
+          return item; 
+      })); 
+  };
+
   const removeFromCart = (id: number) => { setCart(prev => prev.filter(item => item.id !== id)); };
   const cartTotal = useMemo(() => cart.reduce((total, item) => total + (parseFloat(item.price) * item.quantity), 0), [cart]);
 
@@ -514,6 +596,12 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                            </div>
                         )}
 
+                        {enableStockQty && tyre.in_stock !== false && (
+                           <div className="text-[10px] font-bold text-green-400 mb-2 flex items-center gap-1">
+                               <Check size={10} /> В наявності: {tyre.stock_quantity ? tyre.stock_quantity : '> 4'} шт.
+                           </div>
+                        )}
+
                         <div className="mt-auto pt-3 border-t border-zinc-800">
                            <div className="flex flex-col justify-between gap-2">
                               {/* Price Display Logic */}
@@ -571,7 +659,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
               {!orderSuccess ? (
                 <>
                   <div className="flex-grow overflow-y-auto space-y-4 mb-4 pr-2">
-                    {cart.length === 0 ? <p className="text-zinc-500 text-center py-10">Кошик порожній</p> : cart.map(item => (<div key={item.id} className="bg-black border border-zinc-800 p-3 rounded-lg flex items-center gap-3"><div className="w-16 h-16 bg-zinc-800 rounded flex-shrink-0 overflow-hidden">{item.image_url && <img src={item.image_url} className="w-full h-full object-cover" alt="" />}</div><div className="flex-grow"><h4 className="text-white font-bold text-sm leading-tight line-clamp-1">{item.title}</h4><p className="text-[#FFC300] font-mono text-sm">{formatPrice(item.price)} грн</p></div><div className="flex flex-col items-center gap-1"><div className="flex items-center bg-zinc-800 rounded"><button onClick={() => updateQuantity(item.id, -1)} className="p-1 text-zinc-400 hover:text-white"><Minus size={14} /></button><span className="w-6 text-center text-sm font-bold">{item.quantity}</span><button onClick={() => updateQuantity(item.id, 1)} className="p-1 text-zinc-400 hover:text-white"><Plus size={14} /></button></div><button onClick={() => removeFromCart(item.id)} className="text-red-500 hover:text-red-400 text-xs"><Trash2 size={14}/></button></div></div>))}
+                    {cart.length === 0 ? <p className="text-zinc-500 text-center py-10">Кошик порожній</p> : cart.map(item => (<div key={item.id} className="bg-black border border-zinc-800 p-3 rounded-lg flex items-center gap-3"><div className="w-16 h-16 bg-zinc-800 rounded flex-shrink-0 overflow-hidden">{item.image_url && <img src={item.image_url} className="w-full h-full object-cover" alt="" />}</div><div className="flex-grow"><h4 className="text-white font-bold text-sm leading-tight line-clamp-1">{item.title}</h4><p className="text-[#FFC300] font-mono text-sm">{formatPrice(item.price)} грн</p>{enableStockQty && item.stock_quantity && <p className="text-zinc-500 text-[10px]">Доступно: {item.stock_quantity} шт</p>}</div><div className="flex flex-col items-center gap-1"><div className="flex items-center bg-zinc-800 rounded"><button onClick={() => updateQuantity(item.id, -1)} className="p-1 text-zinc-400 hover:text-white"><Minus size={14} /></button><span className="w-6 text-center text-sm font-bold">{item.quantity}</span><button onClick={() => updateQuantity(item.id, 1)} className={`p-1 text-zinc-400 hover:text-white ${enableStockQty && item.stock_quantity && item.quantity >= item.stock_quantity ? 'opacity-30 cursor-not-allowed' : ''}`}><Plus size={14} /></button></div><button onClick={() => removeFromCart(item.id)} className="text-red-500 hover:text-red-400 text-xs"><Trash2 size={14}/></button></div></div>))}
                   </div>
                   {cart.length > 0 && (<div className="border-t border-zinc-800 pt-4"><div className="flex justify-between text-xl font-black text-white mb-4"><span>Разом:</span><span className="text-[#FFC300]">{Math.round(cartTotal)} грн</span></div><div className="space-y-3 mb-4"><input type="text" value={orderName} onChange={e => setOrderName(e.target.value)} placeholder="Ваше ім'я" className="w-full bg-zinc-800 border border-zinc-700 rounded p-3 text-white outline-none focus:border-[#FFC300]" /><input type="tel" value={orderPhone} onChange={e => setOrderPhone(e.target.value)} placeholder="Телефон" className="w-full bg-zinc-800 border border-zinc-700 rounded p-3 text-white outline-none focus:border-[#FFC300]" /><div className="grid grid-cols-2 gap-2"><button onClick={() => setDeliveryMethod('pickup')} className={`py-2 rounded font-bold text-xs ${deliveryMethod === 'pickup' ? 'bg-[#FFC300] text-black' : 'bg-black text-zinc-400 border border-zinc-800'}`}>Самовивіз</button><button onClick={() => setDeliveryMethod('newpost')} className={`py-2 rounded font-bold text-xs ${deliveryMethod === 'newpost' ? 'bg-red-600 text-white' : 'bg-black text-zinc-400 border border-zinc-800'}`}>Нова Пошта</button></div>{deliveryMethod === 'newpost' && (<div className="space-y-2 bg-zinc-800/50 p-2 rounded border border-zinc-700 text-sm"><select value={selectedRegion} onChange={e => { setSelectedRegion(e.target.value); setSelectedCity(''); }} className="w-full bg-black border border-zinc-700 rounded p-2 text-white"><option value="">Область</option>{MOCK_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}</select><select value={selectedCity} onChange={e => { setSelectedCity(e.target.value); setSelectedWarehouse(''); }} disabled={!selectedRegion} className="w-full bg-black border border-zinc-700 rounded p-2 text-white"><option value="">Місто</option>{selectedRegion && MOCK_CITIES[selectedRegion]?.map(c => <option key={c} value={c}>{c}</option>)}</select><select value={selectedWarehouse} onChange={e => setSelectedWarehouse(e.target.value)} disabled={!selectedCity} className="w-full bg-black border border-zinc-700 rounded p-2 text-white"><option value="">Відділення</option>{selectedCity && getMockWarehouses(selectedCity).map(w => <option key={w} value={w}>{w}</option>)}</select><div className="flex gap-2 pt-1"><label className="flex items-center gap-1 text-xs text-zinc-400"><input type="radio" checked={paymentMethod === 'prepayment'} onChange={() => setPaymentMethod('prepayment')} /> Предоплата</label><label className="flex items-center gap-1 text-xs text-zinc-400"><input type="radio" checked={paymentMethod === 'full'} onChange={() => setPaymentMethod('full')} /> Повна</label></div></div>)}</div>{orderError && <p className="text-red-500 text-sm mb-2">{orderError}</p>}<button onClick={submitOrder} disabled={orderSending} className="w-full bg-[#FFC300] hover:bg-[#e6b000] text-black font-black py-4 rounded-xl flex justify-center items-center shadow-lg">{orderSending ? <Loader2 className="animate-spin" /> : 'ЗАМОВИТИ ВСЕ'}</button></div>)}
                 </>

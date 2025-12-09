@@ -27,7 +27,8 @@ export interface TyreProduct {
   price: string;        // Retail Price (New/Current Price)
   base_price?: string;  // Base Price (Cost)
   old_price?: string;   // Old Price (Crossed out)
-  catalog_number?: string; // Catalog Number
+  catalog_number?: string; // Catalog Number (Артикул)
+  product_number?: string; // Product Number (Номер товару)
   manufacturer?: string;
   image_url: string;
   gallery?: string[];   // Array of image URLs

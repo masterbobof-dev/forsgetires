@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import Hero from './components/Hero';
 import Services from './components/Services';
@@ -27,6 +27,52 @@ const App: React.FC = () => {
   
   // Admin Mode: 'service' (Schedule/Clients) or 'tyre' (Shop/Orders)
   const [adminMode, setAdminMode] = useState<'service' | 'tyre'>('service');
+
+  // --- DYNAMIC SEO LOADER ---
+  useEffect(() => {
+    const loadSeo = async () => {
+      const { data } = await supabase.from('settings').select('key, value').in('key', ['seo_title', 'seo_description', 'seo_keywords', 'seo_image', 'seo_robots', 'seo_canonical']);
+      
+      if (data) {
+        data.forEach(item => {
+           if (item.key === 'seo_title' && item.value) {
+               document.title = item.value;
+               let ogTitle = document.querySelector('meta[property="og:title"]');
+               if (ogTitle) ogTitle.setAttribute('content', item.value);
+           }
+           if (item.key === 'seo_description' && item.value) {
+              let meta = document.querySelector('meta[name="description"]');
+              if (!meta) { meta = document.createElement('meta'); meta.setAttribute('name', 'description'); document.head.appendChild(meta); }
+              meta.setAttribute('content', item.value);
+              // Also update OG description
+              let ogMeta = document.querySelector('meta[property="og:description"]');
+              if (ogMeta) ogMeta.setAttribute('content', item.value);
+           }
+           if (item.key === 'seo_keywords' && item.value) {
+              let meta = document.querySelector('meta[name="keywords"]');
+              if (!meta) { meta = document.createElement('meta'); meta.setAttribute('name', 'keywords'); document.head.appendChild(meta); }
+              meta.setAttribute('content', item.value);
+           }
+           // New SEO Fields
+           if (item.key === 'seo_robots' && item.value) {
+              let meta = document.querySelector('meta[name="robots"]');
+              if (!meta) { meta = document.createElement('meta'); meta.setAttribute('name', 'robots'); document.head.appendChild(meta); }
+              meta.setAttribute('content', item.value);
+           }
+           if (item.key === 'seo_canonical' && item.value) {
+              let link = document.querySelector('link[rel="canonical"]');
+              if (!link) { link = document.createElement('link'); link.setAttribute('rel', 'canonical'); document.head.appendChild(link); }
+              link.setAttribute('href', item.value);
+           }
+           if (item.key === 'seo_image' && item.value) {
+               let ogImage = document.querySelector('meta[property="og:image"]');
+               if (ogImage) ogImage.setAttribute('content', item.value);
+           }
+        });
+      }
+    };
+    loadSeo();
+  }, []);
 
   const handleAdminAuth = () => {
      setShowAuthModal(true);

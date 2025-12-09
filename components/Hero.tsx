@@ -1,14 +1,22 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { CreditCard, ShieldCheck, Coins, Coffee, Phone, AlertCircle, MapPin, CalendarDays, Flame, ChevronRight, ChevronLeft, ShoppingBag } from 'lucide-react';
+import { CreditCard, ShieldCheck, Coins, Coffee, Phone, AlertCircle, MapPin, CalendarDays, Flame, ChevronRight, ChevronLeft, ShoppingBag, Megaphone, Star } from 'lucide-react';
 import { HERO_BG_IMAGE, PHONE_NUMBER_1, PHONE_NUMBER_2, PHONE_LINK_1, PHONE_LINK_2 } from '../constants';
 import BookingWizard from './BookingWizard';
 import { supabase } from '../supabaseClient';
 import { TyreProduct } from '../types';
+import { DEFAULT_IMG_CONFIG, DEFAULT_BG_CONFIG } from './admin/promo/shared';
 
 interface HeroProps {
   onShopRedirect: (tyre: TyreProduct) => void;
 }
+
+// Helper to safely parse messy price strings
+const safeParsePrice = (val: string | undefined | null): number => {
+    if (!val) return 0;
+    const clean = String(val).replace(/,/g, '.').replace(/[^\d.]/g, '');
+    return parseFloat(clean) || 0;
+};
 
 const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
   const [phone, setPhone] = useState('');
@@ -19,19 +27,97 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
   const [hotTyres, setHotTyres] = useState<TyreProduct[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Promo Banners State (Array)
+  const [promos, setPromos] = useState<any[]>([]);
+  const [currentPromoIndex, setCurrentPromoIndex] = useState(0);
+
+  // Dynamic Text & Contacts
+  const [heroText, setHeroText] = useState({
+      title: 'ЦІЛОДОБОВИЙ ШИНОМОНТАЖ',
+      subtitle: 'В М. СИНЕЛЬНИКОВЕ (24/7)'
+  });
+  const [contacts, setContacts] = useState({
+      p1: PHONE_NUMBER_1,
+      p2: PHONE_NUMBER_2,
+      link1: PHONE_LINK_1,
+      link2: PHONE_LINK_2,
+      address: 'м. Синельникове, вул. Квітнева 9'
+  });
+
   useEffect(() => {
-    const fetchHotTyres = async () => {
-      const { data } = await supabase
+    const fetchData = async () => {
+      // 1. Fetch Hot Tyres
+      const { data: tyresData } = await supabase
         .from('tyres')
         .select('*')
         .eq('is_hot', true)
         .order('created_at', { ascending: false })
         .limit(10);
-      
-      if (data) setHotTyres(data);
+      if (tyresData) setHotTyres(tyresData);
+
+      // 2. Fetch Promo Data & Settings
+      const { data: settingsData } = await supabase
+        .from('settings')
+        .select('key, value')
+        .in('key', ['promo_data', 'hero_title', 'hero_subtitle', 'contact_phone1', 'contact_phone2', 'contact_address']);
+        
+      if (settingsData) {
+          settingsData.forEach(item => {
+              if (item.key === 'promo_data' && item.value) {
+                  try {
+                     const p = JSON.parse(item.value);
+                     let loadedPromos = [];
+                     if (Array.isArray(p)) {
+                         loadedPromos = p.filter((item: any) => item.active);
+                     } else if (p.active) {
+                         loadedPromos = [p];
+                     }
+                     setPromos(loadedPromos);
+                  } catch (e) { console.error(e); }
+              }
+              if (item.key === 'hero_title' && item.value) setHeroText(prev => ({ ...prev, title: item.value }));
+              if (item.key === 'hero_subtitle' && item.value) setHeroText(prev => ({ ...prev, subtitle: item.value }));
+              
+              if (item.key === 'contact_phone1') setContacts(prev => ({ ...prev, p1: item.value, link1: `tel:${item.value.replace(/[^\d+]/g,'')}` }));
+              if (item.key === 'contact_phone2') setContacts(prev => ({ ...prev, p2: item.value, link2: `tel:${item.value.replace(/[^\d+]/g,'')}` }));
+              if (item.key === 'contact_address') setContacts(prev => ({ ...prev, address: item.value }));
+          });
+      }
     };
-    fetchHotTyres();
+    fetchData();
   }, []);
+
+  // Auto-slide carousel
+  useEffect(() => {
+      if (promos.length <= 1) return;
+      const interval = setInterval(() => {
+          setCurrentPromoIndex(prev => (prev + 1) % promos.length);
+      }, 5000); 
+      return () => clearInterval(interval);
+  }, [promos.length]);
+
+  const nextPromo = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setCurrentPromoIndex(prev => (prev + 1) % promos.length);
+  };
+
+  const prevPromo = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setCurrentPromoIndex(prev => (prev - 1 + promos.length) % promos.length);
+  };
+
+  const handlePromoClick = (promo: any) => {
+      if (!promo) return;
+      if (promo.link === 'shop') {
+          const dummyTyre = { id: -1 } as any; 
+          onShopRedirect(dummyTyre); 
+          window.location.hash = 'shop'; 
+      } else if (promo.link === 'booking') {
+          setShowWizard(true);
+      } else if (promo.link === 'phone') {
+          window.location.href = contacts.link1;
+      }
+  };
 
   const startBooking = () => {
     if (phone.length < 9) {
@@ -44,9 +130,7 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
 
   const handleScroll = (e: React.WheelEvent) => {
     if (scrollRef.current) {
-      // If we scroll vertically with mouse wheel, translate it to horizontal scroll
       if (e.deltaY !== 0) {
-         // e.preventDefault(); // Optional: Uncomment if you want to strictly lock page scroll while hovering
          scrollRef.current.scrollLeft += e.deltaY;
       }
     }
@@ -63,6 +147,34 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
       scrollRef.current.scrollBy({ left: 300, behavior: 'smooth' });
     }
   };
+
+  // Current active promo
+  const currentPromo = promos.length > 0 ? promos[currentPromoIndex] : null;
+  const imgConfig = { ...DEFAULT_IMG_CONFIG, ...(currentPromo?.imageConfig || {}) };
+  const bgConfig = { ...DEFAULT_BG_CONFIG, ...(currentPromo?.backgroundConfig || {}) };
+
+  // Calculate Mask for Soft Vignette
+  let maskImageStyle: React.CSSProperties = {};
+  if (imgConfig.vignette) {
+      if (imgConfig.maskType === 'linear') {
+          // Linear Gradient with Direction
+          const fadeStart = Math.max(0, 50 - (imgConfig.vignetteStrength / 2)); 
+          const direction = imgConfig.maskDirection || 'right';
+          const val = `linear-gradient(to ${direction}, black 0%, black ${fadeStart}%, transparent 100%)`;
+          maskImageStyle = {
+              maskImage: val,
+              WebkitMaskImage: val
+          };
+      } else {
+          // Radial Gradient
+          const maskStop = Math.max(0, 95 - imgConfig.vignetteStrength);
+          const val = `radial-gradient(circle at center, black ${maskStop}%, transparent 100%)`;
+          maskImageStyle = {
+              maskImage: val,
+              WebkitMaskImage: val
+          };
+      }
+  }
 
   return (
     <div className="relative w-full overflow-hidden pb-12">
@@ -81,8 +193,139 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
       </div>
 
       {/* Content Layer */}
-      <div className="relative z-10 max-w-6xl mx-auto px-4 py-12 md:py-20 flex flex-col gap-8">
+      <div className="relative z-10 max-w-6xl mx-auto px-4 py-8 md:py-20 flex flex-col gap-8">
         
+        {/* PROMO CAROUSEL */}
+        {currentPromo && (
+            <div className="relative group/carousel">
+                <div 
+                    onClick={() => handlePromoClick(currentPromo)}
+                    className={`w-full rounded-3xl p-6 md:p-12 text-white shadow-[0_0_40px_rgba(0,0,0,0.5)] relative overflow-hidden cursor-pointer transition-all duration-500 ${currentPromo.color}`}
+                >
+                    {/* CUSTOM BACKGROUND IMAGE LAYER */}
+                    {currentPromo.backgroundImage && (
+                        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+                            <img 
+                                src={currentPromo.backgroundImage} 
+                                className="w-full h-full object-cover transition-opacity duration-300"
+                                style={{ 
+                                    opacity: (bgConfig.opacity ?? 100) / 100,
+                                    objectPosition: `center ${bgConfig.positionY ?? 50}%`
+                                }}
+                                alt=""
+                            />
+                            {/* Dark Overlay for readability */}
+                            <div 
+                                className="absolute inset-0 bg-black transition-opacity duration-300"
+                                style={{ opacity: (bgConfig.overlayOpacity ?? 40) / 100 }}
+                            ></div>
+                        </div>
+                    )}
+
+                    {/* PATTERN OVERLAY */}
+                    {currentPromo.pattern && currentPromo.pattern !== 'none' && (
+                        <div 
+                            className="absolute inset-0 z-0 pointer-events-none"
+                            style={{ 
+                                backgroundImage: currentPromo.pattern,
+                                opacity: (currentPromo.patternOpacity || 10) / 100,
+                                backgroundSize: 'auto',
+                                backgroundRepeat: 'repeat',
+                                mixBlendMode: 'screen'
+                            }}
+                        ></div>
+                    )}
+
+                    <div className="relative z-20 flex flex-col md:flex-row items-center justify-between gap-8 md:gap-12 min-h-[300px]">
+                        
+                        {/* TEXT CONTENT */}
+                        <div className="flex-grow text-center md:text-left z-20 max-w-2xl relative">
+                            
+                             {/* Modern Badge */}
+                            <div className="inline-flex items-center gap-2 bg-white/5 backdrop-blur-md border border-[#FFC300]/50 text-[#FFC300] px-3 py-1.5 md:px-4 md:py-2 rounded-full text-[10px] md:text-xs font-bold uppercase tracking-widest mb-6 shadow-[0_0_15px_rgba(255,195,0,0.2)] justify-center md:justify-start">
+                                <div className="w-1.5 h-1.5 rounded-full bg-[#FFC300] animate-pulse"></div>
+                                АКЦІЯ
+                            </div>
+                            
+                            {/* Updated leading-tight here */}
+                            <h3 className="text-3xl md:text-6xl font-black uppercase italic leading-tight mb-6 drop-shadow-xl tracking-tighter break-words text-white">
+                                {currentPromo.title}
+                            </h3>
+                            
+                            <div className="pl-4 border-l-2 border-[#FFC300] mb-8 inline-block text-left">
+                                <p className="text-base md:text-xl font-medium text-zinc-300 leading-snug drop-shadow-md">
+                                    {currentPromo.text}
+                                </p>
+                            </div>
+
+                            <button className="bg-[#FFC300] text-black font-black text-sm md:text-base px-10 py-4 rounded-xl hover:scale-105 transition-transform uppercase tracking-widest shadow-[0_0_20px_rgba(255,195,0,0.4)] active:scale-95 flex items-center justify-center md:justify-start gap-3 mx-auto md:mx-0 group/btn">
+                                {currentPromo.buttonText}
+                                <ChevronRight size={20} className="group-hover/btn:translate-x-1 transition-transform"/>
+                            </button>
+                        </div>
+                        
+                        {/* Custom Image or Fallback Icon */}
+                        <div className="absolute right-0 top-0 bottom-0 w-full md:w-1/2 h-full z-10 pointer-events-none opacity-30 md:opacity-100 flex items-center justify-center">
+                             {currentPromo.image_url ? (
+                                 <div
+                                    className="relative w-full h-full flex items-center justify-center transition-transform duration-700"
+                                    style={{
+                                        transform: `scale(${imgConfig.scale / 100}) translate(${imgConfig.xOffset}px, ${imgConfig.yOffset}px)`,
+                                        opacity: (imgConfig.opacity || 100) / 100
+                                    }}
+                                 >
+                                     {imgConfig.glow && (
+                                         <div className="absolute inset-0 bg-[#FFC300]/30 blur-[80px] rounded-full scale-90 pointer-events-none mix-blend-screen"></div>
+                                     )}
+                                     <img 
+                                        src={currentPromo.image_url} 
+                                        alt="Promo" 
+                                        className={`
+                                            max-w-none max-h-none object-contain relative z-10
+                                            ${imgConfig.shadow ? 'drop-shadow-[0_25px_50px_rgba(0,0,0,0.8)]' : ''}
+                                        `}
+                                        style={{
+                                            height: '100%',
+                                            ...maskImageStyle
+                                        }}
+                                     />
+                                 </div>
+                             ) : (
+                                <Megaphone size={200} className="text-white/5 -rotate-12" />
+                             )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Carousel Controls (Only if > 1) */}
+                {promos.length > 1 && (
+                    <>
+                        <button 
+                            onClick={prevPromo}
+                            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 md:-translate-x-6 w-10 h-10 md:w-12 md:h-12 bg-black/50 hover:bg-black/80 text-white rounded-full flex items-center justify-center backdrop-blur-sm border border-white/10 opacity-0 group-hover/carousel:opacity-100 transition-opacity duration-300 z-30"
+                        >
+                            <ChevronLeft size={24}/>
+                        </button>
+                        <button 
+                            onClick={nextPromo}
+                            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 md:translate-x-6 w-10 h-10 md:w-12 md:h-12 bg-black/50 hover:bg-black/80 text-white rounded-full flex items-center justify-center backdrop-blur-sm border border-white/10 opacity-0 group-hover/carousel:opacity-100 transition-opacity duration-300 z-30"
+                        >
+                            <ChevronRight size={24}/>
+                        </button>
+                        {/* Dots */}
+                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-30">
+                            {promos.map((_, idx) => (
+                                <div 
+                                    key={idx} 
+                                    className={`w-2 h-2 rounded-full transition-all ${idx === currentPromoIndex ? 'bg-white w-6' : 'bg-white/40'}`}
+                                />
+                            ))}
+                        </div>
+                    </>
+                )}
+            </div>
+        )}
+
         <div className="space-y-6">
           
           {/* ADDRESS & PHONES BLOCK */}
@@ -90,20 +333,20 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
              <div className="flex items-center gap-3 text-zinc-200">
                 <MapPin className="text-[#FFC300] shrink-0" size={28} />
                 <span className="text-base md:text-xl font-bold leading-tight">
-                  м. Синельникове, <span className="whitespace-nowrap">вул. Квітнева 9</span>
+                  {contacts.address}
                 </span>
              </div>
              
              <div className="hidden md:block h-8 w-px bg-white/10"></div>
 
              <div className="flex flex-col sm:flex-row gap-3 sm:gap-8 w-full md:w-auto">
-                <a href={PHONE_LINK_1} className="flex items-center gap-2 font-bold text-lg md:text-xl text-white hover:text-[#FFC300] transition-colors">
+                <a href={contacts.link1} className="flex items-center gap-2 font-bold text-lg md:text-xl text-white hover:text-[#FFC300] transition-colors">
                    <Phone className="text-[#FFC300]" size={20} />
-                   {PHONE_NUMBER_1}
+                   {contacts.p1}
                 </a>
-                <a href={PHONE_LINK_2} className="flex items-center gap-2 font-bold text-lg md:text-xl text-white hover:text-[#FFC300] transition-colors">
+                <a href={contacts.link2} className="flex items-center gap-2 font-bold text-lg md:text-xl text-white hover:text-[#FFC300] transition-colors">
                    <Phone className="text-[#FFC300]" size={20} />
-                   {PHONE_NUMBER_2}
+                   {contacts.p2}
                 </a>
              </div>
           </div>
@@ -111,7 +354,7 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
           {/* ONLINE BOOKING BLOCK */}
           <div className="w-full bg-[#18181b] border-l-4 border-[#FFC300] p-6 md:p-8 backdrop-blur-md rounded-r-lg shadow-[0_0_30px_rgba(255,195,0,0.15)]">
             <h1 className="text-4xl md:text-6xl font-black text-[#FFC300] uppercase leading-tight mb-6 drop-shadow-md tracking-tight italic text-center md:text-left">
-              Цілодобовий Шиномонтаж<br/><span className="text-white">в м. Синельникове (24/7)</span>
+              {heroText.title}<br/><span className="text-white">{heroText.subtitle}</span>
             </h1>
             <div className="flex flex-col gap-4">
               <div className="flex flex-col md:flex-row gap-4 w-full">
@@ -234,7 +477,10 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
                       style={{ scrollBehavior: 'smooth' }}
                   >
                       {hotTyres.map((tyre) => {
-                        const hasDiscount = tyre.old_price && parseFloat(tyre.old_price) > parseFloat(tyre.price);
+                        const priceNum = safeParsePrice(tyre.price);
+                        const oldPriceNum = safeParsePrice(tyre.old_price);
+                        const hasDiscount = oldPriceNum > 0 && oldPriceNum > priceNum;
+                        
                         return (
                         <div 
                           key={tyre.id} 
@@ -257,20 +503,26 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
                               <div className="h-9 mb-1 overflow-hidden">
                                   <h4 className="text-xs font-bold text-white leading-tight line-clamp-2">{tyre.title}</h4>
                               </div>
-                              <div className="flex justify-between items-end mt-2">
-                                  <div className="flex flex-col items-start leading-none">
-                                      {hasDiscount && (
-                                          <span className="text-zinc-500 text-[10px] line-through decoration-zinc-500 mb-0.5">
-                                              {Math.round(parseFloat(tyre.old_price!))} грн
-                                          </span>
-                                      )}
-                                      <span className={`font-black text-sm ${hasDiscount ? 'text-red-500' : 'text-[#FFC300]'}`}>
-                                          {tyre.price} <span className="text-[10px] text-zinc-500 font-normal">грн</span>
-                                      </span>
-                                  </div>
-                                  <div className="bg-zinc-800 p-1.5 rounded-lg text-zinc-400 group-hover/card:bg-[#FFC300] group-hover/card:text-black transition-colors">
-                                    <ChevronRight size={14} />
-                                  </div>
+                              <div className="flex flex-col justify-end mt-2 min-h-[40px]">
+                                  {hasDiscount ? (
+                                    <div className="flex flex-col items-start leading-none relative">
+                                        <div className="absolute -top-3 left-0 bg-red-600 text-white text-[9px] px-1 rounded transform -rotate-2">
+                                           SALE
+                                        </div>
+                                        <span className="text-zinc-500 text-[11px] line-through decoration-red-500/50 mb-0.5 ml-8">
+                                            {Math.round(oldPriceNum)}
+                                        </span>
+                                        <span className="font-black text-sm text-red-500">
+                                            {Math.round(priceNum)} <span className="text-[10px] text-zinc-500 font-normal">грн</span>
+                                        </span>
+                                    </div>
+                                  ) : (
+                                    <div className="flex flex-col items-start leading-none pt-2">
+                                        <span className="font-black text-sm text-[#FFC300]">
+                                            {Math.round(priceNum)} <span className="text-[10px] text-zinc-500 font-normal">грн</span>
+                                        </span>
+                                    </div>
+                                  )}
                               </div>
                             </div>
                         </div>

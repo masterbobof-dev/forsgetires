@@ -1,9 +1,42 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { PhoneCall, MapPin, Navigation } from 'lucide-react';
 import { PHONE_NUMBER_1, PHONE_NUMBER_2, PHONE_LINK_1, PHONE_LINK_2, MAP_EMBED_URL, MAP_DIRECT_LINK } from '../constants';
+import { supabase } from '../supabaseClient';
 
 const Contact: React.FC = () => {
+  const [contacts, setContacts] = useState({
+      p1: PHONE_NUMBER_1,
+      p2: PHONE_NUMBER_2,
+      link1: PHONE_LINK_1,
+      link2: PHONE_LINK_2,
+      mapLink: MAP_DIRECT_LINK
+  });
+
+  useEffect(() => {
+      const fetchContacts = async () => {
+          const { data } = await supabase.from('settings').select('key, value').in('key', ['contact_phone1', 'contact_phone2', 'contact_map_link']);
+          if (data) {
+              const newContacts = { ...contacts };
+              data.forEach(r => {
+                  if (r.key === 'contact_phone1') {
+                      newContacts.p1 = r.value;
+                      newContacts.link1 = `tel:${r.value.replace(/[^\d+]/g, '')}`;
+                  }
+                  if (r.key === 'contact_phone2') {
+                      newContacts.p2 = r.value;
+                      newContacts.link2 = `tel:${r.value.replace(/[^\d+]/g, '')}`;
+                  }
+                  if (r.key === 'contact_map_link') {
+                      newContacts.mapLink = r.value;
+                  }
+              });
+              setContacts(newContacts);
+          }
+      };
+      fetchContacts();
+  }, []);
+
   return (
     <section className="py-12 bg-[#09090b] pb-24">
       <div className="max-w-4xl mx-auto px-4">
@@ -21,16 +54,16 @@ const Contact: React.FC = () => {
                 </div>
                 
                 <div className="flex flex-col gap-4">
-                  <a href={PHONE_LINK_1} className="block w-full">
+                  <a href={contacts.link1} className="block w-full">
                     <button className="w-full py-4 px-6 bg-[#FFC300] hover:bg-[#e6b000] text-black font-black text-2xl rounded-xl transition-transform active:scale-95 flex items-center justify-center gap-3 shadow-lg shadow-yellow-900/20">
                       <PhoneCall className="w-6 h-6" />
-                      {PHONE_NUMBER_1}
+                      {contacts.p1}
                     </button>
                   </a>
-                  <a href={PHONE_LINK_2} className="block w-full">
+                  <a href={contacts.link2} className="block w-full">
                     <button className="w-full py-4 px-6 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-2xl rounded-xl border border-zinc-600 transition-transform active:scale-95 flex items-center justify-center gap-3">
                       <PhoneCall className="w-6 h-6 text-[#FFC300]" />
-                      {PHONE_NUMBER_2}
+                      {contacts.p2}
                     </button>
                   </a>
                 </div>
@@ -41,7 +74,7 @@ const Contact: React.FC = () => {
                   <MapPin className="w-5 h-5" />
                   <h3 className="uppercase tracking-widest text-sm font-bold">Навігація</h3>
                </div>
-               <a href={MAP_DIRECT_LINK} target="_blank" rel="noopener noreferrer" className="block w-full">
+               <a href={contacts.mapLink} target="_blank" rel="noopener noreferrer" className="block w-full">
                   <button className="w-full py-4 px-6 bg-[#FFC300] hover:bg-[#e6b000] text-black font-black text-xl rounded-xl transition-transform active:scale-95 flex items-center justify-center gap-3 animate-pulse">
                     <Navigation className="w-6 h-6" />
                     ПРОКЛАСТИ МАРШРУТ

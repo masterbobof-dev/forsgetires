@@ -1,9 +1,10 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Logo from './Logo';
 import { ViewState } from '../types';
 import { Menu, X, Phone, Lock, ShoppingBag } from 'lucide-react';
 import { PHONE_NUMBER_1, PHONE_NUMBER_2, PHONE_LINK_1, PHONE_LINK_2 } from '../constants';
+import { supabase } from '../supabaseClient';
 
 interface HeaderProps {
   currentView: ViewState;
@@ -12,7 +13,34 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick }) => {
-  const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [phones, setPhones] = useState({ 
+      p1: PHONE_NUMBER_1, 
+      p2: PHONE_NUMBER_2,
+      link1: PHONE_LINK_1,
+      link2: PHONE_LINK_2
+  });
+
+  useEffect(() => {
+      const fetchContacts = async () => {
+          const { data } = await supabase.from('settings').select('key, value').in('key', ['contact_phone1', 'contact_phone2']);
+          if (data) {
+              const newPhones = { ...phones };
+              data.forEach(r => {
+                  if (r.key === 'contact_phone1') {
+                      newPhones.p1 = r.value;
+                      newPhones.link1 = `tel:${r.value.replace(/[^\d+]/g, '')}`;
+                  }
+                  if (r.key === 'contact_phone2') {
+                      newPhones.p2 = r.value;
+                      newPhones.link2 = `tel:${r.value.replace(/[^\d+]/g, '')}`;
+                  }
+              });
+              setPhones(newPhones);
+          }
+      };
+      fetchContacts();
+  }, []);
 
   const navItems: { label: string; view: ViewState }[] = [
     { label: 'Головна', view: 'home' },
@@ -53,13 +81,13 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick
           
           {/* Phones - Visible on Desktop/Tablet */}
           <div className="hidden lg:flex flex-col items-end gap-0.5 border-r border-zinc-800 pr-6 mr-2">
-            <a href={PHONE_LINK_1} className="flex items-center gap-2 text-[#FFC300] font-bold text-sm hover:text-[#e6b000] transition-colors group">
+            <a href={phones.link1} className="flex items-center gap-2 text-[#FFC300] font-bold text-sm hover:text-[#e6b000] transition-colors group">
               <Phone size={14} className="group-hover:animate-bounce" /> 
-              {PHONE_NUMBER_1}
+              {phones.p1}
             </a>
-            <a href={PHONE_LINK_2} className="flex items-center gap-2 text-zinc-400 font-bold text-sm hover:text-white transition-colors">
+            <a href={phones.link2} className="flex items-center gap-2 text-zinc-400 font-bold text-sm hover:text-white transition-colors">
               <Phone size={14} /> 
-              {PHONE_NUMBER_2}
+              {phones.p2}
             </a>
           </div>
 
@@ -91,7 +119,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick
           {/* Mobile Controls */}
           <div className="flex items-center gap-3 md:hidden">
             {/* Quick Call Icon for Mobile */}
-            <a href={PHONE_LINK_1} className="w-10 h-10 flex items-center justify-center bg-[#FFC300] rounded-full text-black active:scale-90 transition-transform">
+            <a href={phones.link1} className="w-10 h-10 flex items-center justify-center bg-[#FFC300] rounded-full text-black active:scale-90 transition-transform">
               <Phone size={20} />
             </a>
             
@@ -113,11 +141,11 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick
         <div className="md:hidden absolute top-full left-0 w-full bg-zinc-900 border-b border-white/10 shadow-2xl animate-in slide-in-from-top-2">
           {/* Mobile Phones in Menu */}
           <div className="bg-black/50 p-4 border-b border-white/5 flex flex-col items-center gap-3">
-             <a href={PHONE_LINK_1} className="flex items-center gap-2 text-[#FFC300] font-bold text-lg">
-                <Phone size={18} /> {PHONE_NUMBER_1}
+             <a href={phones.link1} className="flex items-center gap-2 text-[#FFC300] font-bold text-lg">
+                <Phone size={18} /> {phones.p1}
              </a>
-             <a href={PHONE_LINK_2} className="flex items-center gap-2 text-white font-bold text-lg">
-                <Phone size={18} /> {PHONE_NUMBER_2}
+             <a href={phones.link2} className="flex items-center gap-2 text-white font-bold text-lg">
+                <Phone size={18} /> {phones.p2}
              </a>
           </div>
 

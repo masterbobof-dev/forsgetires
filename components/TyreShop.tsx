@@ -2,8 +2,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { TyreProduct, CartItem } from '../types';
-import { ShoppingBag, Loader2, Phone, X, Filter, Snowflake, Sun, CloudSun, Truck, Check, CreditCard, Wallet, ArrowDown, ShoppingCart, Plus, Minus, Trash2, ChevronLeft, ChevronRight, ZoomIn, Ban, Flame, Grid, ArrowUpDown, Search, DollarSign, AlertCircle } from 'lucide-react';
+import { ShoppingBag, Loader2, Phone, X, Filter, Snowflake, Sun, CloudSun, Truck, Check, CreditCard, Wallet, ArrowDown, ShoppingCart, Plus, Minus, Trash2, ChevronLeft, ChevronRight, ZoomIn, Ban, Flame, Grid, ArrowUpDown, Search, DollarSign, AlertCircle, Tag } from 'lucide-react';
 import { PHONE_LINK_1, PHONE_NUMBER_1, FORMSPREE_ENDPOINT } from '../constants';
+import { DEFAULT_IMG_CONFIG, DEFAULT_BG_CONFIG } from './admin/promo/shared';
 
 const MOCK_REGIONS = [
   "Дніпропетровська обл.", "Київська обл.", "Львівська обл.", "Одеська обл.", "Харківська обл.", "Запорізька обл.", "Вінницька обл.", "Полтавська обл."
@@ -27,10 +28,18 @@ const getMockWarehouses = (city: string) => {
 
 const PAGE_SIZE = 60;
 
+// Helper to safely parse messy price strings (e.g. "2 500", "1,200.00")
+const safeParsePrice = (val: string | undefined | null): number => {
+    if (!val) return 0;
+    const clean = String(val).replace(/,/g, '.').replace(/[^\d.]/g, '');
+    return parseFloat(clean) || 0;
+};
+
 const formatPrice = (priceStr: string | undefined) => {
   if (!priceStr) return '0';
-  const num = parseFloat(priceStr);
-  return isNaN(num) ? priceStr : Math.round(num).toString();
+  // Use safeParsePrice to ensure we handle spaces/commas before formatting back
+  const num = safeParsePrice(priceStr);
+  return num ? Math.round(num).toString() : priceStr;
 };
 
 const CATEGORIES = [
@@ -79,6 +88,11 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
 
   // Stock Quantity Logic
   const [enableStockQty, setEnableStockQty] = useState(false);
+  const [promoBanner, setPromoBanner] = useState<any>(null);
+  
+  // Dynamic Contact Info
+  const [shopPhone, setShopPhone] = useState(PHONE_NUMBER_1);
+  const [shopPhoneLink, setShopPhoneLink] = useState(PHONE_LINK_1);
 
   const [orderName, setOrderName] = useState('');
   const [orderPhone, setOrderPhone] = useState('');
@@ -96,12 +110,27 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   const touchStartRef = useRef<number | null>(null);
   const touchEndRef = useRef<number | null>(null);
 
-  // Fetch Settings
+  // Fetch Settings & Promo
   useEffect(() => {
     const fetchSettings = async () => {
-      const { data } = await supabase.from('settings').select('value').eq('key', 'enable_stock_quantity').single();
-      if (data && data.value === 'true') {
-        setEnableStockQty(true);
+      const { data } = await supabase.from('settings').select('key, value').in('key', ['enable_stock_quantity', 'promo_data', 'contact_phone1']);
+      if (data) {
+          data.forEach(item => {
+              if (item.key === 'enable_stock_quantity') {
+                  setEnableStockQty(item.value === 'true');
+              }
+              if (item.key === 'contact_phone1') {
+                  setShopPhone(item.value);
+                  setShopPhoneLink(`tel:${item.value.replace(/[^\d+]/g, '')}`);
+              }
+              if (item.key === 'promo_data' && item.value) {
+                  try {
+                      const p = JSON.parse(item.value);
+                      const active = Array.isArray(p) ? p.find((x:any) => x.active) : (p.active ? p : null);
+                      setPromoBanner(active);
+                  } catch (e) { console.error(e); }
+              }
+          });
       }
     };
     fetchSettings();
@@ -186,7 +215,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
       // 1. TEXT SEARCH FILTER (If exists)
       if (searchQuery.trim()) {
          const term = searchQuery.trim();
-         query = query.or(`title.ilike.%${term}%,catalog_number.ilike.%${term}%,manufacturer.ilike.%${term}%`);
+         query = query.or(`title.ilike.%${term}%,catalog_number.ilike.%${term}%,manufacturer.ilike.%${term}%,product_number.ilike.%${term}%`);
       }
 
       // 2. CATEGORY FILTERS
@@ -340,7 +369,9 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   };
 
   const removeFromCart = (id: number) => { setCart(prev => prev.filter(item => item.id !== id)); };
-  const cartTotal = useMemo(() => cart.reduce((total, item) => total + (parseFloat(item.price) * item.quantity), 0), [cart]);
+  
+  // Use safeParsePrice for total calculation
+  const cartTotal = useMemo(() => cart.reduce((total, item) => total + (safeParsePrice(item.price) * item.quantity), 0), [cart]);
 
   const openLightbox = (tyre: TyreProduct) => { let images: string[] = []; if (tyre.image_url) images.push(tyre.image_url); if (tyre.gallery && Array.isArray(tyre.gallery)) { const additional = tyre.gallery.filter(url => url !== tyre.image_url); images = [...images, ...additional]; } if (images.length === 0) return; setCurrentLightboxImages(images); setCurrentImageIndex(0); setLightboxOpen(true); };
   
@@ -403,17 +434,112 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
     <div className="min-h-screen bg-[#09090b] py-8 md:py-12 animate-in fade-in duration-500 pb-32">
       <div className="max-w-7xl mx-auto px-2 md:px-4">
         
-        {/* HEADER SECTION */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 px-2">
-           <div>
+        {/* HEADER SECTION with Mini Banner */}
+        <div className="flex flex-col lg:flex-row justify-between items-start md:items-center gap-4 mb-8 px-2 relative">
+           <div className="shrink-0">
               <h2 className="text-3xl md:text-4xl font-black text-white mb-2 border-b-2 border-[#FFC300] inline-block pb-2">Магазин Шин та Дисків</h2>
               <p className="text-zinc-400">Широкий вибір нових та б/в шин у Синельниковому.</p>
            </div>
-           <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex items-center gap-4 w-full md:w-auto">
+
+           {/* MINI BANNER (Visible on Desktop) */}
+           {promoBanner && (
+               (() => {
+                   const imgConfig = { ...DEFAULT_IMG_CONFIG, ...(promoBanner.imageConfig || {}) };
+                   const bgConfig = { ...DEFAULT_BG_CONFIG, ...(promoBanner.backgroundConfig || {}) };
+                   
+                   // Mask Logic
+                   let maskImageStyle: React.CSSProperties = {};
+                   if (imgConfig.vignette) {
+                       if (imgConfig.maskType === 'linear') {
+                           const fadeStart = Math.max(0, 50 - (imgConfig.vignetteStrength / 2));
+                           const direction = imgConfig.maskDirection || 'right';
+                           const val = `linear-gradient(to ${direction}, black 0%, black ${fadeStart}%, transparent 100%)`;
+                           maskImageStyle = { maskImage: val, WebkitMaskImage: val };
+                       } else {
+                           const maskStop = Math.max(0, 95 - imgConfig.vignetteStrength);
+                           const val = `radial-gradient(circle at center, black ${maskStop}%, transparent 100%)`;
+                           maskImageStyle = { maskImage: val, WebkitMaskImage: val };
+                       }
+                   }
+
+                   return (
+                       <div className={`hidden lg:flex flex-1 mx-8 rounded-xl relative overflow-hidden items-center justify-between shadow-lg border border-white/10 max-w-2xl h-36 ${promoBanner.color}`}>
+                           
+                           {/* Custom Background Image */}
+                           {promoBanner.backgroundImage && (
+                                <div className="absolute inset-0 z-0 pointer-events-none">
+                                    <img 
+                                        src={promoBanner.backgroundImage} 
+                                        className="w-full h-full object-cover transition-opacity duration-300"
+                                        style={{ 
+                                            opacity: (bgConfig.opacity ?? 100) / 100,
+                                            objectPosition: `center ${bgConfig.positionY ?? 50}%`
+                                        }}
+                                        alt=""
+                                    />
+                                    <div className="absolute inset-0 bg-black" style={{ opacity: (bgConfig.overlayOpacity ?? 40) / 100 }}></div>
+                                </div>
+                           )}
+
+                           {/* Pattern */}
+                           {promoBanner.pattern && promoBanner.pattern !== 'none' && (
+                               <div 
+                                   className="absolute inset-0 z-0 pointer-events-none" 
+                                   style={{ 
+                                       backgroundImage: promoBanner.pattern, 
+                                       opacity: (promoBanner.patternOpacity || 10) / 100,
+                                       mixBlendMode: 'screen',
+                                       backgroundSize: 'auto',
+                                       backgroundRepeat: 'repeat'
+                                   }}
+                               ></div>
+                           )}
+
+                           <div className="relative z-10 flex flex-col justify-center pl-6 py-4 h-full flex-grow">
+                                <div className="text-[10px] font-bold text-[#FFC300] uppercase tracking-widest mb-1 flex items-center gap-2">
+                                   <div className="w-1.5 h-1.5 bg-[#FFC300] rounded-full animate-pulse"></div>
+                                   Active Promo
+                                </div>
+                                <h3 className="text-2xl font-black text-white italic uppercase leading-none drop-shadow-md">{promoBanner.title}</h3>
+                                <p className="text-xs text-zinc-300 mt-1 line-clamp-2 max-w-xs leading-tight drop-shadow-sm font-medium">{promoBanner.text}</p>
+                           </div>
+
+                           {/* Product Image */}
+                           {promoBanner.image_url && (
+                               <div className="w-48 h-full relative mr-4 flex items-center justify-center pointer-events-none">
+                                  <div 
+                                    style={{
+                                        transform: `scale(${imgConfig.scale / 100}) translate(${imgConfig.xOffset}px, ${imgConfig.yOffset}px)`,
+                                        opacity: (imgConfig.opacity || 100) / 100,
+                                        height: '100%',
+                                        width: '100%',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}
+                                  >
+                                      {imgConfig.glow && (
+                                         <div className="absolute inset-0 bg-[#FFC300]/30 blur-[40px] rounded-full scale-75 pointer-events-none mix-blend-screen"></div>
+                                      )}
+                                      <img 
+                                        src={promoBanner.image_url} 
+                                        className={`max-w-none max-h-none object-contain relative z-10 ${imgConfig.shadow ? 'drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)]' : ''}`} 
+                                        style={{ height: '120%', ...maskImageStyle }}
+                                        alt="Promo" 
+                                      />
+                                  </div>
+                               </div>
+                           )}
+                       </div>
+                   );
+               })()
+           )}
+
+           <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex items-center gap-4 w-full md:w-auto shrink-0">
               <div className="p-2 bg-[#FFC300] rounded-full text-black"><Phone size={20}/></div>
               <div>
                  <p className="text-xs text-zinc-500 uppercase font-bold">Консультація</p>
-                 <a href={PHONE_LINK_1} className="text-white font-bold text-lg hover:text-[#FFC300]">{PHONE_NUMBER_1}</a>
+                 <a href={shopPhoneLink} className="text-white font-bold text-lg hover:text-[#FFC300]">{shopPhone}</a>
               </div>
            </div>
         </div>
@@ -452,7 +578,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={18}/>
                     <input 
                        type="text" 
-                       placeholder="Пошук (наприклад: Michelin, R16, 205/55)..." 
+                       placeholder="Пошук (наприклад: Michelin, R16, 205/55, код)..." 
                        value={searchQuery}
                        onChange={(e) => setSearchQuery(e.target.value)}
                        onKeyDown={(e) => e.key === 'Enter' && handleForceSearch()}
@@ -548,8 +674,11 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
           <>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6 px-2">
                {filteredTyres.map((tyre) => {
-                  // Determine display price logic
-                  const hasDiscount = tyre.old_price && parseFloat(tyre.old_price) > parseFloat(tyre.price);
+                  // Determine display price logic safely
+                  const priceNum = safeParsePrice(tyre.price);
+                  const oldPriceNum = safeParsePrice(tyre.old_price);
+                  const hasDiscount = oldPriceNum > priceNum;
+                  
                   return (
                   <div key={tyre.id} className={`bg-zinc-900 border rounded-xl overflow-hidden hover:border-[#FFC300] transition-colors group flex flex-col relative ${tyre.in_stock === false ? 'border-zinc-800 opacity-70' : 'border-zinc-800'}`}>
                      
@@ -586,19 +715,38 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                         )}
                      </div>
 
-                     {/* INFO */}
-                     <div className="p-3 md:p-4 flex flex-col flex-grow">
-                        <h3 className="text-sm md:text-base font-bold text-white mb-2 leading-tight line-clamp-2 h-[2.5em]">{tyre.title}</h3>
-                        
+                     {/* INFO SECTION */}
+                     <div className="p-3 md:p-4 flex flex-col flex-grow relative">
+                        {/* SPECS BADGE (Separated from Title) */}
                         {(tyre.width || tyre.height) && (
-                           <div className="inline-flex items-center gap-1 mb-3 text-zinc-400 text-xs font-mono bg-black/40 px-2 py-1 rounded self-start border border-zinc-800">
-                              <span>{tyre.width}</span>/<span>{tyre.height}</span> <span className="text-[#FFC300]">{tyre.radius}</span>
+                           <div className="absolute top-3 right-3 text-[10px] md:text-xs font-black bg-zinc-800 text-white px-2 py-1 rounded border border-zinc-700 z-10 shadow-lg">
+                              {tyre.width}/{tyre.height} <span className="text-[#FFC300]">{tyre.radius}</span>
                            </div>
                         )}
 
+                        {/* BRAND LABEL */}
+                        {tyre.manufacturer && (
+                            <div className="text-[10px] text-zinc-500 uppercase font-bold mb-1 tracking-wider">{tyre.manufacturer}</div>
+                        )}
+
+                        {/* TITLE (Improved Spacing) */}
+                        <h3 className="text-sm md:text-base font-bold text-white mb-4 leading-snug line-clamp-2 min-h-[2.5em] pr-12">
+                            {tyre.title}
+                        </h3>
+
+                        <div className="text-[10px] text-zinc-500 mb-2 flex flex-col gap-0.5">
+                           {tyre.catalog_number && <span>Арт: <span className="text-zinc-400 font-mono">{tyre.catalog_number}</span></span>}
+                           {tyre.product_number && <span>№: <span className="text-zinc-400 font-mono">{tyre.product_number}</span></span>}
+                        </div>
+
                         {enableStockQty && tyre.in_stock !== false && (
                            <div className="text-[10px] font-bold text-green-400 mb-2 flex items-center gap-1">
-                               <Check size={10} /> В наявності: {tyre.stock_quantity ? tyre.stock_quantity : '> 4'} шт.
+                               <Check size={10} /> 
+                               {tyre.stock_quantity ? (
+                                   <span>В наявності: {tyre.stock_quantity} шт.</span>
+                               ) : (
+                                   <span>В наявності</span>
+                               )}
                            </div>
                         )}
 

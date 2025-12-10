@@ -242,23 +242,23 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
                         <div className="flex-grow text-center md:text-left z-20 max-w-2xl relative">
                             
                              {/* Modern Badge */}
-                            <div className="inline-flex items-center gap-2 bg-white/5 backdrop-blur-md border border-[#FFC300]/50 text-[#FFC300] px-3 py-1.5 md:px-4 md:py-2 rounded-full text-[10px] md:text-xs font-bold uppercase tracking-widest mb-6 shadow-[0_0_15px_rgba(255,195,0,0.2)] justify-center md:justify-start">
+                            <div className="inline-flex items-center gap-2 bg-white/5 backdrop-blur-md border border-[#FFC300]/50 text-[#FFC300] px-3 py-1.5 md:px-4 md:py-2 rounded-full text-[10px] md:text-xs font-bold uppercase tracking-widest mb-4 md:mb-6 shadow-[0_0_15px_rgba(255,195,0,0.2)] justify-center md:justify-start">
                                 <div className="w-1.5 h-1.5 rounded-full bg-[#FFC300] animate-pulse"></div>
                                 АКЦІЯ
                             </div>
                             
-                            {/* Updated leading-tight here */}
-                            <h3 className="text-3xl md:text-6xl font-black uppercase italic leading-tight mb-6 drop-shadow-xl tracking-tighter break-words text-white">
+                            {/* Mobile-optimized typography */}
+                            <h3 className="text-3xl md:text-6xl font-black uppercase italic leading-tight mb-4 md:mb-6 drop-shadow-xl tracking-tighter break-words text-white">
                                 {currentPromo.title}
                             </h3>
                             
-                            <div className="pl-4 border-l-2 border-[#FFC300] mb-8 inline-block text-left">
+                            <div className="md:pl-4 md:border-l-2 md:border-[#FFC300] mb-6 md:mb-8 inline-block text-center md:text-left w-full md:w-auto">
                                 <p className="text-base md:text-xl font-medium text-zinc-300 leading-snug drop-shadow-md">
                                     {currentPromo.text}
                                 </p>
                             </div>
 
-                            <button className="bg-[#FFC300] text-black font-black text-sm md:text-base px-10 py-4 rounded-xl hover:scale-105 transition-transform uppercase tracking-widest shadow-[0_0_20px_rgba(255,195,0,0.4)] active:scale-95 flex items-center justify-center md:justify-start gap-3 mx-auto md:mx-0 group/btn">
+                            <button className="w-full md:w-auto bg-[#FFC300] text-black font-black text-sm md:text-base px-10 py-4 rounded-xl hover:scale-105 transition-transform uppercase tracking-widest shadow-[0_0_20px_rgba(255,195,0,0.4)] active:scale-95 flex items-center justify-center md:justify-start gap-3 mx-auto md:mx-0 group/btn">
                                 {currentPromo.buttonText}
                                 <ChevronRight size={20} className="group-hover/btn:translate-x-1 transition-transform"/>
                             </button>
@@ -328,9 +328,9 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
 
         <div className="space-y-6">
           
-          {/* ADDRESS & PHONES BLOCK */}
-          <div className="flex flex-col md:flex-row w-full gap-4 md:gap-8 items-start md:items-center justify-between bg-black/40 p-5 rounded-xl border border-white/10 backdrop-blur-sm mt-4">
-             <div className="flex items-center gap-3 text-zinc-200">
+          {/* ADDRESS & PHONES BLOCK - Centered on Mobile */}
+          <div className="flex flex-col md:flex-row w-full gap-4 md:gap-8 items-center md:items-center justify-between bg-black/40 p-5 rounded-xl border border-white/10 backdrop-blur-sm mt-4 text-center md:text-left">
+             <div className="flex flex-col md:flex-row items-center gap-2 md:gap-3 text-zinc-200">
                 <MapPin className="text-[#FFC300] shrink-0" size={28} />
                 <span className="text-base md:text-xl font-bold leading-tight">
                   {contacts.address}
@@ -339,12 +339,12 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
              
              <div className="hidden md:block h-8 w-px bg-white/10"></div>
 
-             <div className="flex flex-col sm:flex-row gap-3 sm:gap-8 w-full md:w-auto">
-                <a href={contacts.link1} className="flex items-center gap-2 font-bold text-lg md:text-xl text-white hover:text-[#FFC300] transition-colors">
+             <div className="flex flex-col sm:flex-row gap-3 sm:gap-8 w-full md:w-auto justify-center">
+                <a href={contacts.link1} className="flex items-center justify-center gap-2 font-bold text-lg md:text-xl text-white hover:text-[#FFC300] transition-colors">
                    <Phone className="text-[#FFC300]" size={20} />
                    {contacts.p1}
                 </a>
-                <a href={contacts.link2} className="flex items-center gap-2 font-bold text-lg md:text-xl text-white hover:text-[#FFC300] transition-colors">
+                <a href={contacts.link2} className="flex items-center justify-center gap-2 font-bold text-lg md:text-xl text-white hover:text-[#FFC300] transition-colors">
                    <Phone className="text-[#FFC300]" size={20} />
                    {contacts.p2}
                 </a>
@@ -353,7 +353,7 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
 
           {/* ONLINE BOOKING BLOCK */}
           <div className="w-full bg-[#18181b] border-l-4 border-[#FFC300] p-6 md:p-8 backdrop-blur-md rounded-r-lg shadow-[0_0_30px_rgba(255,195,0,0.15)]">
-            <h1 className="text-4xl md:text-6xl font-black text-[#FFC300] uppercase leading-tight mb-6 drop-shadow-md tracking-tight italic text-center md:text-left">
+            <h1 className="text-3xl md:text-6xl font-black text-[#FFC300] uppercase leading-tight mb-6 drop-shadow-md tracking-tight italic text-center md:text-left">
               {heroText.title}<br/><span className="text-white">{heroText.subtitle}</span>
             </h1>
             <div className="flex flex-col gap-4">
@@ -369,7 +369,8 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
                         setError('');
                       }}
                       onKeyDown={(e) => e.key === 'Enter' && startBooking()}
-                      className={`w-full h-full bg-black/50 border ${error ? 'border-red-500' : 'border-zinc-700'} text-white p-4 pl-12 rounded-xl text-xl outline-none focus:border-[#FFC300] transition-colors`}
+                      // Increased font size on mobile to prevent iOS zoom
+                      className={`w-full h-full bg-black/50 border ${error ? 'border-red-500' : 'border-zinc-700'} text-white p-4 pl-12 rounded-xl text-base md:text-xl outline-none focus:border-[#FFC300] transition-colors`}
                     />
                 </div>
                 <button 
@@ -485,7 +486,7 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
                         <div 
                           key={tyre.id} 
                           onClick={() => onShopRedirect(tyre)}
-                          className="flex-shrink-0 w-[33%] md:w-[20%] min-w-[140px] bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden hover:border-[#FFC300] transition-all snap-start group/card relative cursor-pointer hover:shadow-lg hover:shadow-yellow-900/10"
+                          className="flex-shrink-0 w-[45%] md:w-[20%] min-w-[140px] bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden hover:border-[#FFC300] transition-all snap-start group/card relative cursor-pointer hover:shadow-lg hover:shadow-yellow-900/10"
                         >
                             <div className="aspect-square bg-black relative">
                               {tyre.image_url ? (

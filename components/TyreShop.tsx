@@ -582,33 +582,34 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                        value={searchQuery}
                        onChange={(e) => setSearchQuery(e.target.value)}
                        onKeyDown={(e) => e.key === 'Enter' && handleForceSearch()}
-                       className="w-full bg-black border border-zinc-700 rounded-xl pl-10 pr-4 py-3 text-white outline-none focus:border-[#FFC300]"
+                       // text-base to prevent zoom on mobile
+                       className="w-full bg-black border border-zinc-700 rounded-xl pl-10 pr-4 py-3 text-base text-white outline-none focus:border-[#FFC300]"
                     />
                  </div>
                  <button 
                     onClick={handleForceSearch}
-                    className="bg-[#FFC300] hover:bg-[#e6b000] text-black font-black px-6 py-3 rounded-xl flex items-center gap-2 shadow-lg active:scale-95 transition-transform uppercase tracking-wider text-sm md:text-base"
+                    className="bg-[#FFC300] hover:bg-[#e6b000] text-black font-black px-6 py-3 rounded-xl flex items-center gap-2 shadow-lg active:scale-95 transition-transform uppercase tracking-wider text-sm md:text-base whitespace-nowrap"
                  >
                     ЗНАЙТИ
                  </button>
               </div>
 
-              {/* Bottom Row: Dropdowns */}
+              {/* Bottom Row: Dropdowns - Stacked on Mobile for better touch targets */}
               <div className="flex flex-col lg:flex-row gap-4">
                  
                  {/* Filters Container */}
                  <div className="flex flex-col sm:flex-row gap-2 w-full lg:flex-grow">
                     {/* Size Filters */}
-                    <div className="grid grid-cols-3 gap-0 bg-black/50 rounded-xl border border-zinc-800 flex-grow overflow-hidden divide-x divide-zinc-800">
-                       <div className="relative group">
+                    <div className="grid grid-cols-3 gap-2 sm:gap-0 sm:bg-black/50 sm:rounded-xl sm:border sm:border-zinc-800 flex-grow sm:overflow-hidden sm:divide-x sm:divide-zinc-800">
+                       <div className="relative group bg-black/50 border border-zinc-800 sm:border-0 rounded-xl sm:rounded-none">
                           <Filter size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-[#FFC300] hidden sm:block" />
-                          <select value={filterWidth} onChange={(e) => setFilterWidth(e.target.value)} className="bg-transparent text-white text-xs md:text-sm font-bold p-3 sm:pl-8 w-full outline-none cursor-pointer hover:bg-zinc-800/50 transition-colors text-center sm:text-left appearance-none sm:appearance-auto"><option value="">Ширина</option>{options.widths.map(w => <option key={w} value={w}>{w}</option>)}</select>
+                          <select value={filterWidth} onChange={(e) => setFilterWidth(e.target.value)} className="bg-transparent text-white text-base md:text-sm font-bold p-3 sm:pl-8 w-full outline-none cursor-pointer hover:bg-zinc-800/50 transition-colors text-center sm:text-left appearance-none sm:appearance-auto"><option value="">Ширина</option>{options.widths.map(w => <option key={w} value={w}>{w}</option>)}</select>
                        </div>
-                       <div className="relative group">
-                          <select value={filterHeight} onChange={(e) => setFilterHeight(e.target.value)} className="bg-transparent text-white text-xs md:text-sm font-bold p-3 w-full outline-none cursor-pointer hover:bg-zinc-800/50 transition-colors text-center"><option value="">Висота</option>{options.heights.map(h => <option key={h} value={h}>{h}</option>)}</select>
+                       <div className="relative group bg-black/50 border border-zinc-800 sm:border-0 rounded-xl sm:rounded-none">
+                          <select value={filterHeight} onChange={(e) => setFilterHeight(e.target.value)} className="bg-transparent text-white text-base md:text-sm font-bold p-3 w-full outline-none cursor-pointer hover:bg-zinc-800/50 transition-colors text-center"><option value="">Висота</option>{options.heights.map(h => <option key={h} value={h}>{h}</option>)}</select>
                        </div>
-                       <div className="relative group">
-                          <select value={filterRadius} onChange={(e) => setFilterRadius(e.target.value)} className="bg-transparent text-white text-xs md:text-sm font-bold p-3 w-full outline-none cursor-pointer hover:bg-zinc-800/50 transition-colors text-center"><option value="">Радіус</option>{options.radii.map(r => <option key={r} value={r}>{r}</option>)}</select>
+                       <div className="relative group bg-black/50 border border-zinc-800 sm:border-0 rounded-xl sm:rounded-none">
+                          <select value={filterRadius} onChange={(e) => setFilterRadius(e.target.value)} className="bg-transparent text-white text-base md:text-sm font-bold p-3 w-full outline-none cursor-pointer hover:bg-zinc-800/50 transition-colors text-center"><option value="">Радіус</option>{options.radii.map(r => <option key={r} value={r}>{r}</option>)}</select>
                        </div>
                     </div>
 
@@ -620,7 +621,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                             placeholder="Від" 
                             value={minPrice} 
                             onChange={(e) => setMinPrice(e.target.value)} 
-                            className="w-16 bg-transparent text-white text-sm font-bold p-2 outline-none text-center border-b border-zinc-700 focus:border-[#FFC300]"
+                            className="w-16 bg-transparent text-white text-base md:text-sm font-bold p-2 outline-none text-center border-b border-zinc-700 focus:border-[#FFC300]"
                         />
                         <span className="text-zinc-600">-</span>
                         <input 
@@ -628,12 +629,12 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                             placeholder="До" 
                             value={maxPrice} 
                             onChange={(e) => setMaxPrice(e.target.value)} 
-                            className="w-16 bg-transparent text-white text-sm font-bold p-2 outline-none text-center border-b border-zinc-700 focus:border-[#FFC300]"
+                            className="w-16 bg-transparent text-white text-base md:text-sm font-bold p-2 outline-none text-center border-b border-zinc-700 focus:border-[#FFC300]"
                         />
                     </div>
 
                     {(filterWidth || filterHeight || filterRadius || searchQuery || minPrice || maxPrice) && (
-                       <button onClick={resetFilters} className="bg-zinc-800 text-white p-3 rounded-xl hover:bg-red-900/50 transition-colors flex-shrink-0 border border-zinc-700"><X size={20}/></button>
+                       <button onClick={resetFilters} className="bg-zinc-800 text-white p-3 rounded-xl hover:bg-red-900/50 transition-colors flex-shrink-0 border border-zinc-700 flex justify-center items-center"><X size={20}/></button>
                     )}
                  </div>
 
@@ -641,7 +642,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                  <div className="w-full lg:w-auto lg:min-w-[200px]">
                     <div className="flex items-center gap-2 bg-black/50 p-1 rounded-xl border border-zinc-800 w-full">
                        <ArrowUpDown size={16} className="text-zinc-500 ml-2 flex-shrink-0" />
-                       <select value={activeSort} onChange={(e) => setActiveSort(e.target.value as any)} className="bg-transparent text-white text-sm font-bold p-2 outline-none w-full cursor-pointer hover:text-[#FFC300]">
+                       <select value={activeSort} onChange={(e) => setActiveSort(e.target.value as any)} className="bg-transparent text-white text-base md:text-sm font-bold p-2 outline-none w-full cursor-pointer hover:text-[#FFC300]">
                           <option value="newest">Спочатку нові</option>
                           <option value="oldest">Спочатку старі</option>
                           <option value="price_asc">Від дешевих</option>

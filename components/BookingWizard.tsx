@@ -227,14 +227,15 @@ const BookingWizard: React.FC<BookingWizardProps> = ({ initialPhone, onClose }) 
   const prevStep = () => setStep(s => s - 1);
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
-       <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl relative">
+    // "Bottom Sheet" style for mobile: aligns items-end on mobile, items-center on desktop
+    <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4">
+       <div className="bg-zinc-900 border-t sm:border border-zinc-700 rounded-t-2xl sm:rounded-2xl w-full max-w-md overflow-hidden shadow-2xl relative flex flex-col max-h-[90vh] sm:max-h-auto">
          
-         <div className="h-1 w-full bg-zinc-800">
+         <div className="h-1 w-full bg-zinc-800 shrink-0">
             <div className="h-full bg-[#FFC300] transition-all duration-300" style={{ width: `${(step / 5) * 100}%` }}></div>
          </div>
 
-         <div className="bg-zinc-950 p-4 border-b border-zinc-800 flex justify-between items-center">
+         <div className="bg-zinc-950 p-4 border-b border-zinc-800 flex justify-between items-center shrink-0">
            <div className="flex items-center gap-2">
               {step > 1 && step < 5 && <button onClick={() => step === 1.5 ? setStep(1) : prevStep()}><ArrowLeft className="text-zinc-400 hover:text-white" /></button>}
               <h3 className="text-xl font-bold text-white uppercase italic">{formData.id ? 'Зміна запису' : 'Онлайн Запис'}</h3>
@@ -242,7 +243,7 @@ const BookingWizard: React.FC<BookingWizardProps> = ({ initialPhone, onClose }) 
            <button onClick={onClose}><X className="text-zinc-400 hover:text-white" /></button>
          </div>
 
-         <div className="p-6">
+         <div className="p-6 overflow-y-auto">
            {/* STEP 1: Phone */}
            {step === 1 && (
              <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
@@ -306,7 +307,8 @@ const BookingWizard: React.FC<BookingWizardProps> = ({ initialPhone, onClose }) 
            {step === 3 && (
              <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
                <h4 className="text-[#FFC300] font-bold text-lg">3. Дата та Час</h4>
-               <input type="date" min={getKyivDate()} value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value, time: ''})} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-white focus:border-[#FFC300] outline-none font-bold" />
+               {/* text-base to prevent zoom on mobile */}
+               <input type="date" min={getKyivDate()} value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value, time: ''})} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-white focus:border-[#FFC300] outline-none font-bold text-base" />
                
                <div className="h-48 overflow-y-auto grid grid-cols-3 gap-2 pr-1 scrollbar-thin scrollbar-thumb-zinc-700 content-start">
                  {loading ? (

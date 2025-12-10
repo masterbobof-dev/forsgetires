@@ -141,7 +141,7 @@ const App: React.FC = () => {
           <>
             <Hero onShopRedirect={(tyre) => {
                setShopCategory('hot');
-               setShopInitialProduct(tyre);
+               setShopInitialProduct(null); // Don't set specific product to avoid auto-opening lightbox
                setCurrentView('shop');
                window.scrollTo({ top: 0, behavior: 'smooth' });
             }} />

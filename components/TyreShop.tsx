@@ -219,19 +219,17 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
       }
 
       // 2. CATEGORY FILTERS
-      // Base logic for Stock: 
-      // If enableStockQty is true:
-      //   - Normal categories: exclude items where in_stock is false OR stock_quantity is 0
-      //   - Out of Stock category: include items where in_stock is false OR stock_quantity is 0
+      // Simplified Hot logic to avoid conflicts with 'or' queries
       
-      const stockCondition = enableStockQty 
-        ? `.or(in_stock.eq.false,stock_quantity.eq.0)` // Defines "Out of Stock"
-        : `.eq(in_stock,false)`;
-
       if (activeCategory === 'hot') {
          query = query.eq('is_hot', true);
-         if (enableStockQty) query = query.or('stock_quantity.gt.0,stock_quantity.is.null').neq('in_stock', false);
-         else query = query.neq('in_stock', false);
+         // Only apply relaxed stock check if not specifically looking for OOS
+         if (enableStockQty) {
+             // Just check not false
+             query = query.neq('in_stock', false);
+         } else {
+             query = query.neq('in_stock', false);
+         }
       } else if (activeCategory === 'winter') {
          query = query.or('title.ilike.%winter%,title.ilike.%зима%,description.ilike.%winter%,description.ilike.%зима%');
          if (enableStockQty) query = query.or('stock_quantity.gt.0,stock_quantity.is.null').neq('in_stock', false);

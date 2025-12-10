@@ -406,6 +406,11 @@ const TyresTab: React.FC = () => {
             let detectedVehicleType: 'car' | 'cargo' | 'suv' = 'car';
 
             if (importPreset === 'artur') {
+                // SKIP HEADERS: If title contains "summer/winter" but no digits, it's a category header
+                if (!/\d/.test(titleRaw) && /лето|літо|summer|зима|winter|всесезон|all season|шины/i.test(titleRaw)) {
+                    continue;
+                }
+
                 const compressedRegex = /^(\d{3})(\d{2})[R|Z]?(\d{2})([0-9]{2,3}[A-Z])?(.*)/i; 
                 const sizeReg = /(\d{3})[\/\s]?(\d{2})[\s]?[R|Z]?(\d{2}[C]?)/i;
                 let sizeMatch = titleRaw.match(sizeReg);
@@ -424,7 +429,8 @@ const TyresTab: React.FC = () => {
                 let cleanModel = titleRaw;
                 if (manufacturer) cleanModel = cleanModel.replace(new RegExp(manufacturer, 'gi'), '');
                 if (sizeMatch) cleanModel = cleanModel.replace(sizeMatch[0], '');
-                cleanModel = cleanModel.replace(/\b(XL|TL|SUV|M\+S|RunFlat|TYRES)\b/gi, '').replace(/[^\w\s\-\/]/g, '').trim();
+                // ALLOW *, (, ), ., comma, and + in the model name to support things like (*), (AO,+), etc.
+                cleanModel = cleanModel.replace(/\b(XL|TL|SUV|M\+S|RunFlat|TYRES)\b/gi, '').replace(/[^\w\s\-\/\(\)\*\.\,\+]/g, '').trim();
                 if (manufacturer && detectedWidth) titleRaw = `${manufacturer} ${cleanModel} ${detectedWidth}/${detectedHeight} ${detectedRadius}`.replace(/\s+/g, ' ').trim();
                 
                 if (!catNum || (catNum.length > 15 && !catNum.includes('-'))) {

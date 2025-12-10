@@ -36,14 +36,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
       <header className="bg-zinc-900 border-b border-zinc-800 p-4 sticky top-0 z-50 shadow-md print:hidden">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
            <h1 className="text-xl font-bold uppercase flex items-center gap-2"><Lock className="text-[#FFC300]"/> Admin Panel <span className="text-xs text-zinc-500 bg-black px-2 py-0.5 rounded">{mode === 'service' ? 'Сервіс' : 'Магазин'}</span></h1>
-           <div className="flex bg-black rounded-lg p-1 overflow-x-auto">
+           
+           {/* Navigation Container - Mobile Optimized */}
+           <div className="flex bg-black rounded-lg p-1 overflow-x-auto w-full md:w-auto scrollbar-hide max-w-[95vw]">
               {mode === 'service' && ['schedule', 'clients', 'prices', 'gallery'].map(t => (
-                  <button key={t} onClick={() => setActiveTab(t as any)} className={`px-4 py-2 rounded font-bold text-sm uppercase ${activeTab === t ? 'bg-[#FFC300] text-black' : 'text-zinc-400'}`}>{t === 'schedule' ? 'Розклад' : t === 'clients' ? 'Клієнти' : t === 'prices' ? 'Прайс' : t === 'gallery' ? 'Галерея' : 'Налашт.'}</button>
+                  <button key={t} onClick={() => setActiveTab(t as any)} className={`px-4 py-2 rounded font-bold text-sm uppercase whitespace-nowrap flex-shrink-0 transition-colors ${activeTab === t ? 'bg-[#FFC300] text-black' : 'text-zinc-400 hover:text-white'}`}>{t === 'schedule' ? 'Розклад' : t === 'clients' ? 'Клієнти' : t === 'prices' ? 'Прайс' : t === 'gallery' ? 'Галерея' : 'Налашт.'}</button>
               ))}
               {mode === 'tyre' && ['tyres', 'orders', 'promo', 'seo', 'articles', 'stats', 'settings'].map(t => (
-                  <button key={t} onClick={() => setActiveTab(t as any)} className={`px-4 py-2 rounded font-bold text-sm uppercase ${activeTab === t ? 'bg-[#FFC300] text-black' : 'text-zinc-400'}`}>{t === 'tyres' ? 'Шини' : t === 'promo' ? 'Маркетинг' : t === 'seo' ? 'SEO' : t === 'orders' ? 'Замовлення' : t === 'articles' ? 'Статті' : t === 'settings' ? 'Налашт.' : 'Стат.'}</button>
+                  <button key={t} onClick={() => setActiveTab(t as any)} className={`px-4 py-2 rounded font-bold text-sm uppercase whitespace-nowrap flex-shrink-0 transition-colors ${activeTab === t ? 'bg-[#FFC300] text-black' : 'text-zinc-400 hover:text-white'}`}>{t === 'tyres' ? 'Шини' : t === 'promo' ? 'Маркетинг' : t === 'seo' ? 'SEO' : t === 'orders' ? 'Замовлення' : t === 'articles' ? 'Статті' : t === 'settings' ? 'Налашт.' : 'Стат.'}</button>
               ))}
-              <button onClick={onLogout} className="px-4 py-2 text-zinc-500 hover:text-white ml-2 flex items-center gap-2"><LogOut size={16}/> Вихід</button>
+              <button onClick={onLogout} className="px-4 py-2 text-zinc-500 hover:text-white ml-2 flex items-center gap-2 whitespace-nowrap flex-shrink-0 border-l border-zinc-800"><LogOut size={16}/> Вихід</button>
            </div>
         </div>
       </header>

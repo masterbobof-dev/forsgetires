@@ -7,6 +7,7 @@ import { PHONE_NUMBER_1, PHONE_NUMBER_2, MAP_DIRECT_LINK } from '../../constants
 
 const SettingsTab: React.FC = () => {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [supplierCounts, setSupplierCounts] = useState<Record<number, number>>({});
   const [enableStockQty, setEnableStockQty] = useState(false);
   const [newSupplierName, setNewSupplierName] = useState('');
   const [adminPin, setAdminPin] = useState('');
@@ -56,8 +57,48 @@ const SettingsTab: React.FC = () => {
   };
 
   const fetchSuppliers = async () => {
+      // 1. Fetch Suppliers
       const { data } = await supabase.from('suppliers').select('*').order('name');
       if (data) setSuppliers(data);
+
+      // 2. Fetch Item Counts (Complete Fetch with Pagination)
+      try {
+          const counts: Record<number, number> = {};
+          let from = 0;
+          const step = 1000;
+          let keepFetching = true;
+
+          while (keepFetching) {
+              const { data: chunk, error } = await supabase
+                  .from('tyres')
+                  .select('supplier_id')
+                  .range(from, from + step - 1);
+
+              if (error) {
+                  console.error("Error calculating counts:", error);
+                  break;
+              }
+
+              if (chunk && chunk.length > 0) {
+                  chunk.forEach((t: any) => {
+                      if (t.supplier_id) {
+                          counts[t.supplier_id] = (counts[t.supplier_id] || 0) + 1;
+                      }
+                  });
+                  
+                  if (chunk.length < step) {
+                      keepFetching = false;
+                  } else {
+                      from += step;
+                  }
+              } else {
+                  keepFetching = false;
+              }
+          }
+          setSupplierCounts(counts);
+      } catch (e) {
+          console.error("Error fetching counts logic", e);
+      }
   };
 
   const handleAddSupplier = async () => {
@@ -101,6 +142,8 @@ const SettingsTab: React.FC = () => {
               }
           } else {
               showError(`Успішно видалено ${count} товарів.`);
+              // Refresh counts immediately
+              fetchSuppliers();
           }
       } catch (err: any) {
           showError(err.message);
@@ -181,9 +224,14 @@ const SettingsTab: React.FC = () => {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {suppliers.map(s => (
-                  <div key={s.id} className="bg-black/50 p-3 rounded-lg border border-zinc-800 flex justify-between items-center group">
-                      <span className="font-bold text-zinc-300">{s.name}</span>
-                      <div className="flex gap-2 items-center">
+                  <div key={s.id} className="bg-black/50 p-3 rounded-lg border border-zinc-800 flex justify-between items-center group hover:border-zinc-600 transition-colors">
+                      <div className="flex items-center gap-2 flex-grow min-w-0">
+                          <span className="font-bold text-zinc-300 truncate">{s.name}</span>
+                          <span className="text-[10px] bg-zinc-800 text-zinc-500 px-2 py-0.5 rounded-full border border-zinc-700 whitespace-nowrap">
+                              {supplierCounts[s.id] || 0} поз.
+                          </span>
+                      </div>
+                      <div className="flex gap-2 items-center flex-shrink-0 ml-2">
                           <button 
                             onClick={(e) => openDeleteProductsModal(e, s.id, s.name)} 
                             className="text-zinc-500 hover:text-orange-500 p-2 bg-zinc-900 rounded border border-zinc-700 hover:border-orange-500 transition-all hover:bg-orange-900/20" 

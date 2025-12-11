@@ -11,8 +11,7 @@ export const PHONE_LINK_2 = "tel:+380635823858";
 export const FORMSPREE_ENDPOINT = "https://formspree.io/f/xpweykjy";
 
 // Nova Poshta API Key (Replace with your own key from new.novaposhta.ua)
-// Leave empty if you don't have one yet, the UI will handle errors gracefully.
-export const NOVA_POSHTA_API_KEY = "3a2a7861937920721245786411516086"; 
+export const NOVA_POSHTA_API_KEY = "7eca24f05d9cc9e90d8b34497c1558db"; 
 
 // Google Maps Embed: Updated to point to "Sinelnikove, vul. Kvitneva 9"
 export const MAP_EMBED_URL = "https://maps.google.com/maps?q=%D0%BC.+%D0%A1%D0%B8%D0%BD%D0%B5%D0%BB%D1%8C%D0%BD%D0%B8%D0%BA%D0%BE%D0%B2%D0%B5,+%D0%B2%D1%83%D0%BB.+%D0%9A%D0%B2%D1%96%D1%82%D0%BD%D0%B2%D0%B0+9&t=&z=15&ie=UTF8&iwloc=&output=embed";

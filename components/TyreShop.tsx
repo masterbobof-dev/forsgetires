@@ -2,29 +2,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { TyreProduct, CartItem } from '../types';
-import { ShoppingBag, Loader2, Phone, X, Filter, Snowflake, Sun, CloudSun, Truck, Check, CreditCard, Wallet, ArrowDown, ShoppingCart, Plus, Minus, Trash2, ChevronLeft, ChevronRight, ZoomIn, Ban, Flame, Grid, ArrowUpDown, Search, DollarSign, AlertCircle, Tag } from 'lucide-react';
-import { PHONE_LINK_1, PHONE_NUMBER_1, FORMSPREE_ENDPOINT } from '../constants';
+import { ShoppingBag, Loader2, Phone, X, Filter, Snowflake, Sun, CloudSun, Truck, Check, CreditCard, Wallet, ArrowDown, ShoppingCart, Plus, Minus, Trash2, ChevronLeft, ChevronRight, ZoomIn, Ban, Flame, Grid, ArrowUpDown, Search, DollarSign, AlertCircle, Tag, Briefcase, MapPin } from 'lucide-react';
+import { PHONE_LINK_1, PHONE_NUMBER_1, FORMSPREE_ENDPOINT, NOVA_POSHTA_API_KEY } from '../constants';
 import { DEFAULT_IMG_CONFIG, DEFAULT_BG_CONFIG } from './admin/promo/shared';
-
-const MOCK_REGIONS = [
-  "Дніпропетровська обл.", "Київська обл.", "Львівська обл.", "Одеська обл.", "Харківська обл.", "Запорізька обл.", "Вінницька обл.", "Полтавська обл."
-];
-
-const MOCK_CITIES: Record<string, string[]> = {
-  "Дніпропетровська обл.": ["Дніпро", "Кривий Ріг", "Кам'янське", "Нікополь", "Павлоград", "Новомосковськ", "Синельникове"],
-  "Київська обл.": ["Київ", "Біла Церква", "Бровари", "Бориспіль", "Ірпінь", "Буча"],
-  "Львівська обл.": ["Львів", "Дрогобич", "Червоноград", "Стрий"],
-  "Одеська обл.": ["Одеса", "Ізмаїл", "Чорноморськ"],
-  "Харківська обл.": ["Харків", "Лозова", "Ізюм"],
-  "Запорізька обл.": ["Запоріжжя", "Мелітополь", "Бердянськ"],
-  "Вінницька обл.": ["Вінниця", "Жмеринка", "Могилів-Подільський"],
-  "Полтавська обл.": ["Полтава", "Кременчук", "Горішні Плавні"]
-};
-
-const getMockWarehouses = (city: string) => {
-  const count = city === "Київ" || city === "Дніпро" ? 20 : 5;
-  return Array.from({ length: count }, (_, i) => `Відділення №${i + 1}: вул. Центральна, ${i + 15}`);
-};
 
 const PAGE_SIZE = 60;
 
@@ -41,6 +21,13 @@ const formatPrice = (priceStr: string | undefined) => {
   const num = safeParsePrice(priceStr);
   return num ? Math.round(num).toString() : priceStr;
 };
+
+const getSeasonLabel = (s: string | undefined) => {
+    if(s === 'winter') return 'Зимова';
+    if(s === 'summer') return 'Літня';
+    if(s === 'all-season') return 'Всесезонна';
+    return '';
+}
 
 const CATEGORIES = [
   { id: 'all', label: 'Всі шини', icon: Grid },
@@ -72,6 +59,9 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [currentLightboxImages, setCurrentLightboxImages] = useState<string[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  
+  // NEW: Detail Modal
+  const [selectedProductForModal, setSelectedProductForModal] = useState<TyreProduct | null>(null);
 
   // Filters & Search
   const [activeCategory, setActiveCategory] = useState<CategoryType>(initialCategory);
@@ -81,7 +71,16 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   const [filterWidth, setFilterWidth] = useState('');
   const [filterHeight, setFilterHeight] = useState('');
   const [filterRadius, setFilterRadius] = useState('');
+  const [filterBrand, setFilterBrand] = useState(''); // New Brand Filter
   
+  // GLOBAL FILTER OPTIONS (Not dependent on current page)
+  const [filterOptions, setFilterOptions] = useState({
+      widths: [] as string[],
+      heights: [] as string[],
+      radii: [] as string[],
+      brands: [] as string[]
+  });
+
   // Price Range State
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
@@ -99,9 +98,17 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   const [deliveryMethod, setDeliveryMethod] = useState<'pickup' | 'newpost'>('pickup');
   const [paymentMethod, setPaymentMethod] = useState<'prepayment' | 'full'>('prepayment');
   
-  const [selectedRegion, setSelectedRegion] = useState('');
-  const [selectedCity, setSelectedCity] = useState('');
-  const [selectedWarehouse, setSelectedWarehouse] = useState('');
+  // Nova Poshta State
+  const [npSearchCity, setNpSearchCity] = useState('');
+  const [npCities, setNpCities] = useState<any[]>([]);
+  const [npWarehouses, setNpWarehouses] = useState<any[]>([]);
+  const [selectedCityRef, setSelectedCityRef] = useState('');
+  const [selectedCityName, setSelectedCityName] = useState('');
+  const [selectedWarehouseRef, setSelectedWarehouseRef] = useState('');
+  const [selectedWarehouseName, setSelectedWarehouseName] = useState('');
+  const [isNpLoadingCities, setIsNpLoadingCities] = useState(false);
+  const [isNpLoadingWarehouses, setIsNpLoadingWarehouses] = useState(false);
+  const [showCityDropdown, setShowCityDropdown] = useState(false);
 
   const [orderSending, setOrderSending] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
@@ -110,7 +117,99 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   const touchStartRef = useRef<number | null>(null);
   const touchEndRef = useRef<number | null>(null);
 
-  // Fetch Settings & Promo
+  // Nova Poshta API Logic
+  useEffect(() => {
+      const timer = setTimeout(() => {
+          if (npSearchCity.length > 1 && !selectedCityRef) {
+              fetchNpCities(npSearchCity);
+          }
+      }, 500);
+      return () => clearTimeout(timer);
+  }, [npSearchCity, selectedCityRef]);
+
+  const fetchNpCities = async (term: string) => {
+      setIsNpLoadingCities(true);
+      try {
+          const res = await fetch('https://api.novaposhta.ua/v2.0/json/', {
+              method: 'POST',
+              body: JSON.stringify({
+                  apiKey: NOVA_POSHTA_API_KEY,
+                  modelName: "Address",
+                  calledMethod: "searchSettlements",
+                  methodProperties: {
+                      CityName: term,
+                      Limit: "20",
+                      Page: "1"
+                  }
+              })
+          });
+          const data = await res.json();
+          if (data.success && data.data && data.data[0]) {
+              // The API structure for searchSettlements returns an array of objects which contain 'Addresses'
+              setNpCities(data.data[0].Addresses || []);
+              setShowCityDropdown(true);
+          } else {
+              setNpCities([]);
+          }
+      } catch (e) {
+          console.error("NP API Error", e);
+      } finally {
+          setIsNpLoadingCities(false);
+      }
+  };
+
+  const fetchNpWarehouses = async (cityRef: string) => {
+      setIsNpLoadingWarehouses(true);
+      try {
+          const res = await fetch('https://api.novaposhta.ua/v2.0/json/', {
+              method: 'POST',
+              body: JSON.stringify({
+                  apiKey: NOVA_POSHTA_API_KEY,
+                  modelName: "Address",
+                  calledMethod: "getWarehouses",
+                  methodProperties: {
+                      CityRef: cityRef,
+                      Language: "UA"
+                  }
+              })
+          });
+          const data = await res.json();
+          if (data.success) {
+              setNpWarehouses(data.data);
+          }
+      } catch (e) {
+          console.error("NP Warehouse Error", e);
+      } finally {
+          setIsNpLoadingWarehouses(false);
+      }
+  };
+
+  const handleCitySelect = (city: any) => {
+      const cityName = city.Present; // Full name with region
+      const cityRef = city.DeliveryCity; // Ref for getting warehouses
+      
+      setNpSearchCity(cityName);
+      setSelectedCityName(cityName);
+      setSelectedCityRef(cityRef);
+      setNpCities([]);
+      setShowCityDropdown(false);
+      
+      // Reset warehouse
+      setSelectedWarehouseRef('');
+      setSelectedWarehouseName('');
+      setNpWarehouses([]);
+      
+      fetchNpWarehouses(cityRef);
+  };
+
+  const handleCityInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      setNpSearchCity(e.target.value);
+      setSelectedCityRef(''); // Reset selection if user types again
+      setSelectedCityName('');
+      setShowCityDropdown(true);
+  };
+
+  // Fetch Settings & Promo & GLOBAL FILTERS
   useEffect(() => {
     const fetchSettings = async () => {
       const { data } = await supabase.from('settings').select('key, value').in('key', ['enable_stock_quantity', 'promo_data', 'contact_phone1']);
@@ -133,7 +232,47 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
           });
       }
     };
+
+    const fetchGlobalFilters = async () => {
+        // Fetch minimal data to build filters from entire DB
+        const { data } = await supabase.from('tyres').select('manufacturer, radius, title').neq('in_stock', false);
+        if (data) {
+            const brands = new Set<string>();
+            const radii = new Set<string>();
+            const widths = new Set<string>();
+            const heights = new Set<string>();
+
+            data.forEach(item => {
+                if (item.manufacturer) {
+                    let brand = item.manufacturer.trim();
+                    // --- NORMALIZE BRANDS ---
+                    if (brand === 'Ш.Ханкук тайр' || brand === 'Ш.Ханкук Тайр' || brand === 'Lfufen') {
+                        brand = 'Laufenn';
+                    }
+                    brands.add(brand);
+                }
+                if (item.radius) radii.add(item.radius.trim());
+                
+                // Parse dimensions from title since they are not columns
+                const sizeRegex = /(\d{3})[\/\s](\d{2})/;
+                const match = item.title.match(sizeRegex);
+                if (match) {
+                    widths.add(match[1]);
+                    heights.add(match[2]);
+                }
+            });
+
+            setFilterOptions({
+                brands: Array.from(brands).sort(),
+                radii: Array.from(radii).sort((a, b) => parseInt(a.replace(/\D/g,'')||'0') - parseInt(b.replace(/\D/g,'')||'0')),
+                widths: Array.from(widths).sort(),
+                heights: Array.from(heights).sort()
+            });
+        }
+    };
+
     fetchSettings();
+    fetchGlobalFilters();
   }, []);
 
   // Update active category if prop changes (e.g. from Home navigation)
@@ -148,7 +287,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
     setPage(0);
     setTyres([]); 
     fetchTyres(0, true);
-  }, [activeCategory, activeSort, enableStockQty]); // Added enableStockQty dependency
+  }, [activeCategory, activeSort, enableStockQty, filterBrand, filterRadius, filterWidth, filterHeight]); 
 
   const parseTyreSpecs = (tyre: TyreProduct): TyreProduct => {
     const sizeRegex = /(\d{3})[\/\s](\d{2})[\s\w]*R(\d{2}[C|c]?)/; 
@@ -198,8 +337,14 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
             in_stock = false;
         }
     }
+
+    // --- NORMALIZE MANUFACTURER FOR DISPLAY ---
+    let manufacturer = tyre.manufacturer || '';
+    if (manufacturer === 'Ш.Ханкук тайр' || manufacturer === 'Ш.Ханкук Тайр' || manufacturer === 'Lfufen') {
+        manufacturer = 'Laufenn';
+    }
     
-    return { ...tyre, width, height, radius: parsedRadius, season, vehicle_type, in_stock };
+    return { ...tyre, width, height, radius: parsedRadius, season, vehicle_type, in_stock, manufacturer };
   };
 
   const fetchTyres = async (pageIndex: number, isRefresh = false) => {
@@ -218,14 +363,31 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
          query = query.or(`title.ilike.%${term}%,catalog_number.ilike.%${term}%,manufacturer.ilike.%${term}%,product_number.ilike.%${term}%`);
       }
 
+      // --- SERVER SIDE FILTERS ---
+      if (filterBrand) {
+          if (filterBrand === 'Laufenn') {
+              // Handle aliases for Laufenn in database query
+              query = query.or('manufacturer.eq.Laufenn,manufacturer.eq.Ш.Ханкук тайр,manufacturer.eq.Ш.Ханкук Тайр');
+          } else {
+              query = query.eq('manufacturer', filterBrand);
+          }
+      }
+      if (filterRadius) {
+          // Try exact match on radius column
+          query = query.eq('radius', filterRadius);
+      }
+      if (filterWidth) {
+          // Since width is usually in title like "205/55", we search for "205" in title roughly
+          query = query.ilike('title', `%${filterWidth}%`);
+      }
+      if (filterHeight) {
+          query = query.ilike('title', `%/${filterHeight}%`); // Try to match "/55"
+      }
+
       // 2. CATEGORY FILTERS
-      // Simplified Hot logic to avoid conflicts with 'or' queries
-      
       if (activeCategory === 'hot') {
          query = query.eq('is_hot', true);
-         // Only apply relaxed stock check if not specifically looking for OOS
          if (enableStockQty) {
-             // Just check not false
              query = query.neq('in_stock', false);
          } else {
              query = query.neq('in_stock', false);
@@ -373,10 +535,10 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
 
   const openLightbox = (tyre: TyreProduct) => { let images: string[] = []; if (tyre.image_url) images.push(tyre.image_url); if (tyre.gallery && Array.isArray(tyre.gallery)) { const additional = tyre.gallery.filter(url => url !== tyre.image_url); images = [...images, ...additional]; } if (images.length === 0) return; setCurrentLightboxImages(images); setCurrentImageIndex(0); setLightboxOpen(true); };
   
-  // Effect to open lightbox if initialProduct is provided (from Home page Hot Deal click)
+  // Effect to open detail modal if initialProduct is provided (from Home page Hot Deal click)
   useEffect(() => {
     if (initialProduct) {
-      openLightbox(initialProduct);
+      setSelectedProductForModal(initialProduct);
     }
   }, [initialProduct]);
 
@@ -388,7 +550,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
 
   const submitOrder = async () => {
     if (!orderName || orderPhone.length < 9) { setOrderError("Введіть коректне ім'я та телефон"); return; }
-    if (deliveryMethod === 'newpost' && (!selectedCity || !selectedWarehouse)) { setOrderError("Оберіть місто та відділення"); return; }
+    if (deliveryMethod === 'newpost' && (!selectedCityName || !selectedWarehouseName)) { setOrderError("Оберіть місто та відділення Нової Пошти"); return; }
     if (cart.length === 0) { setOrderError("Кошик порожній"); return; }
     setOrderSending(true); setOrderError('');
     try {
@@ -400,28 +562,43 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
          base_price: i.base_price 
       }));
       
-      const { error } = await supabase.from('tyre_orders').insert([{ customer_name: orderName, customer_phone: orderPhone, status: 'new', delivery_method: deliveryMethod, delivery_city: deliveryMethod === 'newpost' ? `${selectedRegion}, ${selectedCity}` : null, delivery_warehouse: deliveryMethod === 'newpost' ? selectedWarehouse : null, payment_method: deliveryMethod === 'newpost' ? paymentMethod : null, items: itemsPayload }]);
+      const { error } = await supabase.from('tyre_orders').insert([{ 
+          customer_name: orderName, 
+          customer_phone: orderPhone, 
+          status: 'new', 
+          delivery_method: deliveryMethod, 
+          delivery_city: deliveryMethod === 'newpost' ? selectedCityName : null, 
+          delivery_warehouse: deliveryMethod === 'newpost' ? selectedWarehouseName : null, 
+          payment_method: deliveryMethod === 'newpost' ? paymentMethod : null, 
+          items: itemsPayload 
+      }]);
+      
       if (error) throw new Error("Помилка бази даних: " + error.message);
       try {
         const itemsDesc = cart.map(i => `${i.title} (${i.quantity} шт) - ${formatPrice(i.price)} грн`).join('\n');
-        const formData = { subject: `Замовлення шин (${cart.length} поз.)`, customer_name: orderName, customer_phone: orderPhone, items: itemsDesc, total_price: `${cartTotal} грн`, delivery_method: deliveryMethod === 'pickup' ? "Самовивіз" : "Нова Пошта", delivery_address: deliveryMethod === 'pickup' ? "-" : `${selectedRegion}, ${selectedCity}, ${selectedWarehouse}`, payment_method: deliveryMethod === 'newpost' ? (paymentMethod === 'prepayment' ? 'Предоплата' : 'Повна оплата') : '-' };
+        const formData = { 
+            subject: `Замовлення шин (${cart.length} поз.)`, 
+            customer_name: orderName, 
+            customer_phone: orderPhone, 
+            items: itemsDesc, 
+            total_price: `${cartTotal} грн`, 
+            delivery_method: deliveryMethod === 'pickup' ? "Самовивіз" : "Нова Пошта", 
+            delivery_address: deliveryMethod === 'pickup' ? "-" : `${selectedCityName}, ${selectedWarehouseName}`, 
+            payment_method: deliveryMethod === 'newpost' ? (paymentMethod === 'prepayment' ? 'Предоплата' : 'Повна оплата') : '-' 
+        };
         await fetch(FORMSPREE_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData) });
       } catch (emailErr) { console.error("Email sending failed", emailErr); }
       setOrderSuccess(true); setCart([]);
     } catch (err: any) { console.error(err); setOrderError("Помилка при створенні замовлення. Спробуйте ще раз."); } finally { setOrderSending(false); }
   };
 
-  const options = useMemo(() => {
-    const widths = new Set<string>(); const heights = new Set<string>(); const radii = new Set<string>();
-    tyres.forEach(t => { if (t.in_stock !== false) { if (t.width) widths.add(t.width); if (t.height) heights.add(t.height); if (t.radius) radii.add(t.radius); } });
-    return { widths: Array.from(widths).sort(), heights: Array.from(heights).sort(), radii: Array.from(radii).sort((a, b) => parseInt(a.replace(/\D/g,'')) - parseInt(b.replace(/\D/g,''))) };
-  }, [tyres]);
-
-  const filteredTyres = tyres.filter(t => (!filterWidth || t.width === filterWidth) && (!filterHeight || t.height === filterHeight) && (!filterRadius || t.radius === filterRadius));
+  const filteredTyres = tyres; // No more client-side filtering needed for these main props
+  
   const resetFilters = () => { 
       setFilterWidth(''); 
       setFilterHeight(''); 
       setFilterRadius(''); 
+      setFilterBrand('');
       setSearchQuery(''); 
       setMinPrice('');
       setMaxPrice('');
@@ -578,7 +755,11 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                        type="text" 
                        placeholder="Пошук (наприклад: Michelin, R16, 205/55, код)..." 
                        value={searchQuery}
-                       onChange={(e) => setSearchQuery(e.target.value)}
+                       onChange={(e) => {
+                           const val = e.target.value;
+                           setSearchQuery(val);
+                           if (val === '') setTimeout(() => handleForceSearch(), 0);
+                       }}
                        onKeyDown={(e) => e.key === 'Enter' && handleForceSearch()}
                        // text-base to prevent zoom on mobile
                        className="w-full bg-black border border-zinc-700 rounded-xl pl-10 pr-4 py-3 text-base text-white outline-none focus:border-[#FFC300]"
@@ -598,16 +779,21 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                  {/* Filters Container */}
                  <div className="flex flex-col sm:flex-row gap-2 w-full lg:flex-grow">
                     {/* Size Filters */}
-                    <div className="grid grid-cols-3 gap-2 sm:gap-0 sm:bg-black/50 sm:rounded-xl sm:border sm:border-zinc-800 flex-grow sm:overflow-hidden sm:divide-x sm:divide-zinc-800">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-0 sm:bg-black/50 sm:rounded-xl sm:border sm:border-zinc-800 flex-grow sm:overflow-hidden sm:divide-x sm:divide-zinc-800">
                        <div className="relative group bg-black/50 border border-zinc-800 sm:border-0 rounded-xl sm:rounded-none">
                           <Filter size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-[#FFC300] hidden sm:block" />
-                          <select value={filterWidth} onChange={(e) => setFilterWidth(e.target.value)} className="bg-transparent text-white text-base md:text-sm font-bold p-3 sm:pl-8 w-full outline-none cursor-pointer hover:bg-zinc-800/50 transition-colors text-center sm:text-left appearance-none sm:appearance-auto"><option value="">Ширина</option>{options.widths.map(w => <option key={w} value={w}>{w}</option>)}</select>
+                          <select value={filterWidth} onChange={(e) => setFilterWidth(e.target.value)} className="bg-transparent text-white text-base md:text-sm font-bold p-3 sm:pl-8 w-full outline-none cursor-pointer hover:bg-zinc-800/50 transition-colors text-center sm:text-left appearance-none sm:appearance-auto"><option value="">Ширина</option>{filterOptions.widths.map(w => <option key={w} value={w}>{w}</option>)}</select>
                        </div>
                        <div className="relative group bg-black/50 border border-zinc-800 sm:border-0 rounded-xl sm:rounded-none">
-                          <select value={filterHeight} onChange={(e) => setFilterHeight(e.target.value)} className="bg-transparent text-white text-base md:text-sm font-bold p-3 w-full outline-none cursor-pointer hover:bg-zinc-800/50 transition-colors text-center"><option value="">Висота</option>{options.heights.map(h => <option key={h} value={h}>{h}</option>)}</select>
+                          <select value={filterHeight} onChange={(e) => setFilterHeight(e.target.value)} className="bg-transparent text-white text-base md:text-sm font-bold p-3 w-full outline-none cursor-pointer hover:bg-zinc-800/50 transition-colors text-center"><option value="">Висота</option>{filterOptions.heights.map(h => <option key={h} value={h}>{h}</option>)}</select>
                        </div>
                        <div className="relative group bg-black/50 border border-zinc-800 sm:border-0 rounded-xl sm:rounded-none">
-                          <select value={filterRadius} onChange={(e) => setFilterRadius(e.target.value)} className="bg-transparent text-white text-base md:text-sm font-bold p-3 w-full outline-none cursor-pointer hover:bg-zinc-800/50 transition-colors text-center"><option value="">Радіус</option>{options.radii.map(r => <option key={r} value={r}>{r}</option>)}</select>
+                          <select value={filterRadius} onChange={(e) => setFilterRadius(e.target.value)} className="bg-transparent text-white text-base md:text-sm font-bold p-3 w-full outline-none cursor-pointer hover:bg-zinc-800/50 transition-colors text-center"><option value="">Радіус</option>{filterOptions.radii.map(r => <option key={r} value={r}>{r}</option>)}</select>
+                       </div>
+                       {/* BRAND FILTER */}
+                       <div className="relative group bg-black/50 border border-zinc-800 sm:border-0 rounded-xl sm:rounded-none">
+                          <Briefcase size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-500 hidden sm:block" />
+                          <select value={filterBrand} onChange={(e) => setFilterBrand(e.target.value)} className="bg-transparent text-white text-base md:text-sm font-bold p-3 sm:pl-8 w-full outline-none cursor-pointer hover:bg-zinc-800/50 transition-colors text-center sm:text-left appearance-none sm:appearance-auto"><option value="">Бренд</option>{filterOptions.brands.map(b => <option key={b} value={b}>{b}</option>)}</select>
                        </div>
                     </div>
 
@@ -631,7 +817,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                         />
                     </div>
 
-                    {(filterWidth || filterHeight || filterRadius || searchQuery || minPrice || maxPrice) && (
+                    {(filterWidth || filterHeight || filterRadius || filterBrand || searchQuery || minPrice || maxPrice) && (
                        <button onClick={resetFilters} className="bg-zinc-800 text-white p-3 rounded-xl hover:bg-red-900/50 transition-colors flex-shrink-0 border border-zinc-700 flex justify-center items-center"><X size={20}/></button>
                     )}
                  </div>
@@ -682,7 +868,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                   <div key={tyre.id} className={`bg-zinc-900 border rounded-xl overflow-hidden hover:border-[#FFC300] transition-colors group flex flex-col relative ${tyre.in_stock === false ? 'border-zinc-800 opacity-70' : 'border-zinc-800'}`}>
                      
                      {/* BADGES */}
-                     <div className="absolute top-2 left-2 z-10 flex flex-wrap gap-1 max-w-[80%]">
+                     <div className="absolute top-2 left-2 z-10 flex flex-wrap gap-1 max-w-[70%]">
                         {tyre.is_hot && <div className="bg-orange-600 text-white p-1 rounded shadow-lg flex items-center gap-1 text-[10px] font-bold px-2 uppercase"><Flame size={12} className="fill-current"/> HOT</div>}
                         {hasDiscount && <div className="bg-red-600 text-white p-1 rounded shadow-lg flex items-center gap-1 text-[10px] font-bold px-2 uppercase">SALE</div>}
                         {tyre.season === 'winter' && <div className="bg-blue-600 text-white p-1 rounded shadow-lg" title="Зима"><Snowflake size={14} /></div>}
@@ -691,6 +877,13 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                         {tyre.vehicle_type === 'cargo' && <div className="bg-purple-600 text-white p-1 rounded shadow-lg" title="Вантажна"><Truck size={14} /></div>}
                      </div>
 
+                     {/* SPECS BADGE (Moved to top-right of image area) */}
+                     {(tyre.width || tyre.height) && (
+                        <div className="absolute top-2 right-2 z-10 text-[10px] md:text-xs font-black bg-zinc-900/90 backdrop-blur-sm text-white px-2 py-1 rounded border border-zinc-700 shadow-lg">
+                           {tyre.width}/{tyre.height} <span className="text-[#FFC300]">{tyre.radius}</span>
+                        </div>
+                     )}
+
                      {tyre.in_stock === false && (
                         <div className="absolute inset-0 z-20 bg-black/60 flex items-center justify-center pointer-events-none">
                            <div className="bg-red-600 text-white px-3 py-1 font-black uppercase -rotate-12 border-2 border-white shadow-xl text-sm">Немає в наявності</div>
@@ -698,7 +891,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                      )}
 
                      {/* IMAGE */}
-                     <div className={`aspect-square bg-black relative overflow-hidden ${tyre.in_stock !== false ? 'cursor-zoom-in' : ''}`} onClick={() => tyre.in_stock !== false && openLightbox(tyre)}>
+                     <div className={`aspect-square bg-black relative overflow-hidden cursor-pointer`} onClick={() => tyre.in_stock !== false && setSelectedProductForModal(tyre)}>
                         {tyre.image_url ? (
                            <img src={tyre.image_url} alt={tyre.title} className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${tyre.in_stock === false ? 'grayscale' : ''}`} />
                         ) : (
@@ -715,23 +908,23 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                      </div>
 
                      {/* INFO SECTION */}
-                     <div className="p-3 md:p-4 flex flex-col flex-grow relative">
-                        {/* SPECS BADGE (Separated from Title) */}
-                        {(tyre.width || tyre.height) && (
-                           <div className="absolute top-3 right-3 text-[10px] md:text-xs font-black bg-zinc-800 text-white px-2 py-1 rounded border border-zinc-700 z-10 shadow-lg">
-                              {tyre.width}/{tyre.height} <span className="text-[#FFC300]">{tyre.radius}</span>
-                           </div>
-                        )}
-
+                     <div className="p-3 md:p-4 flex flex-col flex-grow relative" onClick={() => tyre.in_stock !== false && setSelectedProductForModal(tyre)}>
                         {/* BRAND LABEL */}
                         {tyre.manufacturer && (
                             <div className="text-[10px] text-zinc-500 uppercase font-bold mb-1 tracking-wider">{tyre.manufacturer}</div>
                         )}
 
                         {/* TITLE (Improved Spacing) */}
-                        <h3 className="text-sm md:text-base font-bold text-white mb-4 leading-snug line-clamp-2 min-h-[2.5em] pr-12">
+                        <h3 className="text-sm md:text-base font-bold text-white mb-2 leading-snug line-clamp-2 min-h-[2.5em] pr-2 cursor-pointer hover:text-[#FFC300] transition-colors">
                             {tyre.title}
                         </h3>
+
+                        {/* ADDED SEASON TEXT */}
+                        {tyre.season && (
+                            <div className="text-[10px] text-zinc-400 font-bold uppercase mb-2">
+                                Сезон: <span className="text-white">{getSeasonLabel(tyre.season)}</span>
+                            </div>
+                        )}
 
                         <div className="text-[10px] text-zinc-500 mb-2 flex flex-col gap-0.5">
                            {tyre.catalog_number && <span>Арт: <span className="text-zinc-400 font-mono">{tyre.catalog_number}</span></span>}
@@ -766,7 +959,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                               )}
 
                               <button 
-                                 onClick={() => addToCart(tyre)} 
+                                 onClick={(e) => { e.stopPropagation(); addToCart(tyre); }} 
                                  disabled={tyre.in_stock === false} 
                                  className={`
                                     w-full font-bold text-xs py-3 rounded-lg transition-all flex items-center justify-center gap-2 active:scale-95 uppercase tracking-wide
@@ -808,13 +1001,183 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                   <div className="flex-grow overflow-y-auto space-y-4 mb-4 pr-2">
                     {cart.length === 0 ? <p className="text-zinc-500 text-center py-10">Кошик порожній</p> : cart.map(item => (<div key={item.id} className="bg-black border border-zinc-800 p-3 rounded-lg flex items-center gap-3"><div className="w-16 h-16 bg-zinc-800 rounded flex-shrink-0 overflow-hidden">{item.image_url && <img src={item.image_url} className="w-full h-full object-cover" alt="" />}</div><div className="flex-grow"><h4 className="text-white font-bold text-sm leading-tight line-clamp-1">{item.title}</h4><p className="text-[#FFC300] font-mono text-sm">{formatPrice(item.price)} грн</p>{enableStockQty && item.stock_quantity && <p className="text-zinc-500 text-[10px]">Доступно: {item.stock_quantity} шт</p>}</div><div className="flex flex-col items-center gap-1"><div className="flex items-center bg-zinc-800 rounded"><button onClick={() => updateQuantity(item.id, -1)} className="p-1 text-zinc-400 hover:text-white"><Minus size={14} /></button><span className="w-6 text-center text-sm font-bold">{item.quantity}</span><button onClick={() => updateQuantity(item.id, 1)} className={`p-1 text-zinc-400 hover:text-white ${enableStockQty && item.stock_quantity && item.quantity >= item.stock_quantity ? 'opacity-30 cursor-not-allowed' : ''}`}><Plus size={14} /></button></div><button onClick={() => removeFromCart(item.id)} className="text-red-500 hover:text-red-400 text-xs"><Trash2 size={14}/></button></div></div>))}
                   </div>
-                  {cart.length > 0 && (<div className="border-t border-zinc-800 pt-4"><div className="flex justify-between text-xl font-black text-white mb-4"><span>Разом:</span><span className="text-[#FFC300]">{Math.round(cartTotal)} грн</span></div><div className="space-y-3 mb-4"><input type="text" value={orderName} onChange={e => setOrderName(e.target.value)} placeholder="Ваше ім'я" className="w-full bg-zinc-800 border border-zinc-700 rounded p-3 text-white outline-none focus:border-[#FFC300]" /><input type="tel" value={orderPhone} onChange={e => setOrderPhone(e.target.value)} placeholder="Телефон" className="w-full bg-zinc-800 border border-zinc-700 rounded p-3 text-white outline-none focus:border-[#FFC300]" /><div className="grid grid-cols-2 gap-2"><button onClick={() => setDeliveryMethod('pickup')} className={`py-2 rounded font-bold text-xs ${deliveryMethod === 'pickup' ? 'bg-[#FFC300] text-black' : 'bg-black text-zinc-400 border border-zinc-800'}`}>Самовивіз</button><button onClick={() => setDeliveryMethod('newpost')} className={`py-2 rounded font-bold text-xs ${deliveryMethod === 'newpost' ? 'bg-red-600 text-white' : 'bg-black text-zinc-400 border border-zinc-800'}`}>Нова Пошта</button></div>{deliveryMethod === 'newpost' && (<div className="space-y-2 bg-zinc-800/50 p-2 rounded border border-zinc-700 text-sm"><select value={selectedRegion} onChange={e => { setSelectedRegion(e.target.value); setSelectedCity(''); }} className="w-full bg-black border border-zinc-700 rounded p-2 text-white"><option value="">Область</option>{MOCK_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}</select><select value={selectedCity} onChange={e => { setSelectedCity(e.target.value); setSelectedWarehouse(''); }} disabled={!selectedRegion} className="w-full bg-black border border-zinc-700 rounded p-2 text-white"><option value="">Місто</option>{selectedRegion && MOCK_CITIES[selectedRegion]?.map(c => <option key={c} value={c}>{c}</option>)}</select><select value={selectedWarehouse} onChange={e => setSelectedWarehouse(e.target.value)} disabled={!selectedCity} className="w-full bg-black border border-zinc-700 rounded p-2 text-white"><option value="">Відділення</option>{selectedCity && getMockWarehouses(selectedCity).map(w => <option key={w} value={w}>{w}</option>)}</select><div className="flex gap-2 pt-1"><label className="flex items-center gap-1 text-xs text-zinc-400"><input type="radio" checked={paymentMethod === 'prepayment'} onChange={() => setPaymentMethod('prepayment')} /> Предоплата</label><label className="flex items-center gap-1 text-xs text-zinc-400"><input type="radio" checked={paymentMethod === 'full'} onChange={() => setPaymentMethod('full')} /> Повна</label></div></div>)}</div>{orderError && <p className="text-red-500 text-sm mb-2">{orderError}</p>}<button onClick={submitOrder} disabled={orderSending} className="w-full bg-[#FFC300] hover:bg-[#e6b000] text-black font-black py-4 rounded-xl flex justify-center items-center shadow-lg">{orderSending ? <Loader2 className="animate-spin" /> : 'ЗАМОВИТИ ВСЕ'}</button></div>)}
+                  {cart.length > 0 && (
+                    <div className="border-t border-zinc-800 pt-4">
+                        <div className="flex justify-between text-xl font-black text-white mb-4"><span>Разом:</span><span className="text-[#FFC300]">{Math.round(cartTotal)} грн</span></div>
+                        
+                        <div className="space-y-3 mb-4">
+                            <input type="text" value={orderName} onChange={e => setOrderName(e.target.value)} placeholder="Ваше ім'я" className="w-full bg-zinc-800 border border-zinc-700 rounded p-3 text-white outline-none focus:border-[#FFC300]" />
+                            <input type="tel" value={orderPhone} onChange={e => setOrderPhone(e.target.value)} placeholder="Телефон" className="w-full bg-zinc-800 border border-zinc-700 rounded p-3 text-white outline-none focus:border-[#FFC300]" />
+                            
+                            <div className="grid grid-cols-2 gap-2">
+                                <button onClick={() => setDeliveryMethod('pickup')} className={`py-2 rounded font-bold text-xs ${deliveryMethod === 'pickup' ? 'bg-[#FFC300] text-black' : 'bg-black text-zinc-400 border border-zinc-800'}`}>Самовивіз</button>
+                                <button onClick={() => setDeliveryMethod('newpost')} className={`py-2 rounded font-bold text-xs ${deliveryMethod === 'newpost' ? 'bg-red-600 text-white' : 'bg-black text-zinc-400 border border-zinc-800'}`}>Нова Пошта</button>
+                            </div>
+                            
+                            {deliveryMethod === 'newpost' && (
+                                <div className="space-y-2 bg-zinc-800/50 p-2 rounded border border-zinc-700 text-sm relative">
+                                    {/* NOVA POSHTA CITY SEARCH */}
+                                    <div className="relative">
+                                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={16}/>
+                                        <input 
+                                            type="text" 
+                                            value={npSearchCity} 
+                                            onChange={handleCityInputChange}
+                                            placeholder="Введіть місто..." 
+                                            className="w-full bg-black border border-zinc-700 rounded p-2 pl-9 text-white focus:border-red-500 outline-none"
+                                        />
+                                        {isNpLoadingCities && <div className="absolute right-3 top-1/2 -translate-y-1/2"><Loader2 className="animate-spin text-zinc-500" size={16}/></div>}
+                                        
+                                        {showCityDropdown && npCities.length > 0 && (
+                                            <div className="absolute top-full left-0 w-full bg-black border border-zinc-700 rounded-b mt-1 max-h-48 overflow-y-auto z-50 shadow-xl">
+                                                {npCities.map((city: any) => (
+                                                    <div 
+                                                        key={city.Ref} 
+                                                        onClick={() => handleCitySelect(city)}
+                                                        className="p-2 hover:bg-zinc-800 cursor-pointer text-sm text-zinc-300 border-b border-zinc-800 last:border-0"
+                                                    >
+                                                        {city.Present}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* NOVA POSHTA WAREHOUSE SELECT */}
+                                    <select 
+                                        value={selectedWarehouseName} 
+                                        onChange={e => setSelectedWarehouseName(e.target.value)} 
+                                        disabled={!selectedCityRef || isNpLoadingWarehouses} 
+                                        className="w-full bg-black border border-zinc-700 rounded p-2 text-white disabled:opacity-50"
+                                    >
+                                        <option value="">{isNpLoadingWarehouses ? 'Завантаження...' : 'Оберіть відділення'}</option>
+                                        {npWarehouses.map((w: any) => (
+                                            <option key={w.Ref} value={w.Description}>{w.Description}</option>
+                                        ))}
+                                    </select>
+
+                                    <div className="flex gap-2 pt-1">
+                                        <label className="flex items-center gap-1 text-xs text-zinc-400 cursor-pointer">
+                                            <input type="radio" checked={paymentMethod === 'prepayment'} onChange={() => setPaymentMethod('prepayment')} className="accent-red-500" /> Предоплата
+                                        </label>
+                                        <label className="flex items-center gap-1 text-xs text-zinc-400 cursor-pointer">
+                                            <input type="radio" checked={paymentMethod === 'full'} onChange={() => setPaymentMethod('full')} className="accent-red-500" /> Повна оплата
+                                        </label>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        
+                        {orderError && <p className="text-red-500 text-sm mb-2 font-bold bg-red-900/10 p-2 rounded border border-red-900/30">{orderError}</p>}
+                        
+                        <button onClick={submitOrder} disabled={orderSending} className="w-full bg-[#FFC300] hover:bg-[#e6b000] text-black font-black py-4 rounded-xl flex justify-center items-center shadow-lg transition-transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed">
+                            {orderSending ? <Loader2 className="animate-spin" /> : 'ЗАМОВИТИ ВСЕ'}
+                        </button>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-center"><div className="w-20 h-20 bg-green-500/20 text-green-500 rounded-full flex items-center justify-center mb-4"><Check size={40} /></div><h3 className="text-2xl font-bold text-white mb-2">Замовлення успішне!</h3><p className="text-zinc-400 mb-6">Дякуємо. Менеджер зв'яжеться з вами.</p><button onClick={() => { setIsCartOpen(false); setOrderSuccess(false); }} className="px-8 py-3 bg-zinc-800 text-white rounded-xl">Закрити</button></div>
               )}
            </div>
         </div>
+      )}
+
+      {/* NEW PRODUCT DETAILS MODAL */}
+      {selectedProductForModal && (
+          <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-2 md:p-4 animate-in fade-in duration-200" onClick={() => setSelectedProductForModal(null)}>
+              <div 
+                className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-4xl shadow-2xl relative flex flex-col md:flex-row overflow-hidden max-h-[90vh]" 
+                onClick={e => e.stopPropagation()}
+              >
+                  <button onClick={() => setSelectedProductForModal(null)} className="absolute top-4 right-4 text-zinc-500 hover:text-white z-20 bg-black/50 p-1 rounded-full"><X size={24} /></button>
+                  
+                  {/* LEFT: IMAGE */}
+                  <div className="w-full md:w-1/2 bg-black flex items-center justify-center relative group min-h-[300px]">
+                      {selectedProductForModal.image_url ? (
+                          <>
+                            <img src={selectedProductForModal.image_url} className="w-full h-full object-cover" alt={selectedProductForModal.title} />
+                            <button 
+                                onClick={() => openLightbox(selectedProductForModal)}
+                                className="absolute bottom-4 right-4 bg-zinc-900/80 text-white p-3 rounded-full hover:bg-[#FFC300] hover:text-black transition-colors"
+                            >
+                                <ZoomIn size={20} />
+                            </button>
+                          </>
+                      ) : (
+                          <div className="flex flex-col items-center justify-center text-zinc-700">
+                              <ShoppingBag size={64} className="opacity-20 mb-4"/>
+                              <span>Немає фото</span>
+                          </div>
+                      )}
+                  </div>
+
+                  {/* RIGHT: DETAILS */}
+                  <div className="w-full md:w-1/2 p-6 md:p-8 overflow-y-auto bg-zinc-900">
+                      <div className="mb-6">
+                          {selectedProductForModal.manufacturer && <span className="text-zinc-500 font-bold uppercase tracking-wider text-xs mb-2 block">{selectedProductForModal.manufacturer}</span>}
+                          <h2 className="text-xl md:text-2xl font-black text-white leading-tight mb-2">{selectedProductForModal.title}</h2>
+                          {selectedProductForModal.stock_quantity !== undefined && enableStockQty && (
+                              <div className="inline-flex items-center gap-1 px-2 py-1 bg-green-900/20 text-green-400 text-xs font-bold rounded">
+                                  <Check size={12}/> В наявності: {selectedProductForModal.stock_quantity} шт
+                              </div>
+                          )}
+                      </div>
+
+                      <div className="space-y-4 mb-8">
+                          <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
+                              <span className="text-zinc-400 text-sm">Ширина</span>
+                              <span className="text-white font-bold">{selectedProductForModal.width || '-'}</span>
+                          </div>
+                          <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
+                              <span className="text-zinc-400 text-sm">Висота</span>
+                              <span className="text-white font-bold">{selectedProductForModal.height || '-'}</span>
+                          </div>
+                          <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
+                              <span className="text-zinc-400 text-sm">Діаметр</span>
+                              <span className="text-[#FFC300] font-bold">{selectedProductForModal.radius || '-'}</span>
+                          </div>
+                          <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
+                              <span className="text-zinc-400 text-sm">Сезон</span>
+                              <span className="text-white font-bold flex items-center gap-2">
+                                  {selectedProductForModal.season === 'winter' && <Snowflake size={14} className="text-blue-400"/>}
+                                  {selectedProductForModal.season === 'summer' && <Sun size={14} className="text-orange-400"/>}
+                                  {selectedProductForModal.season === 'all-season' && <CloudSun size={14} className="text-green-400"/>}
+                                  {getSeasonLabel(selectedProductForModal.season)}
+                              </span>
+                          </div>
+                          <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
+                              <span className="text-zinc-400 text-sm">Тип авто</span>
+                              <span className="text-white font-bold capitalize">{selectedProductForModal.vehicle_type === 'cargo' ? 'Вантажний (C)' : selectedProductForModal.vehicle_type === 'suv' ? 'Позашляховик' : 'Легковий'}</span>
+                          </div>
+                          {(selectedProductForModal.catalog_number || selectedProductForModal.product_number) && (
+                              <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
+                                  <span className="text-zinc-400 text-sm">Артикул / Код</span>
+                                  <span className="text-zinc-300 font-mono text-sm">{selectedProductForModal.catalog_number || selectedProductForModal.product_number}</span>
+                              </div>
+                          )}
+                      </div>
+
+                      <div className="mt-auto">
+                          <div className="flex items-end gap-3 mb-4">
+                              {safeParsePrice(selectedProductForModal.old_price) > safeParsePrice(selectedProductForModal.price) && (
+                                  <span className="text-zinc-500 line-through text-sm mb-1">{formatPrice(selectedProductForModal.old_price)} грн</span>
+                              )}
+                              <span className="text-3xl font-black text-[#FFC300]">{formatPrice(selectedProductForModal.price)} <span className="text-base text-white font-normal">грн</span></span>
+                          </div>
+                          
+                          <button 
+                              onClick={() => { addToCart(selectedProductForModal); setSelectedProductForModal(null); }}
+                              disabled={selectedProductForModal.in_stock === false}
+                              className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 uppercase tracking-wide transition-all active:scale-95 ${selectedProductForModal.in_stock === false ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' : 'bg-white text-black hover:bg-[#FFC300] shadow-lg'}`}
+                          >
+                              <ShoppingCart size={20} />
+                              {selectedProductForModal.in_stock === false ? 'Немає в наявності' : 'Додати в кошик'}
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
       )}
 
       {lightboxOpen && currentLightboxImages.length > 0 && (<div className="fixed inset-0 z-[200] bg-black flex items-center justify-center animate-in fade-in duration-300"><button onClick={() => setLightboxOpen(false)} className="absolute top-4 right-4 text-white hover:text-[#FFC300] z-50 p-2"><X size={32}/></button><div className="w-full h-full flex items-center justify-center relative touch-pan-y" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>{currentLightboxImages.length > 1 && (<><button onClick={prevImage} className="absolute left-2 md:left-8 text-white/50 hover:text-white z-50 hidden md:block"><ChevronLeft size={48}/></button><button onClick={nextImage} className="absolute right-2 md:right-8 text-white/50 hover:text-white z-50 hidden md:block"><ChevronRight size={48}/></button></>)}<img src={currentLightboxImages[currentImageIndex]} alt="" className="max-w-full max-h-full object-contain pointer-events-none select-none" />{currentLightboxImages.length > 1 && (<div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-2">{currentLightboxImages.map((_, idx) => (<div key={idx} className={`w-2 h-2 rounded-full transition-colors ${idx === currentImageIndex ? 'bg-[#FFC300]' : 'bg-white/30'}`} />))}</div>)}</div></div>)}

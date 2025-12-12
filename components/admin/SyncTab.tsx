@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Globe, Settings, Play, CheckCircle, AlertTriangle, Loader2, Database, ArrowRight, X, Terminal, ChevronLeft, Save, Image as ImageIcon, Box, FileImage, Key, UploadCloud, ToggleLeft, ToggleRight, Briefcase, Search, Download } from 'lucide-react';
+import { Globe, Settings, Play, CheckCircle, AlertTriangle, Loader2, Database, ArrowRight, X, Terminal, ChevronLeft, Save, Image as ImageIcon, Box, FileImage, Key, UploadCloud, ToggleLeft, ToggleRight, Briefcase, Search, Download, Bug, RefreshCw, FileQuestion } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import ApiRequestPanel from './sync/ApiRequestPanel';
 import ImportMapper from './sync/ImportMapper';
@@ -18,16 +18,92 @@ const getValueByPath = (obj: any, path: string) => {
 
 const safeExtractString = (val: any): string => {
     if (val === null || val === undefined) return '';
-    if (typeof val === 'string') return val;
+    if (typeof val === 'string') return val.trim();
     if (typeof val === 'number') return String(val);
     if (typeof val === 'object') {
-        if (val.value) return String(val.value);
-        if (val.name) return String(val.name);
-        if (val.id) return String(val.id);
+        if (val.value !== undefined) return String(val.value);
+        if (val.name !== undefined) return String(val.name);
+        if (val.id !== undefined) return String(val.id);
+        if (val.code !== undefined) return String(val.code);
         return ''; 
     }
-    return String(val);
+    return String(val).trim();
 };
+
+const smartExtractPrice = (val: any): number => {
+    if (val === null || val === undefined) return 0;
+    if (typeof val === 'number') return val;
+
+    let str = '';
+
+    if (Array.isArray(val)) {
+        if (val.length === 0) return 0;
+        return smartExtractPrice(val[0]);
+    }
+
+    if (typeof val === 'object') {
+        if (val.CustomerPrice) return smartExtractPrice(val.CustomerPrice);
+        if (val.Price) return smartExtractPrice(val.Price);
+        
+        const candidates = [
+            val.Value, val.value, val.Amount, val.amount, val.Retail, val.retail,
+            val.Cost, val.cost, val.Rrc, val.rrc, val.Uah, val.uah
+        ];
+        const found = candidates.find(c => c !== undefined && c !== null && smartExtractPrice(c) > 0);
+        if (found !== undefined) return smartExtractPrice(found);
+        
+        const values = Object.values(val);
+        const numVal = values.find(v => typeof v === 'number' && v > 0);
+        if (numVal) return numVal as number;
+        
+        return 0; 
+    }
+
+    str = String(val).trim();
+    str = str.replace(/\s/g, '').replace(/\u00A0/g, '');
+    if (str.includes(',')) {
+        const parts = str.split(',');
+        if (parts[parts.length-1].length === 2) {
+             str = str.split('.').join(''); 
+             str = str.replace(',', '.');   
+        } else {
+             str = str.split(',').join('');
+        }
+    } else {
+        if ((str.match(/\./g) || []).length > 1) {
+             str = str.replace(/\./g, '');
+        }
+    }
+    str = str.replace(/[^\d.-]/g, '');
+    return parseFloat(str) || 0;
+};
+
+const findPriceRecursively = (obj: any): number => {
+    if (!obj || typeof obj !== 'object') return 0;
+    if (obj.CustomerPrice !== undefined) {
+        const cp = smartExtractPrice(obj.CustomerPrice);
+        if (cp > 0) return cp;
+    }
+    if (obj.Price !== undefined) {
+        const p = smartExtractPrice(obj.Price);
+        if (p > 0) return p;
+    }
+    const priorityKeys = ['price', 'retail', 'cost', 'value', 'uah'];
+    for (const key of Object.keys(obj)) {
+        const lowerKey = key.toLowerCase();
+        if (priorityKeys.some(pk => lowerKey.includes(pk))) {
+             const val = smartExtractPrice(obj[key]);
+             if (val > 0) return val;
+        }
+    }
+    for (const key of Object.keys(obj)) {
+        if (typeof obj[key] === 'object') {
+            const res = findPriceRecursively(obj[key]);
+            if (res > 0) return res;
+        }
+    }
+    return 0;
+}
 
 const detectSeason = (text: string): string => {
     const t = String(text).toLowerCase();
@@ -58,22 +134,123 @@ const scanForArrays = (obj: any, path = '', depth = 0): { path: string, count: n
     return candidates.sort((a,b) => b.count - a.count);
 };
 
-// Convert binary string to Uint8Array
-const binaryStringToBytes = (str: string) => {
-    const bytes = new Uint8Array(str.length);
-    for (let i = 0; i < str.length; i++) {
-        bytes[i] = str.charCodeAt(i) & 0xff;
+// --- ADVANCED BINARY PROCESSOR ---
+// Detects if the response is actually JSON, Base64, or Raw Binary
+const processBinaryData = (data: any): Blob | null => {
+    try {
+        if (!data) return null;
+        if (data instanceof Blob) return data;
+
+        let buffer: Uint8Array;
+
+        // 1. Convert to Uint8Array
+        if (data instanceof ArrayBuffer) {
+            buffer = new Uint8Array(data);
+        } else if (typeof data === 'object' && data.type === 'Buffer' && Array.isArray(data.data)) {
+            buffer = new Uint8Array(data.data);
+        } else if (typeof data === 'string') {
+            // Check if it's Base64 String directly
+            if (data.length > 100 && !data.includes(' ') && (data.startsWith('/9j/') || data.startsWith('iVBOR'))) {
+                 const binStr = atob(data);
+                 buffer = new Uint8Array(binStr.length);
+                 for (let i = 0; i < binStr.length; i++) buffer[i] = binStr.charCodeAt(i);
+            } else {
+                 // Assume raw binary string
+                 buffer = new Uint8Array(data.length);
+                 for (let i = 0; i < data.length; i++) buffer[i] = data.charCodeAt(i) & 0xff;
+            }
+        } else {
+            return null;
+        }
+
+        // 2. CHECK MAGIC NUMBERS (JPEG/PNG)
+        if (buffer.length > 3) {
+            // JPEG: FF D8 FF
+            if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
+                return new Blob([buffer], { type: 'image/jpeg' });
+            }
+            // PNG: 89 50 4E 47
+            if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
+                return new Blob([buffer], { type: 'image/png' });
+            }
+        }
+
+        // 3. SPECIAL HANDLING FOR JSON WRAPPED BINARY STRING (Proxy Case)
+        // If buffer starts with '{' (123) or '[' (91)
+        if (buffer[0] === 123 || buffer[0] === 91) {
+            try {
+                const text = new TextDecoder('utf-8').decode(buffer);
+                const json = JSON.parse(text);
+                
+                // Recursively find a string value that looks like a binary image (JFIF header)
+                // "" usually maps to EF BF BD EF BF BD in UTF8 if misinterpreted, or FF D8 in raw
+                // We look for a string property that is long and contains JFIF or PNG signature
+                
+                const findImageString = (obj: any): string | null => {
+                    if (typeof obj === 'string') {
+                        // Check for JFIF signature "JFIF" (4A 46 49 46) inside the first 20 chars
+                        if (obj.length > 100 && obj.substring(0, 20).includes('JFIF')) return obj;
+                        // Check for PNG signature
+                        if (obj.length > 100 && obj.startsWith('PNG')) return obj;
+                        // Check Base64 signature
+                        if (obj.startsWith('/9j/') || obj.startsWith('iVBOR')) return obj;
+                        return null;
+                    }
+                    if (typeof obj === 'object' && obj !== null) {
+                        for (const key in obj) {
+                            const found = findImageString(obj[key]);
+                            if (found) return found;
+                        }
+                    }
+                    return null;
+                };
+                
+                const imgStr = findImageString(json);
+                
+                if (imgStr) {
+                    if (imgStr.startsWith('/9j/') || imgStr.startsWith('iVBOR')) {
+                        // Base64
+                        const binStr = atob(imgStr);
+                        const imgBuffer = new Uint8Array(binStr.length);
+                        for (let i = 0; i < binStr.length; i++) imgBuffer[i] = binStr.charCodeAt(i);
+                        return new Blob([imgBuffer], { type: 'image/jpeg' });
+                    } else {
+                        // Raw Binary String inside JSON
+                        const imgBuffer = new Uint8Array(imgStr.length);
+                        for (let i = 0; i < imgStr.length; i++) imgBuffer[i] = imgStr.charCodeAt(i) & 0xff;
+                        return new Blob([imgBuffer], { type: 'image/jpeg' });
+                    }
+                }
+            } catch (e) {
+                // Not valid JSON or parse error, continue to fallback
+            }
+        }
+
+        // 4. Fallback: Return as JPEG anyway if size > 500 bytes (might be headerless or offset)
+        if (buffer.length > 500) {
+            return new Blob([buffer], { type: 'image/jpeg' });
+        }
+
+        return null;
+    } catch (e) {
+        console.error("Binary processing error", e);
+        return null;
     }
-    return bytes;
+};
+
+const getHexHeader = (buffer: ArrayBuffer) => {
+    const view = new Uint8Array(buffer).slice(0, 20);
+    return Array.from(view).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
 };
 
 const PHOTO_DEFAULT_CONFIG = {
     method: 'POST',
-    url: 'https://public.omega.page/public/api/v1.0/searchcatalog/getTireImages',
-    headers: '{\n  "Content-Type": "application/json"\n}',
+    url: 'https://public.omega.page/public/api/v1.0/product/image',
+    headers: '{\n  "Content-Type": "application/json",\n  "Accept": "image/jpeg"\n}',
     body: JSON.stringify({
-      "ProductId": 0, // Will be replaced
-      "Key": "LYA37jgXHEJy9EOY7fkkIIs5Mg75aueD"
+      "ProductId": 0,
+      "Number": 1,
+      "Key": "INSERT_KEY_HERE"
     }, null, 2)
 };
 
@@ -81,28 +258,26 @@ const SyncTab: React.FC = () => {
   const [viewMode, setViewMode] = useState<'dashboard' | 'config'>('dashboard');
   const [configTab, setConfigTab] = useState<'products' | 'photos'>('products');
   
-  // Config State
   const [responseData, setResponseData] = useState<any>(null);
   const [responseStatus, setResponseStatus] = useState<number | null>(null);
   const [apiConfig, setApiConfig] = useState<any>(null);
   const [suppliers, setSuppliers] = useState<any[]>([]); 
 
-  // Photo Config State
   const [photoMap, setPhotoMap] = useState({ idKey: 'id', urlKey: 'photoUrl' });
   const [photoSourceField, setPhotoSourceField] = useState<'product_number' | 'catalog_number'>('product_number');
-  const [isBinaryMode, setIsBinaryMode] = useState(false);
+  const [isBinaryMode, setIsBinaryMode] = useState(true);
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
+  const [forceOverwritePhotos, setForceOverwritePhotos] = useState(false);
 
-  // --- SINGLE TEST STATE ---
   const [dbSearch, setDbSearch] = useState('');
   const [foundProducts, setFoundProducts] = useState<any[]>([]);
   const [selectedTestProduct, setSelectedTestProduct] = useState<any | null>(null);
   const [testLoading, setTestLoading] = useState(false);
   const [testResultImage, setTestResultImage] = useState<string | null>(null);
-  const [testResultBlob, setTestResultBlob] = useState<Blob | null>(null); // To save later
+  const [testResultBlob, setTestResultBlob] = useState<Blob | null>(null);
   const [testSaveStatus, setTestSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [debugResponse, setDebugResponse] = useState<string | null>(null);
 
-  // Sync Process State
   const [isSyncing, setIsSyncing] = useState(false);
   const [isPhotoSyncing, setIsPhotoSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState({ total: 0, processed: 0, updated: 0, inserted: 0 });
@@ -141,9 +316,8 @@ const SyncTab: React.FC = () => {
       }
   }, []);
 
-  const addLog = (msg: string) => setSyncLogs(prev => [...prev.slice(-4), msg]);
+  const addLog = (msg: string) => setSyncLogs(prev => [...prev.slice(-20), msg]);
 
-  // Search DB for Test Product
   const searchDbProduct = async () => {
       if (!dbSearch.trim() || !selectedSupplierId) return;
       const { data } = await supabase
@@ -155,43 +329,42 @@ const SyncTab: React.FC = () => {
       setFoundProducts(data || []);
   };
 
-  // Run Test for Single Product
   const runSingleTest = async () => {
       if (!selectedTestProduct) return;
       setTestLoading(true);
       setTestResultImage(null);
       setTestResultBlob(null);
       setTestSaveStatus('idle');
+      setDebugResponse(null);
 
       try {
-          const savedConfigStr = localStorage.getItem('forsage_sync_photo_config');
-          if (!savedConfigStr) throw new Error("Немає конфігурації API");
+          const savedConfigStr = localStorage.getItem('forsage_sync_photo_config') || JSON.stringify(PHOTO_DEFAULT_CONFIG);
           const config = JSON.parse(savedConfigStr);
 
-          // Get ID
           const val = selectedTestProduct[photoSourceField];
-          const idToSend = parseInt(val) || val;
+          if (!val) throw new Error(`Поле ${photoSourceField} пусте для цього товару.`);
+          
+          let idToSend = parseInt(val) || 0;
+          if (idToSend > 0) idToSend = -idToSend;
+
+          const { data: keyData } = await supabase.from('settings').select('value').eq('key', 'supplier_api_key').single();
+          const supplierKey = keyData?.value || '';
 
           let headers = {};
-          let requestBody = {};
+          let bodyStr = config.body;
           try { headers = JSON.parse(config.headers); } catch(e) {}
-          if (config.method !== 'GET') {
-              try { requestBody = JSON.parse(config.body); } catch(e) {}
+          
+          if (config.method !== 'GET' && bodyStr && supplierKey) {
+              bodyStr = bodyStr.replace("INSERT_KEY_HERE", supplierKey);
           }
 
-          // Inject ID
-          // Try to find array key or "ProductId"
-          let listKey = Object.keys(requestBody).find(k => Array.isArray((requestBody as any)[k])) || 
-                        Object.keys(requestBody).find(k => k.toLowerCase().includes('id')) || 
-                        'ProductId';
-          
-          const currentBody: any = { ...requestBody };
-          // If body has an array, put single ID in array? or just ID?
-          // If binary mode, usually simple ID or array of 1.
-          if (Array.isArray(currentBody[listKey])) {
-              currentBody[listKey] = [idToSend];
-          } else {
-              currentBody[listKey] = idToSend;
+          let requestBody: any = {};
+          if (config.method !== 'GET') {
+              try { requestBody = JSON.parse(bodyStr); } catch(e) {}
+          }
+
+          if (requestBody.hasOwnProperty('ProductId')) {
+              requestBody.ProductId = idToSend;
           }
 
           const { data: result, error } = await supabase.functions.invoke('super-endpoint', {
@@ -199,57 +372,75 @@ const SyncTab: React.FC = () => {
                   url: config.url,
                   method: config.method,
                   headers: headers,
-                  body: currentBody
-              }
+                  body: requestBody
+                  // NOTE: responseType arraybuffer handles binary data properly
+              },
+              responseType: 'arraybuffer'
           });
 
           if (error) throw new Error(error.message);
 
-          const rawData = result.data !== undefined ? result.data : result;
+          const rawData = result; // ArrayBuffer
+          
+          let debugMsg = '';
+          const blob = processBinaryData(rawData);
 
-          // Check if Binary
-          const isImage = typeof rawData === 'string' && (rawData.includes('JFIF') || rawData.includes('PNG') || rawData.includes('Exif'));
+          if (rawData instanceof ArrayBuffer) {
+              const hex = getHexHeader(rawData);
+              debugMsg = `[Raw Header (Hex)]: ${hex}\n`;
+              debugMsg += `Total Size: ${rawData.byteLength} bytes\n`;
+              
+              if (blob) {
+                  debugMsg += `\n[SUCCESS] Detected Valid Image: ${blob.type.toUpperCase()}`;
+                  debugMsg += `\nSize: ${blob.size} bytes`;
+              } else {
+                  try {
+                      const text = new TextDecoder('utf-8').decode(rawData);
+                      const isJson = text.trim().startsWith('{') || text.trim().startsWith('[');
+                      if (isJson) {
+                          debugMsg += `\n[WARNING] Response appears to be JSON text, not binary image.`;
+                          try {
+                              const json = JSON.parse(text);
+                              debugMsg += `\nJSON Content Preview:\n${JSON.stringify(json, null, 2).substring(0, 500)}`;
+                          } catch {}
+                      } else {
+                          debugMsg += `\n[ERROR] Unknown Format. Text Preview:\n${text.substring(0, 200)}`;
+                      }
+                  } catch {
+                      debugMsg += `\n[ERROR] Could not decode as text either.`;
+                  }
+              }
+          }
+          setDebugResponse(debugMsg);
 
-          if (isImage) {
-              const bytes = binaryStringToBytes(rawData);
-              const blob = new Blob([bytes], { type: 'image/jpeg' });
+          if (blob) {
+              if (blob.size < 500) {
+                  alert("Файл занадто малий (<500b). Це, ймовірно, помилка або пустий файл.");
+              }
               const url = URL.createObjectURL(blob);
               setTestResultImage(url);
               setTestResultBlob(blob);
-              if (!isBinaryMode) {
-                  alert("API повернуло зображення! Автоматично вмикаю Binary Mode.");
-                  setIsBinaryMode(true);
-                  localStorage.setItem('forsage_sync_binary_mode', 'true');
-              }
           } else {
-              // It's JSON?
-              if (isBinaryMode) {
-                  alert("Увага: Очікували файл, а прийшов JSON/Текст. Можливо вимкніть Binary Mode?");
-                  console.log(rawData);
-              }
-              // Try to find URL in JSON if we are NOT in binary mode
-              // ... (simple fallback logic)
-              if (typeof rawData === 'object' && !isBinaryMode) {
-                   alert("Отримано JSON (див. консоль). Налаштуйте мапінг якщо там є URL.");
-                   console.log(rawData);
-              }
+              alert("Не вдалося розпізнати зображення. Перевірте Debug лог.");
           }
 
       } catch (e: any) {
+          setDebugResponse(`Error: ${e.message}`);
           alert("Помилка тесту: " + e.message);
       } finally {
           setTestLoading(false);
       }
   };
 
-  // Save Test Image
   const saveTestImage = async () => {
       if (!testResultBlob || !selectedTestProduct) return;
       setTestSaveStatus('saving');
       try {
-          const fileName = `api_test_${selectedTestProduct.id}_${Date.now()}.jpg`;
+          const ext = testResultBlob.type === 'image/png' ? 'png' : 'jpg';
+          const fileName = `tyre_${selectedTestProduct.id}_${Date.now()}.${ext}`;
+          
           const { error } = await supabase.storage.from('galery').upload(fileName, testResultBlob, {
-              contentType: 'image/jpeg',
+              contentType: testResultBlob.type,
               upsert: true
           });
           if (error) throw error;
@@ -258,12 +449,122 @@ const SyncTab: React.FC = () => {
           await supabase.from('tyres').update({ image_url: data.publicUrl }).eq('id', selectedTestProduct.id);
           
           setTestSaveStatus('saved');
-          // Update local view
           setSelectedTestProduct({...selectedTestProduct, image_url: data.publicUrl});
       } catch (e: any) {
-          console.error(e);
           setTestSaveStatus('error');
           alert("Помилка збереження: " + e.message);
+      }
+  };
+
+  const handleRunPhotoSync = async () => {
+      const savedSupplier = localStorage.getItem('forsage_sync_supplier');
+      if (!savedSupplier) { alert("Оберіть постачальника в налаштуваннях!"); return; }
+
+      const savedConfigStr = localStorage.getItem('forsage_sync_photo_config') || JSON.stringify(PHOTO_DEFAULT_CONFIG);
+      let config: any;
+      try { config = JSON.parse(savedConfigStr); } catch (e) { alert("Помилка конфігу фото"); return; }
+
+      setIsPhotoSyncing(true);
+      setSyncProgress({ total: 0, processed: 0, updated: 0, inserted: 0 });
+      setSyncLogs(['Пошук товарів...']);
+      setSyncError('');
+
+      try {
+          let query = supabase
+              .from('tyres')
+              .select('id, product_number')
+              .eq('supplier_id', parseInt(savedSupplier))
+              .not('product_number', 'is', null)
+              .limit(50);
+          
+          // CRITICAL FIX: Explicitly handle overwrite logic
+          if (!forceOverwritePhotos) {
+              query = query.is('image_url', null);
+          }
+
+          const { data: itemsToUpdate, error } = await query;
+
+          if (error) throw error;
+          
+          if (!itemsToUpdate || itemsToUpdate.length === 0) {
+              if (!forceOverwritePhotos) {
+                  addLog("Всі товари вже мають фото.");
+                  addLog("Увімкніть 'Перезаписати', щоб оновити існуючі.");
+              } else {
+                  addLog("Товарів не знайдено.");
+              }
+              setIsPhotoSyncing(false);
+              return;
+          }
+
+          setSyncProgress(p => ({ ...p, total: itemsToUpdate.length }));
+          addLog(`Обробка ${itemsToUpdate.length} товарів...`);
+
+          const { data: keyData } = await supabase.from('settings').select('value').eq('key', 'supplier_api_key').single();
+          const supplierKey = keyData?.value || '';
+
+          for (const product of itemsToUpdate) {
+              let idToSend = parseInt(product.product_number);
+              if (!idToSend) continue;
+              if (idToSend > 0) idToSend = -idToSend;
+
+              let requestBody: any = {};
+              try {
+                  let bodyStr = config.body;
+                  if (supplierKey) bodyStr = bodyStr.replace("INSERT_KEY_HERE", supplierKey);
+                  requestBody = JSON.parse(bodyStr);
+                  requestBody.ProductId = idToSend;
+              } catch(e) { continue; }
+
+              const { data: result, error: apiError } = await supabase.functions.invoke('super-endpoint', {
+                  body: {
+                      url: config.url,
+                      method: config.method,
+                      headers: JSON.parse(config.headers || '{}'),
+                      body: requestBody
+                  },
+                  responseType: 'arraybuffer'
+              });
+
+              if (apiError || !result) {
+                  addLog(`API Fail for ${idToSend}`);
+                  continue;
+              }
+
+              const rawData = result;
+              const blob = processBinaryData(rawData);
+              
+              if (blob && blob.size > 500) {
+                  const ext = blob.type === 'image/png' ? 'png' : 'jpg';
+                  const fileName = `tyre_${product.id}_${Date.now()}.${ext}`;
+                  
+                  const { error: uploadError } = await supabase.storage.from('galery').upload(fileName, blob, {
+                      contentType: blob.type,
+                      upsert: true
+                  });
+
+                  if (!uploadError) {
+                      const { data: publicUrlData } = supabase.storage.from('galery').getPublicUrl(fileName);
+                      await supabase.from('tyres').update({ image_url: publicUrlData.publicUrl }).eq('id', product.id);
+                      setSyncProgress(p => ({ ...p, updated: p.updated + 1 }));
+                  } else {
+                      addLog(`Storage Error: ${uploadError.message}`);
+                  }
+              } else {
+                  addLog(`Bad Data/No Image for ${idToSend}`);
+              }
+              
+              setSyncProgress(p => ({ ...p, processed: p.processed + 1 }));
+              await new Promise(r => setTimeout(r, 300));
+          }
+
+          addLog("Готово.");
+
+      } catch (e: any) {
+          setSyncError(e.message);
+          addLog("Error: " + e.message);
+      } finally {
+          setIsPhotoSyncing(false);
       }
   };
 
@@ -271,15 +572,14 @@ const SyncTab: React.FC = () => {
       setViewMode('dashboard');
   };
 
-  // --- PRODUCT SYNC LOGIC (Keep existing) ---
+  // --- PRODUCT SYNC LOGIC ---
   const handleRunAutoSync = async () => {
       const savedConfigStr = localStorage.getItem('forsage_sync_config');
       const savedMapStr = localStorage.getItem('forsage_sync_mapping');
       const savedSupplier = localStorage.getItem('forsage_sync_supplier');
 
       if (!savedConfigStr || !savedMapStr || !savedSupplier) {
-          alert("Налаштування не знайдено! Переходимо в режим налаштування.");
-          setViewMode('config');
+          alert("Налаштування не знайдено!");
           return;
       }
 
@@ -293,11 +593,19 @@ const SyncTab: React.FC = () => {
           const map = JSON.parse(savedMapStr);
           const supplierId = parseInt(savedSupplier);
 
+          const { data: keyData } = await supabase.from('settings').select('value').eq('key', 'supplier_api_key').single();
+          const supplierKey = keyData?.value || '';
+
           let headers = {};
           let requestBody = null;
           try { headers = JSON.parse(config.headers); } catch(e) {}
+          
           if (config.method !== 'GET') {
-              try { requestBody = JSON.parse(config.body); } catch(e) {}
+              let bodyStr = config.body;
+              if (supplierKey && bodyStr.includes("INSERT_KEY_HERE")) {
+                  bodyStr = bodyStr.replace("INSERT_KEY_HERE", supplierKey);
+              }
+              try { requestBody = JSON.parse(bodyStr); } catch(e) {}
           }
 
           let offset = 0;
@@ -324,11 +632,10 @@ const SyncTab: React.FC = () => {
               });
 
               if (error) throw new Error("Помилка мережі: " + error.message);
-              
               const rawData = result.data !== undefined ? result.data : result;
               
               if (typeof rawData === 'string' && (rawData.includes('JFIF') || rawData.startsWith('PNG'))) {
-                  throw new Error("API повернуло зображення замість JSON даних. Перевірте налаштування URL.");
+                  throw new Error("API повернуло зображення замість JSON. Перевірте URL.");
               }
 
               let batchItems: any[] = [];
@@ -356,16 +663,36 @@ const SyncTab: React.FC = () => {
                   break;
               }
 
-              const mappedBatch = batchItems.map((item: any) => {
-                  const rawPrice = getValueByPath(item, map.price);
-                  const price = parseFloat(String(rawPrice).replace(/[^\d.]/g, '')) || 0;
+              const mappedBatch = batchItems.map((item: any, idx: number) => {
+                  let rawPrice = getValueByPath(item, map.price);
+                  let price = smartExtractPrice(rawPrice);
+                  
+                  // --- FORCE PRICE RECOVERY ---
+                  if (item.CustomerPrice) {
+                      const cp = smartExtractPrice(item.CustomerPrice);
+                      if (cp > 0) price = cp;
+                  }
+                  if (price === 0 && item.Price) {
+                      const p = smartExtractPrice(item.Price);
+                      if (p > 0) price = p;
+                  }
+                  if (price === 0) {
+                      const deep = findPriceRecursively(item);
+                      if (deep > 0) price = deep;
+                  }
+
                   const rawBasePrice = map.base_price ? getValueByPath(item, map.base_price) : 0;
-                  const basePrice = parseFloat(String(rawBasePrice).replace(/[^\d.]/g, '')) || 0;
+                  const basePrice = smartExtractPrice(rawBasePrice);
+
                   const title = safeExtractString(getValueByPath(item, map.title)) || 'Без назви';
                   const desc = map.description ? safeExtractString(getValueByPath(item, map.description)) : '';
                   const brand = map.brand ? safeExtractString(getValueByPath(item, map.brand)) || 'Unknown' : 'Unknown';
                   const imageUrl = map.image ? safeExtractString(getValueByPath(item, map.image)) : null;
                   
+                  if (idx < 5 && price === 0) {
+                      addLog(`[WARN] Price 0 for ${title.substring(0,10)}... (Raw: ${JSON.stringify(item.CustomerPrice || item.Price)})`);
+                  }
+
                   let radius='';
                   const sizeMatch = title.match(/(\d{3})[\/\s](\d{2})[\s\w]*R(\d{2}[C|c]?)/);
                   if (sizeMatch) { radius='R'+sizeMatch[3].toUpperCase(); }
@@ -373,11 +700,15 @@ const SyncTab: React.FC = () => {
                   let stock = 0;
                   const rawStock = map.stock ? getValueByPath(item, map.stock) : 0;
                   if (Array.isArray(rawStock)) {
-                      stock = rawStock.reduce((acc: number, wh: any) => acc + (parseInt(wh.amount || wh.quantity || wh.rest || 0) || 0), 0);
+                      stock = rawStock.reduce((acc: number, wh: any) => {
+                          const v = wh.Value || wh.value || wh.amount || wh.quantity || wh.rest || 0;
+                          return acc + (parseInt(String(v).replace(/[><+\s]/g, '')) || 0);
+                      }, 0);
                   } else if (typeof rawStock === 'object' && rawStock !== null) {
-                      stock = parseInt((rawStock as any).amount || (rawStock as any).quantity || 0) || 0;
+                      const v = (rawStock as any).amount || (rawStock as any).quantity || (rawStock as any).Value || 0;
+                      stock = parseInt(String(v).replace(/[><+\s]/g, '')) || 0;
                   } else {
-                      stock = parseInt(String(rawStock).replace(/[^\d]/g, '')) || 0;
+                      stock = parseInt(String(rawStock).replace(/[><+\s]/g, '')) || 0;
                   }
 
                   const season = detectSeason(title + ' ' + desc);
@@ -406,31 +737,65 @@ const SyncTab: React.FC = () => {
                   };
               });
 
-              const codes = mappedBatch.map((i: any) => i.catalog_number).filter((c: any) => c);
-              const { data: existingDB } = await supabase
-                  .from('tyres')
-                  .select('id, catalog_number')
-                  .eq('supplier_id', supplierId)
-                  .in('catalog_number', codes);
+              // --- STRICT DEDUPLICATION ---
+              const pIds = mappedBatch.map((i: any) => i.product_number).filter((c: any) => c);
+              const cIds = mappedBatch.map((i: any) => i.catalog_number).filter((c: any) => c);
 
-              const existingMap = new Map();
-              existingDB?.forEach((item: any) => existingMap.set(item.catalog_number, item));
+              let existingMap = new Map();
 
-              const toUpdate = [];
-              const toInsert = [];
+              if (pIds.length > 0) {
+                  const { data: byPid } = await supabase
+                      .from('tyres')
+                      .select('id, product_number')
+                      .eq('supplier_id', supplierId)
+                      .in('product_number', pIds);
+                  byPid?.forEach((row: any) => {
+                      if(row.product_number) existingMap.set(`PID:${String(row.product_number).trim()}`, row.id);
+                  });
+              }
+
+              if (cIds.length > 0) {
+                  const { data: byCid } = await supabase
+                      .from('tyres')
+                      .select('id, catalog_number')
+                      .eq('supplier_id', supplierId)
+                      .in('catalog_number', cIds);
+                  byCid?.forEach((row: any) => {
+                      if(row.catalog_number) existingMap.set(`CID:${String(row.catalog_number).trim()}`, row.id);
+                  });
+              }
+
+              const updatesById = new Map<number, any>();
+              const insertsByKey = new Map<string, any>();
 
               for (const item of mappedBatch) {
-                  if (!item.catalog_number) continue;
-                  const existing = existingMap.get(item.catalog_number);
-                  if (existing) {
-                      toUpdate.push({ ...item, id: existing.id });
+                  const pidKey = item.product_number ? `PID:${String(item.product_number).trim()}` : null;
+                  const cidKey = item.catalog_number ? `CID:${String(item.catalog_number).trim()}` : null;
+
+                  let existingId = pidKey ? existingMap.get(pidKey) : undefined;
+                  if (!existingId && cidKey) {
+                      existingId = existingMap.get(cidKey);
+                  }
+
+                  if (existingId) {
+                      updatesById.set(existingId, { ...item, id: existingId });
                   } else {
-                      toInsert.push(item);
+                      const uniqueKey = pidKey || cidKey || JSON.stringify(item.title);
+                      insertsByKey.set(uniqueKey, item);
                   }
               }
 
-              if (toUpdate.length > 0) await supabase.from('tyres').upsert(toUpdate);
-              if (toInsert.length > 0) await supabase.from('tyres').insert(toInsert);
+              const toUpdate = Array.from(updatesById.values());
+              const toInsert = Array.from(insertsByKey.values());
+
+              if (toUpdate.length > 0) {
+                  const { error } = await supabase.from('tyres').upsert(toUpdate);
+                  if (error) addLog(`Update Error: ${error.message}`);
+              }
+              if (toInsert.length > 0) {
+                  const { error } = await supabase.from('tyres').upsert(toInsert, { onConflict: 'catalog_number,supplier_id' });
+                  if (error) addLog(`Insert Error: ${error.message}`);
+              }
 
               setSyncProgress(prev => ({
                   total: prev.total + batchItems.length,
@@ -438,6 +803,10 @@ const SyncTab: React.FC = () => {
                   updated: prev.updated + toUpdate.length,
                   inserted: prev.inserted + toInsert.length
               }));
+              
+              if(toUpdate.length > 0 || toInsert.length > 0) {
+                  addLog(`Upd: ${toUpdate.length}, New: ${toInsert.length}`);
+              }
 
               if (batchItems.length < BATCH_SIZE) {
                   keepFetching = false;
@@ -464,6 +833,7 @@ const SyncTab: React.FC = () => {
       setResponseData(data);
       setResponseStatus(status);
       setApiConfig(config);
+      setDebugResponse(typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data));
   };
 
   return (
@@ -529,15 +899,15 @@ const SyncTab: React.FC = () => {
                                </div>
                                <div className="bg-zinc-800 p-3 rounded-xl">
                                    <div className="text-2xl font-black text-green-400">{syncProgress.inserted}</div>
-                                   <div className="text-[10px] text-zinc-500 uppercase font-bold">Нових</div>
+                                   <div className="text-[10px] text-zinc-500 uppercase font-bold">Нових/Фото</div>
                                </div>
                            </div>
 
                            {/* LOGS */}
-                           <div className="bg-black/50 rounded-xl p-4 font-mono text-xs text-zinc-400 h-32 overflow-y-auto border border-zinc-800 shadow-inner">
+                           <div className="bg-black/50 rounded-xl p-4 font-mono text-xs text-zinc-400 h-64 overflow-y-auto border border-zinc-800 shadow-inner">
                                {syncLogs.map((log, i) => (
-                                   <div key={i} className="mb-1 border-b border-zinc-800/50 pb-1 last:border-0">
-                                       <span className="text-[#FFC300] mr-2">{'>'}</span>{log}
+                                   <div key={i} className={`mb-1 border-b border-zinc-800/50 pb-1 last:border-0 break-words ${log.includes('[HINT]') ? 'text-[#FFC300] font-bold' : ''}`}>
+                                       <span className="text-zinc-600 mr-2">{'>'}</span>{log}
                                    </div>
                                ))}
                                {(isSyncing || isPhotoSyncing) && <div className="animate-pulse text-[#FFC300]">Обробка даних...</div>}
@@ -563,7 +933,7 @@ const SyncTab: React.FC = () => {
                            </div>
                            <h2 className="text-xl font-bold text-white mb-2">Оновлення Складу</h2>
                            <p className="text-zinc-400 text-sm mb-8 max-w-sm mx-auto">
-                               Автоматична синхронізація цін та залишків працює.
+                               Автоматична синхронізація цін, залишків та фотографій.
                            </p>
                        </div>
                    )}
@@ -582,6 +952,26 @@ const SyncTab: React.FC = () => {
                            {isSyncing ? <Loader2 className="animate-spin" size={20} /> : <Box size={20} fill="currentColor" className="text-black/50"/>}
                            {isSyncing ? 'СИНХРОНІЗАЦІЯ ТОВАРІВ...' : 'СИНХРОНІЗУВАТИ ТОВАРИ (Ціни/Залишки)'}
                        </button>
+
+                       {/* MASS PHOTO SYNC BUTTON */}
+                       <div className="bg-zinc-800/50 p-2 rounded-2xl border border-zinc-700">
+                           <label className="flex items-center gap-2 px-3 py-2 cursor-pointer mb-2 group">
+                               <input type="checkbox" checked={forceOverwritePhotos} onChange={e => setForceOverwritePhotos(e.target.checked)} className="w-4 h-4 accent-[#FFC300]" />
+                               <span className={`text-xs font-bold uppercase select-none transition-colors ${forceOverwritePhotos ? 'text-[#FFC300]' : 'text-zinc-300'}`}>Перезаписати існуючі фото</span>
+                           </label>
+                           <button 
+                               onClick={handleRunPhotoSync}
+                               disabled={isSyncing || isPhotoSyncing}
+                               className={`w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-3 border transition-all active:scale-95 ${
+                                   isPhotoSyncing 
+                                   ? 'bg-zinc-800 text-zinc-500 border-zinc-700 cursor-not-allowed' 
+                                   : 'bg-zinc-800 text-white border-zinc-700 hover:border-[#FFC300] hover:bg-zinc-700'
+                               }`}
+                           >
+                               {isPhotoSyncing ? <Loader2 className="animate-spin" size={16} /> : <ImageIcon size={16} />}
+                               {isPhotoSyncing ? 'ЗАВАНТАЖЕННЯ ФОТО...' : forceOverwritePhotos ? 'ОНОВИТИ ФОТО (ПЕРЕЗАПИС)' : 'СИНХРОНІЗУВАТИ ФОТО (ТІЛЬКИ НОВІ)'}
+                           </button>
+                       </div>
                    </div>
 
                </div>
@@ -621,7 +1011,7 @@ const SyncTab: React.FC = () => {
                                 storageKey="forsage_sync_photo_config"
                                 defaultConfig={PHOTO_DEFAULT_CONFIG}
                                 title="Налаштування API Фото"
-                                description="Запит для отримання фото (getTireImages). ProductId буде підставлено автоматично."
+                                description="Запит для отримання фото. ProductId буде підставлено автоматично замість 0."
                            />
                        )}
                    </div>
@@ -687,7 +1077,7 @@ const SyncTab: React.FC = () => {
                                                {foundProducts.map(p => (
                                                    <div 
                                                        key={p.id} 
-                                                       onClick={() => { setSelectedTestProduct(p); setTestResultImage(null); }}
+                                                       onClick={() => { setSelectedTestProduct(p); setTestResultImage(null); setDebugResponse(null); }}
                                                        className={`p-3 border-b border-zinc-800 cursor-pointer hover:bg-zinc-800 flex items-center gap-3 ${selectedTestProduct?.id === p.id ? 'bg-[#FFC300]/10 border-l-4 border-l-[#FFC300]' : ''}`}
                                                    >
                                                        <div className="w-10 h-10 bg-black rounded border border-zinc-700 flex-shrink-0 overflow-hidden">
@@ -723,8 +1113,8 @@ const SyncTab: React.FC = () => {
                                                    }}
                                                    className="bg-black border border-zinc-700 rounded text-xs p-1 text-white"
                                                >
-                                                   <option value="product_number">product_number</option>
-                                                   <option value="catalog_number">catalog_number</option>
+                                                   <option value="product_number">product_number (ID)</option>
+                                                   <option value="catalog_number">catalog_number (Art)</option>
                                                </select>
                                            </div>
                                        </div>
@@ -753,6 +1143,18 @@ const SyncTab: React.FC = () => {
                                                </button>
                                            </div>
                                        )}
+                                   </div>
+                               )}
+
+                               {/* 4. DEBUG RESPONSE BOX (ALWAYS VISIBLE IF DATA EXISTS) */}
+                               {debugResponse && (
+                                   <div className="bg-black border border-zinc-700 rounded-xl p-4 animate-in fade-in">
+                                       <h5 className="text-zinc-400 text-xs font-bold uppercase mb-2 flex items-center gap-2"><Bug size={14}/> Відповідь сервера (Debug)</h5>
+                                       <textarea 
+                                           readOnly 
+                                           value={debugResponse} 
+                                           className="w-full h-40 bg-zinc-900 border border-zinc-800 rounded p-2 text-[10px] font-mono text-green-400 outline-none resize-none"
+                                       />
                                    </div>
                                )}
                            </div>

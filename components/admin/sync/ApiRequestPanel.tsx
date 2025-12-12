@@ -28,7 +28,7 @@ const DEFAULT_PRODUCT_CONFIG = {
       "From": 0,
       "Count": 100,
       "FormFactor": 0,
-      "Key": "LYA37jgXHEJy9EOY7fkkIIs5Mg75aueD"
+      "Key": "INSERT_KEY_HERE"
     }, null, 2)
 };
 
@@ -41,6 +41,15 @@ const ApiRequestPanel: React.FC<ApiRequestPanelProps> = ({
 }) => {
     const [loading, setLoading] = useState(false);
     const [config, setConfig] = useState(defaultConfig);
+    const [supplierKey, setSupplierKey] = useState('');
+
+    useEffect(() => {
+        const fetchKey = async () => {
+            const { data } = await supabase.from('settings').select('value').eq('key', 'supplier_api_key').single();
+            if(data && data.value) setSupplierKey(data.value);
+        };
+        fetchKey();
+    }, []);
 
     // Load from LocalStorage on mount or key change
     useEffect(() => {
@@ -80,23 +89,52 @@ const ApiRequestPanel: React.FC<ApiRequestPanelProps> = ({
             try { headers = JSON.parse(config.headers); } catch (e) { alert("Помилка в JSON Заголовків"); setLoading(false); return; }
             
             if (config.method !== 'GET') {
-                try { requestBody = JSON.parse(config.body); } catch (e) { alert("Помилка в JSON Тіла запиту"); setLoading(false); return; }
+                // Auto-inject KEY if present in DB and placeholder is in text
+                let bodyStr = config.body;
+                if (supplierKey && bodyStr.includes("INSERT_KEY_HERE")) {
+                    bodyStr = bodyStr.replace("INSERT_KEY_HERE", supplierKey);
+                }
+                
+                try { requestBody = JSON.parse(bodyStr); } catch (e) { alert("Помилка в JSON Тіла запиту"); setLoading(false); return; }
             }
 
-            // Use Supabase Edge Function 'super-endpoint'
+            // Use Supabase Edge Function 'super-endpoint' with arraybuffer to handle all response types safely
             const { data: result, error } = await supabase.functions.invoke('super-endpoint', {
                 body: {
                     url: config.url,
                     method: config.method,
                     headers: headers,
                     body: requestBody
-                }
+                },
+                responseType: 'arraybuffer'
             });
 
             if (error) throw new Error(error.message);
             if (!result) throw new Error("Empty response");
 
-            const responseData = result.data !== undefined ? result.data : result;
+            let responseData = result;
+            
+            // Try to parse as JSON or Text if possible
+            if (result instanceof ArrayBuffer) {
+                try {
+                    const text = new TextDecoder('utf-8').decode(result);
+                    try {
+                        responseData = JSON.parse(text);
+                    } catch {
+                        // If not valid JSON, keep as text if it looks like text (no null bytes in first 100 chars)
+                        // Simple heuristic check for binary
+                        const view = new Uint8Array(result);
+                        let isBinary = false;
+                        for(let i=0; i<Math.min(100, view.length); i++) {
+                            if (view[i] === 0) { isBinary = true; break; }
+                        }
+                        if (!isBinary) responseData = text;
+                        // If binary, keep responseData as ArrayBuffer
+                    }
+                } catch {
+                    // Decoder failed, keep as ArrayBuffer
+                }
+            }
             
             onResponse(responseData, result.status || 200, {
                 url: config.url,
@@ -179,6 +217,7 @@ const ApiRequestPanel: React.FC<ApiRequestPanelProps> = ({
                 {config.method !== 'GET' && (
                     <div>
                         <label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Тіло запиту (Body JSON)</label>
+                        <p className="text-[10px] text-zinc-500 mb-1">Якщо в тексті є <code>INSERT_KEY_HERE</code>, він буде замінений на ключ з налаштувань.</p>
                         <textarea 
                             value={config.body}
                             onChange={(e) => setConfig({...config, body: e.target.value})}

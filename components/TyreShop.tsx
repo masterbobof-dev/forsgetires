@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { TyreProduct, CartItem } from '../types';
 import { ShoppingBag, Loader2, Phone, X, Filter, Snowflake, Sun, CloudSun, Truck, Check, CreditCard, Wallet, ArrowDown, ShoppingCart, Plus, Minus, Trash2, ChevronLeft, ChevronRight, ZoomIn, Ban, Flame, Grid, ArrowUpDown, Search, DollarSign, AlertCircle, Tag, Briefcase, MapPin } from 'lucide-react';
-import { PHONE_LINK_1, PHONE_NUMBER_1, FORMSPREE_ENDPOINT, NOVA_POSHTA_API_KEY } from '../constants';
+import { PHONE_LINK_1, PHONE_NUMBER_1, FORMSPREE_ENDPOINT } from '../constants';
 import { DEFAULT_IMG_CONFIG, DEFAULT_BG_CONFIG } from './admin/promo/shared';
 
 const PAGE_SIZE = 60;
@@ -88,6 +88,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   // Stock Quantity Logic
   const [enableStockQty, setEnableStockQty] = useState(false);
   const [promoBanner, setPromoBanner] = useState<any>(null);
+  const [novaPoshtaKey, setNovaPoshtaKey] = useState('');
   
   // Dynamic Contact Info
   const [shopPhone, setShopPhone] = useState(PHONE_NUMBER_1);
@@ -120,20 +121,21 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   // Nova Poshta API Logic
   useEffect(() => {
       const timer = setTimeout(() => {
-          if (npSearchCity.length > 1 && !selectedCityRef) {
+          if (npSearchCity.length > 1 && !selectedCityRef && novaPoshtaKey) {
               fetchNpCities(npSearchCity);
           }
       }, 500);
       return () => clearTimeout(timer);
-  }, [npSearchCity, selectedCityRef]);
+  }, [npSearchCity, selectedCityRef, novaPoshtaKey]);
 
   const fetchNpCities = async (term: string) => {
+      if(!novaPoshtaKey) return;
       setIsNpLoadingCities(true);
       try {
           const res = await fetch('https://api.novaposhta.ua/v2.0/json/', {
               method: 'POST',
               body: JSON.stringify({
-                  apiKey: NOVA_POSHTA_API_KEY,
+                  apiKey: novaPoshtaKey,
                   modelName: "Address",
                   calledMethod: "searchSettlements",
                   methodProperties: {
@@ -159,12 +161,13 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   };
 
   const fetchNpWarehouses = async (cityRef: string) => {
+      if(!novaPoshtaKey) return;
       setIsNpLoadingWarehouses(true);
       try {
           const res = await fetch('https://api.novaposhta.ua/v2.0/json/', {
               method: 'POST',
               body: JSON.stringify({
-                  apiKey: NOVA_POSHTA_API_KEY,
+                  apiKey: novaPoshtaKey,
                   modelName: "Address",
                   calledMethod: "getWarehouses",
                   methodProperties: {
@@ -212,7 +215,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   // Fetch Settings & Promo & GLOBAL FILTERS
   useEffect(() => {
     const fetchSettings = async () => {
-      const { data } = await supabase.from('settings').select('key, value').in('key', ['enable_stock_quantity', 'promo_data', 'contact_phone1']);
+      const { data } = await supabase.from('settings').select('key, value').in('key', ['enable_stock_quantity', 'promo_data', 'contact_phone1', 'nova_poshta_key']);
       if (data) {
           data.forEach(item => {
               if (item.key === 'enable_stock_quantity') {
@@ -221,6 +224,9 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
               if (item.key === 'contact_phone1') {
                   setShopPhone(item.value);
                   setShopPhoneLink(`tel:${item.value.replace(/[^\d+]/g, '')}`);
+              }
+              if (item.key === 'nova_poshta_key') {
+                  setNovaPoshtaKey(item.value);
               }
               if (item.key === 'promo_data' && item.value) {
                   try {

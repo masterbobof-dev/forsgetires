@@ -24,24 +24,22 @@ const getValueByPath = (obj: any, path: string) => {
     }
 };
 
-// Helper to safely extract string from potentially object values to prevent [object Object]
+// Helper to safely extract string from potentially object values
 const safeExtractString = (val: any): string => {
     if (val === null || val === undefined) return '';
     if (typeof val === 'string') return val;
     if (typeof val === 'number') return String(val);
     if (typeof val === 'object') {
-        // Try to find a common value key if it's an object wrapper
         if (val.value) return String(val.value);
         if (val.name) return String(val.name);
         if (val.id) return String(val.id);
         if (val.code) return String(val.code);
-        // If it's a complex object, return empty string rather than [object Object] garbage
         return ''; 
     }
     return String(val);
 };
 
-// Helper to flatten object keys for dropdown
+// Flatten object keys
 const getFlattenedKeys = (obj: any, prefix = '', depth = 0): string[] => {
     if (!obj || typeof obj !== 'object' || depth > 3) return []; 
     let keys: string[] = [];
@@ -56,7 +54,7 @@ const getFlattenedKeys = (obj: any, prefix = '', depth = 0): string[] => {
     return keys;
 };
 
-// Heuristic to scan for arrays or map-objects in the JSON
+// Scan for arrays
 const scanForArrays = (obj: any, path = '', depth = 0): { path: string, count: number, type: 'array' | 'object' }[] => {
     if (!obj || typeof obj !== 'object' || depth > 3) return [];
     
@@ -64,11 +62,9 @@ const scanForArrays = (obj: any, path = '', depth = 0): { path: string, count: n
 
     if (Array.isArray(obj)) {
         if (obj.length > 0) candidates.push({ path: path || 'root', count: obj.length, type: 'array' });
-        // Don't recurse into array items for finding lists
         return candidates;
     }
 
-    // It's an object. Check if it looks like a map of items
     const keys = Object.keys(obj);
     if (keys.length > 5) {
         const values = Object.values(obj);
@@ -78,7 +74,6 @@ const scanForArrays = (obj: any, path = '', depth = 0): { path: string, count: n
         }
     }
 
-    // Recurse children
     for (const key of keys) {
         if (typeof obj[key] === 'object' && obj[key] !== null) {
             candidates = [...candidates, ...scanForArrays(obj[key], path ? `${path}.${key}` : key, depth + 1)];
@@ -89,14 +84,14 @@ const scanForArrays = (obj: any, path = '', depth = 0): { path: string, count: n
 };
 
 const KEYWORD_MAP = {
-    title: ['name', 'title', 'model', 'nazva', 'tovar', 'productname', 'n', 'nom', 'caption', 'label', 'displayname'],
-    desc: ['description', 'desc', 'info', 'details', 'season', 'param', 'feature', 'opys'],
-    price: ['price', 'retail', 'uah', 'tsina', 'retailprice', 'price_uah', 'p', 'cena', 'rrc', 'roznytsia'],
+    title: ['name', 'title', 'model', 'nazva', 'tovar', 'productname', 'n', 'nom', 'caption', 'label', 'displayname', 'description'],
+    desc: ['description', 'desc', 'info', 'details', 'season', 'param', 'feature', 'opys', 'descriptionukr'],
+    price: ['price', 'retail', 'uah', 'tsina', 'retailprice', 'price_uah', 'p', 'cena', 'rrc', 'roznytsia', 'customerprice'],
     base_price: ['base', 'purchase', 'cost', 'zakupka', 'in', 'opt', 'wholesale', 'input', 'price_base', 'zakup'],
-    brand: ['brand', 'manuf', 'vendor', 'brend', 'manufacturer', 'm', 'proizvoditel', 'make', 'brandname'],
+    brand: ['brand', 'manuf', 'vendor', 'brend', 'manufacturer', 'm', 'proizvoditel', 'make', 'brandname', 'branddescription'],
     stock: ['stock', 'qty', 'quant', 'count', 'rest', 'zalishok', 'quantity', 'amount', 'q', 'r', 'ostatok', 'rests'],
-    code: ['code', 'art', 'sku', 'id', 'num', 'articul', 'article', 'c', 'kod', 'itemid', 'number'],
-    product_number: ['product_number', 'prod_num', 'p_id', 'pn', 'number', 'item_no', 'part_number'],
+    code: ['code', 'art', 'sku', 'id', 'num', 'articul', 'article', 'c', 'kod', 'itemid', 'number', 'card'],
+    product_number: ['productid', 'product_id', 'p_id', 'pn', 'item_no', 'part_number', 'id'],
     image: ['img', 'photo', 'url', 'picture', 'foto', 'image', 'i', 'pic', 'link', 'guid']
 };
 
@@ -105,7 +100,7 @@ const detectSeason = (text: string): string => {
     if (t.includes('зима') || t.includes('зимн') || t.includes('winter') || t.includes('snow') || t.includes('ice') || t.includes('stud') || t.includes('w442') || t.includes('ws')) return 'winter';
     if (t.includes('літо') || t.includes('літн') || t.includes('summer') || t.includes('sport') || t.includes('k125') || t.includes('ventu')) return 'summer';
     if (t.includes('всесезон') || t.includes('all season') || t.includes('4s')) return 'all-season';
-    return 'summer'; // Default fallback
+    return 'summer';
 };
 
 const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatus, apiConfig }) => {
@@ -133,11 +128,9 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
     const [availableKeys, setAvailableKeys] = useState<string[]>([]);
     const [arrayCount, setArrayCount] = useState(0);
 
-    // FULL SYNC STATE
     const [fullSyncProgress, setFullSyncProgress] = useState({ total: 0, processed: 0, updated: 0, inserted: 0 });
     const [isFullSync, setIsFullSync] = useState(false);
 
-    // Load Settings
     useEffect(() => {
         const fetchSuppliers = async () => {
             const { data } = await supabase.from('suppliers').select('*').order('name');
@@ -155,7 +148,6 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
     useEffect(() => { localStorage.setItem(STORAGE_KEY_MAP, JSON.stringify(fieldMapping)); }, [fieldMapping]);
     useEffect(() => { localStorage.setItem(STORAGE_KEY_SUPPLIER, targetSupplierId); }, [targetSupplierId]);
 
-    // --- ANALYZE RESPONSE ---
     useEffect(() => {
         if (!responseData) {
             setDetectedArrays([]);
@@ -176,7 +168,6 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
         }
     }, [responseData]);
 
-    // --- PARSE DATA BASED ON PATH ---
     const itemsToImport = useMemo(() => {
         if (!responseData) return [];
         let data = responseData;
@@ -237,10 +228,23 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
         if (showAlert) alert("Поля підібрано! Перевірте правильність.");
     };
 
+    // Updated Preview Helper to show Array Sums
     const getPreviewValueText = (key: string) => {
         if (!previewItem || !key) return null;
         const val = getValueByPath(previewItem, key);
         if (val === null || val === undefined) return 'не знайдено';
+        
+        if (Array.isArray(val)) {
+            // Try to calculate sum if it looks like stock
+            const sum = val.reduce((acc: number, item: any) => {
+                const v = item.Value || item.value || item.amount || item.quantity || item.rest || 0;
+                // Parse ">5" as 5
+                const clean = String(v).replace(/[><+\s]/g, '');
+                return acc + (parseInt(clean) || 0);
+            }, 0);
+            return `[Масив ${val.length} ел.] Сума: ${sum}`;
+        }
+        
         if (typeof val === 'object') return JSON.stringify(val).substring(0, 20) + '...';
         return String(val);
     };
@@ -253,7 +257,6 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
         const rawBasePrice = fieldMapping.base_price ? getValueByPath(item, fieldMapping.base_price) : 0;
         const basePrice = parseFloat(String(rawBasePrice).replace(/[^\d.]/g, '')) || 0;
 
-        // Use safeExtractString to avoid [object Object]
         const title = safeExtractString(getValueByPath(item, fieldMapping.title)) || 'Без назви';
         const desc = fieldMapping.description ? safeExtractString(getValueByPath(item, fieldMapping.description)) : '';
         const brand = fieldMapping.brand ? safeExtractString(getValueByPath(item, fieldMapping.brand)) || 'Unknown' : 'Unknown';
@@ -263,14 +266,25 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
         const sizeMatch = title.match(/(\d{3})[\/\s](\d{2})[\s\w]*R(\d{2}[C|c]?)/);
         if (sizeMatch) { radius='R'+sizeMatch[3].toUpperCase(); }
 
+        // --- STOCK PARSING IMPROVED ---
         let stock = 0;
         const rawStock = fieldMapping.stock ? getValueByPath(item, fieldMapping.stock) : 0;
+        
         if (Array.isArray(rawStock)) {
-            stock = rawStock.reduce((acc: number, wh: any) => acc + (parseInt(wh.amount || wh.quantity || wh.rest || 0) || 0), 0);
+            // Case: "Rests": [{"Key": "Kyiv", "Value": ">5"}]
+            stock = rawStock.reduce((acc: number, wh: any) => {
+                const val = wh.Value || wh.value || wh.amount || wh.quantity || wh.rest || 0;
+                // Remove '>', '<', '+' and spaces to parse ">5" as 5
+                const cleanVal = String(val).replace(/[><+\s]/g, '');
+                return acc + (parseInt(cleanVal) || 0);
+            }, 0);
         } else if (typeof rawStock === 'object' && rawStock !== null) {
-            stock = parseInt((rawStock as any).amount || (rawStock as any).quantity || 0) || 0;
+            const val = (rawStock as any).amount || (rawStock as any).quantity || (rawStock as any).Value || 0;
+            const cleanVal = String(val).replace(/[><+\s]/g, '');
+            stock = parseInt(cleanVal) || 0;
         } else {
-            stock = parseInt(String(rawStock).replace(/[^\d]/g, '')) || 0;
+            const cleanVal = String(rawStock).replace(/[><+\s]/g, '');
+            stock = parseInt(cleanVal) || 0;
         }
 
         const fullTextForSeason = (title + ' ' + desc).toLowerCase();
@@ -280,10 +294,7 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
         if (radius.includes('C') || title.includes('Truck') || title.includes('Bus') || title.includes('LT')) vehicle_type = 'cargo';
         else if (title.includes('SUV') || title.includes('4x4')) vehicle_type = 'suv';
 
-        // UNIQUE IDENTIFIER - Safe Extraction
         const code = fieldMapping.code ? safeExtractString(getValueByPath(item, fieldMapping.code)).trim() : null;
-        
-        // PRODUCT NUMBER - Safe Extraction
         const prodNum = fieldMapping.product_number ? safeExtractString(getValueByPath(item, fieldMapping.product_number)).trim() : null;
 
         return {
@@ -292,8 +303,8 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
             price: String(price),
             base_price: String(basePrice || price),
             image_url: imageUrl,
-            catalog_number: code, // Used for matching
-            product_number: prodNum, // Extra identifier
+            catalog_number: code, 
+            product_number: prodNum,
             stock_quantity: stock,
             in_stock: stock > 0,
             supplier_id: parseInt(targetSupplierId),
@@ -308,10 +319,7 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
         if (!targetSupplierId) { alert("Оберіть постачальника!"); return; }
         setImporting(true);
         try {
-            // Simple import of current page
             const mappedData = itemsToImport.map(transformItem);
-            // insert is fine here for new items, but if duplicates exist, it might fail unless we use upsert.
-            // For simple import, we generally assume new items or users handle duplicates.
             const { error } = await supabase.from('tyres').insert(mappedData);
             if (error) throw error;
             alert(`Імпортовано ${mappedData.length} товарів!`);
@@ -323,34 +331,30 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
         }
     };
 
-    // --- FULL SYNC LOOP LOGIC ---
     const executeFullSync = async () => {
-        if (!apiConfig) { alert("Спочатку зробіть тестовий запит (кнопка зліва), щоб отримати конфігурацію!"); return; }
+        if (!apiConfig) { alert("Спочатку зробіть тестовий запит!"); return; }
         if (!targetSupplierId) { alert("Оберіть постачальника!"); return; }
-        if (!fieldMapping.code) { alert("Поле 'Артикул (Code)' обов'язкове для розумної синхронізації!"); return; }
+        if (!fieldMapping.code) { alert("Поле 'Артикул' обов'язкове!"); return; }
 
         setIsFullSync(true);
         setFullSyncProgress({ total: 0, processed: 0, updated: 0, inserted: 0 });
 
         try {
             const loopConfig = { ...apiConfig };
-            // Ensure body is object
             if (typeof loopConfig.body === 'string') {
                 try { loopConfig.body = JSON.parse(loopConfig.body); } catch(e) {}
             }
 
             let offset = 0;
-            const BATCH_SIZE = 1000; // API Limit per request
+            const BATCH_SIZE = 1000;
             let keepFetching = true;
 
             while (keepFetching) {
-                // Update pagination in body if it exists
                 if (loopConfig.body && typeof loopConfig.body === 'object') {
                     loopConfig.body.From = offset;
                     loopConfig.body.Count = BATCH_SIZE;
                 }
 
-                // FETCH
                 const { data: result, error } = await supabase.functions.invoke('super-endpoint', {
                     body: {
                         url: loopConfig.url,
@@ -362,18 +366,15 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
 
                 if (error) throw new Error("API Network Error: " + error.message);
                 
-                // Extract Array
                 const rawData = result.data !== undefined ? result.data : result;
                 let batchItems: any[] = [];
                 
-                // Use the same extraction logic as the preview
                 if (jsonPath && jsonPath !== 'root') {
                     const extracted = getValueByPath(rawData, jsonPath);
                     if (Array.isArray(extracted)) batchItems = extracted;
                 } else if (Array.isArray(rawData)) {
                     batchItems = rawData;
                 } else {
-                    // Try to scan if path failed or not set
                     const scan = scanForArrays(rawData);
                     if (scan.length > 0) {
                         const path = scan[0].path;
@@ -387,56 +388,38 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
                     break;
                 }
 
-                // TRANSFORM
                 const mappedBatch = batchItems.map(transformItem);
-                
-                // SMART UPSERT LOGIC
-                // 1. Get all codes in this batch
                 const codes = mappedBatch.map(i => i.catalog_number).filter(c => c);
                 
-                // 2. Find existing items in DB for this supplier with these codes
                 const { data: existingDB } = await supabase
                     .from('tyres')
-                    .select('id, catalog_number, price, stock_quantity')
+                    .select('id, catalog_number')
                     .eq('supplier_id', parseInt(targetSupplierId))
                     .in('catalog_number', codes);
 
                 const existingMap = new Map();
                 existingDB?.forEach((item: any) => existingMap.set(item.catalog_number, item));
 
-                // 3. Separate Arrays to avoid "null value in column id" error
                 const itemsToUpdate = [];
                 const itemsToInsert = [];
                 let updatedCount = 0;
                 let insertedCount = 0;
 
                 for (const item of mappedBatch) {
-                    if (!item.catalog_number) continue; // Skip invalid
-                    
+                    if (!item.catalog_number) continue;
                     const existing = existingMap.get(item.catalog_number);
                     if (existing) {
-                        // Update existing: Reuse ID
                         itemsToUpdate.push({ ...item, id: existing.id });
                         updatedCount++;
                     } else {
-                        // Insert new: No ID (let DB generate it)
                         itemsToInsert.push(item);
                         insertedCount++;
                     }
                 }
 
-                // 4. Execute Operations Separately
-                if (itemsToUpdate.length > 0) {
-                    const { error: updateError } = await supabase.from('tyres').upsert(itemsToUpdate);
-                    if (updateError) throw updateError;
-                }
-                
-                if (itemsToInsert.length > 0) {
-                    const { error: insertError } = await supabase.from('tyres').insert(itemsToInsert);
-                    if (insertError) throw insertError;
-                }
+                if (itemsToUpdate.length > 0) await supabase.from('tyres').upsert(itemsToUpdate);
+                if (itemsToInsert.length > 0) await supabase.from('tyres').insert(itemsToInsert);
 
-                // Update Progress
                 setFullSyncProgress(prev => ({
                     total: prev.total + batchItems.length,
                     processed: prev.processed + batchItems.length,
@@ -444,20 +427,15 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
                     inserted: prev.inserted + insertedCount
                 }));
 
-                // Logic to stop loop
                 if (batchItems.length < BATCH_SIZE) {
                     keepFetching = false;
                 } else {
                     offset += BATCH_SIZE;
                 }
             }
-
             alert("Синхронізація завершена успішно!");
-
         } catch (e: any) {
-            console.error(e);
-            const msg = e.message || (typeof e === 'string' ? e : 'Невідома помилка');
-            alert("Збій синхронізації: " + msg);
+            alert("Збій синхронізації: " + e.message);
         } finally {
             setIsFullSync(false);
         }
@@ -489,7 +467,7 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
                             <div className="bg-black/40 p-4 rounded-xl border border-zinc-700">
                                 <div className="flex justify-between items-start mb-3">
                                     <label className="text-zinc-400 text-xs font-bold uppercase flex items-center gap-2"><ListTree size={14}/> Джерело даних (Масив)</label>
-                                    {arrayCount > 0 && <span className="text-green-400 text-xs font-bold bg-green-900/20 px-2 py-1 rounded">Знайдено: {arrayCount} шт (1 стор)</span>}
+                                    {arrayCount > 0 && <span className="text-green-400 text-xs font-bold bg-green-900/20 px-2 py-1 rounded">Знайдено: {arrayCount} шт</span>}
                                 </div>
                                 
                                 {detectedArrays.length > 0 && (
@@ -568,15 +546,15 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
                                 
                                 <div className="grid grid-cols-1 gap-3">
                                     {[
-                                        { label: 'Назва (Full Name)*', key: 'title', desc: 'Повна назва' },
-                                        { label: 'Опис (Сезонність)', key: 'description', desc: 'Для визначення сезону' },
+                                        { label: 'ID для Фото (ProductId)*', key: 'product_number', desc: 'ID для запиту фото (-1476057)' },
+                                        { label: 'Артикул (Number/Card)', key: 'code', desc: 'Видимий код/артикул (1104600)' },
+                                        { label: 'Назва (Full Name)*', key: 'title', desc: 'Повна назва товару' },
+                                        { label: 'Залишок (Stock/Rests)*', key: 'stock', desc: 'Поле з кількістю (може бути масивом Rests)' },
                                         { label: 'Ціна Продаж (Retail)*', key: 'price', desc: 'Ціна для клієнта' },
                                         { label: 'Ціна Закупка (Base)', key: 'base_price', desc: 'Собівартість' },
                                         { label: 'Бренд (Brand)', key: 'brand', desc: 'Виробник' },
-                                        { label: 'Залишок (Stock)', key: 'stock', desc: 'Кількість' },
-                                        { label: 'Артикул (Code)', key: 'code', desc: 'Унікальний ID для оновлення' },
-                                        { label: 'Номер товару (Product No)', key: 'product_number', desc: 'Дод. ідентифікатор' },
-                                        { label: 'Фото (Image URL)', key: 'image', desc: 'Необов\'язково' },
+                                        { label: 'Опис', key: 'description', desc: 'Для визначення сезону' },
+                                        { label: 'Фото URL', key: 'image', desc: 'Якщо є пряме посилання' },
                                     ].map((field) => (
                                         <div key={field.key} className="flex flex-col bg-black/20 p-2.5 rounded border border-zinc-800 hover:border-zinc-600 transition-colors">
                                             <div className="flex justify-between mb-1 items-center">
@@ -629,8 +607,8 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
                                 <h5 className="text-[#FFC300] font-bold text-center mb-2 flex justify-center items-center gap-2"><Loader2 className="animate-spin"/> СИНХРОНІЗАЦІЯ...</h5>
                                 <div className="text-xs text-zinc-400 space-y-1">
                                     <div className="flex justify-between"><span>Оброблено:</span> <span className="text-white">{fullSyncProgress.processed}</span></div>
-                                    <div className="flex justify-between"><span>Оновлено (ціна/зал):</span> <span className="text-blue-400">{fullSyncProgress.updated}</span></div>
-                                    <div className="flex justify-between"><span>Нових товарів:</span> <span className="text-green-400">{fullSyncProgress.inserted}</span></div>
+                                    <div className="flex justify-between"><span>Оновлено:</span> <span className="text-blue-400">{fullSyncProgress.updated}</span></div>
+                                    <div className="flex justify-between"><span>Нових:</span> <span className="text-green-400">{fullSyncProgress.inserted}</span></div>
                                 </div>
                             </div>
                         ) : (

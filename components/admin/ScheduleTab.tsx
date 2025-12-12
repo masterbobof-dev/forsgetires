@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import { BOOKING_SERVICES, WHEEL_RADII, WORK_START_HOUR, WORK_END_HOUR } from '../../constants';
-import { Clock, Plus, Phone, X, Save, Trash2 } from 'lucide-react';
+import { Clock, Plus, Phone, X, Save, Trash2, AlertTriangle } from 'lucide-react';
 
 const getKyivDateObj = () => new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Kiev' }));
 const getKyivDateString = (date = getKyivDateObj()) => date.toLocaleDateString('en-CA');
@@ -45,12 +45,50 @@ const ScheduleTab: React.FC = () => {
   const handleDropOnGap = async (e: React.DragEvent, targetDate: string, newTime: string) => {
     e.preventDefault();
     if (!draggedBookingId) return;
+
+    // Validate Time on Drop
+    const kyivNow = getKyivDateObj();
+    const todayStr = getKyivDateString(kyivNow);
+    
+    if (targetDate < todayStr) {
+        alert("Не можна переносити запис у минуле!");
+        return;
+    }
+    if (targetDate === todayStr) {
+        const currentMins = kyivNow.getHours() * 60 + kyivNow.getMinutes();
+        if (timeToMins(newTime) < currentMins) {
+            alert("Цей час вже минув!");
+            return;
+        }
+    }
+
     await supabase.from('bookings').update({ booking_date: targetDate, start_time: newTime, is_edited: true }).eq('id', draggedBookingId);
     fetchSchedule(); setDraggedBookingId(null);
   };
 
   const handleSaveBooking = async () => {
     if (!bookingForm.name || !bookingForm.phone) return;
+
+    // --- VALIDATION START ---
+    const kyivNow = getKyivDateObj();
+    const todayStr = getKyivDateString(kyivNow);
+
+    if (bookingForm.date < todayStr) {
+        alert("Помилка: Ви намагаєтесь створити запис на минулу дату.");
+        return;
+    }
+
+    if (bookingForm.date === todayStr) {
+        const currentMinutes = kyivNow.getHours() * 60 + kyivNow.getMinutes();
+        const selectedMinutes = timeToMins(bookingForm.time);
+
+        if (selectedMinutes < currentMinutes) {
+             alert("Помилка: Обраний час вже минув.");
+             return;
+        }
+    }
+    // --- VALIDATION END ---
+
     const srv = BOOKING_SERVICES.find(s => s.id === bookingForm.serviceId);
     const payload = { customer_name: bookingForm.name, customer_phone: bookingForm.phone, service_type: bookingForm.serviceId, service_label: srv ? srv.label : 'Custom', radius: bookingForm.radius, booking_date: bookingForm.date, start_time: bookingForm.time, duration_minutes: srv ? srv.duration : bookingForm.duration, status: 'staff', is_edited: !!bookingForm.id };
     if (bookingForm.id) await supabase.from('bookings').update(payload).eq('id', bookingForm.id); else await supabase.from('bookings').insert([payload]);
@@ -74,15 +112,23 @@ const ScheduleTab: React.FC = () => {
     return items;
   };
 
-  const renderFreeBlock = (start: number, end: number, date: string) => (
-     <div key={`free-${start}`} className="flex gap-2 mb-2 min-h-[50px] group">
-         <div className="w-14 flex-shrink-0 flex flex-col items-center pt-2"><span className="text-zinc-500 font-mono text-sm">{minsToTime(start)}</span><div className="w-px h-full bg-zinc-800 my-1"></div></div>
-         <div className="flex-grow border border-dashed border-zinc-700 rounded-xl flex items-center justify-between px-4 bg-zinc-900/30 hover:bg-[#FFC300]/5 hover:border-[#FFC300] cursor-pointer" onClick={() => { setBookingForm({ id: null, name: '', phone: '', time: minsToTime(start), date: date, serviceId: BOOKING_SERVICES[0].id, radius: WHEEL_RADII[2], duration: 30 }); setShowEditModal(true); }} onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDropOnGap(e, date, minsToTime(start))}>
-             <div className="text-zinc-500 text-sm">Вільний час <span className="font-bold text-white">{minsToTime(start)} - {minsToTime(end)}</span></div>
-             <button className="bg-zinc-800 text-zinc-400 p-2 rounded-full group-hover:bg-[#FFC300] group-hover:text-black"><Plus size={20} /></button>
-         </div>
-     </div>
-  );
+  const renderFreeBlock = (start: number, end: number, date: string) => {
+     // Check if this block is in the past to visually indicate it
+     const kyivNow = getKyivDateObj();
+     const todayStr = getKyivDateString(kyivNow);
+     const currentMins = kyivNow.getHours() * 60 + kyivNow.getMinutes();
+     const isPast = date < todayStr || (date === todayStr && end < currentMins);
+
+     return (
+        <div key={`free-${start}`} className={`flex gap-2 mb-2 min-h-[50px] group ${isPast ? 'opacity-30 pointer-events-none' : ''}`}>
+            <div className="w-14 flex-shrink-0 flex flex-col items-center pt-2"><span className="text-zinc-500 font-mono text-sm">{minsToTime(start)}</span><div className="w-px h-full bg-zinc-800 my-1"></div></div>
+            <div className="flex-grow border border-dashed border-zinc-700 rounded-xl flex items-center justify-between px-4 bg-zinc-900/30 hover:bg-[#FFC300]/5 hover:border-[#FFC300] cursor-pointer" onClick={() => { setBookingForm({ id: null, name: '', phone: '', time: minsToTime(start), date: date, serviceId: BOOKING_SERVICES[0].id, radius: WHEEL_RADII[2], duration: 30 }); setShowEditModal(true); }} onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDropOnGap(e, date, minsToTime(start))}>
+                <div className="text-zinc-500 text-sm">Вільний час <span className="font-bold text-white">{minsToTime(start)} - {minsToTime(end)}</span></div>
+                {!isPast && <button className="bg-zinc-800 text-zinc-400 p-2 rounded-full group-hover:bg-[#FFC300] group-hover:text-black"><Plus size={20} /></button>}
+            </div>
+        </div>
+     );
+  };
 
   const renderBookingBlock = (b: any, date: string) => (
      <div key={b.id} className="flex gap-2 mb-2">
@@ -107,8 +153,25 @@ const ScheduleTab: React.FC = () => {
                 <div className="space-y-4">
                    <input type="text" placeholder="Ім'я" value={bookingForm.name} onChange={e => setBookingForm({...bookingForm, name: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white" />
                    <input type="tel" placeholder="Телефон" value={bookingForm.phone} onChange={e => setBookingForm({...bookingForm, phone: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white" />
+                   
+                   {/* Date Input with min attribute */}
+                   <div className="flex flex-col gap-1">
+                        <label className="text-xs text-zinc-500 font-bold uppercase">Дата та Час</label>
+                        <div className="flex gap-2">
+                            <input 
+                                type="date" 
+                                min={getKyivDateString()} 
+                                value={bookingForm.date} 
+                                onChange={e => setBookingForm({...bookingForm, date: e.target.value})} 
+                                className="bg-black border border-zinc-700 rounded-lg p-3 text-white flex-grow font-bold"
+                            />
+                            <select value={bookingForm.time} onChange={e => setBookingForm({...bookingForm, time: e.target.value})} className="bg-black border border-zinc-700 rounded-lg p-3 text-white font-mono font-bold w-24">
+                                {generateTimeOptions().map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                        </div>
+                   </div>
+
                    <div className="flex gap-2">
-                      <select value={bookingForm.time} onChange={e => setBookingForm({...bookingForm, time: e.target.value})} className="bg-black border border-zinc-700 rounded-lg p-3 text-white">{generateTimeOptions().map(t => <option key={t} value={t}>{t}</option>)}</select>
                       <select value={bookingForm.serviceId} onChange={e => setBookingForm({...bookingForm, serviceId: e.target.value})} className="flex-grow bg-black border border-zinc-700 rounded-lg p-3 text-white">{BOOKING_SERVICES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
                    </div>
                    <div className="flex gap-4 pt-4">

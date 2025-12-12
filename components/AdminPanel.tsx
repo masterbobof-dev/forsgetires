@@ -12,6 +12,7 @@ import StatsTab from './admin/StatsTab';
 import ArticlesTab from './admin/ArticlesTab';
 import SeoTab from './admin/SeoTab';
 import PromoTab from './admin/PromoTab';
+import SyncTab from './admin/SyncTab';
 
 interface AdminPanelProps {
   onLogout: () => void;
@@ -19,14 +20,14 @@ interface AdminPanelProps {
 }
 
 const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
-  const [activeTab, setActiveTab] = useState<'schedule' | 'clients' | 'gallery' | 'prices' | 'settings' | 'tyres' | 'orders' | 'stats' | 'articles' | 'seo' | 'promo'>(
+  const [activeTab, setActiveTab] = useState<'schedule' | 'clients' | 'gallery' | 'prices' | 'settings' | 'tyres' | 'orders' | 'stats' | 'articles' | 'seo' | 'promo' | 'sync'>(
     mode === 'service' ? 'schedule' : 'tyres'
   );
 
   useEffect(() => {
      if (mode === 'service' && !['schedule', 'clients', 'gallery', 'prices'].includes(activeTab)) {
         setActiveTab('schedule');
-     } else if (mode === 'tyre' && !['tyres', 'orders', 'stats', 'settings', 'articles', 'seo', 'promo'].includes(activeTab)) {
+     } else if (mode === 'tyre' && !['tyres', 'orders', 'stats', 'settings', 'articles', 'seo', 'promo', 'sync'].includes(activeTab)) {
         setActiveTab('tyres');
      }
   }, [mode]);
@@ -42,8 +43,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
               {mode === 'service' && ['schedule', 'clients', 'prices', 'gallery'].map(t => (
                   <button key={t} onClick={() => setActiveTab(t as any)} className={`px-4 py-2 rounded font-bold text-sm uppercase whitespace-nowrap flex-shrink-0 transition-colors ${activeTab === t ? 'bg-[#FFC300] text-black' : 'text-zinc-400 hover:text-white'}`}>{t === 'schedule' ? 'Розклад' : t === 'clients' ? 'Клієнти' : t === 'prices' ? 'Прайс' : t === 'gallery' ? 'Галерея' : 'Налашт.'}</button>
               ))}
-              {mode === 'tyre' && ['tyres', 'orders', 'promo', 'seo', 'articles', 'stats', 'settings'].map(t => (
-                  <button key={t} onClick={() => setActiveTab(t as any)} className={`px-4 py-2 rounded font-bold text-sm uppercase whitespace-nowrap flex-shrink-0 transition-colors ${activeTab === t ? 'bg-[#FFC300] text-black' : 'text-zinc-400 hover:text-white'}`}>{t === 'tyres' ? 'Шини' : t === 'promo' ? 'Маркетинг' : t === 'seo' ? 'SEO' : t === 'orders' ? 'Замовлення' : t === 'articles' ? 'Статті' : t === 'settings' ? 'Налашт.' : 'Стат.'}</button>
+              {mode === 'tyre' && ['tyres', 'orders', 'promo', 'sync', 'seo', 'articles', 'stats', 'settings'].map(t => (
+                  <button key={t} onClick={() => setActiveTab(t as any)} className={`px-4 py-2 rounded font-bold text-sm uppercase whitespace-nowrap flex-shrink-0 transition-colors ${activeTab === t ? 'bg-[#FFC300] text-black' : 'text-zinc-400 hover:text-white'}`}>{t === 'tyres' ? 'Шини' : t === 'promo' ? 'Маркетинг' : t === 'sync' ? 'API' : t === 'seo' ? 'SEO' : t === 'orders' ? 'Замовлення' : t === 'articles' ? 'Статті' : t === 'settings' ? 'Налашт.' : 'Стат.'}</button>
               ))}
               <button onClick={onLogout} className="px-4 py-2 text-zinc-500 hover:text-white ml-2 flex items-center gap-2 whitespace-nowrap flex-shrink-0 border-l border-zinc-800"><LogOut size={16}/> Вихід</button>
            </div>
@@ -62,6 +63,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, mode }) => {
          {activeTab === 'articles' && <ArticlesTab />}
          {activeTab === 'seo' && <SeoTab />}
          {activeTab === 'promo' && <PromoTab />}
+         {activeTab === 'sync' && <SyncTab />}
       </main>
     </div>
   );

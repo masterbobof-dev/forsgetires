@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { TyreProduct, CartItem } from '../types';
-import { ShoppingBag, Loader2, Phone, X, Filter, Snowflake, Sun, CloudSun, Truck, Check, CreditCard, Wallet, ArrowDown, ShoppingCart, Plus, Minus, Trash2, ChevronLeft, ChevronRight, ZoomIn, Ban, Flame, Grid, ArrowUpDown, Search, DollarSign, AlertCircle, Tag, Briefcase, MapPin } from 'lucide-react';
+import { ShoppingBag, Loader2, Phone, X, Filter, Snowflake, Sun, CloudSun, Truck, Check, CreditCard, Wallet, ArrowDown, ShoppingCart, Plus, Minus, Trash2, ChevronLeft, ChevronRight, ZoomIn, Ban, Flame, Grid, ArrowUpDown, Search, DollarSign, AlertCircle, Tag, Briefcase, MapPin, Eye, EyeOff, Tractor } from 'lucide-react';
 import { PHONE_LINK_1, PHONE_NUMBER_1, FORMSPREE_ENDPOINT } from '../constants';
 import { DEFAULT_IMG_CONFIG, DEFAULT_BG_CONFIG } from './admin/promo/shared';
 
@@ -34,9 +34,11 @@ const CATEGORIES = [
   { id: 'winter', label: 'Зимові', icon: Snowflake },
   { id: 'summer', label: 'Літні', icon: Sun },
   { id: 'all-season', label: 'Всесезонні', icon: CloudSun },
-  { id: 'cargo', label: 'Вантажні (C)', icon: Truck },
+  { id: 'cargo', label: 'Буси (C)', icon: Truck }, // Light Truck
+  { id: 'truck', label: 'Вантажні (TIR)', icon: Truck }, // Heavy Truck
+  { id: 'agro', label: 'Агро / Спец', icon: Tractor }, // Agricultural
   { id: 'hot', label: 'HOT Знижки', icon: Flame },
-  { id: 'out_of_stock', label: 'Немає в наявності', icon: Ban },
+  { id: 'out_of_stock', label: 'Архів', icon: Ban },
 ] as const;
 
 type CategoryType = typeof CATEGORIES[number]['id'];
@@ -67,6 +69,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   const [activeCategory, setActiveCategory] = useState<CategoryType>(initialCategory);
   const [activeSort, setActiveSort] = useState<'newest' | 'oldest' | 'price_asc' | 'price_desc' | 'with_photo' | 'no_photo'>('newest');
   const [searchQuery, setSearchQuery] = useState(''); // Text search state
+  const [showOnlyInStock, setShowOnlyInStock] = useState(false); // New Stock Filter
 
   const [filterWidth, setFilterWidth] = useState('');
   const [filterHeight, setFilterHeight] = useState('');
@@ -293,7 +296,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
     setPage(0);
     setTyres([]); 
     fetchTyres(0, true);
-  }, [activeCategory, activeSort, enableStockQty, filterBrand, filterRadius, filterWidth, filterHeight]); 
+  }, [activeCategory, activeSort, enableStockQty, filterBrand, filterRadius, filterWidth, filterHeight, showOnlyInStock]); 
 
   const parseTyreSpecs = (tyre: TyreProduct): TyreProduct => {
     const sizeRegex = /(\d{3})[\/\s](\d{2})[\s\w]*R(\d{2}[C|c]?)/; 
@@ -323,8 +326,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
     if (vehicle_type === 'car') {
         const upperTitle = tyre.title.toUpperCase();
         if (upperTitle.includes('R12C') || upperTitle.includes('R13C') || upperTitle.includes('R14C') || 
-            upperTitle.includes('R15C') || upperTitle.includes('R16C') || upperTitle.includes('R17C') || 
-            upperTitle.includes('LT') || upperTitle.includes('CARGO')) { 
+            upperTitle.includes('R15C') || upperTitle.includes('R16C') || upperTitle.includes('LT')) { 
             vehicle_type = 'cargo'; 
         }
     }
@@ -390,37 +392,48 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
           query = query.ilike('title', `%/${filterHeight}%`); // Try to match "/55"
       }
 
+      // --- STOCK FILTER TOGGLE ---
+      if (showOnlyInStock) {
+          // Force In Stock Only
+          if (enableStockQty) query = query.or('stock_quantity.gt.0,stock_quantity.is.null').neq('in_stock', false);
+          else query = query.neq('in_stock', false);
+      }
+
       // 2. CATEGORY FILTERS
       if (activeCategory === 'hot') {
          query = query.eq('is_hot', true);
-         if (enableStockQty) {
-             query = query.neq('in_stock', false);
-         } else {
-             query = query.neq('in_stock', false);
+         // Apply default stock logic if NOT explicitly showing out of stock
+         if (!showOnlyInStock) {
+             if (enableStockQty) query = query.neq('in_stock', false);
+             else query = query.neq('in_stock', false);
          }
       } else if (activeCategory === 'winter') {
          query = query.or('title.ilike.%winter%,title.ilike.%зима%,description.ilike.%winter%,description.ilike.%зима%');
-         if (enableStockQty) query = query.or('stock_quantity.gt.0,stock_quantity.is.null').neq('in_stock', false);
-         else query = query.neq('in_stock', false);
       } else if (activeCategory === 'summer') {
          query = query.or('title.ilike.%summer%,title.ilike.%літо%,description.ilike.%summer%,description.ilike.%літо%');
-         if (enableStockQty) query = query.or('stock_quantity.gt.0,stock_quantity.is.null').neq('in_stock', false);
-         else query = query.neq('in_stock', false);
       } else if (activeCategory === 'all-season') {
          query = query.or('title.ilike.%all season%,title.ilike.%всесезон%,description.ilike.%all season%,description.ilike.%всесезон%');
-         if (enableStockQty) query = query.or('stock_quantity.gt.0,stock_quantity.is.null').neq('in_stock', false);
-         else query = query.neq('in_stock', false);
       } else if (activeCategory === 'cargo') {
-         query = query.or('vehicle_type.eq.cargo,radius.ilike.%C%,title.ilike.%R12C%,title.ilike.%R13C%,title.ilike.%R14C%,title.ilike.%R15C%,title.ilike.%R16C%,title.ilike.%R17C%,title.ilike.%R18C%,title.ilike.%R19C%,title.ilike.%LT%,title.ilike.%Cargo%,title.ilike.%Bus%');
-         if (enableStockQty) query = query.or('stock_quantity.gt.0,stock_quantity.is.null').neq('in_stock', false);
-         else query = query.neq('in_stock', false);
+         // LIGHT TRUCK (C-type): R13C-R16C, excluding heavy truck
+         query = query.or('radius.ilike.%C%').not('radius', 'in', '("R17.5","R19.5","R22.5")');
+      } else if (activeCategory === 'truck') {
+         // HEAVY TRUCK (TIR): Specific large radii
+         query = query.or('radius.eq.R17.5,radius.eq.R19.5,radius.eq.R22.5,title.ilike.%TIR%');
+      } else if (activeCategory === 'agro') {
+         // AGRICULTURAL: Very large radii or specific keywords
+         query = query.or('title.ilike.%agro%,title.ilike.%tractor%,title.ilike.%farm%,title.ilike.%ind%,radius.in.("R24","R26","R28","R30","R32","R34","R36","R38","R40","R42")');
       } else if (activeCategory === 'out_of_stock') {
          if (enableStockQty) query = query.or('in_stock.eq.false,stock_quantity.eq.0');
          else query = query.eq('in_stock', false);
-      } else {
-         // Default 'all' - only in stock
-         if (enableStockQty) query = query.or('stock_quantity.gt.0,stock_quantity.is.null').neq('in_stock', false);
-         else query = query.neq('in_stock', false);
+         // Override showOnlyInStock if user specifically clicks this tab
+      } 
+      
+      // Default stock visibility for regular categories (if showOnlyInStock is false)
+      if (!showOnlyInStock && activeCategory !== 'out_of_stock') {
+          // DO NOT HIDE OUT OF STOCK HERE, we want to SHOW ALL but SORT them (Smart Sort)
+          // The query below is commented out because we want to fetch ALL items and let sort handle visibility
+          // if (enableStockQty) query = query.or('stock_quantity.gt.0,stock_quantity.is.null').neq('in_stock', false);
+          // else query = query.neq('in_stock', false);
       }
 
       // 3. PRICE FILTERS
@@ -431,7 +444,10 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
          query = query.lte('price', parseInt(maxPrice));
       }
 
-      // 4. SORTING
+      // 4. SORTING - SMART SORT (IN STOCK FIRST)
+      // Always apply stock priority first
+      query = query.order('in_stock', { ascending: false });
+
       if (activeSort === 'with_photo') {
          query = query.order('image_url', { ascending: false, nullsFirst: false })
                       .order('created_at', { ascending: false });
@@ -457,6 +473,9 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
         // Client-side fix for "With Photo" priority if mixed
         if (activeSort === 'with_photo') {
             processed = processed.sort((a, b) => {
+                // Keep Stock Priority
+                if (a.in_stock !== b.in_stock) return a.in_stock ? -1 : 1;
+                
                 const aHas = !!a.image_url && a.image_url.length > 5;
                 const bHas = !!b.image_url && b.image_url.length > 5;
                 if (aHas === bHas) return 0;
@@ -564,7 +583,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
          id: i.id, 
          title: i.title, 
          quantity: i.quantity, 
-         price: i.price,
+         price: i.price, 
          base_price: i.base_price 
       }));
       
@@ -727,7 +746,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
         
         {/* CATEGORY NAV */}
         <div className="mb-8 px-2">
-           <div className="grid grid-cols-3 md:flex md:flex-wrap md:justify-center gap-2 md:gap-4">
+           <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-9 gap-2 md:gap-3">
               {CATEGORIES.map(cat => {
                  const isActive = activeCategory === cat.id;
                  return (
@@ -735,14 +754,14 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                        key={cat.id} 
                        onClick={() => handleCategoryChange(cat.id)}
                        className={`
-                          flex flex-col items-center justify-center gap-2 p-2 md:p-4 rounded-xl transition-all duration-300 border
+                          flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl transition-all duration-300 border
                           ${isActive 
-                             ? 'bg-[#FFC300] border-[#FFC300] text-black shadow-lg scale-105' 
+                             ? 'bg-[#FFC300] border-[#FFC300] text-black shadow-lg scale-105 z-10' 
                              : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:border-zinc-600 hover:text-white'}
                        `}
                     >
-                       <cat.icon size={20} className={`md:w-6 md:h-6 ${isActive ? 'animate-bounce' : ''}`} />
-                       <span className="font-bold text-[10px] md:text-sm uppercase tracking-wide text-center leading-tight">{cat.label}</span>
+                       <cat.icon size={18} className={`md:w-5 md:h-5 ${isActive ? 'animate-bounce' : ''}`} />
+                       <span className="font-bold text-[10px] uppercase tracking-wide text-center leading-tight whitespace-pre-wrap">{cat.label}</span>
                     </button>
                  );
               })}
@@ -771,11 +790,33 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                        className="w-full bg-black border border-zinc-700 rounded-xl pl-10 pr-4 py-3 text-base text-white outline-none focus:border-[#FFC300]"
                     />
                  </div>
+                 
+                 {/* STOCK TOGGLE */}
+                 <button 
+                    onClick={() => setShowOnlyInStock(!showOnlyInStock)}
+                    className={`hidden md:flex items-center gap-2 px-4 rounded-xl font-bold border transition-colors ${showOnlyInStock ? 'bg-green-600 text-white border-green-500' : 'bg-black border-zinc-700 text-zinc-500 hover:text-white'}`}
+                    title="Тільки в наявності"
+                 >
+                    {showOnlyInStock ? <Eye size={20}/> : <EyeOff size={20}/>}
+                    <span className="text-xs uppercase whitespace-nowrap">В наявності</span>
+                 </button>
+
                  <button 
                     onClick={handleForceSearch}
                     className="bg-[#FFC300] hover:bg-[#e6b000] text-black font-black px-6 py-3 rounded-xl flex items-center gap-2 shadow-lg active:scale-95 transition-transform uppercase tracking-wider text-sm md:text-base whitespace-nowrap"
                  >
                     ЗНАЙТИ
+                 </button>
+              </div>
+
+              {/* Mobile Stock Toggle */}
+              <div className="md:hidden">
+                 <button 
+                    onClick={() => setShowOnlyInStock(!showOnlyInStock)}
+                    className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold border transition-colors ${showOnlyInStock ? 'bg-green-600 text-white border-green-500' : 'bg-black border-zinc-700 text-zinc-500'}`}
+                 >
+                    {showOnlyInStock ? <Eye size={18}/> : <EyeOff size={18}/>}
+                    <span>Тільки в наявності</span>
                  </button>
               </div>
 
@@ -898,15 +939,15 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
 
                      {/* IMAGE */}
                      <div className={`aspect-square bg-black relative overflow-hidden cursor-pointer`} onClick={() => tyre.in_stock !== false && setSelectedProductForModal(tyre)}>
-                        {tyre.image_url ? (
-                           <img src={tyre.image_url} alt={tyre.title} className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${tyre.in_stock === false ? 'grayscale' : ''}`} />
+                        {tyre.image_url && tyre.in_stock !== false ? (
+                           <img src={tyre.image_url} alt={tyre.title} className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500`} />
                         ) : (
                            <div className="w-full h-full flex flex-col items-center justify-center text-zinc-700 bg-zinc-950">
                               <ShoppingBag size={32} className="opacity-20 mb-2"/>
-                              <span className="text-xs font-bold">Немає фото</span>
+                              <span className="text-xs font-bold">{tyre.in_stock === false ? 'Немає в наявності' : 'Немає фото'}</span>
                            </div>
                         )}
-                        {tyre.gallery && tyre.gallery.length > 0 && (
+                        {tyre.gallery && tyre.gallery.length > 0 && tyre.in_stock !== false && (
                            <div className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-full flex items-center gap-1 backdrop-blur-sm">
                               <Plus size={10} /> {tyre.gallery.length} фото
                            </div>
@@ -1100,7 +1141,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                   
                   {/* LEFT: IMAGE */}
                   <div className="w-full md:w-1/2 bg-black flex items-center justify-center relative group min-h-[300px]">
-                      {selectedProductForModal.image_url ? (
+                      {selectedProductForModal.image_url && selectedProductForModal.in_stock !== false ? (
                           <>
                             <img src={selectedProductForModal.image_url} className="w-full h-full object-cover" alt={selectedProductForModal.title} />
                             <button 
@@ -1113,7 +1154,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                       ) : (
                           <div className="flex flex-col items-center justify-center text-zinc-700">
                               <ShoppingBag size={64} className="opacity-20 mb-4"/>
-                              <span>Немає фото</span>
+                              <span>{selectedProductForModal.in_stock === false ? 'Немає в наявності' : 'Немає фото'}</span>
                           </div>
                       )}
                   </div>

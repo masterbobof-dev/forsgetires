@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Plus, X, Upload, Save, Loader2, FileSpreadsheet, CheckSquare, Square, Edit2, ArrowDown, Wand2, RefreshCw, Menu, FolderOpen, Car, Truck, Mountain, Flame, Ban, Briefcase, ArrowUpDown, Settings, ArrowRight, HelpCircle, Ruler, Copy, Image as ImageIcon, Percent, AlertCircle, FileWarning, FilterX, Trash2, LayoutGrid, List, Snowflake, Sun, CloudSun, CheckCircle } from 'lucide-react';
+import { Search, Plus, X, Upload, Save, Loader2, FileSpreadsheet, CheckSquare, Square, Edit2, ArrowDown, Wand2, RefreshCw, Menu, FolderOpen, Car, Truck, Mountain, Flame, Ban, Briefcase, ArrowUpDown, Settings, ArrowRight, HelpCircle, Ruler, Copy, Image as ImageIcon, Percent, AlertCircle, FileWarning, FilterX, Trash2, LayoutGrid, List, Snowflake, Sun, CloudSun, CheckCircle, Eye, EyeOff, Tractor } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { TyreProduct, Supplier } from '../../types';
 import { WHEEL_RADII } from '../../constants';
@@ -19,37 +19,9 @@ const KNOWN_BRANDS = [
 // Helper for Robust Season Detection
 const detectSeason = (title: string, description: string): string | null => {
     const text = (title + ' ' + (description || '')).toLowerCase();
-    
-    // 1. Winter Keywords (Morphology: "зимн" matches зимня, зимні, зимняя etc.)
-    if (
-        text.includes('зима') || text.includes('зимн') || text.includes('winter') || text.includes('snow') || 
-        text.includes('ice') || text.includes('stud') || text.includes('spike') || text.includes('alpin') || 
-        text.includes('nord') || text.includes('arct') || text.includes('blizzak') || text.includes('w442') || 
-        text.includes('w452') || text.includes('i fit') || text.includes('i*fit') || text.includes('kw31') || 
-        text.includes('rw') || text.includes('ws') || text.includes('dm')
-    ) {
-        return 'winter';
-    }
-
-    // 2. Summer Keywords (Morphology: "літн" matches літня, літні)
-    if (
-        text.includes('літо') || text.includes('літн') || text.includes('summer') || text.includes('sport') || 
-        text.includes('energy') || text.includes('premium') || text.includes('contact') || text.includes('control') || 
-        text.includes('turismo') || text.includes('potenza') || text.includes('ventu') || text.includes('lk01') || 
-        text.includes('lk41') || text.includes('s fit') || text.includes('g fit') || text.includes('k125') || 
-        text.includes('k115') || text.includes('k127') || text.includes('prime') || text.includes('blue')
-    ) {
-        return 'summer';
-    }
-
-    // 3. All-Season Keywords
-    if (
-        text.includes('всесезон') || text.includes('all season') || text.includes('allseason') || text.includes('4s') || 
-        text.includes('quatrac') || text.includes('cross') || text.includes('weather') || text.includes('as')
-    ) {
-        return 'all-season';
-    }
-
+    if (text.includes('зима') || text.includes('зимн') || text.includes('winter') || text.includes('snow') || text.includes('ice') || text.includes('stud') || text.includes('spike') || text.includes('alpin') || text.includes('nord') || text.includes('arct') || text.includes('blizzak') || text.includes('w442') || text.includes('w452') || text.includes('i fit') || text.includes('i*fit') || text.includes('kw31') || text.includes('rw') || text.includes('ws') || text.includes('dm')) return 'winter';
+    if (text.includes('літо') || text.includes('літн') || text.includes('summer') || text.includes('sport') || text.includes('energy') || text.includes('premium') || text.includes('contact') || text.includes('control') || text.includes('turismo') || text.includes('potenza') || text.includes('ventu') || text.includes('lk01') || text.includes('lk41') || text.includes('s fit') || text.includes('g fit') || text.includes('k125') || text.includes('k115') || text.includes('k127') || text.includes('prime') || text.includes('blue')) return 'summer';
+    if (text.includes('всесезон') || text.includes('all season') || text.includes('allseason') || text.includes('4s') || text.includes('quatrac') || text.includes('cross') || text.includes('weather') || text.includes('as')) return 'all-season';
     return null;
 };
 
@@ -68,13 +40,14 @@ const TyresTab: React.FC = () => {
 
   // Filters
   const [tyreSearch, setTyreSearch] = useState('');
-  const [tyreCategoryTab, setTyreCategoryTab] = useState<'all' | 'car' | 'cargo' | 'suv' | 'hot' | 'out_of_stock' | 'no_photo'>('all');
+  const [tyreCategoryTab, setTyreCategoryTab] = useState<'all' | 'car' | 'cargo' | 'truck' | 'agro' | 'suv' | 'hot' | 'out_of_stock' | 'no_photo'>('all');
   const [tyreSort, setTyreSort] = useState<'newest' | 'oldest' | 'price_asc' | 'price_desc' | 'with_photo' | 'no_photo'>('newest');
   const [filterSupplierId, setFilterSupplierId] = useState<string>('all');
+  const [showOnlyInStock, setShowOnlyInStock] = useState(false); // DEFAULT FALSE to show EVERYTHING
+
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [supplierCounts, setSupplierCounts] = useState<Record<number, number>>({});
   const [showCategoryMenu, setShowCategoryMenu] = useState(false);
-  const [categoryCounts, setCategoryCounts] = useState({ all: 0, car: 0, cargo: 0, suv: 0, hot: 0, out: 0, no_photo: 0 });
+  const [categoryCounts, setCategoryCounts] = useState({ all: 0, car: 0, cargo: 0, truck: 0, agro: 0, suv: 0, hot: 0, out: 0, no_photo: 0 });
   const [enableStockQty, setEnableStockQty] = useState(false);
 
   // Selection & Bulk Actions
@@ -91,27 +64,6 @@ const TyresTab: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [tyreToDelete, setTyreToDelete] = useState<number | null>(null);
-
-  // Excel Import State
-  const [showExcelModal, setShowExcelModal] = useState(false);
-  const [excelFile, setExcelFile] = useState<File | null>(null);
-  const [excelPreview, setExcelPreview] = useState<any[]>([]);
-  const [importingExcel, setImportingExcel] = useState(false);
-  const [importStatus, setImportStatus] = useState('');
-  const [excelColumnMap, setExcelColumnMap] = useState<Record<number, string>>({});
-  const [importSupplierId, setImportSupplierId] = useState<string>('');
-  const [importPreset, setImportPreset] = useState<'custom' | 'artur'>('custom');
-  const [importMarkup, setImportMarkup] = useState<string>('20');
-  const [excelStartRow, setExcelStartRow] = useState(2);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [showImportResultModal, setShowImportResultModal] = useState(false);
-  const [importResult, setImportResult] = useState<{inserted: number, updated: number, errors: {row: number, reason: string, raw?: string}[]}>({ inserted: 0, updated: 0, errors: [] });
-
-  // Smart Upload
-  const [showUploadReport, setShowUploadReport] = useState(false);
-  const [uploadReport, setUploadReport] = useState<any[]>([]);
-  const [smartUploadProgress, setSmartUploadProgress] = useState({ current: 0, total: 0 });
-  const smartUploadInputRef = useRef<HTMLInputElement>(null);
 
   const showError = (msg: string) => { setErrorMessage(msg); setTimeout(() => setErrorMessage(''), 6000); };
   
@@ -133,7 +85,7 @@ const TyresTab: React.FC = () => {
       setHasMoreTyres(true);
       fetchTyres(0, true); 
       fetchCategoryCounts();
-  }, [tyreCategoryTab, tyreSort, filterSupplierId, enableStockQty]);
+  }, [tyreCategoryTab, tyreSort, filterSupplierId, enableStockQty, showOnlyInStock]);
 
   const fetchSettings = async () => {
     try {
@@ -150,10 +102,15 @@ const TyresTab: React.FC = () => {
   const fetchCategoryCounts = async () => {
     try {
         const base = supabase.from('tyres').select('*', { count: 'exact', head: true });
-        const [all, car, cargo, suv, hot, out, no_photo] = await Promise.all([
+        const [all, car, cargo, truck, agro, suv, hot, out, no_photo] = await Promise.all([
             base.then(r => r.count),
             supabase.from('tyres').select('*', { count: 'exact', head: true }).or('vehicle_type.eq.car,vehicle_type.is.null').neq('vehicle_type', 'cargo').neq('vehicle_type', 'suv').not('radius', 'ilike', '%C%').then(r => r.count),
-            supabase.from('tyres').select('*', { count: 'exact', head: true }).or('vehicle_type.eq.cargo,radius.ilike.%C%').then(r => r.count),
+            // Cargo (C-type) exclude TIR
+            supabase.from('tyres').select('*', { count: 'exact', head: true }).or('vehicle_type.eq.cargo,radius.ilike.%C%').not('radius', 'in', '("R17.5","R19.5","R22.5")').then(r => r.count),
+            // Truck (TIR)
+            supabase.from('tyres').select('*', { count: 'exact', head: true }).or('radius.eq.R17.5,radius.eq.R19.5,radius.eq.R22.5').then(r => r.count),
+            // Agro
+            supabase.from('tyres').select('*', { count: 'exact', head: true }).or('title.ilike.%agro%,title.ilike.%tractor%,radius.in.("R24","R26","R28","R30","R32","R34","R36","R38","R40","R42")').then(r => r.count),
             supabase.from('tyres').select('*', { count: 'exact', head: true }).eq('vehicle_type', 'suv').then(r => r.count),
             supabase.from('tyres').select('*', { count: 'exact', head: true }).eq('is_hot', true).then(r => r.count),
             supabase.from('tyres').select('*', { count: 'exact', head: true }).eq('in_stock', false).then(r => r.count),
@@ -163,6 +120,8 @@ const TyresTab: React.FC = () => {
             all: all || 0, 
             car: car || 0, 
             cargo: cargo || 0, 
+            truck: truck || 0,
+            agro: agro || 0,
             suv: suv || 0, 
             hot: hot || 0, 
             out: out || 0,
@@ -188,13 +147,24 @@ const TyresTab: React.FC = () => {
        }
        
        if (tyreCategoryTab === 'car') query = query.or('vehicle_type.eq.car,vehicle_type.is.null').neq('vehicle_type', 'cargo').neq('vehicle_type', 'suv').not('radius', 'ilike', '%C%');
-       else if (tyreCategoryTab === 'cargo') query = query.or('vehicle_type.eq.cargo,radius.ilike.%C%'); 
+       else if (tyreCategoryTab === 'cargo') query = query.or('vehicle_type.eq.cargo,radius.ilike.%C%').not('radius', 'in', '("R17.5","R19.5","R22.5")');
+       else if (tyreCategoryTab === 'truck') query = query.or('radius.eq.R17.5,radius.eq.R19.5,radius.eq.R22.5,title.ilike.%TIR%');
+       else if (tyreCategoryTab === 'agro') query = query.or('title.ilike.%agro%,title.ilike.%tractor%,title.ilike.%farm%,title.ilike.%ind%,radius.in.("R24","R26","R28","R30","R32","R34","R36","R38","R40","R42")');
        else if (tyreCategoryTab === 'suv') query = query.eq('vehicle_type', 'suv');
        else if (tyreCategoryTab === 'hot') query = query.eq('is_hot', true);
        else if (tyreCategoryTab === 'out_of_stock') query = query.eq('in_stock', false);
        else if (tyreCategoryTab === 'no_photo') query = query.is('image_url', null);
 
+       // Apply Stock Filter ONLY if manually enabled or if user is NOT looking at 'out_of_stock' tab
+       if (showOnlyInStock && tyreCategoryTab !== 'out_of_stock') {
+           if (enableStockQty) query = query.or('stock_quantity.gt.0,stock_quantity.is.null').neq('in_stock', false);
+           else query = query.neq('in_stock', false);
+       }
+
        if (filterSupplierId !== 'all') query = query.eq('supplier_id', parseInt(filterSupplierId));
+
+       // SMART SORT: In Stock First
+       query = query.order('in_stock', { ascending: false });
 
        if (tyreSort === 'newest') query = query.order('created_at', { ascending: false });
        else if (tyreSort === 'oldest') query = query.order('created_at', { ascending: true });
@@ -209,25 +179,10 @@ const TyresTab: React.FC = () => {
        if (count !== null) setTotalCount(count);
 
        if (data) {
-          // --- INTELLIGENT SEASON PARSING ---
           const processedData = data.map(t => {
-              // Try to detect season from text
               const inferredSeason = detectSeason(t.title, t.description || '');
-              
-              // If detection worked, use it. Otherwise use DB value. 
-              // If DB is 'all-season' (often wrong default) and detection failed, we might want to default to 'summer' for standard cars?
-              // But for safety, if detection fails, we respect existing DB value OR fallback to 'summer' if DB is null.
               let finalSeason = inferredSeason || t.season || 'summer';
-
-              // If database says 'all-season' but name looks like 'LK01' (Summer), detection overrides it.
-              // If detection returns null, we keep 'all-season' only if we trust DB.
-              // Given the user issue, "all-season" in DB is untrustworthy. 
-              // So if detection is null, and DB is 'all-season', we default to 'summer' unless it says '4S' or similar.
-              // Actually, detectSeason covers '4S', 'All Season'. So if it returns null, it's definitely NOT clearly all-season.
-              if (inferredSeason === null && (t.season === 'all' || t.season === 'all-season')) {
-                  finalSeason = 'summer'; // Assume Summer if ambiguous and DB says generic 'all-season'
-              }
-
+              if (inferredSeason === null && (t.season === 'all' || t.season === 'all-season')) finalSeason = 'summer';
               return { ...t, season: finalSeason };
           });
 
@@ -236,7 +191,6 @@ const TyresTab: React.FC = () => {
               setTyrePage(0); 
               setSelectedTyreIds(new Set()); 
           } else { 
-              // APPENDING
               setTyres(prev => {
                   const newIds = new Set(processedData.map(d => d.id));
                   return [...prev.filter(p => !newIds.has(p.id)), ...processedData];
@@ -250,7 +204,6 @@ const TyresTab: React.FC = () => {
     } finally { setLoadingTyres(false); }
   };
 
-  // --- SELECTION LOGIC ---
   const toggleSelection = (id: number) => {
       const newSet = new Set(selectedTyreIds);
       if (newSet.has(id)) newSet.delete(id);
@@ -262,12 +215,8 @@ const TyresTab: React.FC = () => {
       const newSet = new Set(selectedTyreIds);
       const idsOnPage = tyres.map(t => t.id);
       const allSelected = idsOnPage.every(id => newSet.has(id));
-      
-      if (allSelected) {
-          idsOnPage.forEach(id => newSet.delete(id));
-      } else {
-          idsOnPage.forEach(id => newSet.add(id));
-      }
+      if (allSelected) idsOnPage.forEach(id => newSet.delete(id));
+      else idsOnPage.forEach(id => newSet.add(id));
       setSelectedTyreIds(newSet);
   };
 
@@ -275,6 +224,7 @@ const TyresTab: React.FC = () => {
       setTyreSearch('');
       setFilterSupplierId('all');
       setTyreCategoryTab('all');
+      setShowOnlyInStock(false);
       setTyres([]);
       fetchTyres(0, true);
   };
@@ -282,7 +232,9 @@ const TyresTab: React.FC = () => {
   const renderCategoryName = () => {
       switch(tyreCategoryTab) {
           case 'car': return `Легкові (${categoryCounts.car})`;
-          case 'cargo': return `Вантажні (${categoryCounts.cargo})`;
+          case 'cargo': return `Вантажні C (${categoryCounts.cargo})`;
+          case 'truck': return `ТІР (${categoryCounts.truck})`;
+          case 'agro': return `Агро (${categoryCounts.agro})`;
           case 'suv': return `SUV (${categoryCounts.suv})`;
           case 'hot': return `HOT (${categoryCounts.hot})`;
           case 'out_of_stock': return `Немає (${categoryCounts.out})`;
@@ -314,36 +266,24 @@ const TyresTab: React.FC = () => {
 
   const handleQuickHotToggle = async (tyre: TyreProduct) => {
       const newStatus = !tyre.is_hot;
-      // Optimistic update
       setTyres(prev => prev.map(t => t.id === tyre.id ? { ...t, is_hot: newStatus } : t));
-
       try {
           const { error } = await supabase.from('tyres').update({ is_hot: newStatus }).eq('id', tyre.id);
           if (error) throw error;
       } catch (e: any) {
-          // Revert on error
           setTyres(prev => prev.map(t => t.id === tyre.id ? { ...t, is_hot: !newStatus } : t));
           showError("Помилка оновлення: " + e.message);
       }
   };
 
-  // --- DISCOUNT LOGIC ---
   const applyDiscount = (pct: number) => {
       const price = parseFloat(tyreForm.price);
       if (!price) return;
-      // If old_price is empty or 0, treat current price as the base price
       const base = parseFloat(tyreForm.old_price) || price;
-      
       const newPrice = Math.round(base * (1 - pct / 100));
-      
-      setTyreForm(prev => ({
-          ...prev,
-          old_price: base.toString(),
-          price: newPrice.toString()
-      }));
+      setTyreForm(prev => ({ ...prev, old_price: base.toString(), price: newPrice.toString() }));
   };
 
-  // --- SAVE TYRE LOGIC ---
   const handleSaveTyre = async () => {
     setUploading(true);
     try {
@@ -355,11 +295,8 @@ const TyresTab: React.FC = () => {
       }
       
       const finalGallery = Array.from(new Set([...existingGallery, ...newUrls]));
-      // Use form season directly
       const seasonLabel = tyreForm.season === 'winter' ? 'Winter' : tyreForm.season === 'summer' ? 'Summer' : 'All Season';
-      
       const sizeStr = (tyreForm.width && tyreForm.height) ? `${tyreForm.width}/${tyreForm.height}` : '';
-      // Construct title: Brand + Name + Specs
       const fullTitle = `${tyreForm.manufacturer} ${tyreForm.name} ${sizeStr} ${tyreForm.radius} ${seasonLabel}`.replace(/\s+/g, ' ').trim();
 
       const payload: any = {
@@ -393,10 +330,8 @@ const TyresTab: React.FC = () => {
     } catch (err: any) { showError(err.message); } finally { setUploading(false); }
   };
 
-  // --- OPEN MODAL LOGIC ---
   const openEditTyreModal = (t: TyreProduct) => {
       setEditingTyreId(t.id);
-      
       let width = '', height = '';
       const sizeRegex = /(\d{3})[\/\s](\d{2})/;
       const match = t.title.match(sizeRegex);
@@ -409,8 +344,6 @@ const TyresTab: React.FC = () => {
       name = name.replace(/Winter|Summer|All Season|Зима|Літо|Всесезон/gi, '');
       name = name.replace(/\s+/g, ' ').trim();
 
-      // For the modal, we rely on the `t.season` which is already "smart processed" by fetchTyres.
-      // We do NOT re-run detection here to avoid inconsistencies, unless t.season is somehow missing.
       const parsedSeason = t.season || detectSeason(t.title, t.description || '') || 'summer';
 
       setTyreForm({ 
@@ -444,10 +377,6 @@ const TyresTab: React.FC = () => {
     }
   };
 
-  // Simplified refs for brevity 
-  const handleExcelFileSelect = (e: any) => { /* Reuse logic if needed later */ };
-  const handleSmartImageUpload = (e: any) => { /* Reuse logic */ };
-
   return (
     <div className="animate-in fade-in pb-20">
         {errorMessage && <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[300] bg-red-900/90 text-white px-6 py-3 rounded-full border border-red-500 shadow-2xl">{errorMessage}</div>}
@@ -463,7 +392,9 @@ const TyresTab: React.FC = () => {
                     <div className="absolute top-full left-0 mt-2 w-72 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl z-50 overflow-hidden">
                         <button onClick={() => { setTyreCategoryTab('all'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50"><FolderOpen size={18}/> Всі ({categoryCounts.all})</button>
                         <button onClick={() => { setTyreCategoryTab('car'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50"><Car size={18}/> Легкові ({categoryCounts.car})</button>
-                        <button onClick={() => { setTyreCategoryTab('cargo'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50"><Truck size={18}/> Вантажні ({categoryCounts.cargo})</button>
+                        <button onClick={() => { setTyreCategoryTab('cargo'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50"><Truck size={18}/> Вантажні C ({categoryCounts.cargo})</button>
+                        <button onClick={() => { setTyreCategoryTab('truck'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50 text-blue-300"><Truck size={18}/> Вантажні TIR ({categoryCounts.truck})</button>
+                        <button onClick={() => { setTyreCategoryTab('agro'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50 text-green-300"><Tractor size={18}/> Агро / Спец ({categoryCounts.agro})</button>
                         <button onClick={() => { setTyreCategoryTab('suv'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50"><Mountain size={18}/> SUV ({categoryCounts.suv})</button>
                         <button onClick={() => { setTyreCategoryTab('hot'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50"><Flame size={18}/> HOT ({categoryCounts.hot})</button>
                         <button onClick={() => { setTyreCategoryTab('no_photo'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50 text-orange-300"><ImageIcon size={18}/> Без фото ({categoryCounts.no_photo})</button>
@@ -497,6 +428,16 @@ const TyresTab: React.FC = () => {
                     />
                 </div>
                 
+                {/* STOCK TOGGLE */}
+                <button 
+                    onClick={() => setShowOnlyInStock(!showOnlyInStock)}
+                    className={`flex items-center gap-2 px-3 rounded-lg border font-bold text-xs whitespace-nowrap transition-colors ${showOnlyInStock ? 'bg-green-900/30 border-green-500 text-green-400' : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:border-zinc-600'}`}
+                    title="Фільтр наявності"
+                >
+                    {showOnlyInStock ? <Eye size={18}/> : <EyeOff size={18}/>}
+                    <span className="hidden lg:inline">В наявності</span>
+                </button>
+
                 {/* SORT Dropdown */}
                 <div className="relative min-w-[140px]">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"><ArrowUpDown size={16}/></div>
@@ -578,9 +519,10 @@ const TyresTab: React.FC = () => {
                     {tyres.map(tyre => {
                         const isSelected = selectedTyreIds.has(tyre.id);
                         const supplierName = suppliers.find(s => s.id === tyre.supplier_id)?.name || '-';
+                        const isOutOfStock = tyre.in_stock === false;
                         
                         return (
-                            <div key={tyre.id} className={`grid grid-cols-[40px_100px_120px_40px_50px_80px_100px_1fr_50px_100px_80px] gap-2 p-2 items-center hover:bg-zinc-900 transition-colors ${isSelected ? 'bg-zinc-800/50' : ''}`}>
+                            <div key={tyre.id} className={`grid grid-cols-[40px_100px_120px_40px_50px_80px_100px_1fr_50px_100px_80px] gap-2 p-2 items-center hover:bg-zinc-900 transition-colors ${isSelected ? 'bg-zinc-800/50' : ''} ${isOutOfStock ? 'opacity-80' : ''}`}>
                                 
                                 {/* Checkbox */}
                                 <div className="flex justify-center">
@@ -601,6 +543,7 @@ const TyresTab: React.FC = () => {
                                         ) : (
                                             <ImageIcon size={24} className="text-zinc-600"/>
                                         )}
+                                        {isOutOfStock && <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none"><div className="bg-red-600 text-white text-[9px] px-2 py-0.5 font-bold uppercase -rotate-12 border border-red-900 shadow-md">Немає</div></div>}
                                     </div>
                                 </div>
 
@@ -663,7 +606,7 @@ const TyresTab: React.FC = () => {
             /* --- GRID VIEW --- */
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
                 {tyres.map(tyre => (
-                    <div key={tyre.id} className={`bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden group relative ${selectedTyreIds.has(tyre.id) ? 'ring-2 ring-[#FFC300]' : ''}`}>
+                    <div key={tyre.id} className={`bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden group relative ${selectedTyreIds.has(tyre.id) ? 'ring-2 ring-[#FFC300]' : ''} ${tyre.in_stock === false ? 'opacity-80' : ''}`}>
                         <div className="aspect-square bg-black relative">
                             {tyre.image_url ? <img src={tyre.image_url} className="w-full h-full object-cover opacity-80 group-hover:opacity-100" /> : <div className="w-full h-full flex items-center justify-center text-zinc-700"><ImageIcon/></div>}
                             <button onClick={() => toggleSelection(tyre.id)} className={`absolute top-2 left-2 w-6 h-6 rounded border flex items-center justify-center z-20 ${selectedTyreIds.has(tyre.id) ? 'bg-[#FFC300] border-[#FFC300] text-black' : 'bg-black/50 border-white/50'}`}>
@@ -671,6 +614,7 @@ const TyresTab: React.FC = () => {
                             </button>
                             {/* HOT BADGE FOR GRID VIEW */}
                             {tyre.is_hot && <div className="absolute top-2 right-2 bg-orange-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded z-10 shadow-sm">HOT</div>}
+                            {tyre.in_stock === false && <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none"><span className="text-red-500 font-bold uppercase text-xs border border-red-500 px-2 py-1 -rotate-12 bg-black/20 shadow-lg">Немає</span></div>}
                         </div>
                         <div className="p-3">
                             <div className="text-[10px] text-zinc-500 uppercase font-bold">{tyre.manufacturer}</div>

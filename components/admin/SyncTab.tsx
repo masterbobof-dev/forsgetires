@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { Globe, Settings, Play, CheckCircle, AlertTriangle, Loader2, Database, ArrowRight, X, Terminal, ChevronLeft, Save, Image as ImageIcon, Box, FileImage, Key, UploadCloud, ToggleLeft, ToggleRight, Briefcase, Search, Download, Bug, RefreshCw, FileQuestion } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Globe, Settings, CheckCircle, AlertTriangle, Loader2, Database, Save, Image as ImageIcon, Box, Briefcase, Search, Download, Bug, ToggleLeft, ToggleRight, StopCircle, EyeOff } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import ApiRequestPanel from './sync/ApiRequestPanel';
 import ImportMapper from './sync/ImportMapper';
@@ -134,113 +134,28 @@ const scanForArrays = (obj: any, path = '', depth = 0): { path: string, count: n
     return candidates.sort((a,b) => b.count - a.count);
 };
 
-// --- ADVANCED BINARY PROCESSOR ---
-// Detects if the response is actually JSON, Base64, or Raw Binary
-const processBinaryData = (data: any): Blob | null => {
-    try {
-        if (!data) return null;
-        if (data instanceof Blob) return data;
+// --- ROBUST FETCH: RETURNS BLOB + DEBUG INFO ---
+const fetchImageFromProxy = async (bodyPayload: any): Promise<{ blob: Blob, contentType: string, status: number, debugUrl: string }> => {
+    // USE SUPABASE FUNCTIONS INVOKE
+    // This automatically handles the URL construction and Authorization header
+    // Use responseType: 'blob' to get raw data
+    const { data, error } = await supabase.functions.invoke('foto', {
+        body: bodyPayload,
+        responseType: 'blob' 
+    });
 
-        let buffer: Uint8Array;
-
-        // 1. Convert to Uint8Array
-        if (data instanceof ArrayBuffer) {
-            buffer = new Uint8Array(data);
-        } else if (typeof data === 'object' && data.type === 'Buffer' && Array.isArray(data.data)) {
-            buffer = new Uint8Array(data.data);
-        } else if (typeof data === 'string') {
-            // Check if it's Base64 String directly
-            if (data.length > 100 && !data.includes(' ') && (data.startsWith('/9j/') || data.startsWith('iVBOR'))) {
-                 const binStr = atob(data);
-                 buffer = new Uint8Array(binStr.length);
-                 for (let i = 0; i < binStr.length; i++) buffer[i] = binStr.charCodeAt(i);
-            } else {
-                 // Assume raw binary string
-                 buffer = new Uint8Array(data.length);
-                 for (let i = 0; i < data.length; i++) buffer[i] = data.charCodeAt(i) & 0xff;
-            }
-        } else {
-            return null;
-        }
-
-        // 2. CHECK MAGIC NUMBERS (JPEG/PNG)
-        if (buffer.length > 3) {
-            // JPEG: FF D8 FF
-            if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
-                return new Blob([buffer], { type: 'image/jpeg' });
-            }
-            // PNG: 89 50 4E 47
-            if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
-                return new Blob([buffer], { type: 'image/png' });
-            }
-        }
-
-        // 3. SPECIAL HANDLING FOR JSON WRAPPED BINARY STRING (Proxy Case)
-        // If buffer starts with '{' (123) or '[' (91)
-        if (buffer[0] === 123 || buffer[0] === 91) {
-            try {
-                const text = new TextDecoder('utf-8').decode(buffer);
-                const json = JSON.parse(text);
-                
-                // Recursively find a string value that looks like a binary image (JFIF header)
-                // "" usually maps to EF BF BD EF BF BD in UTF8 if misinterpreted, or FF D8 in raw
-                // We look for a string property that is long and contains JFIF or PNG signature
-                
-                const findImageString = (obj: any): string | null => {
-                    if (typeof obj === 'string') {
-                        // Check for JFIF signature "JFIF" (4A 46 49 46) inside the first 20 chars
-                        if (obj.length > 100 && obj.substring(0, 20).includes('JFIF')) return obj;
-                        // Check for PNG signature
-                        if (obj.length > 100 && obj.startsWith('PNG')) return obj;
-                        // Check Base64 signature
-                        if (obj.startsWith('/9j/') || obj.startsWith('iVBOR')) return obj;
-                        return null;
-                    }
-                    if (typeof obj === 'object' && obj !== null) {
-                        for (const key in obj) {
-                            const found = findImageString(obj[key]);
-                            if (found) return found;
-                        }
-                    }
-                    return null;
-                };
-                
-                const imgStr = findImageString(json);
-                
-                if (imgStr) {
-                    if (imgStr.startsWith('/9j/') || imgStr.startsWith('iVBOR')) {
-                        // Base64
-                        const binStr = atob(imgStr);
-                        const imgBuffer = new Uint8Array(binStr.length);
-                        for (let i = 0; i < binStr.length; i++) imgBuffer[i] = binStr.charCodeAt(i);
-                        return new Blob([imgBuffer], { type: 'image/jpeg' });
-                    } else {
-                        // Raw Binary String inside JSON
-                        const imgBuffer = new Uint8Array(imgStr.length);
-                        for (let i = 0; i < imgStr.length; i++) imgBuffer[i] = imgStr.charCodeAt(i) & 0xff;
-                        return new Blob([imgBuffer], { type: 'image/jpeg' });
-                    }
-                }
-            } catch (e) {
-                // Not valid JSON or parse error, continue to fallback
-            }
-        }
-
-        // 4. Fallback: Return as JPEG anyway if size > 500 bytes (might be headerless or offset)
-        if (buffer.length > 500) {
-            return new Blob([buffer], { type: 'image/jpeg' });
-        }
-
-        return null;
-    } catch (e) {
-        console.error("Binary processing error", e);
-        return null;
+    if (error) {
+        throw new Error("Function error: " + error.message);
     }
-};
 
-const getHexHeader = (buffer: ArrayBuffer) => {
-    const view = new Uint8Array(buffer).slice(0, 20);
-    return Array.from(view).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+    if (!data) throw new Error("Empty response");
+
+    const blob = data;
+    const contentType = blob.type || 'unknown';
+    
+    // We don't get exact status code from helper easily unless we use raw fetch, 
+    // but data existence implies 200-299 usually.
+    return { blob, contentType, status: 200, debugUrl: 'function:foto' };
 };
 
 const PHOTO_DEFAULT_CONFIG = {
@@ -268,6 +183,7 @@ const SyncTab: React.FC = () => {
   const [isBinaryMode, setIsBinaryMode] = useState(true);
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
   const [forceOverwritePhotos, setForceOverwritePhotos] = useState(false);
+  const [skipOutOfStock, setSkipOutOfStock] = useState(true); // Default to TRUE to save space
 
   const [dbSearch, setDbSearch] = useState('');
   const [foundProducts, setFoundProducts] = useState<any[]>([]);
@@ -280,6 +196,8 @@ const SyncTab: React.FC = () => {
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [isPhotoSyncing, setIsPhotoSyncing] = useState(false);
+  const isPhotoSyncingRef = useRef(false); // To handle stop button
+
   const [syncProgress, setSyncProgress] = useState({ total: 0, processed: 0, updated: 0, inserted: 0 });
   const [syncLogs, setSyncLogs] = useState<string[]>([]);
   const [syncError, setSyncError] = useState('');
@@ -367,62 +285,35 @@ const SyncTab: React.FC = () => {
               requestBody.ProductId = idToSend;
           }
 
-          const { data: result, error } = await supabase.functions.invoke('super-endpoint', {
-              body: {
-                  url: config.url,
-                  method: config.method,
-                  headers: headers,
-                  body: requestBody
-                  // NOTE: responseType arraybuffer handles binary data properly
-              },
-              responseType: 'arraybuffer'
+          // USE DIRECT FETCH TO "foto" WITH DEBUG INFO
+          const { blob, contentType, status, debugUrl } = await fetchImageFromProxy({
+              url: config.url,
+              method: config.method,
+              headers: headers,
+              body: requestBody
           });
 
-          if (error) throw new Error(error.message);
+          let debugMsg = `Request to: ${debugUrl}\nTarget: ${config.url}\nStatus: ${status}\nType: ${contentType}\nSize: ${blob.size} bytes\n`;
 
-          const rawData = result; // ArrayBuffer
-          
-          let debugMsg = '';
-          const blob = processBinaryData(rawData);
-
-          if (rawData instanceof ArrayBuffer) {
-              const hex = getHexHeader(rawData);
-              debugMsg = `[Raw Header (Hex)]: ${hex}\n`;
-              debugMsg += `Total Size: ${rawData.byteLength} bytes\n`;
-              
-              if (blob) {
-                  debugMsg += `\n[SUCCESS] Detected Valid Image: ${blob.type.toUpperCase()}`;
-                  debugMsg += `\nSize: ${blob.size} bytes`;
-              } else {
-                  try {
-                      const text = new TextDecoder('utf-8').decode(rawData);
-                      const isJson = text.trim().startsWith('{') || text.trim().startsWith('[');
-                      if (isJson) {
-                          debugMsg += `\n[WARNING] Response appears to be JSON text, not binary image.`;
-                          try {
-                              const json = JSON.parse(text);
-                              debugMsg += `\nJSON Content Preview:\n${JSON.stringify(json, null, 2).substring(0, 500)}`;
-                          } catch {}
-                      } else {
-                          debugMsg += `\n[ERROR] Unknown Format. Text Preview:\n${text.substring(0, 200)}`;
-                      }
-                  } catch {
-                      debugMsg += `\n[ERROR] Could not decode as text either.`;
-                  }
-              }
-          }
-          setDebugResponse(debugMsg);
-
-          if (blob) {
-              if (blob.size < 500) {
-                  alert("Файл занадто малий (<500b). Це, ймовірно, помилка або пустий файл.");
-              }
+          // Check if valid image
+          if (contentType.includes('image') || (blob.size > 500 && !contentType.includes('json') && !contentType.includes('text'))) {
               const url = URL.createObjectURL(blob);
               setTestResultImage(url);
               setTestResultBlob(blob);
+              debugMsg += `\n[SUCCESS] Blob is a valid image.`;
           } else {
-              alert("Не вдалося розпізнати зображення. Перевірте Debug лог.");
+              // Try to read the error text/json
+              const text = await blob.text();
+              debugMsg += `\n[RESPONSE BODY (First 1000 chars)]:\n${text.substring(0, 1000)}`;
+              
+              if (text.includes('JFIF') || text.includes('PNG')) {
+                  debugMsg += `\n\n[WARNING] Binary data detected inside Text/JSON response! The proxy is not returning raw bytes.`;
+              }
+              
+              alert("Отримано не зображення. Див. Debug.");
           }
+          
+          setDebugResponse(debugMsg);
 
       } catch (e: any) {
           setDebugResponse(`Error: ${e.message}`);
@@ -438,16 +329,11 @@ const SyncTab: React.FC = () => {
       try {
           const ext = testResultBlob.type === 'image/png' ? 'png' : 'jpg';
           const fileName = `tyre_${selectedTestProduct.id}_${Date.now()}.${ext}`;
-          
-          const { error } = await supabase.storage.from('galery').upload(fileName, testResultBlob, {
-              contentType: testResultBlob.type,
-              upsert: true
-          });
+          const { error } = await supabase.storage.from('galery').upload(fileName, testResultBlob, { contentType: testResultBlob.type, upsert: true });
           if (error) throw error;
-          
           const { data } = supabase.storage.from('galery').getPublicUrl(fileName);
-          await supabase.from('tyres').update({ image_url: data.publicUrl }).eq('id', selectedTestProduct.id);
-          
+          // Set in_stock = true for immediate gratification on single test
+          await supabase.from('tyres').update({ image_url: data.publicUrl, in_stock: true }).eq('id', selectedTestProduct.id);
           setTestSaveStatus('saved');
           setSelectedTestProduct({...selectedTestProduct, image_url: data.publicUrl});
       } catch (e: any) {
@@ -456,115 +342,183 @@ const SyncTab: React.FC = () => {
       }
   };
 
+  const handleStopSync = () => {
+      isPhotoSyncingRef.current = false;
+      addLog("Зупинка процесу користувачем...");
+  };
+
   const handleRunPhotoSync = async () => {
       const savedSupplier = localStorage.getItem('forsage_sync_supplier');
-      if (!savedSupplier) { alert("Оберіть постачальника в налаштуваннях!"); return; }
-
+      if (!savedSupplier) { alert("Оберіть постачальника!"); return; }
+      
       const savedConfigStr = localStorage.getItem('forsage_sync_photo_config') || JSON.stringify(PHOTO_DEFAULT_CONFIG);
       let config: any;
-      try { config = JSON.parse(savedConfigStr); } catch (e) { alert("Помилка конфігу фото"); return; }
+      try { config = JSON.parse(savedConfigStr); } catch (e) { alert("Помилка конфігу"); return; }
 
+      // Get API Key
+      const { data: keyData } = await supabase.from('settings').select('value').eq('key', 'supplier_api_key').single();
+      const supplierKey = keyData?.value || '';
+
+      // Initialize State
+      isPhotoSyncingRef.current = true;
       setIsPhotoSyncing(true);
       setSyncProgress({ total: 0, processed: 0, updated: 0, inserted: 0 });
-      setSyncLogs(['Пошук товарів...']);
+      setSyncLogs(['Запуск масової синхронізації...']);
       setSyncError('');
 
+      // Determine starting Count estimate
+      let countQuery = supabase.from('tyres').select('*', { count: 'exact', head: true }).eq('supplier_id', parseInt(savedSupplier));
+      if (skipOutOfStock) countQuery = countQuery.neq('in_stock', false);
+      const { count } = await countQuery;
+      setSyncProgress(p => ({ ...p, total: count || 0 }));
+
+      // Batch logic
+      let lastProcessedId = 0;
+      let keepGoing = true;
+      const BATCH_SIZE = 1000; // Large batch size to minimize DB requests
+
+      // Counters for reporting
+      let skippedCount = 0;
+      let errorCount = 0;
+      let requestsInThisSession = 0; // Track requests to pause for hourly limit
+
       try {
-          let query = supabase
-              .from('tyres')
-              .select('id, product_number')
-              .eq('supplier_id', parseInt(savedSupplier))
-              .not('product_number', 'is', null)
-              .limit(50);
-          
-          // CRITICAL FIX: Explicitly handle overwrite logic
-          if (!forceOverwritePhotos) {
-              query = query.is('image_url', null);
-          }
+          while (keepGoing && isPhotoSyncingRef.current) {
+              
+              // Construct query: Get next batch of items
+              let query = supabase.from('tyres')
+                  .select('id, product_number')
+                  .eq('supplier_id', parseInt(savedSupplier))
+                  .gt('id', lastProcessedId) // Cursor pagination
+                  .not('product_number', 'is', null)
+                  .order('id', { ascending: true })
+                  .limit(BATCH_SIZE);
 
-          const { data: itemsToUpdate, error } = await query;
-
-          if (error) throw error;
-          
-          if (!itemsToUpdate || itemsToUpdate.length === 0) {
+              // Filter logic
               if (!forceOverwritePhotos) {
-                  addLog("Всі товари вже мають фото.");
-                  addLog("Увімкніть 'Перезаписати', щоб оновити існуючі.");
-              } else {
-                  addLog("Товарів не знайдено.");
-              }
-              setIsPhotoSyncing(false);
-              return;
-          }
-
-          setSyncProgress(p => ({ ...p, total: itemsToUpdate.length }));
-          addLog(`Обробка ${itemsToUpdate.length} товарів...`);
-
-          const { data: keyData } = await supabase.from('settings').select('value').eq('key', 'supplier_api_key').single();
-          const supplierKey = keyData?.value || '';
-
-          for (const product of itemsToUpdate) {
-              let idToSend = parseInt(product.product_number);
-              if (!idToSend) continue;
-              if (idToSend > 0) idToSend = -idToSend;
-
-              let requestBody: any = {};
-              try {
-                  let bodyStr = config.body;
-                  if (supplierKey) bodyStr = bodyStr.replace("INSERT_KEY_HERE", supplierKey);
-                  requestBody = JSON.parse(bodyStr);
-                  requestBody.ProductId = idToSend;
-              } catch(e) { continue; }
-
-              const { data: result, error: apiError } = await supabase.functions.invoke('super-endpoint', {
-                  body: {
-                      url: config.url,
-                      method: config.method,
-                      headers: JSON.parse(config.headers || '{}'),
-                      body: requestBody
-                  },
-                  responseType: 'arraybuffer'
-              });
-
-              if (apiError || !result) {
-                  addLog(`API Fail for ${idToSend}`);
-                  continue;
+                  // Only fetch items without photos if overwrite is OFF
+                  query = query.is('image_url', null);
               }
 
-              const rawData = result;
-              const blob = processBinaryData(rawData);
+              // SKIP OUT OF STOCK
+              if (skipOutOfStock) {
+                  query = query.neq('in_stock', false);
+              }
+
+              const { data: itemsBatch, error } = await query;
+
+              if (error) throw error;
               
-              if (blob && blob.size > 500) {
-                  const ext = blob.type === 'image/png' ? 'png' : 'jpg';
-                  const fileName = `tyre_${product.id}_${Date.now()}.${ext}`;
-                  
-                  const { error: uploadError } = await supabase.storage.from('galery').upload(fileName, blob, {
-                      contentType: blob.type,
-                      upsert: true
-                  });
+              if (!itemsBatch || itemsBatch.length === 0) {
+                  addLog("Всі товари оброблено. Кінець.");
+                  keepGoing = false;
+                  break;
+              }
 
-                  if (!uploadError) {
-                      const { data: publicUrlData } = supabase.storage.from('galery').getPublicUrl(fileName);
-                      await supabase.from('tyres').update({ image_url: publicUrlData.publicUrl }).eq('id', product.id);
-                      setSyncProgress(p => ({ ...p, updated: p.updated + 1 }));
-                  } else {
-                      addLog(`Storage Error: ${uploadError.message}`);
+              addLog(`Завантажено пакет: ${itemsBatch.length} шт. (ID > ${lastProcessedId})`);
+
+              // Process Batch Loop
+              for (const product of itemsBatch) {
+                  // Check stop flag inside inner loop
+                  if (!isPhotoSyncingRef.current) { keepGoing = false; break; }
+
+                  // --- HOURLY LIMIT PROTECTION ---
+                  // If we approach 300 requests, take a long pause
+                  if (requestsInThisSession > 0 && requestsInThisSession % 290 === 0) {
+                      addLog(`[LIMIT WARNING] Виконано ${requestsInThisSession} запитів. Пауза 60 сек для уникнення блокування (300/год)...`);
+                      await new Promise(r => setTimeout(r, 60000));
                   }
-              } else {
-                  addLog(`Bad Data/No Image for ${idToSend}`);
+
+                  lastProcessedId = product.id; // Advance cursor
+                  setSyncProgress(p => ({ ...p, processed: p.processed + 1 }));
+
+                  let idToSend = parseInt(product.product_number);
+                  
+                  // Skip invalid IDs
+                  if (!idToSend) {
+                      skippedCount++;
+                      continue;
+                  }
+                  // Standard Logic: Omega IDs are often positive in DB but negative for Image API
+                  if (idToSend > 0) idToSend = -idToSend;
+
+                  // Prepare Body
+                  let requestBody: any = {};
+                  try {
+                      let bodyStr = config.body;
+                      if (supplierKey) bodyStr = bodyStr.replace("INSERT_KEY_HERE", supplierKey);
+                      requestBody = JSON.parse(bodyStr);
+                      requestBody.ProductId = idToSend;
+                  } catch(e) { 
+                      skippedCount++;
+                      continue; 
+                  }
+
+                  try {
+                      // Increment request counter
+                      requestsInThisSession++;
+
+                      // USE SUPABASE FUNCTION INVOKE
+                      const { blob, contentType } = await fetchImageFromProxy({
+                          url: config.url,
+                          method: config.method,
+                          headers: JSON.parse(config.headers || '{}'),
+                          body: requestBody
+                      });
+                      
+                      // Check if valid image (not JSON error, not text, size > 500 bytes)
+                      // STRICT CHECK: content-type must be image OR blob size > 1000 bytes. 
+                      // If JSON, parse it to see error.
+                      if (contentType.includes('application/json')) {
+                          // Likely an error message from API
+                          // const text = await blob.text(); 
+                          // console.log("API Error JSON:", text); 
+                          errorCount++;
+                      }
+                      else if ((contentType.includes('image') || blob.size > 500) && !contentType.includes('text')) {
+                          const ext = blob.type === 'image/png' ? 'png' : 'jpg';
+                          const fileName = `tyre_${product.id}_${Date.now()}.${ext}`;
+                          
+                          // Upload to Storage
+                          const { error: uploadError } = await supabase.storage.from('galery').upload(fileName, blob, { contentType: blob.type, upsert: true });
+                          
+                          if (!uploadError) {
+                              const { data: publicUrlData } = supabase.storage.from('galery').getPublicUrl(fileName);
+                              
+                              // Update DB (Mark in_stock=true if image found, optional but nice)
+                              await supabase.from('tyres').update({ image_url: publicUrlData.publicUrl, in_stock: true }).eq('id', product.id);
+                              
+                              setSyncProgress(p => ({ ...p, updated: p.updated + 1 }));
+                          } else {
+                              errorCount++;
+                          }
+                      } else {
+                          // Too small or text/html error
+                          errorCount++;
+                      }
+                  } catch (apiErr: any) {
+                      // Silent fail for individual items to keep loop going
+                      errorCount++;
+                  }
+
+                  // 2500ms DELAY = ~24 requests per minute.
+                  // This is safely under the "30 requests per minute" limit.
+                  await new Promise(r => setTimeout(r, 2500));
               }
               
-              setSyncProgress(p => ({ ...p, processed: p.processed + 1 }));
-              await new Promise(r => setTimeout(r, 300));
+              if (errorCount > 0 || skippedCount > 0) {
+                  addLog(`Пакет завершено. Пропущено: ${skippedCount}, Помилок/Без фото: ${errorCount}`);
+                  // Reset batch counters
+                  errorCount = 0;
+                  skippedCount = 0;
+              }
           }
-
-          addLog("Готово.");
-
       } catch (e: any) {
           setSyncError(e.message);
-          addLog("Error: " + e.message);
-      } finally {
+          addLog("CRITICAL ERROR: " + e.message);
+      } finally { 
           setIsPhotoSyncing(false);
+          isPhotoSyncingRef.current = false;
       }
   };
 
@@ -663,6 +617,7 @@ const SyncTab: React.FC = () => {
                   break;
               }
 
+              // --- PREPARE DATA ---
               const mappedBatch = batchItems.map((item: any, idx: number) => {
                   let rawPrice = getValueByPath(item, map.price);
                   let price = smartExtractPrice(rawPrice);
@@ -682,17 +637,20 @@ const SyncTab: React.FC = () => {
                   }
 
                   const rawBasePrice = map.base_price ? getValueByPath(item, map.base_price) : 0;
-                  const basePrice = smartExtractPrice(rawBasePrice);
+                  let basePrice = smartExtractPrice(rawBasePrice);
+
+                  if (price === 0 && basePrice > 0) {
+                      price = Math.round(basePrice * 1.2); 
+                  }
+                  if (basePrice === 0 && price > 0) {
+                      basePrice = Math.round(price * 0.8);
+                  }
 
                   const title = safeExtractString(getValueByPath(item, map.title)) || 'Без назви';
                   const desc = map.description ? safeExtractString(getValueByPath(item, map.description)) : '';
                   const brand = map.brand ? safeExtractString(getValueByPath(item, map.brand)) || 'Unknown' : 'Unknown';
                   const imageUrl = map.image ? safeExtractString(getValueByPath(item, map.image)) : null;
                   
-                  if (idx < 5 && price === 0) {
-                      addLog(`[WARN] Price 0 for ${title.substring(0,10)}... (Raw: ${JSON.stringify(item.CustomerPrice || item.Price)})`);
-                  }
-
                   let radius='';
                   const sizeMatch = title.match(/(\d{3})[\/\s](\d{2})[\s\w]*R(\d{2}[C|c]?)/);
                   if (sizeMatch) { radius='R'+sizeMatch[3].toUpperCase(); }
@@ -737,75 +695,42 @@ const SyncTab: React.FC = () => {
                   };
               });
 
-              // --- STRICT DEDUPLICATION ---
-              const pIds = mappedBatch.map((i: any) => i.product_number).filter((c: any) => c);
-              const cIds = mappedBatch.map((i: any) => i.catalog_number).filter((c: any) => c);
-
-              let existingMap = new Map();
-
-              if (pIds.length > 0) {
-                  const { data: byPid } = await supabase
-                      .from('tyres')
-                      .select('id, product_number')
-                      .eq('supplier_id', supplierId)
-                      .in('product_number', pIds);
-                  byPid?.forEach((row: any) => {
-                      if(row.product_number) existingMap.set(`PID:${String(row.product_number).trim()}`, row.id);
-                  });
-              }
-
-              if (cIds.length > 0) {
-                  const { data: byCid } = await supabase
-                      .from('tyres')
-                      .select('id, catalog_number')
-                      .eq('supplier_id', supplierId)
-                      .in('catalog_number', cIds);
-                  byCid?.forEach((row: any) => {
-                      if(row.catalog_number) existingMap.set(`CID:${String(row.catalog_number).trim()}`, row.id);
-                  });
-              }
-
-              const updatesById = new Map<number, any>();
-              const insertsByKey = new Map<string, any>();
-
-              for (const item of mappedBatch) {
-                  const pidKey = item.product_number ? `PID:${String(item.product_number).trim()}` : null;
-                  const cidKey = item.catalog_number ? `CID:${String(item.catalog_number).trim()}` : null;
-
-                  let existingId = pidKey ? existingMap.get(pidKey) : undefined;
-                  if (!existingId && cidKey) {
-                      existingId = existingMap.get(cidKey);
-                  }
-
-                  if (existingId) {
-                      updatesById.set(existingId, { ...item, id: existingId });
-                  } else {
-                      const uniqueKey = pidKey || cidKey || JSON.stringify(item.title);
-                      insertsByKey.set(uniqueKey, item);
-                  }
-              }
-
-              const toUpdate = Array.from(updatesById.values());
-              const toInsert = Array.from(insertsByKey.values());
-
-              if (toUpdate.length > 0) {
-                  const { error } = await supabase.from('tyres').upsert(toUpdate);
-                  if (error) addLog(`Update Error: ${error.message}`);
-              }
-              if (toInsert.length > 0) {
-                  const { error } = await supabase.from('tyres').upsert(toInsert, { onConflict: 'catalog_number,supplier_id' });
-                  if (error) addLog(`Insert Error: ${error.message}`);
-              }
-
-              setSyncProgress(prev => ({
-                  total: prev.total + batchItems.length,
-                  processed: prev.processed + batchItems.length,
-                  updated: prev.updated + toUpdate.length,
-                  inserted: prev.inserted + toInsert.length
-              }));
+              // --- DEDUPLICATE BATCH IN MEMORY ---
+              // We must ensure the batch itself doesn't contain duplicates for (catalog_number + supplier_id)
+              // otherwise `upsert` will fail with "ON CONFLICT DO UPDATE command cannot affect row a second time"
+              const uniqueBatch = new Map();
               
-              if(toUpdate.length > 0 || toInsert.length > 0) {
-                  addLog(`Upd: ${toUpdate.length}, New: ${toInsert.length}`);
+              mappedBatch.forEach((item: any) => {
+                  if (item.catalog_number) {
+                      // Use constraint columns as key
+                      const key = `${item.catalog_number}_${supplierId}`;
+                      uniqueBatch.set(key, item);
+                  }
+              });
+
+              const payload = Array.from(uniqueBatch.values());
+
+              if (payload.length > 0) {
+                  // --- UPSERT EVERYTHING (Insert or Update) ---
+                  // This relies on the SQL Constraint: UNIQUE (catalog_number, supplier_id)
+                  const { error, count } = await supabase.from('tyres').upsert(payload, { 
+                      onConflict: 'catalog_number,supplier_id',
+                      ignoreDuplicates: false // Update if exists
+                  });
+
+                  if (error) {
+                      addLog(`Batch Error: ${error.message}`);
+                  } else {
+                      setSyncProgress(prev => ({
+                          total: prev.total + batchItems.length,
+                          processed: prev.processed + batchItems.length,
+                          updated: prev.updated, // Supabase doesn't return separate counts for upsert easily
+                          inserted: prev.inserted + payload.length // Rough estimate
+                      }));
+                      addLog(`Processed batch of ${payload.length} items.`);
+                  }
+              } else {
+                  addLog("Skipping batch: No valid catalog numbers found.");
               }
 
               if (batchItems.length < BATCH_SIZE) {
@@ -954,23 +879,43 @@ const SyncTab: React.FC = () => {
                        </button>
 
                        {/* MASS PHOTO SYNC BUTTON */}
-                       <div className="bg-zinc-800/50 p-2 rounded-2xl border border-zinc-700">
-                           <label className="flex items-center gap-2 px-3 py-2 cursor-pointer mb-2 group">
-                               <input type="checkbox" checked={forceOverwritePhotos} onChange={e => setForceOverwritePhotos(e.target.checked)} className="w-4 h-4 accent-[#FFC300]" />
-                               <span className={`text-xs font-bold uppercase select-none transition-colors ${forceOverwritePhotos ? 'text-[#FFC300]' : 'text-zinc-300'}`}>Перезаписати існуючі фото</span>
-                           </label>
-                           <button 
-                               onClick={handleRunPhotoSync}
-                               disabled={isSyncing || isPhotoSyncing}
-                               className={`w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-3 border transition-all active:scale-95 ${
-                                   isPhotoSyncing 
-                                   ? 'bg-zinc-800 text-zinc-500 border-zinc-700 cursor-not-allowed' 
-                                   : 'bg-zinc-800 text-white border-zinc-700 hover:border-[#FFC300] hover:bg-zinc-700'
-                               }`}
-                           >
-                               {isPhotoSyncing ? <Loader2 className="animate-spin" size={16} /> : <ImageIcon size={16} />}
-                               {isPhotoSyncing ? 'ЗАВАНТАЖЕННЯ ФОТО...' : forceOverwritePhotos ? 'ОНОВИТИ ФОТО (ПЕРЕЗАПИС)' : 'СИНХРОНІЗУВАТИ ФОТО (ТІЛЬКИ НОВІ)'}
-                           </button>
+                       <div className="bg-zinc-800/50 p-3 rounded-2xl border border-zinc-700 mt-2">
+                           <div className="flex justify-between items-center px-3 py-2 mb-2 bg-zinc-900/50 rounded-lg border border-zinc-800">
+                               <label className="flex items-center gap-2 cursor-pointer group">
+                                   <input type="checkbox" checked={forceOverwritePhotos} onChange={e => setForceOverwritePhotos(e.target.checked)} className="w-4 h-4 accent-[#FFC300]" />
+                                   <span className={`text-xs font-bold uppercase select-none transition-colors ${forceOverwritePhotos ? 'text-[#FFC300]' : 'text-zinc-500'}`}>Перезаписати існуючі</span>
+                               </label>
+                               
+                               <label className="flex items-center gap-2 cursor-pointer group">
+                                   <input type="checkbox" checked={skipOutOfStock} onChange={e => setSkipOutOfStock(e.target.checked)} className="w-4 h-4 accent-[#FFC300]" />
+                                   <span className={`text-xs font-bold uppercase select-none transition-colors ${skipOutOfStock ? 'text-white' : 'text-zinc-500'}`}>Тільки для наявних (In Stock)</span>
+                               </label>
+                           </div>
+                           
+                           {isPhotoSyncing ? (
+                               <button 
+                                   onClick={handleStopSync}
+                                   className="w-full py-4 rounded-xl font-bold text-sm flex items-center justify-center gap-3 border border-red-500 bg-red-900/50 text-red-200 hover:bg-red-900/80 animate-pulse shadow-[0_0_15px_rgba(220,38,38,0.3)]"
+                               >
+                                   <StopCircle size={20} /> ЗУПИНИТИ ЗАВАНТАЖЕННЯ
+                               </button>
+                           ) : (
+                               <button 
+                                   onClick={handleRunPhotoSync}
+                                   disabled={isSyncing}
+                                   className={`w-full py-4 rounded-xl font-black text-sm flex items-center justify-center gap-3 border transition-all active:scale-95 shadow-lg ${
+                                       isSyncing 
+                                       ? 'bg-zinc-800 text-zinc-500 border-zinc-700 cursor-not-allowed' 
+                                       : 'bg-zinc-800 text-white border-zinc-600 hover:border-[#FFC300] hover:bg-zinc-700 hover:text-[#FFC300]'
+                                   }`}
+                               >
+                                   <ImageIcon size={20} />
+                                   {forceOverwritePhotos ? 'РОЗУМНЕ ЗАВАНТАЖЕННЯ ФОТО (ПОВНИЙ ЦИКЛ)' : 'РОЗУМНЕ ЗАВАНТАЖЕННЯ ФОТО (ТІЛЬКИ НОВІ)'}
+                               </button>
+                           )}
+                           <div className="text-center mt-2 text-[10px] text-zinc-500 font-mono">
+                               Ліміт API: ~20 фото/хв. Авто-пауза кожні 290 запитів.
+                           </div>
                        </div>
                    </div>
 
@@ -1027,7 +972,7 @@ const SyncTab: React.FC = () => {
                            /* NEW SINGLE ITEM TEST MODE */
                            <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800 shadow-xl space-y-6">
                                <div className="flex justify-between items-center">
-                                   <h4 className="text-white font-bold flex items-center gap-2"><ImageIcon size={18}/> Тест одного товару</h4>
+                                   <h4 className="text-white font-bold flex items-center gap-2"><ImageIcon size={18}/> Тест одного товару (v2.0 PROXY)</h4>
                                    <div className="flex items-center gap-2 bg-zinc-800 px-3 py-1 rounded-full text-xs">
                                        <span className={isBinaryMode ? "text-[#FFC300] font-bold" : "text-zinc-500"}>Binary Mode</span>
                                        <button onClick={() => { setIsBinaryMode(!isBinaryMode); localStorage.setItem('forsage_sync_binary_mode', String(!isBinaryMode)); }}>
@@ -1139,7 +1084,7 @@ const SyncTab: React.FC = () => {
                                                    className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 ${testSaveStatus === 'saved' ? 'bg-green-600 text-white' : 'bg-white text-black hover:bg-zinc-200'}`}
                                                >
                                                    {testSaveStatus === 'saving' ? <Loader2 className="animate-spin"/> : testSaveStatus === 'saved' ? <CheckCircle/> : <Save/>}
-                                                   {testSaveStatus === 'saved' ? 'Збережено!' : 'Зберегти до товару'}
+                                                   {testSaveStatus === 'saved' ? 'Збережено (В наявності)' : 'Зберегти до товару'}
                                                </button>
                                            </div>
                                        )}

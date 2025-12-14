@@ -321,11 +321,13 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
         try {
             const mappedData = itemsToImport.map(transformItem);
             const { error } = await supabase.from('tyres').insert(mappedData);
+            
             if (error) throw error;
+            
             alert(`Імпортовано ${mappedData.length} товарів!`);
         } catch (e: any) {
             const msg = e.message || (typeof e === 'string' ? e : 'Невідома помилка');
-            alert("Помилка: " + msg);
+            alert("Помилка (DB Error): " + msg);
         } finally {
             setImporting(false);
         }
@@ -402,29 +404,37 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
 
                 const itemsToUpdate = [];
                 const itemsToInsert = [];
-                let updatedCount = 0;
-                let insertedCount = 0;
-
+                
                 for (const item of mappedBatch) {
                     if (!item.catalog_number) continue;
                     const existing = existingMap.get(item.catalog_number);
                     if (existing) {
                         itemsToUpdate.push({ ...item, id: existing.id });
-                        updatedCount++;
                     } else {
                         itemsToInsert.push(item);
-                        insertedCount++;
                     }
                 }
 
-                if (itemsToUpdate.length > 0) await supabase.from('tyres').upsert(itemsToUpdate);
-                if (itemsToInsert.length > 0) await supabase.from('tyres').insert(itemsToInsert);
+                let currentUpdated = 0;
+                let currentInserted = 0;
+
+                if (itemsToUpdate.length > 0) {
+                    const { error: updErr } = await supabase.from('tyres').upsert(itemsToUpdate);
+                    if (updErr) throw new Error("DB Update Failed: " + updErr.message);
+                    currentUpdated = itemsToUpdate.length;
+                }
+                
+                if (itemsToInsert.length > 0) {
+                    const { error: insErr } = await supabase.from('tyres').insert(itemsToInsert);
+                    if (insErr) throw new Error("DB Insert Failed: " + insErr.message);
+                    currentInserted = itemsToInsert.length;
+                }
 
                 setFullSyncProgress(prev => ({
                     total: prev.total + batchItems.length,
                     processed: prev.processed + batchItems.length,
-                    updated: prev.updated + updatedCount,
-                    inserted: prev.inserted + insertedCount
+                    updated: prev.updated + currentUpdated,
+                    inserted: prev.inserted + currentInserted
                 }));
 
                 if (batchItems.length < BATCH_SIZE) {

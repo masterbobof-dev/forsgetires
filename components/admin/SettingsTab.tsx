@@ -50,7 +50,7 @@ const SettingsTab: React.FC = () => {
   const [cleaningStorage, setCleaningStorage] = useState(false);
   const [showCleanupConfirm, setShowCleanupConfirm] = useState(false);
   const [cleanupStatus, setCleanupStatus] = useState<string>('');
-  const [cleanupResult, setCleanupResult] = useState<{ total: number, active: number, deleted: number } | null>(null);
+  const [cleanupResult, setCleanupResult] = useState<{ total: number, active: number, deleted: number, broken: number } | null>(null);
 
   // Reset Stock State
   const [showResetStockConfirm, setShowResetStockConfirm] = useState(false);
@@ -283,14 +283,27 @@ const SettingsTab: React.FC = () => {
               }
           }
 
-          // 4. FIND & DELETE ORPHANS
-          const filesToDelete = allFiles
-              .filter(f => f.name !== '.emptyFolderPlaceholder' && !activeFiles.has(f.name))
-              .map(f => f.name);
+          // 4. FIND ORPHANS & BROKEN FILES
+          setCleanupStatus(`Крок 4/4: Аналіз ${allFiles.length} файлів...`);
+          
+          const filesToDelete: string[] = [];
+          let brokenCount = 0;
 
-          setCleanupStatus(`Крок 4/4: Видалення ${filesToDelete.length} файлів...`);
+          for (const file of allFiles) {
+              if (file.name === '.emptyFolderPlaceholder') continue;
+              
+              const isOrphan = !activeFiles.has(file.name);
+              // Consider small files (< 500 bytes) as corrupted/broken uploads
+              const isBroken = file.metadata && file.metadata.size < 500; 
+
+              if (isOrphan || isBroken) {
+                  filesToDelete.push(file.name);
+                  if (isBroken) brokenCount++;
+              }
+          }
 
           if (filesToDelete.length > 0) {
+              setCleanupStatus(`Видалення ${filesToDelete.length} файлів (з них битих: ${brokenCount})...`);
               // Delete in batches of 100 to be safe
               for (let i = 0; i < filesToDelete.length; i += 100) {
                   const chunk = filesToDelete.slice(i, i + 100);
@@ -302,7 +315,8 @@ const SettingsTab: React.FC = () => {
           setCleanupResult({
               total: allFiles.length,
               active: activeFiles.size,
-              deleted: filesToDelete.length
+              deleted: filesToDelete.length,
+              broken: brokenCount
           });
           setCleanupStatus("Завершено!");
 
@@ -502,7 +516,9 @@ const SettingsTab: React.FC = () => {
                             <div className="flex-grow">
                                 <h4 className="text-red-400 text-lg font-bold mb-1 flex items-center gap-2"><Eraser size={20}/> Очищення Файлів (Garbage Collector)</h4>
                                 <p className="text-zinc-400 text-sm max-w-xl mb-4">
-                                    Сканує всі файли в сховищі, порівнює їх з базою даних (Товари, Статті, Банери) і видаляє ті, що не використовуються.
+                                    Сканує всі файли в сховищі, порівнює їх з базою даних (Товари, Статті, Банери). 
+                                    <br/>
+                                    <span className="text-[#FFC300] font-bold">УВАГА:</span> Також видаляє "биті" файли (менше 500 байт).
                                 </p>
                                 
                                 {cleanupStatus && (
@@ -516,14 +532,18 @@ const SettingsTab: React.FC = () => {
                                 )}
 
                                 {cleanupResult && (
-                                    <div className="grid grid-cols-3 gap-2 max-w-lg mt-3">
+                                    <div className="grid grid-cols-4 gap-2 max-w-lg mt-3">
                                         <div className="bg-zinc-800 p-2 rounded text-center">
-                                            <div className="text-xs text-zinc-500 uppercase">Всього файлів</div>
+                                            <div className="text-xs text-zinc-500 uppercase">Всього</div>
                                             <div className="font-bold text-white">{cleanupResult.total}</div>
                                         </div>
                                         <div className="bg-zinc-800 p-2 rounded text-center">
-                                            <div className="text-xs text-zinc-500 uppercase">Активних</div>
+                                            <div className="text-xs text-zinc-500 uppercase">Активні</div>
                                             <div className="font-bold text-blue-400">{cleanupResult.active}</div>
+                                        </div>
+                                        <div className="bg-zinc-800 p-2 rounded text-center border border-orange-900/50 bg-orange-900/10">
+                                            <div className="text-xs text-orange-400 uppercase">Биті</div>
+                                            <div className="font-bold text-orange-500">{cleanupResult.broken}</div>
                                         </div>
                                         <div className="bg-zinc-800 p-2 rounded text-center border border-red-900/50 bg-red-900/10">
                                             <div className="text-xs text-red-400 uppercase">Видалено</div>

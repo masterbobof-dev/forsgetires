@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../supabaseClient';
-import { Users, Search, History, Trash2, Edit2, X } from 'lucide-react';
+import { Users, Search, History, Trash2, Edit2, X, AlertTriangle } from 'lucide-react';
 
 const ClientsTab: React.FC = () => {
   const [clients, setClients] = useState<any[]>([]);
@@ -9,6 +9,10 @@ const ClientsTab: React.FC = () => {
   const [selectedClientHistory, setSelectedClientHistory] = useState<any[]>([]);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [editingClient, setEditingClient] = useState<any | null>(null);
+  
+  // Custom Delete Confirmation
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [clientToDelete, setClientToDelete] = useState<string | null>(null);
 
   useEffect(() => { fetchClients(); }, []);
 
@@ -27,11 +31,17 @@ const ClientsTab: React.FC = () => {
      return arr;
   }, [clients, clientSearch]);
 
-  const handleDeleteClient = async (phone: string) => {
-      if (confirm("Видалити клієнта та всю історію?")) {
-          await supabase.from('bookings').delete().eq('customer_phone', phone);
-          fetchClients();
-      }
+  const initiateDelete = (phone: string) => {
+      setClientToDelete(phone);
+      setShowDeleteConfirm(true);
+  };
+
+  const executeDelete = async () => {
+      if (!clientToDelete) return;
+      await supabase.from('bookings').delete().eq('customer_phone', clientToDelete);
+      fetchClients();
+      setShowDeleteConfirm(false);
+      setClientToDelete(null);
   };
 
   const handleEditClientSave = async () => { 
@@ -47,7 +57,8 @@ const ClientsTab: React.FC = () => {
     <div className="animate-in fade-in">
         <h3 className="text-2xl font-black text-white mb-6 flex items-center gap-2"><Users className="text-[#FFC300]"/> Клієнти</h3>
         <div className="mb-4 relative max-w-md"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={18} /><input type="text" placeholder="Пошук..." value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} className="w-full bg-zinc-900 border border-zinc-700 rounded-xl pl-10 pr-4 py-3 text-white"/></div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-xl"><table className="w-full text-left text-sm"><thead className="bg-black text-zinc-500 uppercase font-bold text-xs"><tr><th className="p-4">Ім'я</th><th className="p-4">Телефон</th><th className="p-4">Візитів</th><th className="p-4 text-right">Останній</th><th className="p-4"></th></tr></thead><tbody className="divide-y divide-zinc-800">{uniqueClients.map((c, idx) => (<tr key={idx} className="hover:bg-zinc-800/50 cursor-pointer" onClick={() => { setSelectedClientHistory(clients.filter(x => x.customer_phone === c.customer_phone)); setShowHistoryModal(true); }}><td className="p-4 font-bold text-white text-lg">{c.customer_name}</td><td className="p-4 font-mono text-[#FFC300] font-bold">{c.customer_phone}</td><td className="p-4 text-zinc-400 font-bold">{c.total_visits}</td><td className="p-4 text-right text-zinc-400">{c.booking_date}</td><td className="p-4 text-right flex justify-end gap-2"><button onClick={(e) => { e.stopPropagation(); handleDeleteClient(c.customer_phone); }} className="p-2 rounded bg-red-900/20 text-red-500"><Trash2 size={18} /></button></td></tr>))}</tbody></table></div>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-xl"><table className="w-full text-left text-sm"><thead className="bg-black text-zinc-500 uppercase font-bold text-xs"><tr><th className="p-4">Ім'я</th><th className="p-4">Телефон</th><th className="p-4">Візитів</th><th className="p-4 text-right">Останній</th><th className="p-4"></th></tr></thead><tbody className="divide-y divide-zinc-800">{uniqueClients.map((c, idx) => (<tr key={idx} className="hover:bg-zinc-800/50 cursor-pointer" onClick={() => { setSelectedClientHistory(clients.filter(x => x.customer_phone === c.customer_phone)); setShowHistoryModal(true); }}><td className="p-4 font-bold text-white text-lg">{c.customer_name}</td><td className="p-4 font-mono text-[#FFC300] font-bold">{c.customer_phone}</td><td className="p-4 text-zinc-400 font-bold">{c.total_visits}</td><td className="p-4 text-right text-zinc-400">{c.booking_date}</td><td className="p-4 text-right flex justify-end gap-2"><button onClick={(e) => { e.stopPropagation(); initiateDelete(c.customer_phone); }} className="p-2 rounded bg-red-900/20 text-red-500"><Trash2 size={18} /></button></td></tr>))}</tbody></table></div>
+        
         {showHistoryModal && (
              <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
                  <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-2xl relative shadow-2xl h-[80vh] flex flex-col">
@@ -59,6 +70,21 @@ const ClientsTab: React.FC = () => {
                      )}
                      <div className="flex-grow overflow-y-auto pr-2 custom-scrollbar">
                          <table className="w-full text-left text-sm"><thead className="text-zinc-500 border-b border-zinc-800 uppercase text-xs"><tr><th className="pb-2">Дата</th><th className="pb-2">Послуга</th><th className="pb-2">Радіус</th></tr></thead><tbody className="divide-y divide-zinc-800">{selectedClientHistory.map(item => (<tr key={item.id}><td className="py-3 font-mono text-zinc-300">{item.booking_date} {item.start_time}</td><td className="py-3 font-bold text-white">{item.service_label}</td><td className="py-3 text-zinc-400">{item.radius}</td></tr>))}</tbody></table>
+                     </div>
+                 </div>
+             </div>
+         )}
+
+         {/* Delete Confirmation Modal */}
+         {showDeleteConfirm && (
+             <div className="fixed inset-0 z-[150] bg-black/80 flex items-center justify-center p-4">
+                 <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-sm text-center">
+                     <AlertTriangle size={48} className="mx-auto text-red-500 mb-4"/>
+                     <h3 className="text-xl font-bold text-white mb-2">Видалити клієнта?</h3>
+                     <p className="text-zinc-400 mb-6 text-sm">Це видалить всю історію відвідувань. Дію неможливо скасувати.</p>
+                     <div className="flex gap-3">
+                         <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 py-3 bg-zinc-800 text-white rounded-xl">Скасувати</button>
+                         <button onClick={executeDelete} className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl">Видалити</button>
                      </div>
                  </div>
              </div>

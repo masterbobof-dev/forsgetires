@@ -4,7 +4,7 @@ import {
     Settings, Briefcase, Plus, PackageX, Trash2, ToggleRight, ToggleLeft, 
     KeyRound, Save, RotateCcw, X, AlertTriangle, Loader2, Phone, MapPin, 
     Link2, Shield, UserCog, Truck, Crown, LayoutGrid, Package, Smartphone,
-    Eraser, Database, FileSearch, CheckCircle
+    Eraser, Database, FileSearch, CheckCircle, Tags, GitMerge
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { Supplier } from '../../types';
@@ -55,6 +55,10 @@ const SettingsTab: React.FC = () => {
   // Reset Stock State
   const [showResetStockConfirm, setShowResetStockConfirm] = useState(false);
   const [resettingStock, setResettingStock] = useState(false);
+
+  // Categorization State
+  const [sortingCategories, setSortingCategories] = useState(false);
+  const [showSortConfirm, setShowSortConfirm] = useState(false);
 
   useEffect(() => {
     fetchSettings();
@@ -209,6 +213,128 @@ const SettingsTab: React.FC = () => {
         showMsg("Всі товари відмічені як 'В наявності'!");
      } catch (e: any) { showMsg(e.message, 'error'); }
      finally { setResettingStock(false); }
+  };
+
+  // --- AUTO CATEGORIZATION LOGIC (IMPROVED FOR AGRO) ---
+  const executeAutoCategorization = async () => {
+      setShowSortConfirm(false);
+      setSortingCategories(true);
+      try {
+          // 1. Fetch all items
+          const { data: allItems, error } = await supabase.from('tyres').select('id, title, radius, vehicle_type');
+          if (error) throw error;
+          if (!allItems || allItems.length === 0) { showMsg("Немає товарів для сортування", 'error'); return; }
+
+          const updates = [];
+          let changedCount = 0;
+
+          // SPECIAL KEYWORDS FOR AGRO
+          const agroBrands = ['OZKA', 'BKT', 'SEHA', 'KNK', 'PETLAS', 'ALLIANCE', 'MITAS', 'CULTOR'];
+          const agroKeywords = ['AGRO', 'TRACTOR', 'IMPLEMENT', 'FARM', 'LOADER', 'INDUSTRIAL', 'SKID', 'BOBCAT', 'FORKLIFT', 'PR '];
+          
+          // INDUSTRIAL RIM DIAMETERS
+          const indRims = ['8', '9', '10', '12', '15.3'];
+
+          for (const item of allItems) {
+              let newRadius = item.radius || '';
+              let newType = item.vehicle_type || 'car';
+              let isChanged = false;
+
+              const title = (item.title || '').toUpperCase();
+              
+              // 1. EXTRACT RADIUS FROM "Width-Radius" format (e.g., 6,00-9 -> R9)
+              if (!newRadius || newRadius === 'R') {
+                  const dashMatch = title.match(/[0-9.,]+[-](\d{1,2}(?:\.\d)?)/);
+                  if (dashMatch) {
+                      newRadius = `R${dashMatch[1]}`;
+                      isChanged = true;
+                  }
+              }
+
+              // A. Radius Fix (R17.5, R19.5, etc)
+              const decimalMatch = title.match(/R(17\.5|19\.5|22\.5)/);
+              if (decimalMatch) {
+                  const correctR = decimalMatch[0];
+                  if (newRadius !== correctR) {
+                      newRadius = correctR;
+                      isChanged = true;
+                  }
+              }
+
+              // B. Category Logic
+              let detectedType = 'car';
+              
+              // 1. Truck / TIR check (Strict Rims)
+              if (['R17.5', 'R19.5', 'R22.5', 'R24.5'].includes(newRadius) || title.includes('TIR ') || title.includes('BUS ')) {
+                  detectedType = 'truck';
+              }
+              // 2. Agro / Special Check (Enhanced)
+              else {
+                  // Check brands and keywords
+                  const isAgroBrand = agroBrands.some(b => title.includes(b));
+                  const isAgroKey = agroKeywords.some(k => title.includes(k));
+                  const hasPR = /\d+\s*PR/.test(title); // Check for Ply Rating (e.g. 12PR)
+                  
+                  // Check Ind Rims
+                  const rVal = newRadius.replace('R','');
+                  const isIndRim = indRims.includes(rVal);
+                  
+                  // Check Large Rims
+                  const rNum = parseFloat(rVal) || 0;
+                  const isLargeAgro = rNum >= 24 && rNum !== 24.5; // 24.5 is Truck, but 24 is often Agro
+
+                  if (isAgroBrand || isAgroKey || hasPR || isIndRim || isLargeAgro) {
+                      detectedType = 'agro';
+                  }
+              }
+
+              // 3. Cargo Check (if not truck/agro)
+              if (detectedType === 'car') {
+                  if (newRadius.includes('C') || title.includes('R14C') || title.includes('R15C') || title.includes('R16C') || title.includes('LT ')) {
+                      detectedType = 'cargo';
+                  }
+              }
+
+              // 4. SUV Check
+              if (detectedType === 'car' && (title.includes('SUV') || title.includes('4X4') || title.includes('JEEP'))) {
+                  detectedType = 'suv';
+              }
+
+              // Apply Type Change
+              if (newType !== detectedType) {
+                  newType = detectedType;
+                  isChanged = true;
+              }
+
+              if (isChanged) {
+                  updates.push({
+                      id: item.id,
+                      title: item.title, 
+                      radius: newRadius,
+                      vehicle_type: newType
+                  });
+                  changedCount++;
+              }
+          }
+
+          // 3. Batch Update (Chunks of 500)
+          if (updates.length > 0) {
+              const CHUNK_SIZE = 500;
+              for (let i = 0; i < updates.length; i += CHUNK_SIZE) {
+                  const chunk = updates.slice(i, i + CHUNK_SIZE);
+                  const { error: updErr } = await supabase.from('tyres').upsert(chunk);
+                  if (updErr) throw updErr;
+              }
+              showMsg(`Успішно оновлено ${changedCount} товарів!`);
+          } else {
+              showMsg("Всі товари вже мають правильні категорії.");
+          }
+
+      } catch (e: any) {
+          showMsg("Помилка сортування: " + e.message, 'error');
+      } finally {
+          setSortingCategories(false);
+      }
   };
 
   // --- IMPROVED STORAGE CLEANUP LOGIC ---
@@ -489,24 +615,46 @@ const SettingsTab: React.FC = () => {
                        <div className="bg-black/30 p-6 rounded-xl border border-zinc-800 flex flex-col justify-between">
                             <div>
                                 <h4 className="text-white text-lg font-bold mb-1 flex items-center gap-2"><Database size={18}/> Обслуговування БД</h4>
-                                <p className="text-zinc-400 text-sm mb-4">Масові операції для відновлення статусів товарів.</p>
+                                <p className="text-zinc-400 text-sm mb-4">Масові операції для керування товарами.</p>
                             </div>
                             
-                            {!showResetStockConfirm ? (
-                                <button 
-                                    onClick={() => setShowResetStockConfirm(true)} 
-                                    disabled={resettingStock}
-                                    className="w-full bg-blue-900/20 text-blue-300 px-6 py-3 rounded-xl font-bold border border-blue-900/50 hover:bg-blue-900/40 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-                                >
-                                    <RotateCcw size={18}/> 
-                                    Скинути статус (Все в наявності)
-                                </button>
-                            ) : (
-                                <div className="flex gap-2">
-                                    <button onClick={processResetStock} className="flex-1 bg-red-600 text-white font-bold py-3 rounded-xl text-xs">Підтвердити</button>
-                                    <button onClick={() => setShowResetStockConfirm(false)} className="flex-1 bg-zinc-700 text-white font-bold py-3 rounded-xl text-xs">Скасувати</button>
-                                </div>
-                            )}
+                            <div className="space-y-2">
+                                {!showResetStockConfirm ? (
+                                    <button 
+                                        onClick={() => setShowResetStockConfirm(true)} 
+                                        disabled={resettingStock}
+                                        className="w-full bg-blue-900/20 text-blue-300 px-6 py-3 rounded-xl font-bold border border-blue-900/50 hover:bg-blue-900/40 flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-sm"
+                                    >
+                                        <RotateCcw size={16}/> 
+                                        Скинути статус (Все в наявності)
+                                    </button>
+                                ) : (
+                                    <div className="flex gap-2">
+                                        <button onClick={processResetStock} className="flex-1 bg-red-600 text-white font-bold py-3 rounded-xl text-xs">Підтвердити</button>
+                                        <button onClick={() => setShowResetStockConfirm(false)} className="flex-1 bg-zinc-700 text-white font-bold py-3 rounded-xl text-xs">Скасувати</button>
+                                    </div>
+                                )}
+
+                                {/* AUTO CATEGORIZATION BUTTON */}
+                                {!showSortConfirm ? (
+                                    <button 
+                                        onClick={() => setShowSortConfirm(true)} 
+                                        disabled={sortingCategories}
+                                        className="w-full bg-zinc-800 text-zinc-300 px-6 py-3 rounded-xl font-bold border border-zinc-700 hover:bg-zinc-700 flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-sm"
+                                    >
+                                        {sortingCategories ? <Loader2 className="animate-spin" size={16}/> : <GitMerge size={16}/>}
+                                        Авто-розподіл категорій
+                                    </button>
+                                ) : (
+                                    <div className="bg-zinc-800 p-2 rounded-xl text-center border border-zinc-700">
+                                        <p className="text-[10px] text-zinc-400 mb-2">Призначити TIR, Cargo, Agro та SUV?</p>
+                                        <div className="flex gap-2">
+                                            <button onClick={executeAutoCategorization} className="flex-1 bg-green-600 text-white font-bold py-2 rounded-lg text-xs">Так</button>
+                                            <button onClick={() => setShowSortConfirm(false)} className="flex-1 bg-zinc-700 text-white font-bold py-2 rounded-lg text-xs">Ні</button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                        </div>
                    </div>
 

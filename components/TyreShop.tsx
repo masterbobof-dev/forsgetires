@@ -299,7 +299,8 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   }, [activeCategory, activeSort, enableStockQty, filterBrand, filterRadius, filterWidth, filterHeight, showOnlyInStock]); 
 
   const parseTyreSpecs = (tyre: TyreProduct): TyreProduct => {
-    const sizeRegex = /(\d{3})[\/\s](\d{2})[\s\w]*R(\d{2}[C|c]?)/; 
+    // Regex updated to support decimal radii like R17.5
+    const sizeRegex = /(\d{3})[\/\s](\d{2})[\s\w]*R(\d{2}(?:\.5)?[C|c]?)/; 
     const match = tyre.title.match(sizeRegex) || tyre.description?.match(sizeRegex);
     
     let width = ''; 
@@ -417,15 +418,19 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
          // LIGHT TRUCK (C-type): R13C-R16C, excluding heavy truck
          query = query.or('radius.ilike.%C%').not('radius', 'in', '("R17.5","R19.5","R22.5")');
       } else if (activeCategory === 'truck') {
-         // HEAVY TRUCK (TIR): Specific large radii
-         query = query.or('radius.eq.R17.5,radius.eq.R19.5,radius.eq.R22.5,title.ilike.%TIR%');
+         // HEAVY TRUCK (TIR): Specific large radii or title match
+         query = query.or('radius.eq.R17.5,radius.eq.R19.5,radius.eq.R22.5,title.ilike.%TIR%,title.ilike.%R17.5%,title.ilike.%R19.5%,title.ilike.%R22.5%');
       } else if (activeCategory === 'agro') {
-         // AGRICULTURAL: Very large radii or specific keywords
-         query = query.or('title.ilike.%agro%,title.ilike.%tractor%,title.ilike.%farm%,title.ilike.%ind%,radius.in.("R24","R26","R28","R30","R32","R34","R36","R38","R40","R42")');
+         // AGRICULTURAL: Very large radii OR specific keywords (PR, OZKA, KNK, MPT, IND)
+         const agroRadii = ["R24","R26","R28","R30","R32","R34","R36","R38","R40","R42"];
+         const titleFilters = agroRadii.map(r => `title.ilike.%${r}%`).join(',');
+         // Add special keywords for small agro/industrial
+         const specKeywords = "title.ilike.%PR%,title.ilike.%OZKA%,title.ilike.%BKT%,title.ilike.%KNK%,title.ilike.%MPT%,title.ilike.%IND%";
+         
+         query = query.or(`title.ilike.%agro%,title.ilike.%tractor%,title.ilike.%farm%,radius.in.("R24","R26","R28","R30","R32","R34","R36","R38","R40","R42"),${titleFilters},${specKeywords}`);
       } else if (activeCategory === 'out_of_stock') {
          if (enableStockQty) query = query.or('in_stock.eq.false,stock_quantity.eq.0');
          else query = query.eq('in_stock', false);
-         // Override showOnlyInStock if user specifically clicks this tab
       } 
       
       // Default stock visibility for regular categories (if showOnlyInStock is false)
@@ -885,7 +890,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                  </div>
               </div>
            </div>
-        </div>
+       </div>
 
         {/* PRODUCTS GRID */}
         {loading ? (

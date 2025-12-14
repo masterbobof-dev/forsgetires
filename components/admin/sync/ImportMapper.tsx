@@ -263,7 +263,8 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
         const imageUrl = fieldMapping.image ? safeExtractString(getValueByPath(item, fieldMapping.image)) : null;
         
         let radius='';
-        const sizeMatch = title.match(/(\d{3})[\/\s](\d{2})[\s\w]*R(\d{2}[C|c]?)/);
+        // Updated regex to support decimal radii (e.g. R17.5)
+        const sizeMatch = title.match(/(\d{3})[\/\s](\d{2})[\s\w]*R(\d{2}(?:\.5)?[C|c]?)/);
         if (sizeMatch) { radius='R'+sizeMatch[3].toUpperCase(); }
 
         // --- STOCK PARSING IMPROVED ---

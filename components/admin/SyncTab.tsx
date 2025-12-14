@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Globe, Settings, CheckCircle, AlertTriangle, Loader2, Database, Save, Image as ImageIcon, Box, Briefcase, Search, Download, Bug, ToggleLeft, ToggleRight, StopCircle, EyeOff } from 'lucide-react';
+import { Globe, Settings, CheckCircle, AlertTriangle, Loader2, Database, Save, Image as ImageIcon, Box, Briefcase, Search, Download, Bug, ToggleLeft, ToggleRight, StopCircle, EyeOff, FileText, Ban, Check, Code, Copy, Play, SkipForward, RefreshCw } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import ApiRequestPanel from './sync/ApiRequestPanel';
 import ImportMapper from './sync/ImportMapper';
@@ -134,28 +134,52 @@ const scanForArrays = (obj: any, path = '', depth = 0): { path: string, count: n
     return candidates.sort((a,b) => b.count - a.count);
 };
 
-// --- ROBUST FETCH: RETURNS BLOB + DEBUG INFO ---
-const fetchImageFromProxy = async (bodyPayload: any): Promise<{ blob: Blob, contentType: string, status: number, debugUrl: string }> => {
-    // USE SUPABASE FUNCTIONS INVOKE
-    // This automatically handles the URL construction and Authorization header
-    // Use responseType: 'blob' to get raw data
+const cleanHeaders = (headers: any) => {
+    const cleaned: any = {};
+    if (!headers) return cleaned;
+    Object.keys(headers).forEach(key => {
+        const lower = key.toLowerCase();
+        if (lower !== 'host' && lower !== 'content-length' && lower !== 'connection' && lower !== 'accept-encoding') {
+            cleaned[key] = headers[key];
+        }
+    });
+    return cleaned;
+};
+
+// --- NEW SERVER-SIDE SAVE LOGIC ---
+const requestServerSideUpload = async (bodyPayload: any, productId: string | number): Promise<{ imageUrl: string, status: number }> => {
+    // We send a flag "saveToStorage: true" and the filename to the Edge Function
+    const requestData = {
+        ...bodyPayload,
+        _saveToStorage: true,
+        _fileName: `tyre_${productId}_${Date.now()}.jpg`
+    };
+
     const { data, error } = await supabase.functions.invoke('foto', {
-        body: bodyPayload,
-        responseType: 'blob' 
+        body: requestData
     });
 
     if (error) {
-        throw new Error("Function error: " + error.message);
+        throw new Error("Edge Function Error: " + error.message);
     }
 
-    if (!data) throw new Error("Empty response");
+    if (!data) {
+        throw new Error("SERVER ERROR: Порожня відповідь.");
+    }
 
-    const blob = data;
-    const contentType = blob.type || 'unknown';
-    
-    // We don't get exact status code from helper easily unless we use raw fetch, 
-    // but data existence implies 200-299 usually.
-    return { blob, contentType, status: 200, debugUrl: 'function:foto' };
+    // Check for Logic Errors returned by our function
+    if (data.error) {
+        const errLower = data.error.toLowerCase();
+        if (errLower.includes("limit") || errLower.includes("exceeded")) throw new Error("LIMIT_EXCEEDED");
+        throw new Error("API/Server Error: " + data.error);
+    }
+
+    if (!data.imageUrl) {
+        // Fallback: If function returned generic success but no URL
+        throw new Error("Сервер не повернув посилання на фото.");
+    }
+
+    return { imageUrl: data.imageUrl, status: 200 };
 };
 
 const PHOTO_DEFAULT_CONFIG = {
@@ -168,6 +192,117 @@ const PHOTO_DEFAULT_CONFIG = {
       "Key": "INSERT_KEY_HERE"
     }, null, 2)
 };
+
+// UPDATED EDGE FUNCTION CODE (SERVER-SIDE UPLOAD)
+const EDGE_FUNCTION_CODE = `import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
+  try {
+    const { url, method, headers, body, _saveToStorage, _fileName } = await req.json()
+
+    if (!url) throw new Error("Missing URL");
+
+    // 1. Prepare Headers for Omega
+    const upstreamHeaders = new Headers(headers || {})
+    const forbidden = ['host', 'content-length', 'connection', 'origin', 'referer'];
+    forbidden.forEach(k => upstreamHeaders.delete(k));
+    upstreamHeaders.set('Accept', 'image/jpeg, image/png, application/json');
+    if (body) upstreamHeaders.set('Content-Type', 'application/json');
+
+    console.log(\`Fetching: \${method} \${url}\`);
+
+    // 2. Fetch from Omega
+    const res = await fetch(url, {
+      method: method || 'GET',
+      headers: upstreamHeaders,
+      body: body ? (typeof body === 'string' ? body : JSON.stringify(body)) : null
+    })
+
+    // 3. Get Binary Data
+    const arrayBuffer = await res.arrayBuffer();
+
+    // 4. Validate Data (Check if it's JSON error or HTML)
+    if (arrayBuffer.byteLength < 500) {
+        const text = new TextDecoder().decode(arrayBuffer);
+        // Check for specific Omega errors
+        if (text.includes('request_limit_exceeded')) throw new Error("request_limit_exceeded");
+        if (text.includes('Error') || text.includes('false')) throw new Error("API Error: " + text);
+        if (arrayBuffer.byteLength === 0) throw new Error("Empty response from API");
+    }
+
+    // Check Magic Numbers (Simple JPEG/PNG check)
+    const view = new Uint8Array(arrayBuffer);
+    const isJpeg = view[0] === 0xFF && view[1] === 0xD8;
+    const isPng = view[0] === 0x89 && view[1] === 0x50;
+    
+    if (!isJpeg && !isPng && view[0] !== 0x00) {
+       // If it's not an image, try to return text for debugging
+       const text = new TextDecoder().decode(view.slice(0, 100));
+       throw new Error("Not an image. Response start: " + text);
+    }
+
+    // 5. SERVER-SIDE UPLOAD (If requested)
+    if (_saveToStorage && _fileName) {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+        
+        if (!supabaseKey) throw new Error("Server Config Error: Missing Service Role Key");
+
+        const supabase = createClient(supabaseUrl, supabaseKey);
+
+        const contentType = isPng ? 'image/png' : 'image/jpeg';
+        
+        const { data, error } = await supabase.storage
+            .from('galery')
+            .upload(_fileName, arrayBuffer, { contentType: contentType, upsert: true });
+
+        if (error) throw error;
+
+        const { data: publicUrlData } = supabase.storage
+            .from('galery')
+            .getPublicUrl(_fileName);
+
+        return new Response(JSON.stringify({ imageUrl: publicUrlData.publicUrl }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+    }
+
+    // Fallback: Return binary (Legacy Mode)
+    return new Response(arrayBuffer, {
+      status: res.status,
+      headers: {
+        ...corsHeaders,
+        'Content-Type': res.headers.get('Content-Type') || 'application/octet-stream',
+        'Content-Length': String(arrayBuffer.byteLength)
+      }
+    })
+
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 200, // Return 200 so client can parse JSON error safely
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+})`;
+
+interface DetailedLogItem {
+    id: number;
+    productId: string;
+    status: 'success' | 'error' | 'skipped';
+    message: string;
+    details?: string;
+    timestamp: string;
+}
 
 const SyncTab: React.FC = () => {
   const [viewMode, setViewMode] = useState<'dashboard' | 'config'>('dashboard');
@@ -182,15 +317,21 @@ const SyncTab: React.FC = () => {
   const [photoSourceField, setPhotoSourceField] = useState<'product_number' | 'catalog_number'>('product_number');
   const [isBinaryMode, setIsBinaryMode] = useState(true);
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
+  
+  // --- OPTIONS ---
   const [forceOverwritePhotos, setForceOverwritePhotos] = useState(false);
-  const [skipOutOfStock, setSkipOutOfStock] = useState(true); // Default to TRUE to save space
+  const [skipOutOfStock, setSkipOutOfStock] = useState(true); // For Photo Sync
+  const [customStartId, setCustomStartId] = useState(''); // NEW: Resume feature
+  const [lastSuccessCursor, setLastSuccessCursor] = useState(''); // Auto-save cursor
+  const [fixBrokenLinks, setFixBrokenLinks] = useState(false); // NEW: Only replace broken images
+  const [importOnlyInStock, setImportOnlyInStock] = useState(true); // NEW: For Product Sync
 
   const [dbSearch, setDbSearch] = useState('');
   const [foundProducts, setFoundProducts] = useState<any[]>([]);
   const [selectedTestProduct, setSelectedTestProduct] = useState<any | null>(null);
   const [testLoading, setTestLoading] = useState(false);
   const [testResultImage, setTestResultImage] = useState<string | null>(null);
-  const [testResultBlob, setTestResultBlob] = useState<Blob | null>(null);
+  
   const [testSaveStatus, setTestSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [debugResponse, setDebugResponse] = useState<string | null>(null);
 
@@ -200,8 +341,13 @@ const SyncTab: React.FC = () => {
 
   const [syncProgress, setSyncProgress] = useState({ total: 0, processed: 0, updated: 0, inserted: 0 });
   const [syncLogs, setSyncLogs] = useState<string[]>([]);
+  
+  // NEW: Detailed Logs for Table
+  const [detailedLogs, setDetailedLogs] = useState<DetailedLogItem[]>([]);
+  
   const [syncError, setSyncError] = useState('');
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [showEdgeCode, setShowEdgeCode] = useState(false);
 
   useEffect(() => {
       const fetchSuppliers = async () => {
@@ -227,6 +373,10 @@ const SyncTab: React.FC = () => {
       const savedBinaryMode = localStorage.getItem('forsage_sync_binary_mode');
       if (savedBinaryMode) setIsBinaryMode(savedBinaryMode === 'true');
 
+      // LOAD LAST CURSOR
+      const savedCursor = localStorage.getItem('forsage_photo_last_id');
+      if (savedCursor) setLastSuccessCursor(savedCursor);
+
       if (hasConfig && hasMap && hasSupplier) {
           setViewMode('dashboard');
       } else {
@@ -235,6 +385,13 @@ const SyncTab: React.FC = () => {
   }, []);
 
   const addLog = (msg: string) => setSyncLogs(prev => [...prev.slice(-20), msg]);
+  
+  const addDetailedLog = (item: Omit<DetailedLogItem, 'timestamp'>) => {
+      setDetailedLogs(prev => {
+          const newItem = { ...item, timestamp: new Date().toLocaleTimeString() };
+          return [newItem, ...prev].slice(0, 500); // Keep last 500 logs
+      });
+  };
 
   const searchDbProduct = async () => {
       if (!dbSearch.trim() || !selectedSupplierId) return;
@@ -251,7 +408,6 @@ const SyncTab: React.FC = () => {
       if (!selectedTestProduct) return;
       setTestLoading(true);
       setTestResultImage(null);
-      setTestResultBlob(null);
       setTestSaveStatus('idle');
       setDebugResponse(null);
 
@@ -272,6 +428,8 @@ const SyncTab: React.FC = () => {
           let bodyStr = config.body;
           try { headers = JSON.parse(config.headers); } catch(e) {}
           
+          headers = cleanHeaders(headers);
+
           if (config.method !== 'GET' && bodyStr && supplierKey) {
               bodyStr = bodyStr.replace("INSERT_KEY_HERE", supplierKey);
           }
@@ -285,60 +443,45 @@ const SyncTab: React.FC = () => {
               requestBody.ProductId = idToSend;
           }
 
-          // USE DIRECT FETCH TO "foto" WITH DEBUG INFO
-          const { blob, contentType, status, debugUrl } = await fetchImageFromProxy({
+          // SERVER SIDE UPLOAD & RETURN LINK
+          const { imageUrl } = await requestServerSideUpload({
               url: config.url,
               method: config.method,
               headers: headers,
               body: requestBody
-          });
+          }, selectedTestProduct.id);
 
-          let debugMsg = `Request to: ${debugUrl}\nTarget: ${config.url}\nStatus: ${status}\nType: ${contentType}\nSize: ${blob.size} bytes\n`;
-
-          // Check if valid image
-          if (contentType.includes('image') || (blob.size > 500 && !contentType.includes('json') && !contentType.includes('text'))) {
-              const url = URL.createObjectURL(blob);
-              setTestResultImage(url);
-              setTestResultBlob(blob);
-              debugMsg += `\n[SUCCESS] Blob is a valid image.`;
-          } else {
-              // Try to read the error text/json
-              const text = await blob.text();
-              debugMsg += `\n[RESPONSE BODY (First 1000 chars)]:\n${text.substring(0, 1000)}`;
-              
-              if (text.includes('JFIF') || text.includes('PNG')) {
-                  debugMsg += `\n\n[WARNING] Binary data detected inside Text/JSON response! The proxy is not returning raw bytes.`;
-              }
-              
-              alert("Отримано не зображення. Див. Debug.");
-          }
+          setTestResultImage(imageUrl);
           
+          // Auto Update DB for test
+          await supabase.from('tyres').update({ image_url: imageUrl, in_stock: true }).eq('id', selectedTestProduct.id);
+          
+          let debugMsg = `[SUCCESS] Server downloaded and saved image.\nURL: ${imageUrl}`;
           setDebugResponse(debugMsg);
+          setTestSaveStatus('saved');
 
       } catch (e: any) {
           setDebugResponse(`Error: ${e.message}`);
-          alert("Помилка тесту: " + e.message);
+          if (e.message.includes("limit")) {
+              alert("Ліміт запитів! Спробуйте пізніше.");
+          } else {
+              alert("Помилка: " + e.message);
+          }
       } finally {
           setTestLoading(false);
       }
   };
 
   const saveTestImage = async () => {
-      if (!testResultBlob || !selectedTestProduct) return;
+      if (!selectedTestProduct || !testResultImage) return;
       setTestSaveStatus('saving');
       try {
-          const ext = testResultBlob.type === 'image/png' ? 'png' : 'jpg';
-          const fileName = `tyre_${selectedTestProduct.id}_${Date.now()}.${ext}`;
-          const { error } = await supabase.storage.from('galery').upload(fileName, testResultBlob, { contentType: testResultBlob.type, upsert: true });
+          const { error } = await supabase.from('tyres').update({ image_url: testResultImage, in_stock: true }).eq('id', selectedTestProduct.id);
           if (error) throw error;
-          const { data } = supabase.storage.from('galery').getPublicUrl(fileName);
-          // Set in_stock = true for immediate gratification on single test
-          await supabase.from('tyres').update({ image_url: data.publicUrl, in_stock: true }).eq('id', selectedTestProduct.id);
           setTestSaveStatus('saved');
-          setSelectedTestProduct({...selectedTestProduct, image_url: data.publicUrl});
       } catch (e: any) {
-          setTestSaveStatus('error');
           alert("Помилка збереження: " + e.message);
+          setTestSaveStatus('error');
       }
   };
 
@@ -364,6 +507,7 @@ const SyncTab: React.FC = () => {
       setIsPhotoSyncing(true);
       setSyncProgress({ total: 0, processed: 0, updated: 0, inserted: 0 });
       setSyncLogs(['Запуск масової синхронізації...']);
+      setDetailedLogs([]); // CLEAR PREVIOUS LOGS
       setSyncError('');
 
       // Determine starting Count estimate
@@ -373,7 +517,16 @@ const SyncTab: React.FC = () => {
       setSyncProgress(p => ({ ...p, total: count || 0 }));
 
       // Batch logic
+      // --- CUSTOM START ID ---
       let lastProcessedId = 0;
+      if (customStartId) {
+          const parsedId = parseInt(customStartId);
+          if (!isNaN(parsedId) && parsedId > 0) {
+              lastProcessedId = parsedId;
+              addLog(`Відновлення з ID: ${lastProcessedId}...`);
+          }
+      }
+
       let keepGoing = true;
       const BATCH_SIZE = 1000; // Large batch size to minimize DB requests
 
@@ -387,7 +540,7 @@ const SyncTab: React.FC = () => {
               
               // Construct query: Get next batch of items
               let query = supabase.from('tyres')
-                  .select('id, product_number')
+                  .select('id, product_number, title, image_url') // Select image_url to check for broken links
                   .eq('supplier_id', parseInt(savedSupplier))
                   .gt('id', lastProcessedId) // Cursor pagination
                   .not('product_number', 'is', null)
@@ -395,10 +548,11 @@ const SyncTab: React.FC = () => {
                   .limit(BATCH_SIZE);
 
               // Filter logic
-              if (!forceOverwritePhotos) {
-                  // Only fetch items without photos if overwrite is OFF
-                  query = query.is('image_url', null);
+              if (!forceOverwritePhotos && !fixBrokenLinks) {
+                  // Only fetch items without photos if overwrite is OFF and fixMode is OFF
+                  query = query.or('image_url.is.null,image_url.eq.""');
               }
+              // If fixBrokenLinks is ON, we fetch EVERYTHING (or overwrite) and filter in JS
 
               // SKIP OUT OF STOCK
               if (skipOutOfStock) {
@@ -410,33 +564,56 @@ const SyncTab: React.FC = () => {
               if (error) throw error;
               
               if (!itemsBatch || itemsBatch.length === 0) {
-                  addLog("Всі товари оброблено. Кінець.");
+                  // --- FIX: DETECT EMPTY START ---
+                  if (lastProcessedId === 0 && !customStartId) {
+                      const msg = skipOutOfStock 
+                        ? "Не знайдено товарів (увімкнено 'Тільки в наявності'). Можливо всі товари мають фото або на залишку 0." 
+                        : "Не знайдено товарів для обробки. Всі товари мають фото?";
+                      
+                      addLog(msg);
+                      setSyncError(msg); // Set Error to keep UI open
+                  } else {
+                      addLog("Всі товари оброблено (або кінець списку).");
+                  }
                   keepGoing = false;
                   break;
               }
 
-              addLog(`Завантажено пакет: ${itemsBatch.length} шт. (ID > ${lastProcessedId})`);
+              addLog(`Завантажено пакет: ${itemsBatch.length} шт. (Start ID > ${lastProcessedId})`);
 
               // Process Batch Loop
               for (const product of itemsBatch) {
                   // Check stop flag inside inner loop
                   if (!isPhotoSyncingRef.current) { keepGoing = false; break; }
 
-                  // --- HOURLY LIMIT PROTECTION ---
-                  // If we approach 300 requests, take a long pause
-                  if (requestsInThisSession > 0 && requestsInThisSession % 290 === 0) {
-                      addLog(`[LIMIT WARNING] Виконано ${requestsInThisSession} запитів. Пауза 60 сек для уникнення блокування (300/год)...`);
-                      await new Promise(r => setTimeout(r, 60000));
-                  }
-
                   lastProcessedId = product.id; // Advance cursor
                   setSyncProgress(p => ({ ...p, processed: p.processed + 1 }));
+
+                  // --- SMART FILTER: FIX BROKEN LINKS ---
+                  // If "Fix Broken" is ON, we skip items that ALREADY HAVE GOOD PHOTOS
+                  if (fixBrokenLinks && !forceOverwritePhotos) {
+                      const url = product.image_url;
+                      // Assume a valid photo is at least 25 chars (e.g. Supabase storage URL) and starts with http
+                      if (url && url.length > 25 && url.startsWith('http')) {
+                          // Skip good items to save API calls
+                          continue;
+                      }
+                      // If we are here, the link is either missing, empty, or short/broken. Proceed to download.
+                  }
+
+                  // --- HOURLY LIMIT PROTECTION ---
+                  // If we approach 300 requests, take a LONG pause because limit is usually 300/hour
+                  if (requestsInThisSession > 0 && requestsInThisSession % 290 === 0) {
+                      addLog(`[LIMIT WARNING] Виконано ${requestsInThisSession} запитів. Проактивна пауза 3 хв (щоб не зловити бан)...`);
+                      await new Promise(r => setTimeout(r, 180000)); // 3 minutes wait
+                  }
 
                   let idToSend = parseInt(product.product_number);
                   
                   // Skip invalid IDs
                   if (!idToSend) {
                       skippedCount++;
+                      addDetailedLog({ id: product.id, productId: 'N/A', status: 'skipped', message: 'Немає product_number' });
                       continue;
                   }
                   // Standard Logic: Omega IDs are often positive in DB but negative for Image API
@@ -451,59 +628,72 @@ const SyncTab: React.FC = () => {
                       requestBody.ProductId = idToSend;
                   } catch(e) { 
                       skippedCount++;
+                      addDetailedLog({ id: product.id, productId: String(idToSend), status: 'error', message: 'Config JSON error' });
                       continue; 
                   }
 
-                  try {
-                      // Increment request counter
-                      requestsInThisSession++;
+                  // --- RETRY LOGIC FOR LIMITS ---
+                  let success = false;
+                  let attempts = 0;
+                  
+                  while(!success && attempts < 5 && isPhotoSyncingRef.current) {
+                      attempts++;
+                      try {
+                          // Increment request counter
+                          requestsInThisSession++;
 
-                      // USE SUPABASE FUNCTION INVOKE
-                      const { blob, contentType } = await fetchImageFromProxy({
-                          url: config.url,
-                          method: config.method,
-                          headers: JSON.parse(config.headers || '{}'),
-                          body: requestBody
-                      });
-                      
-                      // Check if valid image (not JSON error, not text, size > 500 bytes)
-                      // STRICT CHECK: content-type must be image OR blob size > 1000 bytes. 
-                      // If JSON, parse it to see error.
-                      if (contentType.includes('application/json')) {
-                          // Likely an error message from API
-                          // const text = await blob.text(); 
-                          // console.log("API Error JSON:", text); 
-                          errorCount++;
-                      }
-                      else if ((contentType.includes('image') || blob.size > 500) && !contentType.includes('text')) {
-                          const ext = blob.type === 'image/png' ? 'png' : 'jpg';
-                          const fileName = `tyre_${product.id}_${Date.now()}.${ext}`;
+                          // Prepare headers
+                          const cleanH = cleanHeaders(JSON.parse(config.headers || '{}'));
+
+                          // USE SERVER-SIDE UPLOAD
+                          const { imageUrl } = await requestServerSideUpload({
+                              url: config.url,
+                              method: config.method,
+                              headers: cleanH,
+                              body: requestBody
+                          }, product.id);
                           
-                          // Upload to Storage
-                          const { error: uploadError } = await supabase.storage.from('galery').upload(fileName, blob, { contentType: blob.type, upsert: true });
+                          // Update DB with URL returned from server
+                          await supabase.from('tyres').update({ image_url: imageUrl, in_stock: true }).eq('id', product.id);
                           
-                          if (!uploadError) {
-                              const { data: publicUrlData } = supabase.storage.from('galery').getPublicUrl(fileName);
+                          // --- SUCCESS: AUTO-SAVE CURSOR ---
+                          localStorage.setItem('forsage_photo_last_id', String(product.id));
+                          setLastSuccessCursor(String(product.id));
+
+                          setSyncProgress(p => ({ ...p, updated: p.updated + 1 }));
+                          addDetailedLog({ id: product.id, productId: String(idToSend), status: 'success', message: 'Завантажено', details: 'OK' });
+                          success = true;
+
+                      } catch (apiErr: any) {
+                          // CASE INSENSITIVE CHECK FOR LIMIT
+                          const msg = apiErr.message ? apiErr.message.toLowerCase() : '';
+                          
+                          if (msg.includes("limit") || msg.includes("429") || msg.includes("exceeded")) {
+                              // Exponential backoff or long pause
+                              const waitTime = attempts * 120000; // 2 min, 4 min, 6 min...
+                              addLog(`[LIMIT HIT] Сервер повернув ліміт. Пауза ${(waitTime/60000).toFixed(1)} хв (Спроба ${attempts}/5)...`);
                               
-                              // Update DB (Mark in_stock=true if image found, optional but nice)
-                              await supabase.from('tyres').update({ image_url: publicUrlData.publicUrl, in_stock: true }).eq('id', product.id);
-                              
-                              setSyncProgress(p => ({ ...p, updated: p.updated + 1 }));
+                              // Wait loop to allow interrupt
+                              const step = 1000;
+                              let waited = 0;
+                              while(waited < waitTime && isPhotoSyncingRef.current) {
+                                  await new Promise(r => setTimeout(r, step));
+                                  waited += step;
+                              }
+                              // Loop will continue (retry)
                           } else {
+                              // Real error, log and break
                               errorCount++;
+                              const errTxt = apiErr.message || "Unknown error";
+                              // Expand log message display limit
+                              addDetailedLog({ id: product.id, productId: String(idToSend), status: 'error', message: 'API Fail', details: errTxt.length > 100 ? errTxt.substring(0,100)+'...' : errTxt });
+                              success = true; // Stop retrying this item
                           }
-                      } else {
-                          // Too small or text/html error
-                          errorCount++;
                       }
-                  } catch (apiErr: any) {
-                      // Silent fail for individual items to keep loop going
-                      errorCount++;
                   }
 
-                  // 2500ms DELAY = ~24 requests per minute.
-                  // This is safely under the "30 requests per minute" limit.
-                  await new Promise(r => setTimeout(r, 2500));
+                  // 3000ms DELAY = ~20 requests per minute (Safe Mode)
+                  await new Promise(r => setTimeout(r, 3000));
               }
               
               if (errorCount > 0 || skippedCount > 0) {
@@ -554,6 +744,9 @@ const SyncTab: React.FC = () => {
           let requestBody = null;
           try { headers = JSON.parse(config.headers); } catch(e) {}
           
+          // CLEAN HEADERS
+          headers = cleanHeaders(headers);
+
           if (config.method !== 'GET') {
               let bodyStr = config.body;
               if (supplierKey && bodyStr.includes("INSERT_KEY_HERE")) {
@@ -619,6 +812,26 @@ const SyncTab: React.FC = () => {
 
               // --- PREPARE DATA ---
               const mappedBatch = batchItems.map((item: any, idx: number) => {
+                  // --- STOCK CALCULATION ---
+                  let stock = 0;
+                  const rawStock = map.stock ? getValueByPath(item, map.stock) : 0;
+                  if (Array.isArray(rawStock)) {
+                      stock = rawStock.reduce((acc: number, wh: any) => {
+                          const v = wh.Value || wh.value || wh.amount || wh.quantity || wh.rest || 0;
+                          return acc + (parseInt(String(v).replace(/[><+\s]/g, '')) || 0);
+                      }, 0);
+                  } else if (typeof rawStock === 'object' && rawStock !== null) {
+                      const v = (rawStock as any).amount || (rawStock as any).quantity || (rawStock as any).Value || 0;
+                      stock = parseInt(String(v).replace(/[><+\s]/g, '')) || 0;
+                  } else {
+                      stock = parseInt(String(rawStock).replace(/[><+\s]/g, '')) || 0;
+                  }
+
+                  // --- SKIP IF STOCK FILTER IS ON ---
+                  if (importOnlyInStock && stock <= 0) {
+                      return null; // Will be filtered out
+                  }
+
                   let rawPrice = getValueByPath(item, map.price);
                   let price = smartExtractPrice(rawPrice);
                   
@@ -655,20 +868,6 @@ const SyncTab: React.FC = () => {
                   const sizeMatch = title.match(/(\d{3})[\/\s](\d{2})[\s\w]*R(\d{2}[C|c]?)/);
                   if (sizeMatch) { radius='R'+sizeMatch[3].toUpperCase(); }
 
-                  let stock = 0;
-                  const rawStock = map.stock ? getValueByPath(item, map.stock) : 0;
-                  if (Array.isArray(rawStock)) {
-                      stock = rawStock.reduce((acc: number, wh: any) => {
-                          const v = wh.Value || wh.value || wh.amount || wh.quantity || wh.rest || 0;
-                          return acc + (parseInt(String(v).replace(/[><+\s]/g, '')) || 0);
-                      }, 0);
-                  } else if (typeof rawStock === 'object' && rawStock !== null) {
-                      const v = (rawStock as any).amount || (rawStock as any).quantity || (rawStock as any).Value || 0;
-                      stock = parseInt(String(v).replace(/[><+\s]/g, '')) || 0;
-                  } else {
-                      stock = parseInt(String(rawStock).replace(/[><+\s]/g, '')) || 0;
-                  }
-
                   const season = detectSeason(title + ' ' + desc);
                   let vehicle_type = 'car';
                   if (radius.includes('C') || title.includes('Truck') || title.includes('LT')) vehicle_type = 'cargo';
@@ -693,11 +892,9 @@ const SyncTab: React.FC = () => {
                       radius,
                       vehicle_type
                   };
-              });
+              }).filter((item: any) => item !== null);
 
               // --- DEDUPLICATE BATCH IN MEMORY ---
-              // We must ensure the batch itself doesn't contain duplicates for (catalog_number + supplier_id)
-              // otherwise `upsert` will fail with "ON CONFLICT DO UPDATE command cannot affect row a second time"
               const uniqueBatch = new Map();
               
               mappedBatch.forEach((item: any) => {
@@ -712,7 +909,6 @@ const SyncTab: React.FC = () => {
 
               if (payload.length > 0) {
                   // --- UPSERT EVERYTHING (Insert or Update) ---
-                  // This relies on the SQL Constraint: UNIQUE (catalog_number, supplier_id)
                   const { error, count } = await supabase.from('tyres').upsert(payload, { 
                       onConflict: 'catalog_number,supplier_id',
                       ignoreDuplicates: false // Update if exists
@@ -724,13 +920,14 @@ const SyncTab: React.FC = () => {
                       setSyncProgress(prev => ({
                           total: prev.total + batchItems.length,
                           processed: prev.processed + batchItems.length,
-                          updated: prev.updated, // Supabase doesn't return separate counts for upsert easily
-                          inserted: prev.inserted + payload.length // Rough estimate
+                          updated: prev.updated, 
+                          inserted: prev.inserted + payload.length 
                       }));
                       addLog(`Processed batch of ${payload.length} items.`);
                   }
               } else {
-                  addLog("Skipping batch: No valid catalog numbers found.");
+                  addLog("Skipping batch: No valid items found (checked stock filter?).");
+                  setSyncProgress(prev => ({ ...prev, processed: prev.processed + batchItems.length }));
               }
 
               if (batchItems.length < BATCH_SIZE) {
@@ -804,14 +1001,14 @@ const SyncTab: React.FC = () => {
                        <div className="flex items-center gap-3">
                            <div className={`w-3 h-3 rounded-full ${isSyncing || isPhotoSyncing ? 'bg-[#FFC300] animate-ping' : syncError ? 'bg-red-500' : 'bg-green-500'}`}></div>
                            <span className="text-zinc-400 font-bold uppercase text-xs tracking-widest">
-                               {isSyncing || isPhotoSyncing ? 'СИНХРОНІЗАЦІЯ...' : syncError ? 'ПОМИЛКА' : 'ГОТОВО ДО РОБОТИ'}
+                               {isSyncing || isPhotoSyncing ? 'СИНХРОНІЗАЦІЯ...' : syncError ? 'ПОМИЛКА / ЗУПИНЕНО' : 'ГОТОВО ДО РОБОТИ'}
                            </span>
                        </div>
                        {lastSyncTime && <div className="text-xs text-zinc-500">Останнє оновлення: {lastSyncTime}</div>}
                    </div>
 
-                   {/* PROGRESS SECTION */}
-                   {isSyncing || isPhotoSyncing || syncProgress.processed > 0 ? (
+                   {/* PROGRESS SECTION - FIXED VISIBILITY LOGIC */}
+                   {isSyncing || isPhotoSyncing || syncProgress.processed > 0 || syncLogs.length > 0 || syncError ? (
                        <div className="space-y-6">
                            <div className="grid grid-cols-3 gap-4 text-center">
                                <div className="bg-zinc-800 p-3 rounded-xl">
@@ -829,7 +1026,7 @@ const SyncTab: React.FC = () => {
                            </div>
 
                            {/* LOGS */}
-                           <div className="bg-black/50 rounded-xl p-4 font-mono text-xs text-zinc-400 h-64 overflow-y-auto border border-zinc-800 shadow-inner">
+                           <div className="bg-black/50 rounded-xl p-4 font-mono text-xs text-zinc-400 h-32 overflow-y-auto border border-zinc-800 shadow-inner">
                                {syncLogs.map((log, i) => (
                                    <div key={i} className={`mb-1 border-b border-zinc-800/50 pb-1 last:border-0 break-words ${log.includes('[HINT]') ? 'text-[#FFC300] font-bold' : ''}`}>
                                        <span className="text-zinc-600 mr-2">{'>'}</span>{log}
@@ -837,6 +1034,43 @@ const SyncTab: React.FC = () => {
                                ))}
                                {(isSyncing || isPhotoSyncing) && <div className="animate-pulse text-[#FFC300]">Обробка даних...</div>}
                            </div>
+                           
+                           {/* DETAILED LOG TABLE FOR PHOTOS */}
+                           {detailedLogs.length > 0 && (
+                               <div className="mt-4">
+                                   <h5 className="text-white font-bold mb-2 flex items-center gap-2 text-sm"><FileText size={14}/> Детальний звіт по фото</h5>
+                                   <div className="bg-zinc-950 rounded-xl border border-zinc-800 overflow-hidden h-64 overflow-y-auto custom-scrollbar">
+                                       <table className="w-full text-left text-[10px] text-zinc-400">
+                                           <thead className="bg-zinc-900 text-zinc-500 sticky top-0">
+                                               <tr>
+                                                   <th className="p-2">ID товару</th>
+                                                   <th className="p-2">Req ID</th>
+                                                   <th className="p-2">Статус</th>
+                                                   <th className="p-2">Деталі</th>
+                                                   <th className="p-2 text-right">Час</th>
+                                               </tr>
+                                           </thead>
+                                           <tbody>
+                                               {detailedLogs.map((log, i) => (
+                                                   <tr key={i} className="border-b border-zinc-800/50 last:border-0 hover:bg-zinc-900/50">
+                                                       <td className="p-2 font-mono">{log.id}</td>
+                                                       <td className="p-2 font-mono text-blue-400">{log.productId}</td>
+                                                       <td className="p-2">
+                                                           {log.status === 'success' && <span className="text-green-500 flex items-center gap-1"><Check size={10}/> OK</span>}
+                                                           {log.status === 'error' && <span className="text-red-500 flex items-center gap-1"><Ban size={10}/> Error</span>}
+                                                           {log.status === 'skipped' && <span className="text-zinc-500 flex items-center gap-1"><Box size={10}/> Skip</span>}
+                                                       </td>
+                                                       <td className="p-2 max-w-[150px] truncate" title={log.details || log.message}>
+                                                           {log.message} <span className="opacity-50">{log.details}</span>
+                                                       </td>
+                                                       <td className="p-2 text-right opacity-50">{log.timestamp}</td>
+                                                   </tr>
+                                               ))}
+                                           </tbody>
+                                       </table>
+                                   </div>
+                               </div>
+                           )}
 
                            {!(isSyncing || isPhotoSyncing) && !syncError && (
                                <div className="flex items-center gap-2 text-green-400 bg-green-900/20 p-3 rounded-xl border border-green-900/50 justify-center">
@@ -865,6 +1099,17 @@ const SyncTab: React.FC = () => {
 
                    {/* ACTION BUTTONS */}
                    <div className="mt-8 flex flex-col gap-3">
+                       
+                       {/* STOCK FILTER UI */}
+                       <div className="flex justify-center mb-2">
+                           <label className="flex items-center gap-2 cursor-pointer bg-zinc-800/50 px-4 py-2 rounded-lg border border-zinc-700">
+                               <input type="checkbox" checked={importOnlyInStock} onChange={e => setImportOnlyInStock(e.target.checked)} className="w-4 h-4 accent-[#FFC300]" />
+                               <span className={`text-xs font-bold uppercase transition-colors ${importOnlyInStock ? 'text-green-400' : 'text-zinc-500'}`}>
+                                   Імпортувати тільки наявні (Stock > 0)
+                               </span>
+                           </label>
+                       </div>
+
                        <button 
                            onClick={handleRunAutoSync}
                            disabled={isSyncing || isPhotoSyncing}
@@ -880,16 +1125,44 @@ const SyncTab: React.FC = () => {
 
                        {/* MASS PHOTO SYNC BUTTON */}
                        <div className="bg-zinc-800/50 p-3 rounded-2xl border border-zinc-700 mt-2">
-                           <div className="flex justify-between items-center px-3 py-2 mb-2 bg-zinc-900/50 rounded-lg border border-zinc-800">
-                               <label className="flex items-center gap-2 cursor-pointer group">
-                                   <input type="checkbox" checked={forceOverwritePhotos} onChange={e => setForceOverwritePhotos(e.target.checked)} className="w-4 h-4 accent-[#FFC300]" />
-                                   <span className={`text-xs font-bold uppercase select-none transition-colors ${forceOverwritePhotos ? 'text-[#FFC300]' : 'text-zinc-500'}`}>Перезаписати існуючі</span>
-                               </label>
-                               
-                               <label className="flex items-center gap-2 cursor-pointer group">
-                                   <input type="checkbox" checked={skipOutOfStock} onChange={e => setSkipOutOfStock(e.target.checked)} className="w-4 h-4 accent-[#FFC300]" />
-                                   <span className={`text-xs font-bold uppercase select-none transition-colors ${skipOutOfStock ? 'text-white' : 'text-zinc-500'}`}>Тільки для наявних (In Stock)</span>
-                               </label>
+                           <div className="flex flex-col gap-3 mb-3">
+                               <div className="flex flex-wrap justify-between gap-2 px-3 py-2 bg-zinc-900/50 rounded-lg border border-zinc-800">
+                                   <label className="flex items-center gap-2 cursor-pointer group">
+                                       <input type="checkbox" checked={forceOverwritePhotos} onChange={e => { setForceOverwritePhotos(e.target.checked); if(e.target.checked) setFixBrokenLinks(false); }} className="w-4 h-4 accent-[#FFC300]" />
+                                       <span className={`text-xs font-bold uppercase select-none transition-colors ${forceOverwritePhotos ? 'text-[#FFC300]' : 'text-zinc-500'}`}>Перезаписати існуючі</span>
+                                   </label>
+                                   
+                                   <label className="flex items-center gap-2 cursor-pointer group">
+                                       <input type="checkbox" checked={skipOutOfStock} onChange={e => setSkipOutOfStock(e.target.checked)} className="w-4 h-4 accent-[#FFC300]" />
+                                       <span className={`text-xs font-bold uppercase select-none transition-colors ${skipOutOfStock ? 'text-white' : 'text-zinc-500'}`}>В наявності</span>
+                                   </label>
+
+                                   <label className="flex items-center gap-2 cursor-pointer group">
+                                       <input type="checkbox" checked={fixBrokenLinks} onChange={e => { setFixBrokenLinks(e.target.checked); if(e.target.checked) setForceOverwritePhotos(false); }} className="w-4 h-4 accent-blue-500" />
+                                       <span className={`text-xs font-bold uppercase select-none transition-colors ${fixBrokenLinks ? 'text-blue-400' : 'text-zinc-500'}`}>Тільки биті посилання</span>
+                                   </label>
+                               </div>
+
+                               <div className="flex flex-col gap-2 bg-zinc-900/50 p-2 rounded-lg border border-zinc-800">
+                                   <div className="flex items-center gap-2">
+                                       <span className="text-zinc-500 text-xs font-bold whitespace-nowrap px-2">Почати з ID:</span>
+                                       <input 
+                                           type="number" 
+                                           value={customStartId} 
+                                           onChange={(e) => setCustomStartId(e.target.value)} 
+                                           className="bg-black border border-zinc-700 rounded px-2 py-1 text-white text-sm font-mono w-full focus:border-[#FFC300] outline-none"
+                                           placeholder="0"
+                                       />
+                                   </div>
+                                   {lastSuccessCursor && (
+                                       <div 
+                                           onClick={() => setCustomStartId(lastSuccessCursor)}
+                                           className="text-[10px] text-green-500 font-mono text-center cursor-pointer hover:underline bg-green-900/10 rounded py-1 border border-green-900/30"
+                                       >
+                                           Останній успішний ID: {lastSuccessCursor} (Натисніть для продовження)
+                                       </div>
+                                   )}
+                               </div>
                            </div>
                            
                            {isPhotoSyncing ? (
@@ -897,7 +1170,7 @@ const SyncTab: React.FC = () => {
                                    onClick={handleStopSync}
                                    className="w-full py-4 rounded-xl font-bold text-sm flex items-center justify-center gap-3 border border-red-500 bg-red-900/50 text-red-200 hover:bg-red-900/80 animate-pulse shadow-[0_0_15px_rgba(220,38,38,0.3)]"
                                >
-                                   <StopCircle size={20} /> ЗУПИНИТИ ЗАВАНТАЖЕННЯ
+                                   <StopCircle size={20} /> ЗУПИНИТИ ЗАВАНТАЖЕННЯ (Поточний ID: {syncProgress.processed > 0 ? detailedLogs[0]?.id : '-'})
                                </button>
                            ) : (
                                <button 
@@ -910,7 +1183,9 @@ const SyncTab: React.FC = () => {
                                    }`}
                                >
                                    <ImageIcon size={20} />
-                                   {forceOverwritePhotos ? 'РОЗУМНЕ ЗАВАНТАЖЕННЯ ФОТО (ПОВНИЙ ЦИКЛ)' : 'РОЗУМНЕ ЗАВАНТАЖЕННЯ ФОТО (ТІЛЬКИ НОВІ)'}
+                                   {fixBrokenLinks ? `ВИПРАВИТИ БИТІ ФОТО ${customStartId ? '(З ID '+customStartId+')' : ''}` : 
+                                    forceOverwritePhotos ? (customStartId ? `ВІДНОВИТИ ПЕРЕЗАПИС (З ID ${customStartId})` : 'ПЕРЕЗАПИСАТИ ВСІ ФОТО') 
+                                    : (customStartId ? `ПРОДОВЖИТИ (З ID ${customStartId})` : 'ЗАВАНТАЖИТИ ФОТО (ТІЛЬКИ НОВІ)')}
                                </button>
                            )}
                            <div className="text-center mt-2 text-[10px] text-zinc-500 font-mono">
@@ -973,13 +1248,29 @@ const SyncTab: React.FC = () => {
                            <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800 shadow-xl space-y-6">
                                <div className="flex justify-between items-center">
                                    <h4 className="text-white font-bold flex items-center gap-2"><ImageIcon size={18}/> Тест одного товару (v2.0 PROXY)</h4>
-                                   <div className="flex items-center gap-2 bg-zinc-800 px-3 py-1 rounded-full text-xs">
-                                       <span className={isBinaryMode ? "text-[#FFC300] font-bold" : "text-zinc-500"}>Binary Mode</span>
-                                       <button onClick={() => { setIsBinaryMode(!isBinaryMode); localStorage.setItem('forsage_sync_binary_mode', String(!isBinaryMode)); }}>
-                                           {isBinaryMode ? <ToggleRight className="text-[#FFC300]" size={24}/> : <ToggleLeft className="text-zinc-500" size={24}/>}
+                                   <div className="flex items-center gap-2">
+                                       <button onClick={() => setShowEdgeCode(!showEdgeCode)} className="text-xs text-blue-400 font-bold underline px-2 flex items-center gap-1">
+                                           <Code size={12}/> {showEdgeCode ? 'Приховати код' : 'Код Сервера (Edge Function)'}
                                        </button>
+                                       <div className="flex items-center gap-2 bg-zinc-800 px-3 py-1 rounded-full text-xs">
+                                           <span className={isBinaryMode ? "text-[#FFC300] font-bold" : "text-zinc-500"}>Binary Mode</span>
+                                           <button onClick={() => { setIsBinaryMode(!isBinaryMode); localStorage.setItem('forsage_sync_binary_mode', String(!isBinaryMode)); }}>
+                                               {isBinaryMode ? <ToggleRight className="text-[#FFC300]" size={24}/> : <ToggleLeft className="text-zinc-500" size={24}/>}
+                                           </button>
+                                       </div>
                                    </div>
                                </div>
+
+                               {/* EDGE FUNCTION CODE VIEWER */}
+                               {showEdgeCode && (
+                                   <div className="bg-black border border-zinc-700 rounded-xl p-4 animate-in slide-in-from-top-2">
+                                       <div className="flex justify-between items-center mb-2">
+                                           <h5 className="text-[#FFC300] font-bold text-xs uppercase">Вставте цей код у Supabase Edge Function "foto"</h5>
+                                           <button onClick={() => navigator.clipboard.writeText(EDGE_FUNCTION_CODE)} className="text-zinc-400 hover:text-white flex items-center gap-1 text-xs"><Copy size={12}/> Копіювати</button>
+                                       </div>
+                                       <textarea readOnly className="w-full h-48 bg-zinc-900 text-green-400 font-mono text-[10px] p-2 rounded border border-zinc-800" value={EDGE_FUNCTION_CODE} />
+                                   </div>
+                               )}
 
                                {/* 1. SELECT SUPPLIER */}
                                <div className="bg-zinc-800/50 p-4 rounded-xl border border-zinc-700">

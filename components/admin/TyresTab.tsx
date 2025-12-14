@@ -107,10 +107,10 @@ const TyresTab: React.FC = () => {
             supabase.from('tyres').select('*', { count: 'exact', head: true }).or('vehicle_type.eq.car,vehicle_type.is.null').neq('vehicle_type', 'cargo').neq('vehicle_type', 'suv').not('radius', 'ilike', '%C%').then(r => r.count),
             // Cargo (C-type) exclude TIR
             supabase.from('tyres').select('*', { count: 'exact', head: true }).or('vehicle_type.eq.cargo,radius.ilike.%C%').not('radius', 'in', '("R17.5","R19.5","R22.5")').then(r => r.count),
-            // Truck (TIR)
-            supabase.from('tyres').select('*', { count: 'exact', head: true }).or('radius.eq.R17.5,radius.eq.R19.5,radius.eq.R22.5').then(r => r.count),
-            // Agro
-            supabase.from('tyres').select('*', { count: 'exact', head: true }).or('title.ilike.%agro%,title.ilike.%tractor%,radius.in.("R24","R26","R28","R30","R32","R34","R36","R38","R40","R42")').then(r => r.count),
+            // Truck (TIR) - Enhanced logic to check title for decimal radii
+            supabase.from('tyres').select('*', { count: 'exact', head: true }).or('radius.eq.R17.5,radius.eq.R19.5,radius.eq.R22.5,title.ilike.%TIR%,title.ilike.%R17.5%,title.ilike.%R19.5%,title.ilike.%R22.5%').then(r => r.count),
+            // Agro - Enhanced logic
+            supabase.from('tyres').select('*', { count: 'exact', head: true }).or('title.ilike.%agro%,title.ilike.%tractor%,radius.in.("R24","R26","R28","R30","R32","R34","R36","R38","R40","R42"),title.ilike.%R24%,title.ilike.%R26%,title.ilike.%R28%,title.ilike.%R30%,title.ilike.%R32%,title.ilike.%R34%,title.ilike.%R36%,title.ilike.%R38%,title.ilike.%R40%,title.ilike.%R42%').then(r => r.count),
             supabase.from('tyres').select('*', { count: 'exact', head: true }).eq('vehicle_type', 'suv').then(r => r.count),
             supabase.from('tyres').select('*', { count: 'exact', head: true }).eq('is_hot', true).then(r => r.count),
             supabase.from('tyres').select('*', { count: 'exact', head: true }).eq('in_stock', false).then(r => r.count),
@@ -148,8 +148,12 @@ const TyresTab: React.FC = () => {
        
        if (tyreCategoryTab === 'car') query = query.or('vehicle_type.eq.car,vehicle_type.is.null').neq('vehicle_type', 'cargo').neq('vehicle_type', 'suv').not('radius', 'ilike', '%C%');
        else if (tyreCategoryTab === 'cargo') query = query.or('vehicle_type.eq.cargo,radius.ilike.%C%').not('radius', 'in', '("R17.5","R19.5","R22.5")');
-       else if (tyreCategoryTab === 'truck') query = query.or('radius.eq.R17.5,radius.eq.R19.5,radius.eq.R22.5,title.ilike.%TIR%');
-       else if (tyreCategoryTab === 'agro') query = query.or('title.ilike.%agro%,title.ilike.%tractor%,title.ilike.%farm%,title.ilike.%ind%,radius.in.("R24","R26","R28","R30","R32","R34","R36","R38","R40","R42")');
+       else if (tyreCategoryTab === 'truck') query = query.or('radius.eq.R17.5,radius.eq.R19.5,radius.eq.R22.5,title.ilike.%TIR%,title.ilike.%R17.5%,title.ilike.%R19.5%,title.ilike.%R22.5%');
+       else if (tyreCategoryTab === 'agro') {
+           const agroRadii = ["R24","R26","R28","R30","R32","R34","R36","R38","R40","R42"];
+           const titleFilters = agroRadii.map(r => `title.ilike.%${r}%`).join(',');
+           query = query.or(`title.ilike.%agro%,title.ilike.%tractor%,title.ilike.%farm%,title.ilike.%ind%,radius.in.("R24","R26","R28","R30","R32","R34","R36","R38","R40","R42"),${titleFilters}`);
+       }
        else if (tyreCategoryTab === 'suv') query = query.eq('vehicle_type', 'suv');
        else if (tyreCategoryTab === 'hot') query = query.eq('is_hot', true);
        else if (tyreCategoryTab === 'out_of_stock') query = query.eq('in_stock', false);

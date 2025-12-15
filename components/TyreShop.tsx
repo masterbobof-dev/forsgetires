@@ -121,6 +121,78 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   const touchStartRef = useRef<number | null>(null);
   const touchEndRef = useRef<number | null>(null);
 
+  // --- DEEP LINKING & SEO LOGIC ---
+  useEffect(() => {
+    // Check for product_id in URL on mount
+    const params = new URLSearchParams(window.location.search);
+    const prodId = params.get('product_id');
+    if (prodId) {
+        const fetchDeepLinkProduct = async () => {
+            const { data } = await supabase.from('tyres').select('*').eq('id', prodId).single();
+            if (data) {
+                const parsed = parseTyreSpecs(data);
+                if (parsed.in_stock !== false) {
+                    setSelectedProductForModal(parsed);
+                }
+            }
+        };
+        fetchDeepLinkProduct();
+    }
+  }, []);
+
+  const updateUrlForProduct = (product: TyreProduct | null) => {
+      if (product) {
+          const newUrl = `${window.location.pathname}?product_id=${product.id}`;
+          window.history.pushState({ path: newUrl }, '', newUrl);
+          document.title = `${product.title} - Купити в Синельниковому | Форсаж`;
+      } else {
+          const newUrl = window.location.pathname;
+          window.history.pushState({ path: newUrl }, '', newUrl);
+          document.title = 'Магазин Шин та Дисків | Форсаж Синельникове';
+      }
+  };
+
+  const handleProductClick = (tyre: TyreProduct) => {
+      if (tyre.in_stock !== false) {
+          setSelectedProductForModal(tyre);
+          updateUrlForProduct(tyre);
+      }
+  };
+
+  const handleCloseModal = () => {
+      setSelectedProductForModal(null);
+      updateUrlForProduct(null);
+  };
+
+  // Generate Schema.org JSON-LD
+  const renderSchema = (product: TyreProduct) => {
+      const schema = {
+          "@context": "https://schema.org/",
+          "@type": "Product",
+          "name": product.title,
+          "image": product.image_url || "https://forsage-sinelnikove.com/favicon.svg",
+          "description": product.description || `Шина ${product.title}. Виробник: ${product.manufacturer}. Сезон: ${product.season}.`,
+          "brand": {
+              "@type": "Brand",
+              "name": product.manufacturer || "Unknown"
+          },
+          "offers": {
+              "@type": "Offer",
+              "url": `https://forsage-sinelnikove.com/?product_id=${product.id}`,
+              "priceCurrency": "UAH",
+              "price": safeParsePrice(product.price),
+              "availability": product.in_stock !== false ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+              "itemCondition": "https://schema.org/NewCondition"
+          }
+      };
+      
+      return (
+          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
+      );
+  };
+
+  // --- EXISTING LOGIC BELOW ---
+
   // Nova Poshta API Logic
   useEffect(() => {
       const timer = setTimeout(() => {
@@ -208,7 +280,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
 
   const handleCityInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       setNpSearchCity(e.target.value);
-      setSelectedCityRef(''); 
+      setSelectedCityRef('');
       setSelectedCityName('');
       setShowCityDropdown(true);
   };
@@ -416,14 +488,9 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
          query = query.or('radius.eq.R17.5,radius.eq.R19.5,radius.eq.R22.5,title.ilike.%TIR%,title.ilike.%R17.5%,title.ilike.%R19.5%,title.ilike.%R22.5%');
       } else if (activeCategory === 'agro') {
          // STRICTER AGRO FILTER:
-         // 1. Explicitly marked as Agro in DB
-         // 2. OR matches strict agro keywords/radii
-         // 3. EXPLICITLY EXCLUDE CARGO KEYWORDS regardless of other matches to fix 195R14C appearing here
-         
          const strictAgroRadii = [
              "R10","R12","R14.5","R15.3","R15.5","R24","R26","R28","R30","R32","R34","R36","R38","R40","R42","R44","R46","R48","R50","R52"
          ];
-         
          const specKeywords = "title.ilike.%PR%,title.ilike.%OZKA%,title.ilike.%BKT%,title.ilike.%KNK%,title.ilike.%MPT%,title.ilike.%IND%,title.ilike.%TR-%,title.ilike.%IMP%,title.ilike.%Ф-%,title.ilike.%В-%";
          
          // Logic: (Type is Agro OR Matches Radii/Keywords) AND (Type NOT car/suv/cargo) AND (Title does NOT contain 'C'/'LT')
@@ -749,7 +816,13 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                   const hasDiscount = oldPriceNum > priceNum;
                   
                   return (
-                  <div key={tyre.id} className={`bg-zinc-900 border rounded-xl overflow-hidden hover:border-[#FFC300] transition-colors group flex flex-col relative ${tyre.in_stock === false ? 'border-zinc-800 opacity-70' : 'border-zinc-800'}`}>
+                  <a // Wrap in <a> for SEO crawler linking
+                    key={tyre.id}
+                    href={`?product_id=${tyre.id}`}
+                    onClick={(e) => { e.preventDefault(); handleProductClick(tyre); }}
+                    className="block"
+                  >
+                  <div className={`h-full bg-zinc-900 border rounded-xl overflow-hidden hover:border-[#FFC300] transition-colors group flex flex-col relative ${tyre.in_stock === false ? 'border-zinc-800 opacity-70' : 'border-zinc-800'}`}>
                      
                      {/* BADGES */}
                      <div className="absolute top-2 left-2 z-10 flex flex-wrap gap-1 max-w-[70%]">
@@ -771,7 +844,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
 
                      {tyre.in_stock === false && <div className="absolute inset-0 z-20 bg-black/60 flex items-center justify-center pointer-events-none"><div className="bg-red-600 text-white px-3 py-1 font-black uppercase -rotate-12 border-2 border-white shadow-xl text-sm">Немає в наявності</div></div>}
 
-                     <div className={`aspect-square bg-black relative overflow-hidden cursor-pointer`} onClick={() => tyre.in_stock !== false && setSelectedProductForModal(tyre)}>
+                     <div className={`aspect-square bg-black relative overflow-hidden cursor-pointer`}>
                         {tyre.image_url && tyre.in_stock !== false ? (
                            <img src={tyre.image_url} alt={tyre.title} className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500`} />
                         ) : (
@@ -780,7 +853,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                         {tyre.gallery && tyre.gallery.length > 0 && tyre.in_stock !== false && <div className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-full flex items-center gap-1 backdrop-blur-sm"><Plus size={10} /> {tyre.gallery.length} фото</div>}
                      </div>
 
-                     <div className="p-3 md:p-4 flex flex-col flex-grow relative" onClick={() => tyre.in_stock !== false && setSelectedProductForModal(tyre)}>
+                     <div className="p-3 md:p-4 flex flex-col flex-grow relative">
                         {tyre.manufacturer && <div className="text-[10px] text-zinc-500 uppercase font-bold mb-1 tracking-wider">{tyre.manufacturer}</div>}
                         <h3 className="text-sm md:text-base font-bold text-white mb-2 leading-snug line-clamp-2 min-h-[2.5em] pr-2 cursor-pointer hover:text-[#FFC300] transition-colors">{tyre.title}</h3>
                         {tyre.season && <div className="text-[10px] text-zinc-400 font-bold uppercase mb-2">Сезон: <span className="text-white">{getSeasonLabel(tyre.season)}</span></div>}
@@ -798,6 +871,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                         </div>
                      </div>
                   </div>
+                  </a>
                )})}
             </div>
             {hasMore && <div className="mt-12 text-center"><button onClick={loadMore} disabled={loadingMore} className="bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 px-8 rounded-xl border border-zinc-700 transition-all flex items-center gap-2 mx-auto disabled:opacity-50 hover:border-[#FFC300]">{loadingMore ? <Loader2 className="animate-spin" /> : <ArrowDown size={20} />} Завантажити ще</button></div>}
@@ -834,9 +908,12 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
       )}
 
       {selectedProductForModal && (
-          <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-2 md:p-4 animate-in fade-in duration-200" onClick={() => setSelectedProductForModal(null)}>
+          <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-2 md:p-4 animate-in fade-in duration-200" onClick={handleCloseModal}>
+              {/* Inject Schema.org for SEO */}
+              {renderSchema(selectedProductForModal)}
+              
               <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-4xl shadow-2xl relative flex flex-col md:flex-row overflow-hidden max-h-[90vh]" onClick={e => e.stopPropagation()}>
-                  <button onClick={() => setSelectedProductForModal(null)} className="absolute top-4 right-4 text-zinc-500 hover:text-white z-20 bg-black/50 p-1 rounded-full"><X size={24} /></button>
+                  <button onClick={handleCloseModal} className="absolute top-4 right-4 text-zinc-500 hover:text-white z-20 bg-black/50 p-1 rounded-full"><X size={24} /></button>
                   <div className="w-full md:w-1/2 bg-black flex items-center justify-center relative group min-h-[300px]">
                       {selectedProductForModal.image_url && selectedProductForModal.in_stock !== false ? (
                           <><img src={selectedProductForModal.image_url} className="w-full h-full object-cover" alt={selectedProductForModal.title} /><button onClick={() => openLightbox(selectedProductForModal)} className="absolute bottom-4 right-4 bg-zinc-900/80 text-white p-3 rounded-full hover:bg-[#FFC300] hover:text-black transition-colors"><ZoomIn size={20} /></button></>
@@ -845,7 +922,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                       )}
                   </div>
                   <div className="w-full md:w-1/2 p-6 md:p-8 overflow-y-auto bg-zinc-900">
-                      <div className="mb-6">{selectedProductForModal.manufacturer && <span className="text-zinc-500 font-bold uppercase tracking-wider text-xs mb-2 block">{selectedProductForModal.manufacturer}</span>}<h2 className="text-xl md:text-2xl font-black text-white leading-tight mb-2">{selectedProductForModal.title}</h2>{selectedProductForModal.stock_quantity !== undefined && enableStockQty && <div className="inline-flex items-center gap-1 px-2 py-1 bg-green-900/20 text-green-400 text-xs font-bold rounded"><Check size={12}/> В наявності: {selectedProductForModal.stock_quantity} шт</div>}</div>
+                      <div className="mb-6">{selectedProductForModal.manufacturer && <span className="text-zinc-500 font-bold uppercase tracking-wider text-xs mb-2 block">{selectedProductForModal.manufacturer}</span>}<h1 className="text-xl md:text-2xl font-black text-white leading-tight mb-2">{selectedProductForModal.title}</h1>{selectedProductForModal.stock_quantity !== undefined && enableStockQty && <div className="inline-flex items-center gap-1 px-2 py-1 bg-green-900/20 text-green-400 text-xs font-bold rounded"><Check size={12}/> В наявності: {selectedProductForModal.stock_quantity} шт</div>}</div>
                       <div className="space-y-4 mb-8">
                           <div className="flex justify-between items-center border-b border-zinc-800 pb-2"><span className="text-zinc-400 text-sm">Ширина</span><span className="text-white font-bold">{selectedProductForModal.width || '-'}</span></div>
                           <div className="flex justify-between items-center border-b border-zinc-800 pb-2"><span className="text-zinc-400 text-sm">Висота</span><span className="text-white font-bold">{selectedProductForModal.height || '-'}</span></div>
@@ -853,6 +930,14 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                           <div className="flex justify-between items-center border-b border-zinc-800 pb-2"><span className="text-zinc-400 text-sm">Сезон</span><span className="text-white font-bold flex items-center gap-2">{selectedProductForModal.season === 'winter' && <Snowflake size={14} className="text-blue-400"/>}{selectedProductForModal.season === 'summer' && <Sun size={14} className="text-orange-400"/>}{selectedProductForModal.season === 'all-season' && <CloudSun size={14} className="text-green-400"/>}{getSeasonLabel(selectedProductForModal.season)}</span></div>
                           <div className="flex justify-between items-center border-b border-zinc-800 pb-2"><span className="text-zinc-400 text-sm">Тип авто</span><span className="text-white font-bold capitalize">{selectedProductForModal.vehicle_type === 'cargo' ? 'Вантажний (C)' : selectedProductForModal.vehicle_type === 'suv' ? 'Позашляховик' : selectedProductForModal.vehicle_type === 'truck' ? 'Вантажний (TIR)' : selectedProductForModal.vehicle_type === 'agro' ? 'Спецтехніка' : 'Легковий'}</span></div>
                           {(selectedProductForModal.catalog_number || selectedProductForModal.product_number) && (<div className="flex justify-between items-center border-b border-zinc-800 pb-2"><span className="text-zinc-400 text-sm">Артикул / Код</span><span className="text-zinc-300 font-mono text-sm">{selectedProductForModal.catalog_number || selectedProductForModal.product_number}</span></div>)}
+                          
+                          {/* SEO Description Block */}
+                          {selectedProductForModal.description && selectedProductForModal.description.length > 20 && (
+                              <div className="mt-4 p-4 bg-zinc-800/30 rounded-xl border border-zinc-800/50">
+                                  <h3 className="text-zinc-400 text-xs font-bold uppercase mb-2">Опис</h3>
+                                  <p className="text-sm text-zinc-300 leading-relaxed">{selectedProductForModal.description}</p>
+                              </div>
+                          )}
                       </div>
                       <div className="mt-auto"><div className="flex items-end gap-3 mb-4">{safeParsePrice(selectedProductForModal.old_price) > safeParsePrice(selectedProductForModal.price) && (<span className="text-zinc-500 line-through text-sm mb-1">{formatPrice(selectedProductForModal.old_price)} грн</span>)}<span className="text-3xl font-black text-[#FFC300]">{formatPrice(selectedProductForModal.price)} <span className="text-base text-white font-normal">грн</span></span></div><button onClick={() => { addToCart(selectedProductForModal); setSelectedProductForModal(null); }} disabled={selectedProductForModal.in_stock === false} className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 uppercase tracking-wide transition-all active:scale-95 ${selectedProductForModal.in_stock === false ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' : 'bg-white text-black hover:bg-[#FFC300] shadow-lg'}`}><ShoppingCart size={20} />{selectedProductForModal.in_stock === false ? 'Немає в наявності' : 'Додати в кошик'}</button></div>
                   </div>

@@ -1,18 +1,17 @@
 
 import React, { useState, useEffect } from 'react';
-import { Globe, Settings, CheckCircle, Database, Box, Briefcase, Search, Download, Bug, ToggleLeft, ToggleRight, Check, Code, Copy, FileText, Loader2, AlertTriangle, Image as ImageIcon, FileSpreadsheet, RefreshCw } from 'lucide-react';
+import { Globe, Settings, CheckCircle, Database, Box, Briefcase, Search, Download, Bug, ToggleLeft, ToggleRight, Check, Code, Copy, FileText, Loader2, AlertTriangle, Image as ImageIcon, RefreshCw } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import ApiRequestPanel from './sync/ApiRequestPanel';
 import ImportMapper from './sync/ImportMapper';
 import PhotoSyncDashboard from './sync/PhotoSyncDashboard';
-import ExcelImportPanel from './sync/ExcelImportPanel';
 import { cleanHeaders, requestServerSideUpload, EDGE_FUNCTION_CODE, PHOTO_DEFAULT_CONFIG } from './sync/syncUtils';
 
 const SyncTab: React.FC = () => {
   const [viewMode, setViewMode] = useState<'dashboard' | 'config'>('dashboard');
   
-  // NEW TABS STRUCTURE: 'api' | 'excel' | 'photos'
-  const [activeTab, setActiveTab] = useState<'api' | 'excel' | 'photos'>('api');
+  // CHANGED: 'excel' removed from tabs
+  const [activeTab, setActiveTab] = useState<'api' | 'photos'>('api');
   
   const [responseData, setResponseData] = useState<any>(null);
   const [responseStatus, setResponseStatus] = useState<number | null>(null);
@@ -164,10 +163,10 @@ const SyncTab: React.FC = () => {
        <div className="mb-6 shrink-0 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
            <div>
                <h3 className="text-2xl font-black text-white flex items-center gap-2">
-                   <Globe className="text-[#FFC300]" /> Центр Синхронізації
+                   <Globe className="text-[#FFC300]" /> Центр Синхронізації (API)
                </h3>
                <p className="text-zinc-400 text-sm mt-1">
-                   {viewMode === 'dashboard' ? 'Керування оновленнями та імпортом' : 'Режим налаштування підключення'}
+                   {viewMode === 'dashboard' ? 'Керування онлайн оновленнями' : 'Режим налаштування підключення'}
                </p>
            </div>
            
@@ -176,7 +175,7 @@ const SyncTab: React.FC = () => {
                     onClick={() => setViewMode('config')}
                     className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold border bg-zinc-800 text-zinc-300 border-zinc-700 hover:text-white transition-colors"
                 >
-                    <Settings size={18}/> Налаштування API / Імпорт
+                    <Settings size={18}/> Налаштування API
                 </button>
            ) : (
                 <button 
@@ -241,12 +240,6 @@ const SyncTab: React.FC = () => {
                        <RefreshCw size={16}/> API (Синхронізація)
                    </button>
                    <button 
-                        onClick={() => setActiveTab('excel')}
-                        className={`px-6 py-3 rounded-t-xl font-bold text-sm transition-all border-b-2 flex items-center gap-2 ${activeTab === 'excel' ? 'text-green-400 border-green-500 bg-zinc-900' : 'text-zinc-500 border-transparent hover:text-white'}`}
-                   >
-                       <FileSpreadsheet size={16}/> EXCEL (Імпорт)
-                   </button>
-                   <button 
                         onClick={() => setActiveTab('photos')}
                         className={`px-6 py-3 rounded-t-xl font-bold text-sm transition-all border-b-2 flex items-center gap-2 ${activeTab === 'photos' ? 'text-blue-400 border-blue-500 bg-zinc-900' : 'text-zinc-500 border-transparent hover:text-white'}`}
                    >
@@ -275,13 +268,6 @@ const SyncTab: React.FC = () => {
                                   apiConfig={apiConfig}
                                />
                            </div>
-                       </div>
-                   )}
-
-                   {/* 2. EXCEL TAB */}
-                   {activeTab === 'excel' && (
-                       <div className="h-full flex flex-col pb-10">
-                           <ExcelImportPanel suppliers={suppliers} />
                        </div>
                    )}
 

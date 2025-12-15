@@ -299,8 +299,8 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   }, [activeCategory, activeSort, enableStockQty, filterBrand, filterRadius, filterWidth, filterHeight, showOnlyInStock]); 
 
   const parseTyreSpecs = (tyre: TyreProduct): TyreProduct => {
-    // Regex updated to support decimal radii like R17.5
-    const sizeRegex = /(\d{3})[\/\s](\d{2})[\s\w]*R(\d{2}(?:\.5)?[C|c]?)/; 
+    // Regex updated to support decimal radii like R17.5, R15.3 etc
+    const sizeRegex = /(\d{3})[\/\s](\d{2})[\s\w]*R(\d{2}(?:\.5|\.3)?[C|c]?)/; 
     const match = tyre.title.match(sizeRegex) || tyre.description?.match(sizeRegex);
     
     let width = ''; 
@@ -339,12 +339,21 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
     else if (lowerTitle.includes('всесезон') || lowerTitle.includes('all season')) season = 'all-season';
     
     // Logic for in_stock based on setting
-    let in_stock = tyre.in_stock !== false;
-    
-    if (enableStockQty && tyre.stock_quantity !== undefined && tyre.stock_quantity !== null) {
-        if (tyre.stock_quantity <= 0) {
+    // CRITICAL FIX: If enableStockQty is FALSE (meaning disabled), we override the DB value and say it IS in stock.
+    // This assumes the user wants everything available if tracking is off.
+    let in_stock = true; 
+
+    if (enableStockQty) {
+        // Strict Mode: Rely on DB and quantity
+        in_stock = tyre.in_stock !== false;
+        if (tyre.stock_quantity !== undefined && tyre.stock_quantity !== null && tyre.stock_quantity <= 0) {
             in_stock = false;
         }
+    } else {
+        // Loose Mode: Ignore stock quantity, always available unless manually archived (we treat in_stock=false from DB as 0 quantity which user wants to ignore)
+        // However, if the user explicitly marked it as out of stock via the admin panel (archive), we should respect that?
+        // Based on user request "I turn off display... but it writes not available", they want it available.
+        in_stock = true;
     }
 
     // --- NORMALIZE MANUFACTURER FOR DISPLAY ---
@@ -406,7 +415,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
          // Apply default stock logic if NOT explicitly showing out of stock
          if (!showOnlyInStock) {
              if (enableStockQty) query = query.neq('in_stock', false);
-             else query = query.neq('in_stock', false);
+             // If disabled stock qty, we show everything for hot too
          }
       } else if (activeCategory === 'winter') {
          query = query.or('title.ilike.%winter%,title.ilike.%зима%,description.ilike.%winter%,description.ilike.%зима%');
@@ -424,8 +433,8 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
          // AGRICULTURAL: Very large radii OR specific keywords (PR, OZKA, KNK, MPT, IND)
          const agroRadii = ["R24","R26","R28","R30","R32","R34","R36","R38","R40","R42"];
          const titleFilters = agroRadii.map(r => `title.ilike.%${r}%`).join(',');
-         // Add special keywords for small agro/industrial
-         const specKeywords = "title.ilike.%PR%,title.ilike.%OZKA%,title.ilike.%BKT%,title.ilike.%KNK%,title.ilike.%MPT%,title.ilike.%IND%";
+         // Add special keywords for small agro/industrial (including from recent update)
+         const specKeywords = "title.ilike.%PR%,title.ilike.%OZKA%,title.ilike.%BKT%,title.ilike.%KNK%,title.ilike.%MPT%,title.ilike.%IND%,title.ilike.%TR-%,title.ilike.%IMP%,title.ilike.%Ф-%,title.ilike.%В-%";
          
          query = query.or(`title.ilike.%agro%,title.ilike.%tractor%,title.ilike.%farm%,radius.in.("R24","R26","R28","R30","R32","R34","R36","R38","R40","R42"),${titleFilters},${specKeywords}`);
       } else if (activeCategory === 'out_of_stock') {
@@ -433,14 +442,6 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
          else query = query.eq('in_stock', false);
       } 
       
-      // Default stock visibility for regular categories (if showOnlyInStock is false)
-      if (!showOnlyInStock && activeCategory !== 'out_of_stock') {
-          // DO NOT HIDE OUT OF STOCK HERE, we want to SHOW ALL but SORT them (Smart Sort)
-          // The query below is commented out because we want to fetch ALL items and let sort handle visibility
-          // if (enableStockQty) query = query.or('stock_quantity.gt.0,stock_quantity.is.null').neq('in_stock', false);
-          // else query = query.neq('in_stock', false);
-      }
-
       // 3. PRICE FILTERS
       if (minPrice) {
          query = query.gte('price', parseInt(minPrice));
@@ -450,8 +451,10 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
       }
 
       // 4. SORTING - SMART SORT (IN STOCK FIRST)
-      // Always apply stock priority first
-      query = query.order('in_stock', { ascending: false });
+      // Always apply stock priority first, UNLESS stock tracking is disabled (then everything is "in stock")
+      if (enableStockQty) {
+          query = query.order('in_stock', { ascending: false });
+      }
 
       if (activeSort === 'with_photo') {
          query = query.order('image_url', { ascending: false, nullsFirst: false })
@@ -478,8 +481,8 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
         // Client-side fix for "With Photo" priority if mixed
         if (activeSort === 'with_photo') {
             processed = processed.sort((a, b) => {
-                // Keep Stock Priority
-                if (a.in_stock !== b.in_stock) return a.in_stock ? -1 : 1;
+                // Keep Stock Priority IF enabled
+                if (enableStockQty && a.in_stock !== b.in_stock) return a.in_stock ? -1 : 1;
                 
                 const aHas = !!a.image_url && a.image_url.length > 5;
                 const bHas = !!b.image_url && b.image_url.length > 5;
@@ -522,7 +525,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
           const existing = prev.find(item => item.id === tyre.id);
           const currentQty = existing ? existing.quantity : 0;
 
-          // Stock Limit Check
+          // Stock Limit Check (Only if enabled)
           if (enableStockQty && tyre.stock_quantity !== undefined && tyre.stock_quantity !== null && tyre.stock_quantity > 0) {
               if (currentQty + 1 > tyre.stock_quantity) {
                   alert(`Вибачте, доступно лише ${tyre.stock_quantity} шт. цього товару.`);
@@ -544,7 +547,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
           if (item.id === id) {
               const newQty = item.quantity + delta;
               
-              // Stock Limit Check
+              // Stock Limit Check (Only if enabled)
               if (delta > 0 && enableStockQty && item.stock_quantity !== undefined && item.stock_quantity !== null && item.stock_quantity > 0) {
                   if (newQty > item.stock_quantity) {
                       // alert(`Максимальна кількість: ${item.stock_quantity}`);
@@ -927,6 +930,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                         {tyre.season === 'summer' && <div className="bg-orange-500 text-white p-1 rounded shadow-lg" title="Літо"><Sun size={14} /></div>}
                         {tyre.season === 'all-season' && <div className="bg-green-600 text-white p-1 rounded shadow-lg" title="Всесезон"><CloudSun size={14} /></div>}
                         {tyre.vehicle_type === 'cargo' && <div className="bg-purple-600 text-white p-1 rounded shadow-lg" title="Вантажна"><Truck size={14} /></div>}
+                        {tyre.vehicle_type === 'agro' && <div className="bg-green-700 text-white p-1 rounded shadow-lg" title="Агро"><Tractor size={14} /></div>}
                      </div>
 
                      {/* SPECS BADGE (Moved to top-right of image area) */}
@@ -1200,7 +1204,12 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                           </div>
                           <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
                               <span className="text-zinc-400 text-sm">Тип авто</span>
-                              <span className="text-white font-bold capitalize">{selectedProductForModal.vehicle_type === 'cargo' ? 'Вантажний (C)' : selectedProductForModal.vehicle_type === 'suv' ? 'Позашляховик' : 'Легковий'}</span>
+                              <span className="text-white font-bold capitalize">
+                                  {selectedProductForModal.vehicle_type === 'cargo' ? 'Вантажний (C)' : 
+                                   selectedProductForModal.vehicle_type === 'suv' ? 'Позашляховик' :
+                                   selectedProductForModal.vehicle_type === 'agro' ? 'Спецтехніка' : 
+                                   selectedProductForModal.vehicle_type === 'truck' ? 'TIR' : 'Легковий'}
+                              </span>
                           </div>
                           {(selectedProductForModal.catalog_number || selectedProductForModal.product_number) && (
                               <div className="flex justify-between items-center border-b border-zinc-800 pb-2">

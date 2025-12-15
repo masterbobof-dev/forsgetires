@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ImageIcon, StopCircle, CheckCircle, AlertTriangle, FileText, Check, Ban, Box } from 'lucide-react';
+import { ImageIcon, StopCircle, AlertTriangle } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
 import { cleanHeaders, requestServerSideUpload, PHOTO_DEFAULT_CONFIG } from './syncUtils';
 

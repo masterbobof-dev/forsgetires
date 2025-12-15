@@ -228,12 +228,16 @@ const SettingsTab: React.FC = () => {
           const updates = [];
           let changedCount = 0;
 
-          // SPECIAL KEYWORDS FOR AGRO
-          const agroBrands = ['OZKA', 'BKT', 'SEHA', 'KNK', 'PETLAS', 'ALLIANCE', 'MITAS', 'CULTOR'];
-          const agroKeywords = ['AGRO', 'TRACTOR', 'IMPLEMENT', 'FARM', 'LOADER', 'INDUSTRIAL', 'SKID', 'BOBCAT', 'FORKLIFT', 'PR '];
+          // SPECIAL KEYWORDS FOR AGRO (Expanded based on screenshot)
+          const agroBrands = ['OZKA', 'BKT', 'SEHA', 'KNK', 'PETLAS', 'ALLIANCE', 'MITAS', 'CULTOR', 'KABAT', 'ROSAVA'];
+          const agroKeywords = [
+              'AGRO', 'TRACTOR', 'IMPLEMENT', 'FARM', 'LOADER', 'INDUSTRIAL', 'SKID', 'BOBCAT', 'FORKLIFT', 'PR ',
+              'TR-', 'IMP', 'SGP', 'Ф-', 'В-', 'БЦФ', 'ИЯВ', 'ВЛ-', 'К-', 'Л-', 'М-' // Cyrillic and spec models
+          ];
           
-          // INDUSTRIAL RIM DIAMETERS
-          const indRims = ['8', '9', '10', '12', '15.3'];
+          // AGRO/INDUSTRIAL RIM DIAMETERS (Strings to match)
+          const agroRims = ['15.3', '15.5', '20', '24', '28', '30', '32', '34', '36', '38', '40', '42', '46', '48', '52'];
+          const indRims = ['8', '9', '10', '12', '15.3']; // Small industrial
 
           for (const item of allItems) {
               let newRadius = item.radius || '';
@@ -242,17 +246,17 @@ const SettingsTab: React.FC = () => {
 
               const title = (item.title || '').toUpperCase();
               
-              // 1. EXTRACT RADIUS FROM "Width-Radius" format (e.g., 6,00-9 -> R9)
+              // 1. EXTRACT RADIUS FROM "Width-Radius" format (e.g., 6,00-9 -> R9, 10.0/75-15.3 -> R15.3)
               if (!newRadius || newRadius === 'R') {
-                  const dashMatch = title.match(/[0-9.,]+[-](\d{1,2}(?:\.\d)?)/);
+                  const dashMatch = title.match(/[0-9.,]+[-/](\d{1,2}(?:[.,]\d)?)/);
                   if (dashMatch) {
-                      newRadius = `R${dashMatch[1]}`;
+                      newRadius = `R${dashMatch[1].replace(',', '.')}`;
                       isChanged = true;
                   }
               }
 
               // A. Radius Fix (R17.5, R19.5, etc)
-              const decimalMatch = title.match(/R(17\.5|19\.5|22\.5)/);
+              const decimalMatch = title.match(/R(15\.3|15\.5|17\.5|19\.5|22\.5)/);
               if (decimalMatch) {
                   const correctR = decimalMatch[0];
                   if (newRadius !== correctR) {
@@ -264,38 +268,38 @@ const SettingsTab: React.FC = () => {
               // B. Category Logic
               let detectedType = 'car';
               
-              // 1. Truck / TIR check (Strict Rims)
-              if (['R17.5', 'R19.5', 'R22.5', 'R24.5'].includes(newRadius) || title.includes('TIR ') || title.includes('BUS ')) {
+              // 1. Check for specific AGRO Rims first (Strongest indicator)
+              // Handle R15.3, R15.5 specifically
+              const radiusVal = newRadius.replace('R', '');
+              if (agroRims.includes(radiusVal) || indRims.includes(radiusVal)) {
+                  detectedType = 'agro';
+                  // Exception: R20 can be Truck sometimes, but with TR/KNK it is Agro
+              } 
+              // 2. Truck / TIR check (Strict Rims)
+              else if (['17.5', '19.5', '22.5', '24.5'].includes(radiusVal) || title.includes('TIR ') || title.includes('BUS ')) {
                   detectedType = 'truck';
               }
-              // 2. Agro / Special Check (Enhanced)
-              else {
-                  // Check brands and keywords
+              
+              // 3. Agro / Special Check (Keywords & Brands)
+              // If not already detected as agro/truck, or to refine R16/R20 overlaps
+              if (detectedType === 'car' || radiusVal === '16' || radiusVal === '20') {
                   const isAgroBrand = agroBrands.some(b => title.includes(b));
                   const isAgroKey = agroKeywords.some(k => title.includes(k));
                   const hasPR = /\d+\s*PR/.test(title); // Check for Ply Rating (e.g. 12PR)
                   
-                  // Check Ind Rims
-                  const rVal = newRadius.replace('R','');
-                  const isIndRim = indRims.includes(rVal);
-                  
-                  // Check Large Rims
-                  const rNum = parseFloat(rVal) || 0;
-                  const isLargeAgro = rNum >= 24 && rNum !== 24.5; // 24.5 is Truck, but 24 is often Agro
-
-                  if (isAgroBrand || isAgroKey || hasPR || isIndRim || isLargeAgro) {
+                  if (isAgroBrand || isAgroKey || (hasPR && (radiusVal === '16' || radiusVal === '20'))) {
                       detectedType = 'agro';
                   }
               }
 
-              // 3. Cargo Check (if not truck/agro)
+              // 4. Cargo Check (Light Truck C-type) - Only if not already Agro
               if (detectedType === 'car') {
                   if (newRadius.includes('C') || title.includes('R14C') || title.includes('R15C') || title.includes('R16C') || title.includes('LT ')) {
                       detectedType = 'cargo';
                   }
               }
 
-              // 4. SUV Check
+              // 5. SUV Check
               if (detectedType === 'car' && (title.includes('SUV') || title.includes('4X4') || title.includes('JEEP'))) {
                   detectedType = 'suv';
               }
@@ -604,11 +608,11 @@ const SettingsTab: React.FC = () => {
                        <div className="bg-black/30 p-6 rounded-xl border border-zinc-800 flex flex-col justify-between">
                             <div>
                                 <h4 className="text-lg font-bold text-white mb-1">Відображення залишків</h4>
-                                <p className="text-zinc-400 text-sm mb-4">Якщо увімкнено, на сайті буде показано точну кількість шин. Якщо вимкнено — просто "В наявності".</p>
+                                <p className="text-zinc-400 text-sm mb-4">Якщо увімкнено, на сайті буде показано точну кількість. <br/><span className="text-[#FFC300]">Якщо вимкнено — всі товари вважаються доступними (навіть 0 шт).</span></p>
                             </div>
                             <button onClick={toggleStockQty} className={`w-full flex items-center justify-center gap-3 px-6 py-3 rounded-xl font-bold transition-colors ${enableStockQty ? 'bg-[#FFC300] text-black' : 'bg-zinc-800 text-zinc-400'}`}>
                                 {enableStockQty ? <ToggleRight size={32}/> : <ToggleLeft size={32}/>} 
-                                {enableStockQty ? 'УВІМКНЕНО' : 'ВИМКНЕНО'}
+                                {enableStockQty ? 'УВІМКНЕНО (Точний облік)' : 'ВИМКНЕНО (Все в наявності)'}
                             </button>
                        </div>
 

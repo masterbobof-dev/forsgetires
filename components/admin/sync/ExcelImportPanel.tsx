@@ -29,6 +29,7 @@ const ExcelImportPanel: React.FC<ExcelImportPanelProps> = ({ suppliers }) => {
     const [columnMapping, setColumnMapping] = useState<Record<number, string>>({});
     const [startRow, setStartRow] = useState(1);
     const [selectedSupplierId, setSelectedSupplierId] = useState('');
+    const [defaultCategory, setDefaultCategory] = useState(''); // NEW STATE
     const [loading, setLoading] = useState(false);
     const [importing, setImporting] = useState(false);
     const [stats, setStats] = useState({ total: 0, updated: 0, created: 0, errors: 0 });
@@ -115,9 +116,15 @@ const ExcelImportPanel: React.FC<ExcelImportPanelProps> = ({ suppliers }) => {
 
         const season = data.season ? detectSeason(data.season) : detectSeason(title);
         
+        // --- CATEGORY LOGIC ---
         let vehicle_type = 'car';
-        if (radius.includes('C') || title.includes('Truck') || title.includes('LT')) vehicle_type = 'cargo';
-        else if (title.includes('SUV') || title.includes('4x4')) vehicle_type = 'suv';
+        if (defaultCategory) {
+            vehicle_type = defaultCategory;
+        } else {
+            // Auto Detect
+            if (radius.includes('C') || title.includes('Truck') || title.includes('LT')) vehicle_type = 'cargo';
+            else if (title.includes('SUV') || title.includes('4x4')) vehicle_type = 'suv';
+        }
 
         return {
             catalog_number: safeExtractString(data.catalog_number),
@@ -156,9 +163,6 @@ const ExcelImportPanel: React.FC<ExcelImportPanelProps> = ({ suppliers }) => {
             const rowsToProcess = allRows.slice(startRow - 1); // Respect start row
             const batchSize = 100;
             
-            // Get existing items for this supplier to decide insert vs update
-            // Strategy: Upsert based on (catalog_number, supplier_id) constraint
-            
             for (let i = 0; i < rowsToProcess.length; i += batchSize) {
                 const batch = rowsToProcess.slice(i, i + batchSize);
                 const payload = [];
@@ -178,8 +182,6 @@ const ExcelImportPanel: React.FC<ExcelImportPanelProps> = ({ suppliers }) => {
                         console.error("Batch error", error);
                         errors += payload.length;
                     } else {
-                        // Estimate created vs updated is hard with upsert, usually we count total processed
-                        // For exact stats we'd need to check created_at vs updated_at but that's expensive
                         updated += payload.length; 
                     }
                 }
@@ -203,17 +205,36 @@ const ExcelImportPanel: React.FC<ExcelImportPanelProps> = ({ suppliers }) => {
                     <p className="text-zinc-400 text-sm mt-1">Оновлення цін та залишків, створення нових карток.</p>
                 </div>
                 
-                {/* 1. SELECT SUPPLIER */}
-                <div className="w-full md:w-64">
-                    <label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Постачальник</label>
-                    <select 
-                        value={selectedSupplierId}
-                        onChange={(e) => setSelectedSupplierId(e.target.value)}
-                        className="w-full bg-black border border-zinc-600 rounded-lg p-2 text-white font-bold text-sm focus:border-[#FFC300] outline-none"
-                    >
-                        <option value="">-- Оберіть --</option>
-                        {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
+                <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+                    {/* CATEGORY SELECTOR */}
+                    <div className="w-full md:w-40">
+                        <label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Категорія (опц.)</label>
+                        <select 
+                            value={defaultCategory}
+                            onChange={(e) => setDefaultCategory(e.target.value)}
+                            className="w-full bg-black border border-zinc-600 rounded-lg p-2 text-white font-bold text-sm focus:border-[#FFC300] outline-none"
+                        >
+                            <option value="">Авто-визначення</option>
+                            <option value="car">Легкова</option>
+                            <option value="suv">SUV</option>
+                            <option value="cargo">Вантажна (C)</option>
+                            <option value="truck">TIR (Вантаж)</option>
+                            <option value="agro">Спецтехніка</option>
+                        </select>
+                    </div>
+
+                    {/* SUPPLIER SELECTOR */}
+                    <div className="w-full md:w-48">
+                        <label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Постачальник</label>
+                        <select 
+                            value={selectedSupplierId}
+                            onChange={(e) => setSelectedSupplierId(e.target.value)}
+                            className="w-full bg-black border border-zinc-600 rounded-lg p-2 text-white font-bold text-sm focus:border-[#FFC300] outline-none"
+                        >
+                            <option value="">-- Оберіть --</option>
+                            {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                    </div>
                 </div>
             </div>
 

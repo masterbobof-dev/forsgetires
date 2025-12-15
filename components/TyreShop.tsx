@@ -415,16 +415,25 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
          // TIR
          query = query.or('radius.eq.R17.5,radius.eq.R19.5,radius.eq.R22.5,title.ilike.%TIR%,title.ilike.%R17.5%,title.ilike.%R19.5%,title.ilike.%R22.5%');
       } else if (activeCategory === 'agro') {
-         // AGRO / SPEC - Updated logic to include vehicle_type=agro and expanded radius list
-         const agroRadii = [
-             "R10","R12","R14.5","R15.3","R15.5","R20","R22.5",
-             "R24","R26","R28","R30","R32","R34","R36","R38","R40","R42","R48"
+         // STRICTER AGRO FILTER:
+         // 1. Explicitly marked as Agro in DB
+         // 2. OR matches strict agro keywords/radii
+         // 3. EXPLICITLY EXCLUDE CARGO KEYWORDS regardless of other matches to fix 195R14C appearing here
+         
+         const strictAgroRadii = [
+             "R10","R12","R14.5","R15.3","R15.5","R24","R26","R28","R30","R32","R34","R36","R38","R40","R42","R44","R46","R48","R50","R52"
          ];
-         const titleFilters = agroRadii.map(r => `title.ilike.%${r}%`).join(',');
+         
          const specKeywords = "title.ilike.%PR%,title.ilike.%OZKA%,title.ilike.%BKT%,title.ilike.%KNK%,title.ilike.%MPT%,title.ilike.%IND%,title.ilike.%TR-%,title.ilike.%IMP%,title.ilike.%Ф-%,title.ilike.%В-%";
          
-         // Explicitly include anything marked as vehicle_type=agro, OR matches radii, OR matches keywords
-         query = query.or(`vehicle_type.eq.agro,title.ilike.%agro%,title.ilike.%tractor%,title.ilike.%farm%,radius.in.("${agroRadii.join('","')}"),${titleFilters},${specKeywords}`);
+         // Logic: (Type is Agro OR Matches Radii/Keywords) AND (Type NOT car/suv/cargo) AND (Title does NOT contain 'C'/'LT')
+         query = query.or(`vehicle_type.eq.agro,and(vehicle_type.neq.car,vehicle_type.neq.suv,vehicle_type.neq.cargo,or(radius.in.("${strictAgroRadii.join('","')}"),${specKeywords}))`)
+                      .not('title', 'ilike', '%(C)%')
+                      .not('title', 'ilike', '% LT%')
+                      .not('title', 'ilike', '%R14C%')
+                      .not('title', 'ilike', '%R15C%')
+                      .not('title', 'ilike', '%R16C%');
+         
       } else if (activeCategory === 'out_of_stock') {
          if (enableStockQty) query = query.or('in_stock.eq.false,stock_quantity.eq.0');
          else query = query.eq('in_stock', false);

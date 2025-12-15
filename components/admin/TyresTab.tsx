@@ -48,6 +48,7 @@ const TyresTab: React.FC = () => {
 
   const [selectedTyreIds, setSelectedTyreIds] = useState<Set<number>>(new Set());
   const [bulkMarkup, setBulkMarkup] = useState('');
+  const [bulkCategory, setBulkCategory] = useState(''); // NEW for Bulk Category
   const [isApplyingBulk, setIsApplyingBulk] = useState(false);
 
   const [showAddTyreModal, setShowAddTyreModal] = useState(false);
@@ -103,8 +104,8 @@ const TyresTab: React.FC = () => {
             supabase.from('tyres').select('*', { count: 'exact', head: true }).or('vehicle_type.eq.car,vehicle_type.is.null').neq('vehicle_type', 'cargo').neq('vehicle_type', 'suv').not('radius', 'ilike', '%C%').then(r => r.count),
             supabase.from('tyres').select('*', { count: 'exact', head: true }).or('vehicle_type.eq.cargo,radius.ilike.%C%').not('radius', 'in', '("R17.5","R19.5","R22.5")').then(r => r.count),
             supabase.from('tyres').select('*', { count: 'exact', head: true }).or('radius.eq.R17.5,radius.eq.R19.5,radius.eq.R22.5,title.ilike.%TIR%,title.ilike.%R17.5%,title.ilike.%R19.5%,title.ilike.%R22.5%').then(r => r.count),
-            // Updated AGRO count logic to match new filter
-            supabase.from('tyres').select('*', { count: 'exact', head: true }).or('vehicle_type.eq.agro,title.ilike.%agro%,title.ilike.%tractor%,radius.in.("R10","R12","R14.5","R15.3","R15.5","R20","R24","R26","R28","R30","R32","R34","R36","R38","R40","R42")').then(r => r.count),
+            // Updated AGRO count logic - STRICT
+            supabase.from('tyres').select('*', { count: 'exact', head: true }).or('vehicle_type.eq.agro,and(vehicle_type.neq.car,vehicle_type.neq.suv,vehicle_type.neq.cargo,radius.in.("R10","R12","R14.5","R15.3","R15.5","R20","R24","R26","R28","R30","R32","R34","R36","R38","R40","R42"))').then(r => r.count),
             supabase.from('tyres').select('*', { count: 'exact', head: true }).eq('vehicle_type', 'suv').then(r => r.count),
             supabase.from('tyres').select('*', { count: 'exact', head: true }).eq('is_hot', true).then(r => r.count),
             supabase.from('tyres').select('*', { count: 'exact', head: true }).eq('in_stock', false).then(r => r.count),
@@ -144,14 +145,18 @@ const TyresTab: React.FC = () => {
        else if (tyreCategoryTab === 'cargo') query = query.or('vehicle_type.eq.cargo,radius.ilike.%C%').not('radius', 'in', '("R17.5","R19.5","R22.5")');
        else if (tyreCategoryTab === 'truck') query = query.or('radius.eq.R17.5,radius.eq.R19.5,radius.eq.R22.5,title.ilike.%TIR%,title.ilike.%R17.5%,title.ilike.%R19.5%,title.ilike.%R22.5%');
        else if (tyreCategoryTab === 'agro') {
-           const agroRadii = [
-               "R10","R12","R14.5","R15.3","R15.5","R20","R22.5",
-               "R24","R26","R28","R30","R32","R34","R36","R38","R40","R42","R48"
+           const strictAgroRadii = [
+               "R10","R12","R14.5","R15.3","R15.5","R24","R26","R28","R30","R32","R34","R36","R38","R40","R42","R44","R46","R48","R50","R52"
            ];
-           const titleFilters = agroRadii.map(r => `title.ilike.%${r}%`).join(',');
+           // Only show agro IF explicitly tagged OR strict radius match AND NOT car/suv/cargo
            const specKeywords = "title.ilike.%PR%,title.ilike.%OZKA%,title.ilike.%BKT%,title.ilike.%KNK%,title.ilike.%MPT%,title.ilike.%IND%,title.ilike.%TR-%,title.ilike.%IMP%,title.ilike.%Ф-%,title.ilike.%В-%";
-           // Include vehicle_type.eq.agro to catch ambiguous sizes like R16 that are explicitly marked
-           query = query.or(`vehicle_type.eq.agro,title.ilike.%agro%,title.ilike.%tractor%,title.ilike.%farm%,title.ilike.%ind%,radius.in.("${agroRadii.join('","')}"),${titleFilters},${specKeywords}`);
+           // Strong exclusion of Cargo terms
+           query = query.or(`vehicle_type.eq.agro,and(vehicle_type.neq.car,vehicle_type.neq.suv,vehicle_type.neq.cargo,or(radius.in.("${strictAgroRadii.join('","')}"),${specKeywords}))`)
+                        .not('title', 'ilike', '%(C)%')
+                        .not('title', 'ilike', '% LT%')
+                        .not('title', 'ilike', '%R14C%')
+                        .not('title', 'ilike', '%R15C%')
+                        .not('title', 'ilike', '%R16C%');
        }
        else if (tyreCategoryTab === 'suv') query = query.eq('vehicle_type', 'suv');
        else if (tyreCategoryTab === 'hot') query = query.eq('is_hot', true);
@@ -248,6 +253,32 @@ const TyresTab: React.FC = () => {
       if(!bulkMarkup) return;
       setIsApplyingBulk(true);
       setTimeout(() => { setIsApplyingBulk(false); showError("Ціни оновлено (Mock)"); }, 500);
+  };
+
+  // --- NEW: BULK CATEGORY UPDATE ---
+  const handleBulkCategoryUpdate = async (category: string) => {
+      if (!category || selectedTyreIds.size === 0) return;
+      setIsApplyingBulk(true);
+      try {
+          const ids = Array.from(selectedTyreIds);
+          const { error } = await supabase.from('tyres').update({ vehicle_type: category }).in('id', ids);
+          
+          if (error) throw error;
+          
+          // Update local state
+          setTyres(prev => prev.map(t => selectedTyreIds.has(t.id) ? { ...t, vehicle_type: category as any } : t));
+          
+          setSuccessMessage(`Оновлено категорію для ${ids.length} товарів.`);
+          setBulkCategory('');
+          setSelectedTyreIds(new Set()); // Clear selection
+          fetchCategoryCounts();
+          setTimeout(() => setSuccessMessage(''), 3000);
+          
+      } catch (e: any) {
+          showError("Помилка оновлення категорії: " + e.message);
+      } finally {
+          setIsApplyingBulk(false);
+      }
   };
 
   const handleBulkHotUpdate = async (action: 'add' | 'remove') => {
@@ -507,6 +538,23 @@ const TyresTab: React.FC = () => {
                     <span className="text-xs normal-case text-white bg-zinc-600 px-2 py-0.5 rounded ml-1">обрано: {selectedTyreIds.size}</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
+                    
+                    {/* NEW BULK CATEGORY SELECTOR */}
+                    <div className="mr-2 border-r border-zinc-700 pr-2 hidden md:block">
+                        <select 
+                            value={bulkCategory}
+                            onChange={(e) => handleBulkCategoryUpdate(e.target.value)}
+                            className="bg-black border border-zinc-600 rounded-lg p-2 text-white text-xs font-bold w-40 outline-none focus:border-[#FFC300]"
+                        >
+                            <option value="">Встановити категорію...</option>
+                            <option value="car">Легкова</option>
+                            <option value="suv">Позашляховик (SUV)</option>
+                            <option value="cargo">Вантажна (C)</option>
+                            <option value="truck">Вантажна (TIR)</option>
+                            <option value="agro">Агро / Спец</option>
+                        </select>
+                    </div>
+
                     <input type="text" value={bulkMarkup} onChange={e => setBulkMarkup(e.target.value)} placeholder="%" className="w-16 p-2 rounded-lg bg-black border border-zinc-600 text-white text-center font-bold outline-none focus:border-[#FFC300]" />
                     <button onClick={() => handleBulkPriceUpdate(1)} className="flex-1 sm:flex-none bg-green-900/50 text-green-200 px-4 py-2 rounded-lg font-bold border border-green-800 hover:bg-green-800 flex items-center justify-center gap-1 transition-colors whitespace-nowrap text-xs md:text-sm"><ArrowRight size={14} className="-rotate-45"/> + Ціна</button>
                     <button onClick={() => handleBulkPriceUpdate(-1)} className="flex-1 sm:flex-none bg-red-900/50 text-red-200 px-4 py-2 rounded-lg font-bold border border-red-800 hover:bg-red-800 flex items-center justify-center gap-1 transition-colors whitespace-nowrap text-xs md:text-sm"><ArrowRight size={14} className="rotate-45"/> - Ціна</button>

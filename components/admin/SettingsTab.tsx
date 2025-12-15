@@ -219,129 +219,6 @@ const SettingsTab: React.FC = () => {
      finally { setResettingStock(false); }
   };
 
-  // --- SMART PHOTO MATCHER LOGIC ---
-  const handleSmartUpload = async () => {
-      if (smartFiles.length === 0) return;
-      
-      setIsSmartMatching(true);
-      setSmartStatus(['Початок обробки...']);
-      
-      try {
-          // 1. Get all distinct manufacturers to optimize first step
-          const { data: brandData } = await supabase.from('tyres').select('manufacturer');
-          const uniqueBrands = Array.from(new Set(brandData?.map(b => b.manufacturer).filter(Boolean) as string[]));
-          
-          let processed = 0;
-          let matchedTotal = 0;
-
-          for (const file of smartFiles) {
-              // Parse filename tokens
-              const rawFilename = file.name.toLowerCase().replace(/\.[^/.]+$/, ""); // remove extension
-              // Detect brand if possible
-              const brand = uniqueBrands.find(b => rawFilename.includes(b.toLowerCase()));
-              
-              // Get clean tokens (words > 2 chars)
-              const filenameTokens = rawFilename
-                  .replace(/[^a-z0-9а-яіїє]/g, " ") // keep only letters/numbers
-                  .split(/\s+/)
-                  .filter(w => w.length > 2); // ignore tiny stuff like "r15" if < 3 chars, but "r15" is 3 chars. "15" is 2.
-
-              // Exclude technical specs to avoid broad matching (e.g. matching ALL R15 tires)
-              // We want to match MODEL names (e.g. KNK50, TR-135, AGRIMAX)
-              const noise = ['jpg','png','jpeg','bmp','webp','tif','tiff',
-                             'r12','r13','r14','r15','r16','r17','r18','r19','r20','r22','r24','r26','r28','r30','r32','r34','r38','r42',
-                             '10pr','12pr','14pr','16pr','18pr','ply','starmaxx','petlas','ozka','bkt','seha','mitas','cultor','kabat','rosava',
-                             '15.3','15.5','17.5','19.5','22.5','10/75','11.5/80','400/60','6.00','6.50','7.50','8.25','9.00'];
-              
-              const relevantTokens = filenameTokens.filter(t => !noise.includes(t));
-
-              if (relevantTokens.length === 0) {
-                  setSmartStatus(prev => [`[SKIP] ${file.name} - Немає унікальних слів для пошуку`, ...prev]);
-                  continue;
-              }
-
-              // 2. Fetch candidates
-              // If brand detected, fetch only that brand. Else fetch all (or limit to special types if possible, but let's be broad to be safe)
-              let query = supabase.from('tyres').select('id, title');
-              
-              if (brand) {
-                  query = query.ilike('manufacturer', brand);
-              } 
-              // Optimization: if no brand, maybe try to match first token in title? 
-              // Or just fetch all if list isn't huge. Assuming list fits in memory or we page it.
-              // To avoid memory issues, let's fetch everything. It might be slow but safe.
-              
-              if (!smartOverwrite) {
-                  query = query.is('image_url', null);
-              }
-
-              // Use Helper to get ALL rows because standard select has limit
-              // Actually, fetching ALL might be too much (10k+ items).
-              // Let's rely on at least ONE token matching via ILIKE to narrow down DB search
-              // Then refine in JS
-              
-              // Construct OR query for tokens to narrow down search space
-              const orQuery = relevantTokens.map(t => `title.ilike.%${t}%`).join(',');
-              query = query.or(orQuery);
-
-              const { data: candidates } = await query;
-
-              if (!candidates || candidates.length === 0) {
-                  setSmartStatus(prev => [`[NO MATCH] ${file.name}`, ...prev]);
-                  continue;
-              }
-
-              // 3. JS Matching Logic: Check if at least 2 tokens match the title
-              const matches = candidates.filter(item => {
-                  const titleLower = item.title.toLowerCase();
-                  // Check how many relevant tokens appear in the title
-                  let matchCount = 0;
-                  relevantTokens.forEach(token => {
-                      if (titleLower.includes(token)) matchCount++;
-                  });
-                  
-                  // Special logic: If filename has brand "BKT" and model "TR-135", we want match.
-                  // If filename is "TR 135.jpg", tokens are "135". "TR" might be filtered if < 3 chars? No "tr" is 2. 
-                  // Let's adjust token filter to allow length 2 if it contains letters?
-                  // Actually the filter above is length > 2 (so 3+). "TR" is lost. "135" is kept.
-                  // So "TR 135" -> "135". Match count 1. 
-                  // If we change filter to length >= 2, we get "TR".
-                  // Let's say we need matchCount >= 2 OR (matchCount >= 1 AND relevantTokens.length === 1)
-                  // The prompt says "if two words match". So strict >= 2.
-                  
-                  return matchCount >= 2;
-              });
-
-              if (matches.length > 0) {
-                  const fileName = `smart_${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
-                  const { error: uploadErr } = await supabase.storage.from('galery').upload(fileName, file);
-                  
-                  if (!uploadErr) {
-                      const { data: urlData } = supabase.storage.from('galery').getPublicUrl(fileName);
-                      const ids = matches.map(m => m.id);
-                      
-                      // Batch update
-                      await supabase.from('tyres').update({ image_url: urlData.publicUrl }).in('id', ids);
-                      
-                      matchedTotal += ids.length;
-                      setSmartStatus(prev => [`[OK] ${file.name} -> Оновлено ${ids.length} шт.`, ...prev]);
-                  }
-              } else {
-                  setSmartStatus(prev => [`[WEAK MATCH] ${file.name} - Знайдено кандидатів, але недостатньо збігів (потрібно 2 слова)`, ...prev]);
-              }
-              processed++;
-          }
-          
-          showMsg(`Завершено! Оновлено ${matchedTotal} товарів.`);
-          setSmartFiles([]);
-
-      } catch (e: any) {
-          setSmartStatus(prev => [`ERROR: ${e.message}`, ...prev]);
-      } finally {
-          setIsSmartMatching(false);
-      }
-  };
-
   // --- AUTO CATEGORIZATION LOGIC (UPDATED FOR TRUCK/AGRO) ---
   const executeAutoCategorization = async () => {
       setShowSortConfirm(false);
@@ -366,6 +243,13 @@ const SettingsTab: React.FC = () => {
           // Rims that exist in both Car/Van and Agro (require keyword check)
           const overlapRims = ['15', '16', '17', '18', '20', '22.5'];
 
+          // REGEX: Pattern for standard car/van sizes like 205/55R16, 185/65R15
+          const strictCarPattern = /\b\d{3}\/\d{2}[R|Z]?\d{2}\b/; 
+          
+          // REGEX: Pattern for Full Profile Cargo (e.g. 185R14C, 195R14LT)
+          // Look for 3 digits + R + 2 digits + C or LT
+          const strictCargoFullProfile = /\b\d{3}R\d{2}(?:C|LT)\b/i;
+
           for (const item of allItems) {
               let newRadius = item.radius || '';
               let newType = item.vehicle_type || 'car';
@@ -389,37 +273,56 @@ const SettingsTab: React.FC = () => {
               let detectedType = 'car';
               const radiusVal = newRadius.replace('R', '');
               
-              // TRUCK (TIR)
-              if (['17.5', '19.5', '22.5', '24.5'].includes(radiusVal) || title.includes('TIR ') || title.includes('BUS ')) {
+              const isAgroBrand = agroBrands.some(b => title.includes(b));
+              const isAgroKey = agroKeywords.some(k => title.includes(k));
+              
+              // STRONG CARGO CHECK (Must happen first or override others)
+              // Matches: 185R14C, R14C, 195R14LT, (C), etc.
+              const isCargoStrong = 
+                  newRadius.includes('C') || 
+                  title.includes('R14C') || 
+                  title.includes('R15C') || 
+                  title.includes('R16C') || 
+                  title.includes(' LT ') || 
+                  title.includes('(C)') ||
+                  strictCargoFullProfile.test(title);
+
+              if (isCargoStrong) {
+                  detectedType = 'cargo';
+              } 
+              // Truck (TIR)
+              else if (['17.5', '19.5', '22.5', '24.5'].includes(radiusVal) || title.includes('TIR ') || title.includes('BUS ')) {
                   detectedType = 'truck';
-                  // Check if 22.5 is actually Agro based on pattern? Usually 22.5 is Truck, but sometimes Agro. 
-                  // Priority: If keywords say AGRO, move to agro.
-                  if (agroKeywords.some(k => title.includes(k)) || agroBrands.some(b => title.includes(b))) {
+                  // Check if 22.5 is actually Agro
+                  if (isAgroKey || isAgroBrand) {
                       detectedType = 'agro';
                   }
               }
-              // AGRO / SPEC (Unambiguous)
+              // Agro (Unambiguous Rims)
               else if (agroRims.includes(radiusVal)) {
                   detectedType = 'agro';
               }
-              // AGRO / SPEC (Ambiguous R15, R16...)
-              else if (detectedType === 'car' || overlapRims.includes(radiusVal)) {
-                  const isAgroBrand = agroBrands.some(b => title.includes(b));
-                  const isAgroKey = agroKeywords.some(k => title.includes(k));
-                  const hasPR = /\d+\s*PR/.test(title); 
-                  
-                  if (isAgroBrand || isAgroKey || (hasPR && (radiusVal === '16' || radiusVal === '20' || radiusVal === '18' || radiusVal === '15'))) {
-                      detectedType = 'agro';
-                  }
-              }
-              // CARGO (C)
-              else if (detectedType === 'car') {
-                  if (newRadius.includes('C') || title.includes('R14C') || title.includes('R15C') || title.includes('R16C') || title.includes('LT ')) {
-                      detectedType = 'cargo';
+              // Agro (Ambiguous Rims)
+              else if (overlapRims.includes(radiusVal)) {
+                  // If it's standard car pattern (205/55R16), force car unless explicit agro keyword
+                  if (strictCarPattern.test(title)) {
+                      if (title.includes('TRACTOR') || title.includes('AGRO') || title.includes('IMPLEMENT')) {
+                          detectedType = 'agro';
+                      } else {
+                          detectedType = 'car';
+                      }
+                  } else {
+                      // Doesn't look like standard car tire.
+                      const hasPR = /\d+\s*PR/.test(title); 
+                      const hasAgroSize = /\d{1,3}\.\d{2}-\d{2}/.test(title) || /\d{1,3}-\d{2}/.test(title); // 6.00-16
+
+                      if (isAgroBrand || isAgroKey || hasPR || hasAgroSize) {
+                          detectedType = 'agro';
+                      }
                   }
               }
               // SUV
-              else if (detectedType === 'car' && (title.includes('SUV') || title.includes('4X4') || title.includes('JEEP'))) {
+              else if (title.includes('SUV') || title.includes('4X4') || title.includes('JEEP')) {
                   detectedType = 'suv';
               }
 
@@ -444,139 +347,210 @@ const SettingsTab: React.FC = () => {
                   const { error: updErr } = await supabase.from('tyres').upsert(chunk);
                   if (updErr) throw updErr;
               }
-              showMsg(`Успішно оновлено ${changedCount} товарів! (Спецтехніка = Всесезон)`);
+              showMsg(`Успішно оновлено ${changedCount} товарів!`);
           } else {
               showMsg("Всі товари вже мають правильні категорії.");
           }
       } catch (e: any) { showMsg("Помилка сортування: " + e.message, 'error'); } finally { setSortingCategories(false); }
   };
 
-  // --- STORAGE CLEANUP LOGIC (FIXED LIMIT) ---
+  // --- SMART UPLOAD LOGIC ---
+  const handleSmartUpload = async () => {
+      if (smartFiles.length === 0) return;
+      setIsSmartMatching(true);
+      setSmartStatus(['Початок обробки...']);
+      
+      try {
+          let updatedCount = 0;
+          
+          for (const file of smartFiles) {
+              const fileNameClean = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
+              const keywords = fileNameClean.split(/\s+/).filter(w => w.length > 2);
+              
+              if (keywords.length < 2) {
+                  setSmartStatus(prev => [`SKIP: ${file.name} (мало ключових слів)`, ...prev]);
+                  continue;
+              }
+
+              const { data: potentialMatches } = await supabase
+                  .from('tyres')
+                  .select('id, title, image_url')
+                  .ilike('title', `%${keywords[0]}%`);
+
+              if (!potentialMatches || potentialMatches.length === 0) {
+                  setSmartStatus(prev => [`NOT FOUND: ${file.name}`, ...prev]);
+                  continue;
+              }
+
+              const matches = potentialMatches.filter(p => {
+                  const titleLower = p.title.toLowerCase();
+                  const matchCount = keywords.reduce((acc, k) => titleLower.includes(k.toLowerCase()) ? acc + 1 : acc, 0);
+                  return matchCount >= 2;
+              });
+
+              if (matches.length === 0) {
+                  setSmartStatus(prev => [`NO MATCH: ${file.name}`, ...prev]);
+                  continue;
+              }
+
+              const storageName = `smart_${Date.now()}_${file.name.replace(/\s/g, '_')}`;
+              const { error: uploadError } = await supabase.storage.from('galery').upload(storageName, file);
+              if (uploadError) {
+                  setSmartStatus(prev => [`ERR UPLOAD: ${file.name}`, ...prev]);
+                  continue;
+              }
+              
+              const { data: urlData } = supabase.storage.from('galery').getPublicUrl(storageName);
+              const publicUrl = urlData.publicUrl;
+
+              const idsToUpdate = matches
+                  .filter(p => smartOverwrite || !p.image_url)
+                  .map(p => p.id);
+
+              if (idsToUpdate.length > 0) {
+                  await supabase.from('tyres').update({ image_url: publicUrl, in_stock: true }).in('id', idsToUpdate);
+                  updatedCount += idsToUpdate.length;
+                  setSmartStatus(prev => [`MATCHED: ${file.name} -> ${idsToUpdate.length} товарів`, ...prev]);
+              } else {
+                  setSmartStatus(prev => [`SKIPPED (Has Image): ${file.name}`, ...prev]);
+              }
+          }
+          
+          setSmartStatus(prev => [`ЗАВЕРШЕНО. Оновлено товарів: ${updatedCount}`, ...prev]);
+          setSmartFiles([]);
+
+      } catch (e: any) {
+          setSmartStatus(prev => [`CRITICAL ERROR: ${e.message}`, ...prev]);
+      } finally {
+          setIsSmartMatching(false);
+      }
+  };
+
+  // --- STORAGE CLEANUP LOGIC ---
   const executeStorageCleanup = async () => {
       setShowCleanupConfirm(false);
       setCleaningStorage(true);
-      setCleanupStatus("Підготовка до сканування...");
+      setCleanupStatus('Аналіз бази даних...');
       setCleanupResult(null);
 
       try {
-          const activeFiles = new Set<string>();
-          const getFileName = (url: string) => { if(!url) return null; try { const parts = url.split('/'); return decodeURIComponent(parts[parts.length - 1]); } catch { return null; } };
+          const allTyres = await fetchAllIds('tyres', 'image_url');
+          const allGallery = await fetchAllIds('gallery', 'url');
+          const allArticles = await fetchAllIds('articles', 'image_url');
+          const allPromo = await fetchAllIds('settings', 'value', (q) => q.eq('key', 'promo_data'));
 
-          setCleanupStatus("Крок 1/4: Сканування бази (Товари)...");
-          // Use fetchAllIds to get ALL items
-          const allTyres = await fetchAllIds('tyres', 'image_url, gallery');
-          allTyres.forEach(t => {
-              if (t.image_url) { const n = getFileName(t.image_url); if(n) activeFiles.add(n); }
-              if (t.gallery && Array.isArray(t.gallery)) { t.gallery.forEach((g: string) => { const n = getFileName(g); if(n) activeFiles.add(n); }); }
+          const activeUrls = new Set<string>();
+          allTyres.forEach(t => t.image_url && activeUrls.add(t.image_url));
+          allGallery.forEach(g => g.url && activeUrls.add(g.url));
+          allArticles.forEach(a => a.image_url && activeUrls.add(a.image_url));
+          
+          if(allPromo.length > 0) {
+              try {
+                  const promos = JSON.parse(allPromo[0].value);
+                  if(Array.isArray(promos)) {
+                      promos.forEach((p:any) => {
+                          if(p.image_url) activeUrls.add(p.image_url);
+                          if(p.backgroundImage) activeUrls.add(p.backgroundImage);
+                      });
+                  } else if(promos.image_url) {
+                      activeUrls.add(promos.image_url);
+                  }
+              } catch(e) {}
+          }
+
+          setCleanupStatus(`Знайдено ${activeUrls.size} активних посилань. Сканування сховища...`);
+          
+          let allFiles: any[] = [];
+          const { data: files, error } = await supabase.storage.from('galery').list('', { limit: 10000 }); 
+          if (error) throw error;
+          allFiles = files || [];
+
+          const orphans: string[] = [];
+          const projectUrl = "https://zzxueclhkhvwdmxflmyx.supabase.co/storage/v1/object/public/galery/";
+          
+          allFiles.forEach(file => {
+              const fullUrl = projectUrl + file.name;
+              if (!activeUrls.has(fullUrl)) {
+                  orphans.push(file.name);
+              }
           });
 
-          setCleanupStatus(`Крок 2/4: Сканування медіа (Знайдено активних: ${activeFiles.size})...`);
-          const gallery = await fetchAllIds('gallery', 'url');
-          gallery.forEach(g => { const n = getFileName(g.url); if(n) activeFiles.add(n); });
-          const articles = await fetchAllIds('articles', 'image_url');
-          articles.forEach(a => { const n = getFileName(a.image_url); if(n) activeFiles.add(n); });
-          const { data: settings } = await supabase.from('settings').select('value').eq('key', 'promo_data').single();
-          if (settings && settings.value) { try { const promos = JSON.parse(settings.value); const promoArr = Array.isArray(promos) ? promos : [promos]; promoArr.forEach((p: any) => { if(p.image_url) { const n = getFileName(p.image_url); if(n) activeFiles.add(n); } if(p.backgroundImage) { const n = getFileName(p.backgroundImage); if(n) activeFiles.add(n); } }); } catch {} }
+          setCleanupStatus(`Знайдено ${orphans.length} файлів для видалення.`);
 
-          setCleanupStatus(`Крок 3/4: Отримання списку файлів (Активних: ${activeFiles.size})...`);
-          let allFiles: any[] = [];
-          let offset = 0;
-          let keepFetching = true;
-          const BATCH = 1000;
-
-          while (keepFetching) {
-              const { data: files, error } = await supabase.storage.from('galery').list('', { limit: BATCH, offset: offset });
-              if (error) throw error;
-              if (!files || files.length === 0) { keepFetching = false; } else { allFiles = [...allFiles, ...files]; offset += BATCH; setCleanupStatus(`Знайдено файлів: ${allFiles.length}...`); if (allFiles.length > 50000) keepFetching = false; }
+          if (orphans.length > 0) {
+              const BATCH = 50;
+              for(let i=0; i<orphans.length; i+=BATCH) {
+                  const batch = orphans.slice(i, i+BATCH);
+                  await supabase.storage.from('galery').remove(batch);
+              }
           }
 
-          setCleanupStatus(`Крок 4/4: Аналіз ${allFiles.length} файлів...`);
-          const filesToDelete: string[] = [];
-          let brokenCount = 0;
+          setCleanupResult({
+              total: allFiles.length,
+              active: allFiles.length - orphans.length,
+              deleted: orphans.length,
+              broken: 0
+          });
+          setCleanupStatus('Завершено успішно.');
 
-          for (const file of allFiles) {
-              if (file.name === '.emptyFolderPlaceholder') continue;
-              const isOrphan = !activeFiles.has(file.name);
-              const isBroken = file.metadata && file.metadata.size < 500; 
-              if (isOrphan || isBroken) { filesToDelete.push(file.name); if (isBroken) brokenCount++; }
-          }
-
-          if (filesToDelete.length > 0) {
-              setCleanupStatus(`Видалення ${filesToDelete.length} файлів (з них битих: ${brokenCount})...`);
-              for (let i = 0; i < filesToDelete.length; i += 100) { const chunk = filesToDelete.slice(i, i + 100); await supabase.storage.from('galery').remove(chunk); setCleanupStatus(`Видалено ${Math.min(i + 100, filesToDelete.length)} з ${filesToDelete.length}...`); }
-          }
-
-          setCleanupResult({ total: allFiles.length, active: activeFiles.size, deleted: filesToDelete.length, broken: brokenCount });
-          setCleanupStatus("Завершено!");
-      } catch (e: any) { setCleanupStatus("Помилка!"); showMsg("Помилка очищення: " + e.message, 'error'); } finally { setCleaningStorage(false); }
+      } catch (e: any) {
+          setCleanupStatus('Помилка: ' + e.message);
+      } finally {
+          setCleaningStorage(false);
+      }
   };
 
-  // --- IMAGE LINK CHECKER (BROKEN LINKS) - FIXED 1000 LIMIT ---
-  const checkImage = (url: string) => new Promise<boolean>((resolve) => {
-      const img = new Image();
-      img.onload = () => resolve(true);
-      img.onerror = () => resolve(false);
-      img.src = url;
-  });
-
+  // --- BROKEN LINK SCANNER ---
   const executeBrokenLinkScan = async () => {
       setShowScanConfirm(false);
       setIsScanningImages(true);
+      setScanStatus('Завантаження списку товарів...');
       setScanProgress({ checked: 0, broken: 0, removed: 0 });
-      setScanStatus("Завантаження списку...");
 
       try {
-          // Use Helper to get ALL rows (bypass 1000 limit)
-          const items = await fetchAllIds('tyres', 'id, image_url', (q) => q.not('image_url', 'is', null));
+          const products = await fetchAllIds('tyres', 'id, image_url');
+          const productsWithImages = products.filter(p => p.image_url);
           
-          if (!items || items.length === 0) {
-              showMsg("Немає товарів з фото.", 'error');
-              setIsScanningImages(false);
-              return;
-          }
-
-          setScanStatus(`Знайдено ${items.length} фото. Сканування...`);
-          let brokenIds: number[] = [];
+          setScanStatus(`Перевірка ${productsWithImages.length} зображень...`);
           
-          // Process in batches
-          const BATCH_SIZE = 50;
-          for (let i = 0; i < items.length; i += BATCH_SIZE) {
-              const batch = items.slice(i, i + BATCH_SIZE);
-              
-              const results = await Promise.all(batch.map(async (item) => {
-                  const isValid = await checkImage(item.image_url);
-                  return { id: item.id, valid: isValid };
-              }));
+          const BATCH_SIZE = 20; 
+          let processed = 0;
+          let brokenCount = 0;
+          let removedCount = 0;
 
-              results.forEach(res => { if (!res.valid) brokenIds.push(res.id); });
-
-              setScanProgress(prev => ({ 
-                  checked: prev.checked + batch.length, 
-                  broken: brokenIds.length,
-                  removed: 0 
-              }));
-              setScanStatus(`Перевірено ${Math.min(i + BATCH_SIZE, items.length)} з ${items.length}...`);
-          }
-
-          if (brokenIds.length > 0) {
-              setScanStatus(`Видалення ${brokenIds.length} битих посилань...`);
-              
-              for (let i = 0; i < brokenIds.length; i += 100) {
-                  const chunk = brokenIds.slice(i, i + 100);
-                  await supabase.from('tyres').update({ image_url: null }).in('id', chunk);
-                  setScanProgress(prev => ({ ...prev, removed: prev.removed + chunk.length }));
+          const checkUrl = async (url: string) => {
+              try {
+                  const res = await fetch(url, { method: 'HEAD' });
+                  return res.ok;
+              } catch {
+                  return false;
               }
+          };
+
+          for (let i = 0; i < productsWithImages.length; i += BATCH_SIZE) {
+              const batch = productsWithImages.slice(i, i + BATCH_SIZE);
               
-              setScanStatus("Завершено!");
-              showMsg(`Видалено ${brokenIds.length} битих посилань.`);
-          } else {
-              setScanStatus("Всі фото валідні!");
-              showMsg("Битих посилань не знайдено.");
+              const results = await Promise.all(batch.map(async (p) => {
+                  const isOk = await checkUrl(p.image_url);
+                  return { id: p.id, isOk };
+              }));
+
+              const brokenIds = results.filter(r => !r.isOk).map(r => r.id);
+              
+              if (brokenIds.length > 0) {
+                  await supabase.from('tyres').update({ image_url: null }).in('id', brokenIds);
+                  brokenCount += brokenIds.length;
+                  removedCount += brokenIds.length;
+              }
+
+              processed += batch.length;
+              setScanProgress({ checked: processed, broken: brokenCount, removed: removedCount });
           }
+
+          setScanStatus(`Завершено. Перевірено: ${processed}. Видалено битих: ${removedCount}.`);
 
       } catch (e: any) {
-          setScanStatus("Помилка!");
-          showMsg(e.message, 'error');
+          setScanStatus('Помилка: ' + e.message);
       } finally {
           setIsScanningImages(false);
       }

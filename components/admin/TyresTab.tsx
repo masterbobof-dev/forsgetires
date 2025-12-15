@@ -148,7 +148,6 @@ const TyresTab: React.FC = () => {
            const strictAgroRadii = [
                "R10","R12","R14.5","R15.3","R15.5","R24","R26","R28","R30","R32","R34","R36","R38","R40","R42","R44","R46","R48","R50","R52"
            ];
-           // Only show agro IF explicitly tagged OR strict radius match AND NOT car/suv/cargo
            const specKeywords = "title.ilike.%PR%,title.ilike.%OZKA%,title.ilike.%BKT%,title.ilike.%KNK%,title.ilike.%MPT%,title.ilike.%IND%,title.ilike.%TR-%,title.ilike.%IMP%,title.ilike.%Ф-%,title.ilike.%В-%";
            // Strong exclusion of Cargo terms
            query = query.or(`vehicle_type.eq.agro,and(vehicle_type.neq.car,vehicle_type.neq.suv,vehicle_type.neq.cargo,or(radius.in.("${strictAgroRadii.join('","')}"),${specKeywords}))`)
@@ -422,7 +421,13 @@ const TyresTab: React.FC = () => {
         supplier_id: t.supplier_id ? String(t.supplier_id) : '',
         stock_quantity: t.stock_quantity ? String(t.stock_quantity) : ''
       });
-      setExistingGallery(t.gallery || (t.image_url ? [t.image_url] : []));
+      
+      // FIX: Check if gallery is empty BUT image_url exists (from smart sync), prevent overwrite
+      let currentGallery = t.gallery || [];
+      if (currentGallery.length === 0 && t.image_url) {
+          currentGallery = [t.image_url];
+      }
+      setExistingGallery(currentGallery);
       setTyreUploadFiles([]);
       setShowAddTyreModal(true);
   };

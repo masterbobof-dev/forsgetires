@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { CreditCard, ShieldCheck, Coins, Coffee, Phone, AlertCircle, MapPin, CalendarDays, Flame, ChevronRight, ChevronLeft, ShoppingBag, Megaphone, Star } from 'lucide-react';
+import { CreditCard, ShieldCheck, Coins, Coffee, Phone, AlertCircle, MapPin, CalendarDays, Flame, ChevronRight, ChevronLeft, ShoppingBag, Megaphone, Star, Truck, Tractor, ArrowRight } from 'lucide-react';
 import { HERO_BG_IMAGE, PHONE_NUMBER_1, PHONE_NUMBER_2, PHONE_LINK_1, PHONE_LINK_2 } from '../constants';
 import BookingWizard from './BookingWizard';
 import { supabase } from '../supabaseClient';
@@ -8,7 +8,7 @@ import { TyreProduct } from '../types';
 import { DEFAULT_IMG_CONFIG, DEFAULT_BG_CONFIG } from './admin/promo/shared';
 
 interface HeroProps {
-  onShopRedirect: (tyre: TyreProduct) => void;
+  onShopRedirect: (category: string, tyre?: TyreProduct) => void;
 }
 
 // Helper to safely parse messy price strings
@@ -23,9 +23,13 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
   const [showWizard, setShowWizard] = useState(false);
   const [error, setError] = useState('');
   
-  // Hot Products State
+  // Hot Products State (Cars/SUV/Cargo)
   const [hotTyres, setHotTyres] = useState<TyreProduct[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Hot Products State (Truck/Agro)
+  const [hotTruckTyres, setHotTruckTyres] = useState<TyreProduct[]>([]);
+  const scrollRefTruck = useRef<HTMLDivElement>(null);
 
   // Promo Banners State (Array)
   const [promos, setPromos] = useState<any[]>([]);
@@ -46,16 +50,27 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
 
   useEffect(() => {
     const fetchData = async () => {
-      // 1. Fetch Hot Tyres
-      const { data: tyresData } = await supabase
+      // 1. Fetch Hot Tyres (Light Vehicles: Car, SUV, Cargo)
+      const { data: lightTyres } = await supabase
         .from('tyres')
         .select('*')
         .eq('is_hot', true)
+        .in('vehicle_type', ['car', 'suv', 'cargo']) // Filter for light vehicles
         .order('created_at', { ascending: false })
         .limit(10);
-      if (tyresData) setHotTyres(tyresData);
+      if (lightTyres) setHotTyres(lightTyres);
 
-      // 2. Fetch Promo Data & Settings
+      // 2. Fetch Hot Tyres (Heavy Vehicles: Truck, Agro)
+      const { data: heavyTyres } = await supabase
+        .from('tyres')
+        .select('*')
+        .eq('is_hot', true)
+        .in('vehicle_type', ['truck', 'agro']) // Filter for heavy vehicles
+        .order('created_at', { ascending: false })
+        .limit(10);
+      if (heavyTyres) setHotTruckTyres(heavyTyres);
+
+      // 3. Fetch Promo Data & Settings
       const { data: settingsData } = await supabase
         .from('settings')
         .select('key, value')
@@ -109,9 +124,7 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
   const handlePromoClick = (promo: any) => {
       if (!promo) return;
       if (promo.link === 'shop') {
-          const dummyTyre = { id: -1 } as any; 
-          onShopRedirect(dummyTyre); 
-          window.location.hash = 'shop'; 
+          onShopRedirect('all'); 
       } else if (promo.link === 'booking') {
           setShowWizard(true);
       } else if (promo.link === 'phone') {
@@ -128,6 +141,7 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
     setShowWizard(true);
   };
 
+  // Scroll Handlers for Light Tyres
   const handleScroll = (e: React.WheelEvent) => {
     if (scrollRef.current) {
       if (e.deltaY !== 0) {
@@ -135,18 +149,19 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
       }
     }
   };
+  const scrollLeft = () => { if (scrollRef.current) scrollRef.current.scrollBy({ left: -300, behavior: 'smooth' }); };
+  const scrollRight = () => { if (scrollRef.current) scrollRef.current.scrollBy({ left: 300, behavior: 'smooth' }); };
 
-  const scrollLeft = () => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollBy({ left: -300, behavior: 'smooth' });
+  // Scroll Handlers for Heavy Tyres
+  const handleScrollTruck = (e: React.WheelEvent) => {
+    if (scrollRefTruck.current) {
+      if (e.deltaY !== 0) {
+         scrollRefTruck.current.scrollLeft += e.deltaY;
+      }
     }
   };
-
-  const scrollRight = () => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollBy({ left: 300, behavior: 'smooth' });
-    }
-  };
+  const scrollLeftTruck = () => { if (scrollRefTruck.current) scrollRefTruck.current.scrollBy({ left: -300, behavior: 'smooth' }); };
+  const scrollRightTruck = () => { if (scrollRefTruck.current) scrollRefTruck.current.scrollBy({ left: 300, behavior: 'smooth' }); };
 
   // Current active promo
   const currentPromo = promos.length > 0 ? promos[currentPromoIndex] : null;
@@ -157,24 +172,71 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
   let maskImageStyle: React.CSSProperties = {};
   if (imgConfig.vignette) {
       if (imgConfig.maskType === 'linear') {
-          // Linear Gradient with Direction
           const fadeStart = Math.max(0, 50 - (imgConfig.vignetteStrength / 2)); 
           const direction = imgConfig.maskDirection || 'right';
           const val = `linear-gradient(to ${direction}, black 0%, black ${fadeStart}%, transparent 100%)`;
-          maskImageStyle = {
-              maskImage: val,
-              WebkitMaskImage: val
-          };
+          maskImageStyle = { maskImage: val, WebkitMaskImage: val };
       } else {
-          // Radial Gradient
           const maskStop = Math.max(0, 95 - imgConfig.vignetteStrength);
           const val = `radial-gradient(circle at center, black ${maskStop}%, transparent 100%)`;
-          maskImageStyle = {
-              maskImage: val,
-              WebkitMaskImage: val
-          };
+          maskImageStyle = { maskImage: val, WebkitMaskImage: val };
       }
   }
+
+  // Helper to render a card
+  const ProductCard: React.FC<{ tyre: TyreProduct, category: string }> = ({ tyre, category }) => {
+      const priceNum = safeParsePrice(tyre.price);
+      const oldPriceNum = safeParsePrice(tyre.old_price);
+      const hasDiscount = oldPriceNum > 0 && oldPriceNum > priceNum;
+      
+      return (
+        <div 
+          onClick={() => onShopRedirect(category, tyre)}
+          className="flex-shrink-0 w-[45%] md:w-[20%] min-w-[140px] bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden hover:border-[#FFC300] transition-all snap-start group/card relative cursor-pointer hover:shadow-lg hover:shadow-yellow-900/10"
+        >
+            <div className="aspect-square bg-black relative">
+              {tyre.image_url ? (
+                  <img src={tyre.image_url} alt={tyre.title} className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-500" />
+              ) : (
+                  <div className="w-full h-full flex items-center justify-center text-zinc-700">
+                    <ShoppingBag size={24} />
+                  </div>
+              )}
+              <div className="absolute top-2 left-2 bg-orange-600 text-white text-[10px] font-black px-2 py-0.5 rounded uppercase">
+                  HOT
+              </div>
+            </div>
+            <div className="p-3">
+              <div className="h-9 mb-1 overflow-hidden">
+                  <h4 className="text-xs font-bold text-white leading-tight line-clamp-2">{tyre.title}</h4>
+              </div>
+              <div className="flex flex-col justify-end mt-2 min-h-[40px]">
+                  {hasDiscount ? (
+                    <div className="flex flex-col items-start leading-none relative">
+                        <div className="absolute -top-3 left-0 bg-red-600 text-white text-[9px] px-1 rounded transform -rotate-2">
+                           SALE
+                        </div>
+                        {/* UPDATED: Yellow text for old price, standard red line-through */}
+                        <span className="text-[#FFC300] text-[11px] line-through decoration-red-500/80 mb-0.5 ml-8">
+                            {Math.round(oldPriceNum)}
+                        </span>
+                        {/* UPDATED: Slightly larger new price */}
+                        <span className="font-black text-base md:text-lg text-red-500">
+                            {Math.round(priceNum)} <span className="text-[10px] text-zinc-500 font-normal">грн</span>
+                        </span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-start leading-none pt-2">
+                        <span className="font-black text-sm text-[#FFC300]">
+                            {Math.round(priceNum)} <span className="text-[10px] text-zinc-500 font-normal">грн</span>
+                        </span>
+                    </div>
+                  )}
+              </div>
+            </div>
+        </div>
+      );
+  };
 
   return (
     <div className="relative w-full overflow-hidden pb-12">
@@ -444,30 +506,27 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
             </div>
           </div>
 
-          {/* HOT DEALS SLIDER */}
+          {/* --- SLIDER 1: LIGHT VEHICLES --- */}
           {hotTyres.length > 0 && (
             <div className="mt-8">
-               <div className="flex items-center gap-3 mb-4 pl-1">
-                  <Flame className="text-orange-500 fill-orange-500 animate-pulse" size={28} />
-                  <h2 className="text-2xl md:text-3xl font-black text-white italic uppercase tracking-wide">
-                     Гарячі Пропозиції
-                  </h2>
+               <div className="flex items-center justify-between gap-3 mb-4 pl-1">
+                  <div className="flex items-center gap-3">
+                      <Flame className="text-orange-500 fill-orange-500 animate-pulse" size={28} />
+                      <h2 className="text-xl md:text-3xl font-black text-white italic uppercase tracking-wide">
+                         Гарячі Пропозиції
+                      </h2>
+                  </div>
+                  <button onClick={() => onShopRedirect('hot_light')} className="text-sm text-zinc-400 hover:text-[#FFC300] font-bold uppercase flex items-center gap-1">Дивитися всі <ArrowRight size={14}/></button>
                </div>
                
                <div className="relative group">
                   {/* Left Arrow (Desktop Only) */}
-                  <button 
-                    onClick={scrollLeft} 
-                    className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 z-20 w-12 h-12 bg-black/80 rounded-full border border-zinc-700 items-center justify-center text-white hover:bg-[#FFC300] hover:text-black hover:border-[#FFC300] transition-all shadow-[0_0_20px_rgba(0,0,0,0.5)] opacity-0 group-hover:opacity-100 -translate-x-1/2 duration-300"
-                  >
+                  <button onClick={scrollLeft} className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 z-20 w-12 h-12 bg-black/80 rounded-full border border-zinc-700 items-center justify-center text-white hover:bg-[#FFC300] hover:text-black hover:border-[#FFC300] transition-all shadow-[0_0_20px_rgba(0,0,0,0.5)] opacity-0 group-hover:opacity-100 -translate-x-1/2 duration-300">
                      <ChevronLeft size={28} />
                   </button>
 
                   {/* Right Arrow (Desktop Only) */}
-                  <button 
-                    onClick={scrollRight} 
-                    className="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-20 w-12 h-12 bg-black/80 rounded-full border border-zinc-700 items-center justify-center text-white hover:bg-[#FFC300] hover:text-black hover:border-[#FFC300] transition-all shadow-[0_0_20px_rgba(0,0,0,0.5)] opacity-0 group-hover:opacity-100 translate-x-1/2 duration-300"
-                  >
+                  <button onClick={scrollRight} className="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-20 w-12 h-12 bg-black/80 rounded-full border border-zinc-700 items-center justify-center text-white hover:bg-[#FFC300] hover:text-black hover:border-[#FFC300] transition-all shadow-[0_0_20px_rgba(0,0,0,0.5)] opacity-0 group-hover:opacity-100 translate-x-1/2 duration-300">
                      <ChevronRight size={28} />
                   </button>
 
@@ -477,57 +536,47 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
                       className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory cursor-grab active:cursor-grabbing px-1"
                       style={{ scrollBehavior: 'smooth' }}
                   >
-                      {hotTyres.map((tyre) => {
-                        const priceNum = safeParsePrice(tyre.price);
-                        const oldPriceNum = safeParsePrice(tyre.old_price);
-                        const hasDiscount = oldPriceNum > 0 && oldPriceNum > priceNum;
-                        
-                        return (
-                        <div 
-                          key={tyre.id} 
-                          onClick={() => onShopRedirect(tyre)}
-                          className="flex-shrink-0 w-[45%] md:w-[20%] min-w-[140px] bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden hover:border-[#FFC300] transition-all snap-start group/card relative cursor-pointer hover:shadow-lg hover:shadow-yellow-900/10"
-                        >
-                            <div className="aspect-square bg-black relative">
-                              {tyre.image_url ? (
-                                  <img src={tyre.image_url} alt={tyre.title} className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-500" />
-                              ) : (
-                                  <div className="w-full h-full flex items-center justify-center text-zinc-700">
-                                    <ShoppingBag size={24} />
-                                  </div>
-                              )}
-                              <div className="absolute top-2 left-2 bg-orange-600 text-white text-[10px] font-black px-2 py-0.5 rounded uppercase">
-                                  HOT
-                              </div>
-                            </div>
-                            <div className="p-3">
-                              <div className="h-9 mb-1 overflow-hidden">
-                                  <h4 className="text-xs font-bold text-white leading-tight line-clamp-2">{tyre.title}</h4>
-                              </div>
-                              <div className="flex flex-col justify-end mt-2 min-h-[40px]">
-                                  {hasDiscount ? (
-                                    <div className="flex flex-col items-start leading-none relative">
-                                        <div className="absolute -top-3 left-0 bg-red-600 text-white text-[9px] px-1 rounded transform -rotate-2">
-                                           SALE
-                                        </div>
-                                        <span className="text-zinc-500 text-[11px] line-through decoration-red-500/50 mb-0.5 ml-8">
-                                            {Math.round(oldPriceNum)}
-                                        </span>
-                                        <span className="font-black text-sm text-red-500">
-                                            {Math.round(priceNum)} <span className="text-[10px] text-zinc-500 font-normal">грн</span>
-                                        </span>
-                                    </div>
-                                  ) : (
-                                    <div className="flex flex-col items-start leading-none pt-2">
-                                        <span className="font-black text-sm text-[#FFC300]">
-                                            {Math.round(priceNum)} <span className="text-[10px] text-zinc-500 font-normal">грн</span>
-                                        </span>
-                                    </div>
-                                  )}
-                              </div>
-                            </div>
-                        </div>
-                      )})}
+                      {hotTyres.map((tyre) => (
+                          <ProductCard key={tyre.id} tyre={tyre} category="hot_light" />
+                      ))}
+                  </div>
+               </div>
+            </div>
+          )}
+
+          {/* --- SLIDER 2: TRUCK & SPECIAL (NEW) --- */}
+          {hotTruckTyres.length > 0 && (
+            <div className="mt-8 border-t border-zinc-800 pt-8">
+               <div className="flex items-center justify-between gap-3 mb-4 pl-1">
+                  <div className="flex items-center gap-3">
+                      <div className="p-2 bg-zinc-800 rounded-lg border border-zinc-700">
+                          <Truck className="text-blue-400" size={24} />
+                      </div>
+                      <h2 className="text-xl md:text-3xl font-black text-white italic uppercase tracking-wide">
+                         Вантажні та Спецтехніка <span className="text-orange-500 not-italic">(HOT)</span>
+                      </h2>
+                  </div>
+                  <button onClick={() => onShopRedirect('hot_heavy')} className="text-sm text-zinc-400 hover:text-[#FFC300] font-bold uppercase flex items-center gap-1">Дивитися всі <ArrowRight size={14}/></button>
+               </div>
+               
+               <div className="relative group">
+                  <button onClick={scrollLeftTruck} className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 z-20 w-12 h-12 bg-black/80 rounded-full border border-zinc-700 items-center justify-center text-white hover:bg-blue-500 hover:text-white hover:border-blue-500 transition-all shadow-[0_0_20px_rgba(0,0,0,0.5)] opacity-0 group-hover:opacity-100 -translate-x-1/2 duration-300">
+                     <ChevronLeft size={28} />
+                  </button>
+
+                  <button onClick={scrollRightTruck} className="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-20 w-12 h-12 bg-black/80 rounded-full border border-zinc-700 items-center justify-center text-white hover:bg-blue-500 hover:text-white hover:border-blue-500 transition-all shadow-[0_0_20px_rgba(0,0,0,0.5)] opacity-0 group-hover:opacity-100 translate-x-1/2 duration-300">
+                     <ChevronRight size={28} />
+                  </button>
+
+                  <div 
+                      ref={scrollRefTruck}
+                      onWheel={handleScrollTruck}
+                      className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory cursor-grab active:cursor-grabbing px-1"
+                      style={{ scrollBehavior: 'smooth' }}
+                  >
+                      {hotTruckTyres.map((tyre) => (
+                          <ProductCard key={tyre.id} tyre={tyre} category="hot_heavy" />
+                      ))}
                   </div>
                </div>
             </div>

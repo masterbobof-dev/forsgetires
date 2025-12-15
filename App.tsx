@@ -203,9 +203,9 @@ const App: React.FC = () => {
       default:
         return (
           <>
-            <Hero onShopRedirect={(tyre) => {
-               setShopCategory('hot');
-               setShopInitialProduct(null);
+            <Hero onShopRedirect={(category, tyre) => {
+               setShopCategory(category);
+               setShopInitialProduct(tyre || null);
                setCurrentView('shop');
                window.scrollTo({ top: 0, behavior: 'smooth' });
             }} />

@@ -45,7 +45,7 @@ export interface TyreProduct {
   width?: string;
   height?: string;
   season?: string;
-  vehicle_type?: 'car' | 'cargo' | 'suv'; // Added for C-type detection
+  vehicle_type?: 'car' | 'cargo' | 'suv' | 'truck' | 'agro'; // Added truck (TIR) and agro (Special)
   
   // Cart Logic
   quantity?: number;

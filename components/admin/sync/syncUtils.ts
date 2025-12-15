@@ -59,7 +59,8 @@ export const smartExtractPrice = (val: any): number => {
     str = str.replace(/\s/g, '').replace(/\u00A0/g, '');
     if (str.includes(',')) {
         const parts = str.split(',');
-        if (parts[parts.length-1].length === 2) {
+        // CHANGED: Allow length 1 or 2 for decimal part (e.g. ",5" or ",50")
+        if (parts[parts.length-1].length === 1 || parts[parts.length-1].length === 2) {
              str = str.split('.').join(''); 
              str = str.replace(',', '.');   
         } else {
@@ -284,4 +285,4 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   }
-})`;
+})`

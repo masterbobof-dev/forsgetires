@@ -11,14 +11,12 @@ export const PHONE_LINK_2 = "tel:+380635823858";
 export const FORMSPREE_ENDPOINT = "https://formspree.io/f/xpweykjy";
 
 // Nova Poshta API Key
-// SECURITY WARNING: Do not paste your real key here if the code is public.
-// Use Supabase Edge Functions to proxy requests for maximum security.
 export const NOVA_POSHTA_API_KEY = ""; 
 
-// Google Maps Embed: Updated to point to "Sinelnikove, vul. Kvitneva 9"
+// Google Maps Embed
 export const MAP_EMBED_URL = "https://maps.google.com/maps?q=%D0%BC.+%D0%A1%D0%B8%D0%BD%D0%B5%D0%BB%D1%8C%D0%BD%D0%B8%D0%BA%D0%BE%D0%B2%D0%B5,+%D0%B2%D1%83%D0%BB.+%D0%9A%D0%B2%D1%96%D1%82%D0%BD%D0%B2%D0%B0+9&t=&z=15&ie=UTF8&iwloc=&output=embed";
 
-// Specific location link provided by user (for the "Get Directions" button)
+// Specific location link
 export const MAP_DIRECT_LINK = "https://share.google/PQZz6JyQrYR4Vayfv"; 
 
 // Images
@@ -60,7 +58,33 @@ export const BOOKING_SERVICES = [
   { id: 'repair', label: 'Ремонт 1 колеса', duration: 20 },
 ];
 
-export const WHEEL_RADII = ['R13', 'R14', 'R15', 'R16', 'R17', 'R18', 'R19', 'R20', 'R21'];
+// --- RADIUS CONFIGURATIONS ---
+
+// Passenger / SUV
+export const CAR_RADII = ['R12', 'R13', 'R14', 'R15', 'R16', 'R17', 'R18', 'R19', 'R20', 'R22', 'R23', 'R24'];
+
+// Light Truck (C)
+export const CARGO_RADII = ['R12C', 'R13C', 'R14C', 'R15C', 'R16C', 'R17C'];
+
+// Heavy Truck (TIR)
+export const TRUCK_RADII = ['R17.5', 'R19.5', 'R20', 'R22.5', 'R24.5'];
+
+// Agro / Industrial / Special
+export const AGRO_RADII = [
+    'R4', 'R5', 'R6', 'R8', 'R9', 'R10', 'R12', 
+    'R14.5', 'R15', 'R15.3', 'R15.5', 'R16', 'R16.5', 'R17', 'R18', 'R20', 'R22.5', 
+    'R24', 'R26', 'R28', 'R30', 'R32', 'R34', 'R36', 'R38', 'R40', 'R42', 
+    'R44', 'R46', 'R48', 'R50', 'R52', 'R54'
+];
+
+// Combined list for general use, sorted numerically
+export const WHEEL_RADII = Array.from(new Set([
+    ...CAR_RADII, ...CARGO_RADII, ...TRUCK_RADII, ...AGRO_RADII
+])).sort((a, b) => {
+    const numA = parseFloat(a.replace(/[^\d.]/g, ''));
+    const numB = parseFloat(b.replace(/[^\d.]/g, ''));
+    return numA - numB;
+});
 
 export const ACCENT_COLOR = "#FFC300";
 

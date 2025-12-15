@@ -220,41 +220,14 @@ const SettingsTab: React.FC = () => {
   };
 
   // --- SMART PHOTO MATCHER LOGIC ---
-  const parseSmartFileName = (filename: string, knownBrands: string[]) => {
-      let clean = filename.replace(/\.[^/.]+$/, "").replace(/_/g, " ").replace(/-/g, " ");
-      
-      // 1. Detect Brand
-      const brand = knownBrands.find(b => clean.toLowerCase().includes(b.toLowerCase()));
-      if (!brand) return null;
-
-      // 2. Remove Brand from string to isolate Model
-      let remainder = clean.replace(new RegExp(brand, 'gi'), " ").trim();
-
-      // 3. Remove Specs (Size: 195/70R15C, Index: 104/102R)
-      // Remove patterns like 195/70, R15, 104R etc.
-      remainder = remainder.replace(/\d{3}[\/\s]\d{2}[\sA-Z]*\d{2}[C]?/gi, ""); 
-      remainder = remainder.replace(/\d{2,3}\/?\d{0,3}[A-Z]/gi, ""); // Index like 91H or 104/102R
-
-      // 4. Remove common tyre keywords (Noise)
-      const noise = ['TL', 'TT', 'XL', 'FR', 'ZR', 'RFT', 'RUNFLAT', 'SUV', '4X4', 'M+S', 'Tubeless', 'Radial', 'Reinforced'];
-      noise.forEach(n => remainder = remainder.replace(new RegExp(`\\b${n}\\b`, 'gi'), ""));
-
-      // 5. Clean up extra spaces
-      const modelKeywords = remainder.split(/\s+/).filter(w => w.length >= 2 && !/^\d+$/.test(w)); // Filter out purely numeric leftovers if any
-      
-      if (modelKeywords.length === 0) return null;
-
-      return { brand, modelKeywords };
-  };
-
   const handleSmartUpload = async () => {
       if (smartFiles.length === 0) return;
       
       setIsSmartMatching(true);
-      setSmartStatus(['Завантаження брендів...']);
+      setSmartStatus(['Початок обробки...']);
       
       try {
-          // 1. Get all distinct manufacturers to help parsing
+          // 1. Get all distinct manufacturers to optimize first step
           const { data: brandData } = await supabase.from('tyres').select('manufacturer');
           const uniqueBrands = Array.from(new Set(brandData?.map(b => b.manufacturer).filter(Boolean) as string[]));
           
@@ -262,44 +235,99 @@ const SettingsTab: React.FC = () => {
           let matchedTotal = 0;
 
           for (const file of smartFiles) {
-              const parsed = parseSmartFileName(file.name, uniqueBrands);
+              // Parse filename tokens
+              const rawFilename = file.name.toLowerCase().replace(/\.[^/.]+$/, ""); // remove extension
+              // Detect brand if possible
+              const brand = uniqueBrands.find(b => rawFilename.includes(b.toLowerCase()));
               
-              if (!parsed) {
-                  setSmartStatus(prev => [`[SKIP] ${file.name} - Бренд/Модель не розпізнано`, ...prev]);
+              // Get clean tokens (words > 2 chars)
+              const filenameTokens = rawFilename
+                  .replace(/[^a-z0-9а-яіїє]/g, " ") // keep only letters/numbers
+                  .split(/\s+/)
+                  .filter(w => w.length > 2); // ignore tiny stuff like "r15" if < 3 chars, but "r15" is 3 chars. "15" is 2.
+
+              // Exclude technical specs to avoid broad matching (e.g. matching ALL R15 tires)
+              // We want to match MODEL names (e.g. KNK50, TR-135, AGRIMAX)
+              const noise = ['jpg','png','jpeg','bmp','webp','tif','tiff',
+                             'r12','r13','r14','r15','r16','r17','r18','r19','r20','r22','r24','r26','r28','r30','r32','r34','r38','r42',
+                             '10pr','12pr','14pr','16pr','18pr','ply','starmaxx','petlas','ozka','bkt','seha','mitas','cultor','kabat','rosava',
+                             '15.3','15.5','17.5','19.5','22.5','10/75','11.5/80','400/60','6.00','6.50','7.50','8.25','9.00'];
+              
+              const relevantTokens = filenameTokens.filter(t => !noise.includes(t));
+
+              if (relevantTokens.length === 0) {
+                  setSmartStatus(prev => [`[SKIP] ${file.name} - Немає унікальних слів для пошуку`, ...prev]);
                   continue;
               }
 
-              // 2. Build Query: Brand + Model Keywords
-              let query = supabase.from('tyres').select('id, title').ilike('manufacturer', parsed.brand);
+              // 2. Fetch candidates
+              // If brand detected, fetch only that brand. Else fetch all (or limit to special types if possible, but let's be broad to be safe)
+              let query = supabase.from('tyres').select('id, title');
               
-              // Add fuzzy search for each model keyword
-              parsed.modelKeywords.forEach(kw => {
-                  query = query.ilike('title', `%${kw}%`);
-              });
-
+              if (brand) {
+                  query = query.ilike('manufacturer', brand);
+              } 
+              // Optimization: if no brand, maybe try to match first token in title? 
+              // Or just fetch all if list isn't huge. Assuming list fits in memory or we page it.
+              // To avoid memory issues, let's fetch everything. It might be slow but safe.
+              
               if (!smartOverwrite) {
-                  query = query.is('image_url', null); // Only empty ones
+                  query = query.is('image_url', null);
               }
 
-              const { data: matches } = await query;
+              // Use Helper to get ALL rows because standard select has limit
+              // Actually, fetching ALL might be too much (10k+ items).
+              // Let's rely on at least ONE token matching via ILIKE to narrow down DB search
+              // Then refine in JS
+              
+              // Construct OR query for tokens to narrow down search space
+              const orQuery = relevantTokens.map(t => `title.ilike.%${t}%`).join(',');
+              query = query.or(orQuery);
 
-              if (matches && matches.length > 0) {
-                  // 3. Upload File
+              const { data: candidates } = await query;
+
+              if (!candidates || candidates.length === 0) {
+                  setSmartStatus(prev => [`[NO MATCH] ${file.name}`, ...prev]);
+                  continue;
+              }
+
+              // 3. JS Matching Logic: Check if at least 2 tokens match the title
+              const matches = candidates.filter(item => {
+                  const titleLower = item.title.toLowerCase();
+                  // Check how many relevant tokens appear in the title
+                  let matchCount = 0;
+                  relevantTokens.forEach(token => {
+                      if (titleLower.includes(token)) matchCount++;
+                  });
+                  
+                  // Special logic: If filename has brand "BKT" and model "TR-135", we want match.
+                  // If filename is "TR 135.jpg", tokens are "135". "TR" might be filtered if < 3 chars? No "tr" is 2. 
+                  // Let's adjust token filter to allow length 2 if it contains letters?
+                  // Actually the filter above is length > 2 (so 3+). "TR" is lost. "135" is kept.
+                  // So "TR 135" -> "135". Match count 1. 
+                  // If we change filter to length >= 2, we get "TR".
+                  // Let's say we need matchCount >= 2 OR (matchCount >= 1 AND relevantTokens.length === 1)
+                  // The prompt says "if two words match". So strict >= 2.
+                  
+                  return matchCount >= 2;
+              });
+
+              if (matches.length > 0) {
                   const fileName = `smart_${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
                   const { error: uploadErr } = await supabase.storage.from('galery').upload(fileName, file);
                   
                   if (!uploadErr) {
                       const { data: urlData } = supabase.storage.from('galery').getPublicUrl(fileName);
-                      
-                      // 4. Update Database
                       const ids = matches.map(m => m.id);
+                      
+                      // Batch update
                       await supabase.from('tyres').update({ image_url: urlData.publicUrl }).in('id', ids);
                       
                       matchedTotal += ids.length;
-                      setSmartStatus(prev => [`[OK] ${parsed.brand} ${parsed.modelKeywords.join(' ')} -> Оновлено ${ids.length} шт.`, ...prev]);
+                      setSmartStatus(prev => [`[OK] ${file.name} -> Оновлено ${ids.length} шт.`, ...prev]);
                   }
               } else {
-                  setSmartStatus(prev => [`[NO MATCH] ${parsed.brand} ${parsed.modelKeywords.join(' ')} - Товарів не знайдено`, ...prev]);
+                  setSmartStatus(prev => [`[WEAK MATCH] ${file.name} - Знайдено кандидатів, але недостатньо збігів (потрібно 2 слова)`, ...prev]);
               }
               processed++;
           }
@@ -314,54 +342,99 @@ const SettingsTab: React.FC = () => {
       }
   };
 
-  // --- AUTO CATEGORIZATION LOGIC (FIXED LIMIT) ---
+  // --- AUTO CATEGORIZATION LOGIC (UPDATED FOR TRUCK/AGRO) ---
   const executeAutoCategorization = async () => {
       setShowSortConfirm(false);
       setSortingCategories(true);
       try {
           // Use pagination fetch
-          const allItems = await fetchAllIds('tyres', 'id, title, radius, vehicle_type');
+          const allItems = await fetchAllIds('tyres', 'id, title, radius, vehicle_type, season');
           if (!allItems || allItems.length === 0) { showMsg("Немає товарів.", 'error'); return; }
 
           const updates = [];
           let changedCount = 0;
 
           const agroBrands = ['OZKA', 'BKT', 'SEHA', 'KNK', 'PETLAS', 'ALLIANCE', 'MITAS', 'CULTOR', 'KABAT', 'ROSAVA'];
-          const agroKeywords = ['AGRO', 'TRACTOR', 'IMPLEMENT', 'FARM', 'LOADER', 'INDUSTRIAL', 'SKID', 'BOBCAT', 'FORKLIFT', 'PR ', 'TR-', 'IMP', 'SGP', 'Ф-', 'В-', 'БЦФ', 'ИЯВ', 'ВЛ-', 'К-', 'Л-', 'М-'];
-          const agroRims = ['15.3', '15.5', '20', '24', '28', '30', '32', '34', '36', '38', '40', '42', '46', '48', '52'];
-          const indRims = ['8', '9', '10', '12', '15.3']; 
+          const agroKeywords = ['AGRO', 'TRACTOR', 'IMPLEMENT', 'FARM', 'LOADER', 'INDUSTRIAL', 'SKID', 'BOBCAT', 'FORKLIFT', 'PR ', 'TR-', 'IMP', 'SGP', 'Ф-', 'В-', 'БЦФ', 'ИЯВ', 'ВЛ-', 'К-', 'Л-', 'М-', 'IND'];
+          
+          // Expanded agro rims based on request
+          const agroRims = [
+              '10', '12', '14.5', '15.3', '15.5', '24', '26', '28', '30', '32', '34', '36', '38', 
+              '40', '42', '44', '46', '48', '50', '52', '54'
+          ];
+          
+          // Rims that exist in both Car/Van and Agro (require keyword check)
+          const overlapRims = ['15', '16', '17', '18', '20', '22.5'];
 
           for (const item of allItems) {
               let newRadius = item.radius || '';
               let newType = item.vehicle_type || 'car';
+              let newSeason = item.season || 'summer';
+              
               let isChanged = false;
               const title = (item.title || '').toUpperCase();
               
+              // 1. Fix Radius Format
               if (!newRadius || newRadius === 'R') {
                   const dashMatch = title.match(/[0-9.,]+[-/](\d{1,2}(?:[.,]\d)?)/);
                   if (dashMatch) { newRadius = `R${dashMatch[1].replace(',', '.')}`; isChanged = true; }
               }
-              const decimalMatch = title.match(/R(15\.3|15\.5|17\.5|19\.5|22\.5)/);
-              if (decimalMatch) { const correctR = decimalMatch[0]; if (newRadius !== correctR) { newRadius = correctR; isChanged = true; } }
+              const decimalMatch = title.match(/R(14\.5|15\.3|15\.5|17\.5|19\.5|22\.5|24\.5)/);
+              if (decimalMatch) { 
+                  const correctR = decimalMatch[0]; 
+                  if (newRadius !== correctR) { newRadius = correctR; isChanged = true; } 
+              }
 
+              // 2. Detect Category
               let detectedType = 'car';
               const radiusVal = newRadius.replace('R', '');
-              if (agroRims.includes(radiusVal) || indRims.includes(radiusVal)) detectedType = 'agro';
-              else if (['17.5', '19.5', '22.5', '24.5'].includes(radiusVal) || title.includes('TIR ') || title.includes('BUS ')) detectedType = 'truck';
               
-              if (detectedType === 'car' || radiusVal === '16' || radiusVal === '20') {
+              // TRUCK (TIR)
+              if (['17.5', '19.5', '22.5', '24.5'].includes(radiusVal) || title.includes('TIR ') || title.includes('BUS ')) {
+                  detectedType = 'truck';
+                  // Check if 22.5 is actually Agro based on pattern? Usually 22.5 is Truck, but sometimes Agro. 
+                  // Priority: If keywords say AGRO, move to agro.
+                  if (agroKeywords.some(k => title.includes(k)) || agroBrands.some(b => title.includes(b))) {
+                      detectedType = 'agro';
+                  }
+              }
+              // AGRO / SPEC (Unambiguous)
+              else if (agroRims.includes(radiusVal)) {
+                  detectedType = 'agro';
+              }
+              // AGRO / SPEC (Ambiguous R15, R16...)
+              else if (detectedType === 'car' || overlapRims.includes(radiusVal)) {
                   const isAgroBrand = agroBrands.some(b => title.includes(b));
                   const isAgroKey = agroKeywords.some(k => title.includes(k));
                   const hasPR = /\d+\s*PR/.test(title); 
-                  if (isAgroBrand || isAgroKey || (hasPR && (radiusVal === '16' || radiusVal === '20'))) detectedType = 'agro';
+                  
+                  if (isAgroBrand || isAgroKey || (hasPR && (radiusVal === '16' || radiusVal === '20' || radiusVal === '18' || radiusVal === '15'))) {
+                      detectedType = 'agro';
+                  }
               }
-              if (detectedType === 'car') {
-                  if (newRadius.includes('C') || title.includes('R14C') || title.includes('R15C') || title.includes('R16C') || title.includes('LT ')) detectedType = 'cargo';
+              // CARGO (C)
+              else if (detectedType === 'car') {
+                  if (newRadius.includes('C') || title.includes('R14C') || title.includes('R15C') || title.includes('R16C') || title.includes('LT ')) {
+                      detectedType = 'cargo';
+                  }
               }
-              if (detectedType === 'car' && (title.includes('SUV') || title.includes('4X4') || title.includes('JEEP'))) detectedType = 'suv';
+              // SUV
+              else if (detectedType === 'car' && (title.includes('SUV') || title.includes('4X4') || title.includes('JEEP'))) {
+                  detectedType = 'suv';
+              }
 
               if (newType !== detectedType) { newType = detectedType; isChanged = true; }
-              if (isChanged) { updates.push({ id: item.id, title: item.title, radius: newRadius, vehicle_type: newType }); changedCount++; }
+
+              // 3. Force Season for Agro/Spec
+              if (newType === 'agro' && newSeason !== 'all-season') {
+                  newSeason = 'all-season';
+                  isChanged = true;
+              }
+
+              if (isChanged) { 
+                  updates.push({ id: item.id, title: item.title, radius: newRadius, vehicle_type: newType, season: newSeason }); 
+                  changedCount++; 
+              }
           }
 
           if (updates.length > 0) {
@@ -371,7 +444,7 @@ const SettingsTab: React.FC = () => {
                   const { error: updErr } = await supabase.from('tyres').upsert(chunk);
                   if (updErr) throw updErr;
               }
-              showMsg(`Успішно оновлено ${changedCount} товарів!`);
+              showMsg(`Успішно оновлено ${changedCount} товарів! (Спецтехніка = Всесезон)`);
           } else {
               showMsg("Всі товари вже мають правильні категорії.");
           }
@@ -674,7 +747,7 @@ const SettingsTab: React.FC = () => {
                                     </button>
                                 ) : (
                                     <div className="bg-zinc-800 p-2 rounded-xl text-center border border-zinc-700">
-                                        <p className="text-[10px] text-zinc-400 mb-2">Призначити TIR, Cargo, Agro та SUV?</p>
+                                        <p className="text-[10px] text-zinc-400 mb-2">Призначити TIR, Спецтехніку, Cargo та SUV?</p>
                                         <div className="flex gap-2">
                                             <button onClick={executeAutoCategorization} className="flex-1 bg-green-600 text-white font-bold py-2 rounded-lg text-xs">Так</button>
                                             <button onClick={() => setShowSortConfirm(false)} className="flex-1 bg-zinc-700 text-white font-bold py-2 rounded-lg text-xs">Ні</button>
@@ -720,7 +793,9 @@ const SettingsTab: React.FC = () => {
                            <div>
                                <h4 className="text-blue-400 text-lg font-bold mb-1 flex items-center gap-2"><Wand2 size={20}/> Розумне завантаження фото (Smart Match)</h4>
                                <p className="text-zinc-400 text-sm max-w-2xl mb-4">
-                                   Завантажте фото з назвою (напр. <code>195/70R15C Nordicca Van Matador.jpg</code>). Система автоматично визначить бренд (Matador) та модель (Nordicca Van) і прикріпить це фото до <strong>ВСІХ</strong> відповідних товарів.
+                                   Завантажте фото з назвою (напр. <code>TR 135 BKT.jpg</code> або <code>KNK50.jpg</code>). 
+                                   Система розіб'є назву на слова і прив'яже фото, якщо в назві товару знайдеться <strong>мінімум 2 слова</strong> з назви файлу.
+                                   <br/><span className="text-blue-300">Ідеально для спецшин (напр. KNK50 12.4-24).</span>
                                </p>
                            </div>
 

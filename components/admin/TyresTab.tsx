@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Plus, X, Upload, Save, Loader2, FileSpreadsheet, CheckSquare, Square, Edit2, ArrowDown, Wand2, RefreshCw, Menu, FolderOpen, Car, Truck, Mountain, Flame, Ban, Briefcase, ArrowUpDown, Settings, ArrowRight, HelpCircle, Ruler, Copy, Image as ImageIcon, Percent, AlertCircle, FileWarning, FilterX, Trash2, LayoutGrid, List, Snowflake, Sun, CloudSun, CheckCircle, Eye, EyeOff, Tractor } from 'lucide-react';
+import { Search, Plus, X, Upload, Save, Loader2, FileSpreadsheet, CheckSquare, Square, Edit2, ArrowDown, Wand2, RefreshCw, Menu, FolderOpen, Car, Truck, Mountain, Flame, Ban, Briefcase, ArrowUpDown, Settings, ArrowRight, HelpCircle, Ruler, Copy, Image as ImageIcon, Percent, AlertCircle, FileWarning, FilterX, Trash2, LayoutGrid, List, Snowflake, Sun, CloudSun, CheckCircle, Eye, EyeOff, Tractor, AlertTriangle } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { TyreProduct, Supplier } from '../../types';
 import { WHEEL_RADII, CAR_RADII, CARGO_RADII, TRUCK_RADII, AGRO_RADII } from '../../constants';
@@ -47,20 +48,24 @@ const TyresTab: React.FC = () => {
 
   const [selectedTyreIds, setSelectedTyreIds] = useState<Set<number>>(new Set());
   const [bulkMarkup, setBulkMarkup] = useState('');
-  const [bulkCategory, setBulkCategory] = useState(''); // NEW for Bulk Category
+  const [bulkCategory, setBulkCategory] = useState(''); 
   const [isApplyingBulk, setIsApplyingBulk] = useState(false);
 
   const [showAddTyreModal, setShowAddTyreModal] = useState(false);
   const [editingTyreId, setEditingTyreId] = useState<number | null>(null);
-  const [tyreForm, setTyreForm] = useState({ manufacturer: '', name: '', width: '', height: '', radius: 'R15', season: 'winter', vehicle_type: 'car' as 'car'|'cargo'|'suv'|'truck'|'agro', price: '', old_price: '', base_price: '', catalog_number: '', product_number: '', description: '', is_hot: false, supplier_id: '', stock_quantity: '' });
+  const [tyreForm, setTyreForm] = useState({ manufacturer: '', name: '', width: '', height: '', radius: 'R15', season: 'winter', vehicle_type: 'car' as 'car'|'cargo'|'suv'|'truck'|'agro', axis_type: '', price: '', old_price: '', base_price: '', catalog_number: '', product_number: '', description: '', is_hot: false, supplier_id: '', stock_quantity: '' });
   const [tyreUploadFiles, setTyreUploadFiles] = useState<File[]>([]);
   const [existingGallery, setExistingGallery] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  
+  // Deletion States
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [tyreToDelete, setTyreToDelete] = useState<number | null>(null);
-  
-  // Custom Bulk Delete Modal State
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [showCategoryDeleteConfirm, setShowCategoryDeleteConfirm] = useState(false);
+  
+  // New: Checkbox for deleting photos
+  const [deleteWithPhotos, setDeleteWithPhotos] = useState(false);
 
   const showError = (msg: string) => { setErrorMessage(msg); setTimeout(() => setErrorMessage(''), 6000); };
   
@@ -97,14 +102,26 @@ const TyresTab: React.FC = () => {
 
   const fetchCategoryCounts = async () => {
     try {
+        const strictAgroRadii = ["R10","R12","R14.5","R15.3","R15.5","R20","R24","R26","R28","R30","R32","R34","R36","R38","R40","R42","R44","R46","R48","R50","R52"];
+        const specKeywords = "title.ilike.%PR%,title.ilike.%OZKA%,title.ilike.%BKT%,title.ilike.%KNK%,title.ilike.%MPT%,title.ilike.%IND%,title.ilike.%TR-%,title.ilike.%IMP%,title.ilike.%Ф-%,title.ilike.%В-%";
+
         const base = supabase.from('tyres').select('*', { count: 'exact', head: true });
         const [all, car, cargo, truck, agro, suv, hot, out, no_photo] = await Promise.all([
             base.then(r => r.count),
-            supabase.from('tyres').select('*', { count: 'exact', head: true }).or('vehicle_type.eq.car,vehicle_type.is.null').neq('vehicle_type', 'cargo').neq('vehicle_type', 'suv').not('radius', 'ilike', '%C%').then(r => r.count),
+            supabase.from('tyres').select('*', { count: 'exact', head: true }).or('vehicle_type.eq.car,vehicle_type.is.null').neq('vehicle_type', 'cargo').neq('vehicle_type', 'suv').neq('vehicle_type', 'truck').not('radius', 'ilike', '%C%').then(r => r.count),
             supabase.from('tyres').select('*', { count: 'exact', head: true }).or('vehicle_type.eq.cargo,radius.ilike.%C%').not('radius', 'in', '("R17.5","R19.5","R22.5")').then(r => r.count),
-            supabase.from('tyres').select('*', { count: 'exact', head: true }).or('radius.eq.R17.5,radius.eq.R19.5,radius.eq.R22.5,title.ilike.%TIR%,title.ilike.%R17.5%,title.ilike.%R19.5%,title.ilike.%R22.5%').then(r => r.count),
-            // Updated AGRO count logic - STRICT
-            supabase.from('tyres').select('*', { count: 'exact', head: true }).or('vehicle_type.eq.agro,and(vehicle_type.neq.car,vehicle_type.neq.suv,vehicle_type.neq.cargo,radius.in.("R10","R12","R14.5","R15.3","R15.5","R20","R24","R26","R28","R30","R32","R34","R36","R38","R40","R42"))').then(r => r.count),
+            supabase.from('tyres').select('*', { count: 'exact', head: true }).or('vehicle_type.eq.truck,radius.eq.R17.5,radius.eq.R19.5,radius.eq.R22.5,title.ilike.%TIR%,title.ilike.%R17.5%,title.ilike.%R19.5%,title.ilike.%R22.5%').then(r => r.count),
+            
+            // SYNCHRONIZED AGRO LOGIC FOR COUNTER
+            supabase.from('tyres').select('*', { count: 'exact', head: true })
+                .or(`vehicle_type.eq.agro,and(vehicle_type.neq.car,vehicle_type.neq.suv,vehicle_type.neq.cargo,or(radius.in.("${strictAgroRadii.join('","')}"),${specKeywords}))`)
+                .not('title', 'ilike', '%(C)%')
+                .not('title', 'ilike', '% LT%')
+                .not('title', 'ilike', '%R14C%')
+                .not('title', 'ilike', '%R15C%')
+                .not('title', 'ilike', '%R16C%')
+                .then(r => r.count),
+                
             supabase.from('tyres').select('*', { count: 'exact', head: true }).eq('vehicle_type', 'suv').then(r => r.count),
             supabase.from('tyres').select('*', { count: 'exact', head: true }).eq('is_hot', true).then(r => r.count),
             supabase.from('tyres').select('*', { count: 'exact', head: true }).eq('in_stock', false).then(r => r.count),
@@ -140,9 +157,11 @@ const TyresTab: React.FC = () => {
            });
        }
        
-       if (tyreCategoryTab === 'car') query = query.or('vehicle_type.eq.car,vehicle_type.is.null').neq('vehicle_type', 'cargo').neq('vehicle_type', 'suv').not('radius', 'ilike', '%C%');
+       if (tyreCategoryTab === 'car') query = query.or('vehicle_type.eq.car,vehicle_type.is.null').neq('vehicle_type', 'cargo').neq('vehicle_type', 'suv').neq('vehicle_type', 'truck').not('radius', 'ilike', '%C%');
        else if (tyreCategoryTab === 'cargo') query = query.or('vehicle_type.eq.cargo,radius.ilike.%C%').not('radius', 'in', '("R17.5","R19.5","R22.5")');
-       else if (tyreCategoryTab === 'truck') query = query.or('radius.eq.R17.5,radius.eq.R19.5,radius.eq.R22.5,title.ilike.%TIR%,title.ilike.%R17.5%,title.ilike.%R19.5%,title.ilike.%R22.5%');
+       else if (tyreCategoryTab === 'truck') {
+           query = query.or('vehicle_type.eq.truck,radius.eq.R17.5,radius.eq.R19.5,radius.eq.R22.5,title.ilike.%TIR%,title.ilike.%R17.5%,title.ilike.%R19.5%,title.ilike.%R22.5%');
+       }
        else if (tyreCategoryTab === 'agro') {
            const strictAgroRadii = [
                "R10","R12","R14.5","R15.3","R15.5","R24","R26","R28","R30","R32","R34","R36","R38","R40","R42","R44","R46","R48","R50","R52"
@@ -247,36 +266,49 @@ const TyresTab: React.FC = () => {
       }
   };
 
+  // Helper to delete images from storage
+  const deleteImagesFromStorage = async (imageUrls: string[]) => {
+      if (!imageUrls || imageUrls.length === 0) return;
+      
+      const filePaths = imageUrls.map(url => {
+          try {
+              // Extract relative path: ".../galery/filename.jpg" -> "filename.jpg"
+              const urlObj = new URL(url);
+              const pathParts = urlObj.pathname.split('/galery/');
+              return pathParts.length > 1 ? pathParts[1] : null;
+          } catch { return null; }
+      }).filter(p => p !== null) as string[];
+
+      if (filePaths.length > 0) {
+          // Process in batches
+          const BATCH = 50;
+          for (let i = 0; i < filePaths.length; i += BATCH) {
+              const batch = filePaths.slice(i, i + BATCH);
+              await supabase.storage.from('galery').remove(batch);
+          }
+      }
+  };
+
   const handleBulkPriceUpdate = async (dir: number) => {
       if(!bulkMarkup) return;
       setIsApplyingBulk(true);
       setTimeout(() => { setIsApplyingBulk(false); showError("Ціни оновлено (Mock)"); }, 500);
   };
 
-  // --- NEW: BULK CATEGORY UPDATE ---
   const handleBulkCategoryUpdate = async (category: string) => {
       if (!category || selectedTyreIds.size === 0) return;
       setIsApplyingBulk(true);
       try {
           const ids = Array.from(selectedTyreIds);
           const { error } = await supabase.from('tyres').update({ vehicle_type: category }).in('id', ids);
-          
           if (error) throw error;
-          
-          // Update local state
           setTyres(prev => prev.map(t => selectedTyreIds.has(t.id) ? { ...t, vehicle_type: category as any } : t));
-          
           setSuccessMessage(`Оновлено категорію для ${ids.length} товарів.`);
           setBulkCategory('');
-          setSelectedTyreIds(new Set()); // Clear selection
+          setSelectedTyreIds(new Set()); 
           fetchCategoryCounts();
           setTimeout(() => setSuccessMessage(''), 3000);
-          
-      } catch (e: any) {
-          showError("Помилка оновлення категорії: " + e.message);
-      } finally {
-          setIsApplyingBulk(false);
-      }
+      } catch (e: any) { showError("Помилка оновлення категорії: " + e.message); } finally { setIsApplyingBulk(false); }
   };
 
   const handleBulkHotUpdate = async (action: 'add' | 'remove') => {
@@ -286,7 +318,6 @@ const TyresTab: React.FC = () => {
           const ids = Array.from(selectedTyreIds);
           const updates = ids.map(id => ({ id, is_hot: action === 'add' }));
           for (const u of updates) await supabase.from('tyres').update(u).eq('id', u.id);
-          
           showError(`Оновлено ${ids.length} товарів`);
           fetchTyres(0, true);
           setSelectedTyreIds(new Set());
@@ -294,9 +325,11 @@ const TyresTab: React.FC = () => {
       finally { setIsApplyingBulk(false); }
   };
 
-  // --- NEW: BULK DELETE ---
+  // --- DELETE LOGIC ---
+
   const handleBulkDelete = () => {
       if (selectedTyreIds.size === 0) return;
+      setDeleteWithPhotos(false);
       setShowBulkDeleteConfirm(true);
   };
 
@@ -305,8 +338,20 @@ const TyresTab: React.FC = () => {
       setIsApplyingBulk(true);
       try {
           const ids = Array.from(selectedTyreIds);
-          const { error } = await supabase.from('tyres').delete().in('id', ids);
           
+          if (deleteWithPhotos) {
+              const { data: itemsToDelete } = await supabase.from('tyres').select('image_url, gallery').in('id', ids);
+              if (itemsToDelete) {
+                  const allImages: string[] = [];
+                  itemsToDelete.forEach((item: any) => {
+                      if (item.image_url) allImages.push(item.image_url);
+                      if (item.gallery && Array.isArray(item.gallery)) allImages.push(...item.gallery);
+                  });
+                  await deleteImagesFromStorage(allImages);
+              }
+          }
+
+          const { error } = await supabase.from('tyres').delete().in('id', ids);
           if (error) throw error;
           
           setTyres(prev => prev.filter(t => !selectedTyreIds.has(t.id)));
@@ -318,6 +363,81 @@ const TyresTab: React.FC = () => {
           showError("Помилка видалення: " + e.message); 
       } finally { 
           setIsApplyingBulk(false); 
+      }
+  };
+
+  const handleCategoryDelete = () => {
+      setDeleteWithPhotos(false);
+      setShowCategoryDeleteConfirm(true);
+  };
+
+  const executeCategoryDelete = async () => {
+      if (tyreCategoryTab === 'all' || tyreCategoryTab === 'hot' || tyreCategoryTab === 'no_photo' || tyreCategoryTab === 'out_of_stock') {
+          showError("Неможливо видалити спеціальні категорії.");
+          setShowCategoryDeleteConfirm(false);
+          return;
+      }
+
+      setShowCategoryDeleteConfirm(false);
+      setIsApplyingBulk(true); // Using same loader state
+      
+      try {
+          // Construct query to identify items to delete based on the current filter logic
+          let query = supabase.from('tyres').select('id, image_url, gallery');
+          
+          // Re-use logic from fetchTyres but simplified for specific categories that map to vehicle_type or radius
+          if (tyreCategoryTab === 'car') query = query.or('vehicle_type.eq.car,vehicle_type.is.null').neq('vehicle_type', 'cargo').neq('vehicle_type', 'suv').neq('vehicle_type', 'truck').not('radius', 'ilike', '%C%');
+          else if (tyreCategoryTab === 'cargo') query = query.or('vehicle_type.eq.cargo,radius.ilike.%C%').not('radius', 'in', '("R17.5","R19.5","R22.5")');
+          
+          // UPDATED TRUCK DELETE LOGIC
+          else if (tyreCategoryTab === 'truck') query = query.or('vehicle_type.eq.truck,radius.eq.R17.5,radius.eq.R19.5,radius.eq.R22.5,title.ilike.%TIR%,title.ilike.%R17.5%,title.ilike.%R19.5%,title.ilike.%R22.5%');
+          
+          else if (tyreCategoryTab === 'agro') {
+               const strictAgroRadii = ["R10","R12","R14.5","R15.3","R15.5","R20","R24","R26","R28","R30","R32","R34","R36","R38","R40","R42","R44","R46","R48","R50","R52"];
+               const specKeywords = "title.ilike.%PR%,title.ilike.%OZKA%,title.ilike.%BKT%,title.ilike.%KNK%,title.ilike.%MPT%,title.ilike.%IND%,title.ilike.%TR-%,title.ilike.%IMP%,title.ilike.%Ф-%,title.ilike.%В-%";
+               query = query.or(`vehicle_type.eq.agro,and(vehicle_type.neq.car,vehicle_type.neq.suv,vehicle_type.neq.cargo,or(radius.in.("${strictAgroRadii.join('","')}"),${specKeywords}))`)
+                            .not('title', 'ilike', '%(C)%')
+                            .not('title', 'ilike', '% LT%')
+                            .not('title', 'ilike', '%R14C%')
+                            .not('title', 'ilike', '%R15C%')
+                            .not('title', 'ilike', '%R16C%');
+          }
+          else if (tyreCategoryTab === 'suv') query = query.eq('vehicle_type', 'suv');
+          
+          // CRITICAL FIX: Increase limit to handle bulk deletion > 1000 items
+          const { data: itemsToDelete, error: fetchError } = await query.limit(10000);
+          if (fetchError) throw fetchError;
+
+          if (itemsToDelete && itemsToDelete.length > 0) {
+              const ids = itemsToDelete.map((i: any) => i.id);
+
+              if (deleteWithPhotos) {
+                  const allImages: string[] = [];
+                  itemsToDelete.forEach((item: any) => {
+                      if (item.image_url) allImages.push(item.image_url);
+                      if (item.gallery && Array.isArray(item.gallery)) allImages.push(...item.gallery);
+                  });
+                  await deleteImagesFromStorage(allImages);
+              }
+
+              // Delete in batches to avoid URL length issues
+              const BATCH = 500;
+              for(let i=0; i<ids.length; i+=BATCH) {
+                  const batchIds = ids.slice(i, i+BATCH);
+                  await supabase.from('tyres').delete().in('id', batchIds);
+              }
+
+              setSuccessMessage(`Видалено ${ids.length} товарів з категорії ${renderCategoryName()}.`);
+              fetchTyres(0, true);
+              fetchCategoryCounts();
+          } else {
+              showError("В цій категорії немає товарів для видалення.");
+          }
+
+      } catch (e: any) {
+          showError("Помилка видалення категорії: " + e.message);
+      } finally {
+          setIsApplyingBulk(false);
       }
   };
 
@@ -368,6 +488,7 @@ const TyresTab: React.FC = () => {
         radius: tyreForm.radius, 
         season: tyreForm.season,
         vehicle_type: tyreForm.vehicle_type, 
+        axis_type: tyreForm.axis_type || null, // NEW: Save Axis Type
         image_url: finalGallery[0] || null, 
         gallery: finalGallery, 
         is_hot: tyreForm.is_hot,
@@ -410,6 +531,7 @@ const TyresTab: React.FC = () => {
         radius: t.radius || 'R15', 
         season: parsedSeason, 
         vehicle_type: t.vehicle_type || 'car', 
+        axis_type: t.axis_type || '', // NEW: Load Axis Type
         price: String(t.price || ''), 
         old_price: String(t.old_price || ''), 
         base_price: String(t.base_price || ''), 
@@ -421,7 +543,6 @@ const TyresTab: React.FC = () => {
         stock_quantity: t.stock_quantity ? String(t.stock_quantity) : ''
       });
       
-      // FIX: Check if gallery is empty BUT image_url exists (from smart sync), prevent overwrite
       let currentGallery = t.gallery || [];
       if (currentGallery.length === 0 && t.image_url) {
           currentGallery = [t.image_url];
@@ -433,6 +554,16 @@ const TyresTab: React.FC = () => {
 
   const handleDeleteTyre = async () => {
     if (tyreToDelete) {
+        if (deleteWithPhotos) {
+            const { data } = await supabase.from('tyres').select('image_url, gallery').eq('id', tyreToDelete).single();
+            if (data) {
+                const imagesToDelete: string[] = [];
+                if(data.image_url) imagesToDelete.push(data.image_url);
+                if(data.gallery && Array.isArray(data.gallery)) imagesToDelete.push(...data.gallery);
+                await deleteImagesFromStorage(imagesToDelete);
+            }
+        }
+        
         await supabase.from('tyres').delete().eq('id', tyreToDelete);
         setTyreToDelete(null);
         setShowDeleteModal(false);
@@ -472,10 +603,22 @@ const TyresTab: React.FC = () => {
         
         {/* --- TOP TOOLBAR --- */}
         <div className="flex flex-col md:flex-row gap-4 justify-between mb-4">
-            <div className="relative">
+            <div className="relative flex items-center gap-2">
                 <button onClick={() => setShowCategoryMenu(!showCategoryMenu)} className="bg-zinc-800 text-white font-bold px-4 py-3 rounded-lg flex items-center gap-2 border border-zinc-700 hover:bg-zinc-700 transition-colors w-full md:w-auto justify-between">
                     <div className="flex items-center gap-2"><Menu size={20} className="text-[#FFC300]"/> <span className="uppercase tracking-wide text-sm">{renderCategoryName()}</span></div>
                 </button>
+                
+                {/* DELETE CATEGORY BUTTON (If a specific category is selected) */}
+                {tyreCategoryTab !== 'all' && tyreCategoryTab !== 'hot' && tyreCategoryTab !== 'out_of_stock' && tyreCategoryTab !== 'no_photo' && (
+                    <button 
+                        onClick={handleCategoryDelete}
+                        className="bg-red-900/20 text-red-500 border border-red-900/50 p-3 rounded-lg hover:bg-red-900/40 transition-colors"
+                        title="Видалити всю категорію"
+                    >
+                        <Trash2 size={20} />
+                    </button>
+                )}
+
                 {showCategoryMenu && (
                     <div className="absolute top-full left-0 mt-2 w-72 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl z-50 overflow-hidden">
                         <button onClick={() => { setTyreCategoryTab('all'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50"><FolderOpen size={18}/> Всі ({categoryCounts.all})</button>
@@ -544,7 +687,7 @@ const TyresTab: React.FC = () => {
                     <button onClick={() => setViewMode('list')} className={`p-2 rounded ${viewMode === 'list' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-white'}`}><List size={18}/></button>
                 </div>
 
-                <button onClick={() => {setEditingTyreId(null); setTyreForm({ manufacturer: '', name: '', width: '', height: '', radius: 'R15', season: 'winter', vehicle_type: 'car', price: '', old_price: '', base_price: '', catalog_number: '', product_number: '', description: '', is_hot: false, supplier_id: '', stock_quantity: '' }); setExistingGallery([]); setTyreUploadFiles([]); setShowAddTyreModal(true);}} className="bg-[#FFC300] text-black font-bold px-3 md:px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#e6b000]"><Plus size={18}/> <span className="hidden md:inline">Додати</span></button>
+                <button onClick={() => {setEditingTyreId(null); setTyreForm({ manufacturer: '', name: '', width: '', height: '', radius: 'R15', season: 'winter', vehicle_type: 'car', axis_type: '', price: '', old_price: '', base_price: '', catalog_number: '', product_number: '', description: '', is_hot: false, supplier_id: '', stock_quantity: '' }); setExistingGallery([]); setTyreUploadFiles([]); setShowAddTyreModal(true);}} className="bg-[#FFC300] text-black font-bold px-3 md:px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#e6b000]"><Plus size={18}/> <span className="hidden md:inline">Додати</span></button>
             </div>
         </div>
 
@@ -661,7 +804,7 @@ const TyresTab: React.FC = () => {
                                 </div>
                                 <div className="text-center font-bold text-[#FFC300] text-sm">{tyre.radius?.replace('R','')}</div>
                                 <div className="text-right font-mono text-white text-sm">{tyre.price}</div>
-                                <div className="flex justify-center gap-1"><button onClick={() => openEditTyreModal(tyre)} className="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300"><Edit2 size={14}/></button><button onClick={() => { setTyreToDelete(tyre.id); setShowDeleteModal(true); }} className="p-1.5 bg-zinc-800 hover:bg-red-900/50 text-zinc-500 hover:text-red-500 rounded"><X size={14}/></button></div>
+                                <div className="flex justify-center gap-1"><button onClick={() => openEditTyreModal(tyre)} className="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300"><Edit2 size={14}/></button><button onClick={() => { setTyreToDelete(tyre.id); setDeleteWithPhotos(false); setShowDeleteModal(true); }} className="p-1.5 bg-zinc-800 hover:bg-red-900/50 text-zinc-500 hover:text-red-500 rounded"><X size={14}/></button></div>
                             </div>
                         );
                     })}
@@ -682,7 +825,7 @@ const TyresTab: React.FC = () => {
                             <div className="text-[10px] text-zinc-500 uppercase font-bold">{tyre.manufacturer}</div>
                             <div onClick={() => handleCopyTitle(tyre.title)} title={`${tyre.title} (Натисніть, щоб скопіювати)`} className="text-xs font-bold text-white line-clamp-2 h-8 mb-1 cursor-pointer hover:text-[#FFC300] transition-colors">{tyre.title}</div>
                             <div className="flex justify-between items-end"><div className="text-[#FFC300] font-mono font-bold">{tyre.price}</div><div className="text-[10px] text-zinc-500">{tyre.radius}</div></div>
-                            <div className="mt-2 flex gap-1"><button onClick={() => openEditTyreModal(tyre)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white text-xs py-1 rounded">Ред.</button><button onClick={() => { setTyreToDelete(tyre.id); setShowDeleteModal(true); }} className="px-2 bg-zinc-800 hover:bg-red-900/50 text-red-500 rounded"><Trash2 size={12}/></button></div>
+                            <div className="mt-2 flex gap-1"><button onClick={() => openEditTyreModal(tyre)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white text-xs py-1 rounded">Ред.</button><button onClick={() => { setTyreToDelete(tyre.id); setDeleteWithPhotos(false); setShowDeleteModal(true); }} className="px-2 bg-zinc-800 hover:bg-red-900/50 text-red-500 rounded"><Trash2 size={12}/></button></div>
                         </div>
                     </div>
                 ))}
@@ -733,7 +876,29 @@ const TyresTab: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="bg-zinc-800 p-3 rounded-lg border border-zinc-700"><label className="block text-zinc-400 text-xs font-bold uppercase mb-2 text-center">Сезонність</label><div className="grid grid-cols-3 gap-2"><button type="button" onClick={() => setTyreForm({...tyreForm, season: 'winter'})} className={`flex flex-col items-center gap-1 p-3 rounded-lg border transition-all hover:scale-[1.02] active:scale-95 ${tyreForm.season === 'winter' ? 'bg-blue-900/40 border-blue-500 text-blue-200 shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'bg-black border-zinc-700 text-zinc-500 hover:text-white hover:bg-zinc-900'}`}><Snowflake size={24}/> <span className="text-xs font-black uppercase tracking-wide">Зима</span></button><button type="button" onClick={() => setTyreForm({...tyreForm, season: 'summer'})} className={`flex flex-col items-center gap-1 p-3 rounded-lg border transition-all hover:scale-[1.02] active:scale-95 ${tyreForm.season === 'summer' ? 'bg-orange-900/40 border-orange-500 text-orange-200 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-black border-zinc-700 text-zinc-500 hover:text-white hover:bg-zinc-900'}`}><Sun size={24}/> <span className="text-xs font-black uppercase tracking-wide">Літо</span></button><button type="button" onClick={() => setTyreForm({...tyreForm, season: 'all-season'})} className={`flex flex-col items-center gap-1 p-3 rounded-lg border transition-all hover:scale-[1.02] active:scale-95 ${tyreForm.season === 'all-season' ? 'bg-green-900/40 border-green-500 text-green-200 shadow-[0_0_15px_rgba(34,197,94,0.3)]' : 'bg-black border-zinc-700 text-zinc-500 hover:text-white hover:bg-zinc-900'}`}><CloudSun size={24}/> <span className="text-xs font-black uppercase tracking-wide">Всесезон</span></button></div></div>
-                                <div><label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Тип авто</label><select value={tyreForm.vehicle_type} onChange={e => setTyreForm({...tyreForm, vehicle_type: e.target.value as any, radius: getRadiiOptions(e.target.value as any)[0] })} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white"><option value="car">Легкова</option><option value="suv">Позашляховик</option><option value="cargo">Вантажна (C)</option><option value="truck">Вантажна (TIR)</option><option value="agro">Агро / Спец</option></select></div>
+                                
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div><label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Тип авто</label><select value={tyreForm.vehicle_type} onChange={e => setTyreForm({...tyreForm, vehicle_type: e.target.value as any, radius: getRadiiOptions(e.target.value as any)[0] })} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white"><option value="car">Легкова</option><option value="suv">Позашляховик</option><option value="cargo">Вантажна (C)</option><option value="truck">Вантажна (TIR)</option><option value="agro">Агро / Спец</option></select></div>
+                                    {(tyreForm.vehicle_type === 'truck' || tyreForm.vehicle_type === 'agro') && (
+                                        <div>
+                                            <label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Вісь (TIR/Agro)</label>
+                                            <select 
+                                                value={tyreForm.axis_type} 
+                                                onChange={e => setTyreForm({...tyreForm, axis_type: e.target.value})} 
+                                                className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white"
+                                            >
+                                                <option value="">Не вказано</option>
+                                                <option value="Ведуча">Ведуча</option>
+                                                <option value="Причіпна">Причіпна</option>
+                                                <option value="Рульова">Рульова</option>
+                                                <option value="Рульова, автобусна">Рульова, автобусна</option>
+                                                <option value="Рульова/Причіпна">Рульова/Причіпна</option>
+                                                <option value="Універсальна">Універсальна</option>
+                                            </select>
+                                        </div>
+                                    )}
+                                </div>
+
                                 <div><label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Постачальник</label><select value={tyreForm.supplier_id} onChange={e => setTyreForm({...tyreForm, supplier_id: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white"><option value="">Не обрано</option>{suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
                                 <div className="border-2 border-dashed border-zinc-700 rounded-xl p-4 text-center">
                                     <input type="file" multiple onChange={e => setTyreUploadFiles(Array.from(e.target.files || []))} className="hidden" id="tyre-files" />
@@ -762,7 +927,24 @@ const TyresTab: React.FC = () => {
         {/* Delete Modal */}
         {showDeleteModal && (
             <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-               <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-sm relative shadow-2xl"><h3 className="text-xl font-bold text-white mb-4">Видалити?</h3><div className="flex gap-4"><button onClick={() => { setShowDeleteModal(false); setTyreToDelete(null); }} className="flex-1 py-3 bg-zinc-800 text-white rounded-xl font-bold">Ні</button><button onClick={handleDeleteTyre} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold">Так</button></div></div>
+               <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-sm relative shadow-2xl">
+                   <h3 className="text-xl font-bold text-white mb-4">Видалити товар?</h3>
+                   <div className="mb-4 bg-zinc-800/50 p-3 rounded-lg border border-zinc-700">
+                        <label className="flex items-center gap-3 cursor-pointer">
+                            <input 
+                                type="checkbox" 
+                                checked={deleteWithPhotos} 
+                                onChange={(e) => setDeleteWithPhotos(e.target.checked)} 
+                                className="w-5 h-5 accent-red-500 rounded cursor-pointer"
+                            />
+                            <span className="text-sm font-bold text-zinc-200">Видалити разом з фото файлами</span>
+                        </label>
+                   </div>
+                   <div className="flex gap-4">
+                       <button onClick={() => { setShowDeleteModal(false); setTyreToDelete(null); }} className="flex-1 py-3 bg-zinc-800 text-white rounded-xl font-bold">Ні</button>
+                       <button onClick={handleDeleteTyre} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold">Так</button>
+                   </div>
+               </div>
             </div>
         )}
 
@@ -775,9 +957,53 @@ const TyresTab: React.FC = () => {
                    </div>
                    <h3 className="text-xl font-bold text-white mb-2">Видалити {selectedTyreIds.size} товарів?</h3>
                    <p className="text-zinc-400 text-sm mb-6">Цю дію неможливо скасувати. Товари будуть видалені з бази назавжди.</p>
+                   
+                   <div className="mb-6 bg-zinc-800/50 p-3 rounded-lg border border-zinc-700 text-left">
+                        <label className="flex items-center gap-3 cursor-pointer">
+                            <input 
+                                type="checkbox" 
+                                checked={deleteWithPhotos} 
+                                onChange={(e) => setDeleteWithPhotos(e.target.checked)} 
+                                className="w-5 h-5 accent-red-500 rounded cursor-pointer"
+                            />
+                            <span className="text-sm font-bold text-zinc-200">Видалити також всі фото цих товарів з серверу?</span>
+                        </label>
+                   </div>
+
                    <div className="flex gap-4">
                        <button onClick={() => setShowBulkDeleteConfirm(false)} className="flex-1 py-3 bg-zinc-800 text-white rounded-xl font-bold border border-zinc-700 hover:bg-zinc-700 transition-colors">Скасувати</button>
                        <button onClick={executeBulkDelete} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-500 transition-colors shadow-lg shadow-red-900/20">Видалити</button>
+                   </div>
+               </div>
+            </div>
+        )}
+
+        {/* Category Delete Confirmation Modal */}
+        {showCategoryDeleteConfirm && (
+            <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in zoom-in duration-200">
+               <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-sm relative shadow-2xl text-center">
+                   <div className="bg-red-900/20 p-4 rounded-full text-red-500 mb-4 border border-red-900/50 w-16 h-16 flex items-center justify-center mx-auto">
+                        <AlertTriangle size={32} />
+                   </div>
+                   <h3 className="text-xl font-black text-white mb-2 uppercase">Очищення Категорії</h3>
+                   <p className="text-zinc-400 text-sm mb-2">Ви збираєтесь видалити <strong>ВСІ ТОВАРИ</strong> з поточної категорії: <span className="text-[#FFC300] font-bold">{renderCategoryName()}</span>.</p>
+                   <p className="text-red-400 text-xs font-bold mb-6 uppercase">Цю дію неможливо скасувати!</p>
+                   
+                   <div className="mb-6 bg-zinc-800/50 p-3 rounded-lg border border-zinc-700 text-left">
+                        <label className="flex items-center gap-3 cursor-pointer">
+                            <input 
+                                type="checkbox" 
+                                checked={deleteWithPhotos} 
+                                onChange={(e) => setDeleteWithPhotos(e.target.checked)} 
+                                className="w-5 h-5 accent-red-500 rounded cursor-pointer"
+                            />
+                            <span className="text-sm font-bold text-zinc-200">Видалити разом з фото файлами</span>
+                        </label>
+                   </div>
+
+                   <div className="flex gap-4">
+                       <button onClick={() => setShowCategoryDeleteConfirm(false)} className="flex-1 py-3 bg-zinc-800 text-white rounded-xl font-bold border border-zinc-700 hover:bg-zinc-700 transition-colors">Ні, скасувати</button>
+                       <button onClick={executeCategoryDelete} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-500 transition-colors shadow-lg shadow-red-900/20">ТАК, ВИДАЛИТИ ВСЕ</button>
                    </div>
                </div>
             </div>

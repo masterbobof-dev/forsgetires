@@ -46,6 +46,7 @@ export interface TyreProduct {
   height?: string;
   season?: string;
   vehicle_type?: 'car' | 'cargo' | 'suv' | 'truck' | 'agro'; // Added truck (TIR) and agro (Special)
+  axis_type?: string; // NEW: Truck Axle Type
   
   // Cart Logic
   quantity?: number;

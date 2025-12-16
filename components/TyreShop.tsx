@@ -2,11 +2,20 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { TyreProduct, CartItem } from '../types';
-import { ShoppingBag, Loader2, Phone, X, Filter, Snowflake, Sun, CloudSun, Truck, Check, CreditCard, Wallet, ArrowDown, ShoppingCart, Plus, Minus, Trash2, ChevronLeft, ChevronRight, ZoomIn, Ban, Flame, Grid, ArrowUpDown, Search, DollarSign, AlertCircle, Tag, Briefcase, MapPin, Eye, EyeOff, Tractor } from 'lucide-react';
+import { ShoppingBag, Loader2, Phone, X, Filter, Snowflake, Sun, CloudSun, Truck, Check, CreditCard, Wallet, ArrowDown, ShoppingCart, Plus, Minus, Trash2, ChevronLeft, ChevronRight, ZoomIn, Ban, Flame, Grid, ArrowUpDown, Search, DollarSign, AlertCircle, Tag, Briefcase, MapPin, Eye, EyeOff, Tractor, Route } from 'lucide-react';
 import { PHONE_LINK_1, PHONE_NUMBER_1, FORMSPREE_ENDPOINT } from '../constants';
 import { DEFAULT_IMG_CONFIG, DEFAULT_BG_CONFIG } from './admin/promo/shared';
 
 const PAGE_SIZE = 60;
+
+const AXLE_TYPES = [
+    'Ведуча',
+    'Причіпна',
+    'Рульова',
+    'Рульова, автобусна',
+    'Рульова/Причіпна',
+    'Універсальна'
+];
 
 // Helper to safely parse messy price strings (e.g. "2 500", "1,200.00")
 const safeParsePrice = (val: string | undefined | null): number => {
@@ -74,7 +83,8 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   const [filterWidth, setFilterWidth] = useState('');
   const [filterHeight, setFilterHeight] = useState('');
   const [filterRadius, setFilterRadius] = useState('');
-  const [filterBrand, setFilterBrand] = useState(''); // New Brand Filter
+  const [filterBrand, setFilterBrand] = useState(''); 
+  const [filterAxle, setFilterAxle] = useState(''); // NEW: Truck Axle Filter
   
   // GLOBAL FILTER OPTIONS (Not dependent on current page)
   const [filterOptions, setFilterOptions] = useState({
@@ -364,7 +374,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
     setPage(0);
     setTyres([]); 
     fetchTyres(0, true);
-  }, [activeCategory, activeSort, enableStockQty, filterBrand, filterRadius, filterWidth, filterHeight, showOnlyInStock]); 
+  }, [activeCategory, activeSort, enableStockQty, filterBrand, filterRadius, filterWidth, filterHeight, filterAxle, showOnlyInStock]); 
 
   const parseTyreSpecs = (tyre: TyreProduct): TyreProduct => {
     const sizeRegex = /(\d{3})[\/\s](\d{2})[\s\w]*R(\d{2}(?:\.5|\.3)?[C|c]?)/; 
@@ -460,6 +470,11 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
       if (filterHeight) {
           query = query.ilike('title', `%/${filterHeight}%`);
       }
+      
+      // Truck Axle Filter (Using the new column)
+      if (filterAxle) {
+          query = query.eq('axis_type', filterAxle);
+      }
 
       if (showOnlyInStock) {
           if (enableStockQty) query = query.or('stock_quantity.gt.0,stock_quantity.is.null').neq('in_stock', false);
@@ -484,10 +499,10 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
       } else if (activeCategory === 'cargo') {
          query = query.or('vehicle_type.eq.cargo,radius.ilike.%C%').not('radius', 'in', '("R17.5","R19.5","R22.5")');
       } else if (activeCategory === 'truck') {
-         // TIR
-         query = query.or('radius.eq.R17.5,radius.eq.R19.5,radius.eq.R22.5,title.ilike.%TIR%,title.ilike.%R17.5%,title.ilike.%R19.5%,title.ilike.%R22.5%');
+         // TIR Logic Update: Use vehicle_type OR legacy radius checks
+         query = query.or('vehicle_type.eq.truck,radius.eq.R17.5,radius.eq.R19.5,radius.eq.R22.5,title.ilike.%TIR%,title.ilike.%R17.5%,title.ilike.%R19.5%,title.ilike.%R22.5%');
       } else if (activeCategory === 'agro') {
-         // STRICTER AGRO FILTER:
+         // STRICTER AGRO FILTER (Updated to use vehicle_type):
          const strictAgroRadii = [
              "R10","R12","R14.5","R15.3","R15.5","R24","R26","R28","R30","R32","R34","R36","R38","R40","R42","R44","R46","R48","R50","R52"
          ];
@@ -564,6 +579,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   const handleCategoryChange = (cat: CategoryType) => {
      setActiveCategory(cat);
      if (cat === 'all') setActiveSort('newest');
+     if (cat !== 'truck') setFilterAxle(''); // Reset Axle filter when changing category
   };
 
   const handleForceSearch = () => {
@@ -671,6 +687,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
       setFilterHeight(''); 
       setFilterRadius(''); 
       setFilterBrand('');
+      setFilterAxle('');
       setSearchQuery(''); 
       setMinPrice('');
       setMaxPrice('');
@@ -792,8 +809,24 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                           <select value={filterBrand} onChange={(e) => setFilterBrand(e.target.value)} className="bg-transparent text-white text-base md:text-sm font-bold p-3 sm:pl-8 w-full outline-none cursor-pointer hover:bg-zinc-800/50 transition-colors text-center sm:text-left appearance-none sm:appearance-auto"><option value="">Бренд</option>{filterOptions.brands.map(b => <option key={b} value={b}>{b}</option>)}</select>
                        </div>
                     </div>
+                    
+                    {/* TRUCK AXLE FILTER */}
+                    {activeCategory === 'truck' && (
+                        <div className="relative group bg-black/50 border border-zinc-800 rounded-xl sm:min-w-[150px]">
+                            <Route size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-blue-400 hidden sm:block" />
+                            <select 
+                                value={filterAxle} 
+                                onChange={(e) => setFilterAxle(e.target.value)} 
+                                className="bg-transparent text-white text-base md:text-sm font-bold p-3 sm:pl-8 w-full outline-none cursor-pointer hover:bg-zinc-800/50 transition-colors text-center sm:text-left appearance-none sm:appearance-auto"
+                            >
+                                <option value="">Тип вісі</option>
+                                {AXLE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                        </div>
+                    )}
+
                     <div className="flex items-center gap-2 bg-black/50 p-1 rounded-xl border border-zinc-800 px-3 sm:w-auto w-full justify-center"><span className="text-zinc-500 text-xs font-bold whitespace-nowrap">Ціна:</span><input type="number" placeholder="Від" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} className="w-16 bg-transparent text-white text-base md:text-sm font-bold p-2 outline-none text-center border-b border-zinc-700 focus:border-[#FFC300]"/><span className="text-zinc-600">-</span><input type="number" placeholder="До" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} className="w-16 bg-transparent text-white text-base md:text-sm font-bold p-2 outline-none text-center border-b border-zinc-700 focus:border-[#FFC300]"/></div>
-                    {(filterWidth || filterHeight || filterRadius || filterBrand || searchQuery || minPrice || maxPrice) && <button onClick={resetFilters} className="bg-zinc-800 text-white p-3 rounded-xl hover:bg-red-900/50 transition-colors flex-shrink-0 border border-zinc-700 flex justify-center items-center"><X size={20}/></button>}
+                    {(filterWidth || filterHeight || filterRadius || filterBrand || filterAxle || searchQuery || minPrice || maxPrice) && <button onClick={resetFilters} className="bg-zinc-800 text-white p-3 rounded-xl hover:bg-red-900/50 transition-colors flex-shrink-0 border border-zinc-700 flex justify-center items-center"><X size={20}/></button>}
                  </div>
                  <div className="w-full lg:w-auto lg:min-w-[200px]">
                     <div className="flex items-center gap-2 bg-black/50 p-1 rounded-xl border border-zinc-800 w-full"><ArrowUpDown size={16} className="text-zinc-500 ml-2 flex-shrink-0" /><select value={activeSort} onChange={(e) => setActiveSort(e.target.value as any)} className="bg-transparent text-white text-base md:text-sm font-bold p-2 outline-none w-full cursor-pointer hover:text-[#FFC300]"><option value="newest">Спочатку нові</option><option value="oldest">Спочатку старі</option><option value="price_asc">Від дешевих</option><option value="price_desc">Від дорогих</option><option value="with_photo">З фото</option><option value="no_photo">Без фото</option></select></div>

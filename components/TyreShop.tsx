@@ -858,6 +858,14 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                         <h3 className="text-sm md:text-base font-bold text-white mb-2 leading-snug line-clamp-2 min-h-[2.5em] pr-2 cursor-pointer hover:text-[#FFC300] transition-colors">{tyre.title}</h3>
                         {tyre.season && <div className="text-[10px] text-zinc-400 font-bold uppercase mb-2">Сезон: <span className="text-white">{getSeasonLabel(tyre.season)}</span></div>}
                         <div className="text-[10px] text-zinc-500 mb-2 flex flex-col gap-0.5">{tyre.catalog_number && <span>Арт: <span className="text-zinc-400 font-mono">{tyre.catalog_number}</span></span>}{tyre.product_number && <span>№: <span className="text-zinc-400 font-mono">{tyre.product_number}</span></span>}</div>
+                        
+                        {/* DESCRIPTION IN CARD */}
+                        {tyre.description && tyre.description !== 'API Import' && (
+                            <p className="text-xs text-zinc-400 line-clamp-2 mb-2 leading-relaxed">
+                                {tyre.description}
+                            </p>
+                        )}
+
                         {enableStockQty && tyre.in_stock !== false && <div className="text-[10px] font-bold text-green-400 mb-2 flex items-center gap-1"><Check size={10} /> {tyre.stock_quantity ? <span>В наявності: {tyre.stock_quantity} шт.</span> : <span>В наявності</span>}</div>}
                         <div className="mt-auto pt-3 border-t border-zinc-800">
                            <div className="flex flex-col justify-between gap-2">

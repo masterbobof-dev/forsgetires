@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Plus, X, Upload, Save, Loader2, FileSpreadsheet, CheckSquare, Square, Edit2, ArrowDown, Wand2, RefreshCw, Menu, FolderOpen, Car, Truck, Mountain, Flame, Ban, Briefcase, ArrowUpDown, Settings, ArrowRight, HelpCircle, Ruler, Copy, Image as ImageIcon, Percent, AlertCircle, FileWarning, FilterX, Trash2, LayoutGrid, List, Snowflake, Sun, CloudSun, CheckCircle, Eye, EyeOff, Tractor } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
@@ -453,6 +452,19 @@ const TyresTab: React.FC = () => {
       }
   };
 
+  // Handle Paste Event for Image Upload
+  const handleModalPaste = (e: React.ClipboardEvent) => {
+      if (e.clipboardData.files.length > 0) {
+          e.preventDefault();
+          const newFiles = Array.from(e.clipboardData.files).filter((f: any) => f.type.startsWith('image/'));
+          if (newFiles.length > 0) {
+              setTyreUploadFiles(prev => [...prev, ...newFiles]);
+              setSuccessMessage(`Додано ${newFiles.length} фото з буферу!`);
+              setTimeout(() => setSuccessMessage(''), 2000);
+          }
+      }
+  };
+
   return (
     <div className="animate-in fade-in pb-20">
         {errorMessage && <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[300] bg-red-900/90 text-white px-6 py-3 rounded-full border border-red-500 shadow-2xl">{errorMessage}</div>}
@@ -682,10 +694,24 @@ const TyresTab: React.FC = () => {
             <div className="mt-8 text-center pb-8"><button onClick={() => fetchTyres(tyrePage + 1)} disabled={loadingTyres} className="bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 px-8 rounded-xl border border-zinc-700 transition-all flex items-center gap-2 mx-auto disabled:opacity-50 min-w-[200px] justify-center">{loadingTyres ? <Loader2 className="animate-spin" /> : <ArrowDown size={20} />} Завантажити ще ({Math.max(0, totalCount - tyres.length)})</button></div>
         )}
 
-        {/* Add/Edit Modal */}
+        {/* Add/Edit Modal with PASTE Support */}
         {showAddTyreModal && (
-            <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
-                <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-4xl h-[90vh] flex flex-col shadow-2xl relative">
+            <div 
+                className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4 outline-none" 
+                onPaste={(e: React.ClipboardEvent) => {
+                    if (e.clipboardData.files.length > 0) {
+                        e.preventDefault();
+                        const newFiles = Array.from(e.clipboardData.files).filter((f: any) => f.type.startsWith('image/'));
+                        if (newFiles.length > 0) {
+                            setTyreUploadFiles(prev => [...prev, ...newFiles]);
+                            setSuccessMessage(`Додано ${newFiles.length} фото з буферу!`);
+                            setTimeout(() => setSuccessMessage(''), 2000);
+                        }
+                    }
+                }}
+                tabIndex={0}
+            >
+                <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-4xl h-[90vh] flex flex-col shadow-2xl relative" onClick={e => e.stopPropagation()}>
                     <div className="flex justify-between items-center mb-6"><h3 className="text-2xl font-black text-white">{editingTyreId ? 'Редагування шини' : 'Нова шина'}</h3><button onClick={() => setShowAddTyreModal(false)} className="text-zinc-500 hover:text-white"><X size={28}/></button></div>
                     <div className="flex-grow overflow-y-auto pr-2 custom-scrollbar">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -709,7 +735,15 @@ const TyresTab: React.FC = () => {
                                 <div className="bg-zinc-800 p-3 rounded-lg border border-zinc-700"><label className="block text-zinc-400 text-xs font-bold uppercase mb-2 text-center">Сезонність</label><div className="grid grid-cols-3 gap-2"><button type="button" onClick={() => setTyreForm({...tyreForm, season: 'winter'})} className={`flex flex-col items-center gap-1 p-3 rounded-lg border transition-all hover:scale-[1.02] active:scale-95 ${tyreForm.season === 'winter' ? 'bg-blue-900/40 border-blue-500 text-blue-200 shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'bg-black border-zinc-700 text-zinc-500 hover:text-white hover:bg-zinc-900'}`}><Snowflake size={24}/> <span className="text-xs font-black uppercase tracking-wide">Зима</span></button><button type="button" onClick={() => setTyreForm({...tyreForm, season: 'summer'})} className={`flex flex-col items-center gap-1 p-3 rounded-lg border transition-all hover:scale-[1.02] active:scale-95 ${tyreForm.season === 'summer' ? 'bg-orange-900/40 border-orange-500 text-orange-200 shadow-[0_0_15px_rgba(249,115,22,0.3)]' : 'bg-black border-zinc-700 text-zinc-500 hover:text-white hover:bg-zinc-900'}`}><Sun size={24}/> <span className="text-xs font-black uppercase tracking-wide">Літо</span></button><button type="button" onClick={() => setTyreForm({...tyreForm, season: 'all-season'})} className={`flex flex-col items-center gap-1 p-3 rounded-lg border transition-all hover:scale-[1.02] active:scale-95 ${tyreForm.season === 'all-season' ? 'bg-green-900/40 border-green-500 text-green-200 shadow-[0_0_15px_rgba(34,197,94,0.3)]' : 'bg-black border-zinc-700 text-zinc-500 hover:text-white hover:bg-zinc-900'}`}><CloudSun size={24}/> <span className="text-xs font-black uppercase tracking-wide">Всесезон</span></button></div></div>
                                 <div><label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Тип авто</label><select value={tyreForm.vehicle_type} onChange={e => setTyreForm({...tyreForm, vehicle_type: e.target.value as any, radius: getRadiiOptions(e.target.value as any)[0] })} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white"><option value="car">Легкова</option><option value="suv">Позашляховик</option><option value="cargo">Вантажна (C)</option><option value="truck">Вантажна (TIR)</option><option value="agro">Агро / Спец</option></select></div>
                                 <div><label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Постачальник</label><select value={tyreForm.supplier_id} onChange={e => setTyreForm({...tyreForm, supplier_id: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white"><option value="">Не обрано</option>{suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-                                <div className="border-2 border-dashed border-zinc-700 rounded-xl p-4 text-center"><input type="file" multiple onChange={e => setTyreUploadFiles(Array.from(e.target.files || []))} className="hidden" id="tyre-files" /><label htmlFor="tyre-files" className="cursor-pointer flex flex-col items-center gap-2 text-zinc-400 hover:text-white"><Upload size={32} /><span className="text-sm font-bold">Натисніть щоб додати фото</span></label>{tyreUploadFiles.length > 0 && <div className="mt-2 text-[#FFC300] text-sm font-bold">{tyreUploadFiles.length} файлів обрано</div>}</div>
+                                <div className="border-2 border-dashed border-zinc-700 rounded-xl p-4 text-center">
+                                    <input type="file" multiple onChange={e => setTyreUploadFiles(Array.from(e.target.files || []))} className="hidden" id="tyre-files" />
+                                    <label htmlFor="tyre-files" className="cursor-pointer flex flex-col items-center gap-2 text-zinc-400 hover:text-white">
+                                        <Upload size={32} />
+                                        <span className="text-sm font-bold">Натисніть щоб додати фото</span>
+                                    </label>
+                                    <p className="text-[10px] text-zinc-500 mt-2">або натисніть <span className="text-[#FFC300] font-bold">Ctrl+V</span> для вставки з буферу</p>
+                                    {tyreUploadFiles.length > 0 && <div className="mt-2 text-[#FFC300] text-sm font-bold">{tyreUploadFiles.length} файлів обрано</div>}
+                                </div>
                                 {existingGallery.length > 0 && (<div className="flex gap-2 overflow-x-auto pb-2">{existingGallery.map((url, idx) => (<div key={idx} className="w-16 h-16 rounded border border-zinc-700 flex-shrink-0 relative group"><img src={url} className="w-full h-full object-cover" /><button onClick={() => setExistingGallery(prev => prev.filter(u => u !== url))} className="absolute top-0 right-0 bg-red-600 text-white p-0.5 rounded opacity-0 group-hover:opacity-100"><X size={12}/></button></div>))}</div>)}
                             </div>
                             <div className="space-y-4">

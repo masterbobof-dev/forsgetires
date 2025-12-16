@@ -4,7 +4,7 @@ import {
     Settings, Briefcase, Plus, PackageX, Trash2, ToggleRight, ToggleLeft, 
     KeyRound, Save, RotateCcw, X, AlertTriangle, Loader2, Phone, MapPin, 
     Link2, Shield, UserCog, Truck, Crown, LayoutGrid, Package, Smartphone,
-    Eraser, Database, FileSearch, CheckCircle, Tags, GitMerge, FileSpreadsheet, Stethoscope, Wand2, Upload, FileImage, Sparkles, FileCode
+    Eraser, Database, FileSearch, CheckCircle, Tags, GitMerge, FileSpreadsheet, Stethoscope, Wand2, Upload, FileImage, Sparkles, FileCode, Eye, EyeOff, StopCircle, Tractor
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { Supplier } from '../../types';
@@ -26,6 +26,8 @@ const SettingsTab: React.FC = () => {
   // Security Settings
   const [novaPoshtaKey, setNovaPoshtaKey] = useState('');
   const [supplierKey, setSupplierKey] = useState('');
+  const [geminiKey, setGeminiKey] = useState(''); // NEW: Google Gemini API Key
+  const [showGeminiKey, setShowGeminiKey] = useState(false);
   const [serviceEmail, setServiceEmail] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
 
@@ -65,6 +67,7 @@ const SettingsTab: React.FC = () => {
   const [isSmartMatching, setIsSmartMatching] = useState(false);
   const [smartStatus, setSmartStatus] = useState<string[]>([]);
   const [smartOverwrite, setSmartOverwrite] = useState(false);
+  const [smartExactMatch, setSmartExactMatch] = useState(false); // NEW: Exact Match Mode
   const smartInputRef = useRef<HTMLInputElement>(null);
 
   // Reset Stock State
@@ -77,8 +80,10 @@ const SettingsTab: React.FC = () => {
 
   // AI Description Generator State
   const [aiGenerating, setAiGenerating] = useState(false);
+  const aiGeneratingRef = useRef(false); // Ref for immediate stopping
   const [aiProgress, setAiProgress] = useState({ total: 0, current: 0, updated: 0 });
   const [aiStatusLog, setAiStatusLog] = useState<string[]>([]);
+  const [aiOverwrite, setAiOverwrite] = useState(false); 
 
   useEffect(() => {
     fetchSettings();
@@ -106,6 +111,7 @@ const SettingsTab: React.FC = () => {
                 // Keys & Security
                 if(r.key === 'nova_poshta_key') setNovaPoshtaKey(r.value);
                 if(r.key === 'supplier_api_key') setSupplierKey(r.value);
+                if(r.key === 'google_gemini_api_key') setGeminiKey(r.value); // Fetch Gemini Key
                 if(r.key === 'service_staff_email') setServiceEmail(r.value);
                 if(r.key === 'admin_email') setAdminEmail(r.value);
 
@@ -143,7 +149,6 @@ const SettingsTab: React.FC = () => {
       if (suppData) setSuppliers(suppData);
 
       try {
-          // Fetch counts using the pagination helper to ensure accuracy > 1000
           const allTyres = await fetchAllIds('tyres', 'supplier_id');
           const counts: Record<number, number> = {};
           allTyres.forEach((t: any) => {
@@ -165,10 +170,6 @@ const SettingsTab: React.FC = () => {
           showMsg("Постачальника додано");
       }
   };
-
-  // ... (Existing functions for Delete, Settings, etc.) ...
-  // Keeping previous logic for brevity in this XML output, assuming standard implementation.
-  // Adding placeholders for unchanged large blocks to focus on requested changes.
 
   const initiateDelete = (mode: 'products_only' | 'full_supplier', id: number, name: string) => {
       const count = supplierCounts[id] || 0;
@@ -209,6 +210,7 @@ const SettingsTab: React.FC = () => {
   const saveAllSettings = async () => {
        await supabase.from('settings').upsert({ key: 'nova_poshta_key', value: novaPoshtaKey });
        await supabase.from('settings').upsert({ key: 'supplier_api_key', value: supplierKey });
+       await supabase.from('settings').upsert({ key: 'google_gemini_api_key', value: geminiKey }); // Save Gemini Key
        await supabase.from('settings').upsert({ key: 'service_staff_email', value: serviceEmail });
        await supabase.from('settings').upsert({ key: 'admin_email', value: adminEmail });
        await supabase.from('settings').upsert({ key: 'contact_phone1', value: contactSettings.phone1 });
@@ -229,103 +231,445 @@ const SettingsTab: React.FC = () => {
      finally { setResettingStock(false); }
   };
 
-  // ... (Other maintenance functions: executeAutoCategorization, executeStorageCleanup, handleSmartUpload, executeBrokenLinkScan) ...
-  // [Assuming these exist from previous steps]
-  
+  // --- AUTO CATEGORIZATION LOGIC ---
   const executeAutoCategorization = async () => {
-      // (Implementation same as previous step, omitted for brevity)
-      // Just returning mock success to keep file size manageable if logic unchanged
+      setShowSortConfirm(false);
       setSortingCategories(true);
-      setTimeout(() => { setSortingCategories(false); showMsg("Категорії оновлено!"); }, 1000);
+      try {
+          const allItems = await fetchAllIds('tyres', 'id, title, radius, vehicle_type, season');
+          if (!allItems || allItems.length === 0) { showMsg("Немає товарів.", 'error'); return; }
+
+          const updates = [];
+          let changedCount = 0;
+
+          const agroBrands = ['OZKA', 'BKT', 'SEHA', 'KNK', 'PETLAS', 'ALLIANCE', 'MITAS', 'CULTOR', 'KABAT', 'ROSAVA'];
+          const agroKeywords = ['AGRO', 'TRACTOR', 'IMPLEMENT', 'FARM', 'LOADER', 'INDUSTRIAL', 'SKID', 'BOBCAT', 'FORKLIFT', 'PR ', 'TR-', 'IMP', 'SGP', 'Ф-', 'В-', 'БЦФ', 'ИЯВ', 'ВЛ-', 'К-', 'Л-', 'М-', 'IND'];
+          
+          const agroRims = ['10', '12', '14.5', '15.3', '15.5', '24', '26', '28', '30', '32', '34', '36', '38', '40', '42', '44', '46', '48', '50', '52', '54'];
+          const overlapRims = ['15', '16', '17', '18', '20', '22.5'];
+          const strictCarPattern = /\b\d{3}\/\d{2}[R|Z]?\d{2}\b/; 
+          const strictCargoFullProfile = /\b\d{3}R\d{2}(?:C|LT)\b/i;
+
+          for (const item of allItems) {
+              let newRadius = item.radius || '';
+              let newType = item.vehicle_type || 'car';
+              let newSeason = item.season || 'summer';
+              let isChanged = false;
+              const title = (item.title || '').toUpperCase();
+              
+              if (!newRadius || newRadius === 'R') {
+                  const dashMatch = title.match(/[0-9.,]+[-/](\d{1,2}(?:[.,]\d)?)/);
+                  if (dashMatch) { newRadius = `R${dashMatch[1].replace(',', '.')}`; isChanged = true; }
+              }
+              const decimalMatch = title.match(/R(14\.5|15\.3|15\.5|17\.5|19\.5|22\.5|24\.5)/);
+              if (decimalMatch) { 
+                  const correctR = decimalMatch[0]; 
+                  if (newRadius !== correctR) { newRadius = correctR; isChanged = true; } 
+              }
+
+              let detectedType = 'car';
+              const radiusVal = newRadius.replace('R', '');
+              
+              const isAgroBrand = agroBrands.some(b => title.includes(b));
+              const isAgroKey = agroKeywords.some(k => title.includes(k));
+              const isCargoStrong = newRadius.includes('C') || title.includes('R14C') || title.includes('R15C') || title.includes('R16C') || title.includes(' LT ') || title.includes('(C)') || strictCargoFullProfile.test(title);
+
+              if (isCargoStrong) detectedType = 'cargo';
+              else if (['17.5', '19.5', '22.5', '24.5'].includes(radiusVal) || title.includes('TIR ') || title.includes('BUS ')) {
+                  detectedType = 'truck';
+                  if (isAgroKey || isAgroBrand) detectedType = 'agro';
+              }
+              else if (agroRims.includes(radiusVal)) detectedType = 'agro';
+              else if (overlapRims.includes(radiusVal)) {
+                  if (strictCarPattern.test(title)) {
+                      if (title.includes('TRACTOR') || title.includes('AGRO') || title.includes('IMPLEMENT')) detectedType = 'agro';
+                      else detectedType = 'car';
+                  } else {
+                      const hasPR = /\d+\s*PR/.test(title); 
+                      const hasAgroSize = /\d{1,3}\.\d{2}-\d{2}/.test(title) || /\d{1,3}-\d{2}/.test(title);
+                      if (isAgroBrand || isAgroKey || hasPR || hasAgroSize) detectedType = 'agro';
+                  }
+              }
+              else if (title.includes('SUV') || title.includes('4X4') || title.includes('JEEP')) detectedType = 'suv';
+
+              if (newType !== detectedType) { newType = detectedType; isChanged = true; }
+              if (newType === 'agro' && newSeason !== 'all-season') { newSeason = 'all-season'; isChanged = true; }
+
+              if (isChanged) { updates.push({ id: item.id, title: item.title, radius: newRadius, vehicle_type: newType, season: newSeason }); changedCount++; }
+          }
+
+          if (updates.length > 0) {
+              const CHUNK_SIZE = 500;
+              for (let i = 0; i < updates.length; i += CHUNK_SIZE) {
+                  const chunk = updates.slice(i, i + CHUNK_SIZE);
+                  const { error: updErr } = await supabase.from('tyres').upsert(chunk);
+                  if (updErr) throw updErr;
+              }
+              showMsg(`Успішно оновлено ${changedCount} товарів!`);
+          } else {
+              showMsg("Всі товари вже мають правильні категорії.");
+          }
+      } catch (e: any) { showMsg("Помилка сортування: " + e.message, 'error'); } finally { setSortingCategories(false); }
   };
 
+  // --- SMART UPLOAD LOGIC ---
   const handleSmartUpload = async () => {
+      if (smartFiles.length === 0) return;
       setIsSmartMatching(true);
-      setTimeout(() => { setIsSmartMatching(false); setSmartFiles([]); showMsg("Фото завантажено!"); }, 1500);
+      setSmartStatus(['Початок обробки...']);
+      
+      try {
+          let updatedCount = 0;
+          
+          for (const file of smartFiles) {
+              const fileNameClean = file.name
+                  .replace(/\.[^/.]+$/, "") // Remove extension
+                  .replace(/[()]/g, " ")    
+                  .replace(/[-_]/g, " ");   
+              
+              let matches = [];
+
+              if (smartExactMatch) {
+                  // --- EXACT MATCH MODE (SPECIAL MACHINERY) ---
+                  // Search for exact title OR product_number OR catalog_number match
+                  // We remove the extension but keep the full name string
+                  const exactName = file.name.replace(/\.[^/.]+$/, "").trim();
+                  
+                  const { data: exactMatches } = await supabase
+                      .from('tyres')
+                      .select('id, title, image_url')
+                      .or(`title.ilike."${exactName}",product_number.eq."${exactName}",catalog_number.eq."${exactName}"`)
+                      .limit(5);
+                  
+                  matches = exactMatches || [];
+                  
+                  if (matches.length === 0) {
+                      setSmartStatus(prev => [`NOT FOUND (Exact): ${file.name}`, ...prev]);
+                      continue;
+                  }
+              } else {
+                  // --- KEYWORD MATCH MODE (DEFAULT) ---
+                  const keywords = fileNameClean.split(/\s+/).filter(w => w.length >= 2);
+                  
+                  if (keywords.length < 2) {
+                      setSmartStatus(prev => [`SKIP: ${file.name} (мало ключових слів)`, ...prev]);
+                      continue;
+                  }
+
+                  const sortedKeywords = [...keywords].sort((a, b) => b.length - a.length);
+                  const searchTerm = sortedKeywords[0]; 
+
+                  const { data: potentialMatches } = await supabase
+                      .from('tyres')
+                      .select('id, title, image_url')
+                      .ilike('title', `%${searchTerm}%`)
+                      .limit(50);
+
+                  if (!potentialMatches || potentialMatches.length === 0) {
+                      setSmartStatus(prev => [`NOT FOUND (By '${searchTerm}'): ${file.name}`, ...prev]);
+                      continue;
+                  }
+
+                  matches = potentialMatches.filter(p => {
+                      const titleLower = p.title.toLowerCase();
+                      const matchCount = keywords.reduce((acc, k) => {
+                          return titleLower.includes(k.toLowerCase()) ? acc + 1 : acc;
+                      }, 0);
+                      
+                      return matchCount >= 2; 
+                  });
+
+                  if (matches.length === 0) {
+                      setSmartStatus(prev => [`NO MATCH (2+ keywords): ${file.name}`, ...prev]);
+                      continue;
+                  }
+              }
+
+              // --- COMMON UPLOAD LOGIC ---
+              const storageName = `smart_${Date.now()}_${file.name.replace(/\s/g, '_')}`;
+              const { error: uploadError } = await supabase.storage.from('galery').upload(storageName, file);
+              if (uploadError) {
+                  setSmartStatus(prev => [`ERR UPLOAD: ${file.name}`, ...prev]);
+                  continue;
+              }
+              
+              const { data: urlData } = supabase.storage.from('galery').getPublicUrl(storageName);
+              const publicUrl = urlData.publicUrl;
+
+              const idsToUpdate = matches
+                  .filter(p => smartOverwrite || !p.image_url)
+                  .map(p => p.id);
+
+              if (idsToUpdate.length > 0) {
+                  await supabase.from('tyres').update({ image_url: publicUrl, in_stock: true }).in('id', idsToUpdate);
+                  updatedCount += idsToUpdate.length;
+                  setSmartStatus(prev => [`MATCHED (${smartExactMatch ? 'Exact' : 'Fuzzy'}): ${file.name} -> ${idsToUpdate.length} товарів`, ...prev]);
+              } else {
+                  setSmartStatus(prev => [`SKIPPED (Has Image): ${file.name}`, ...prev]);
+              }
+          }
+          
+          setSmartStatus(prev => [`ЗАВЕРШЕНО. Оновлено товарів: ${updatedCount}`, ...prev]);
+          setSmartFiles([]);
+
+      } catch (e: any) {
+          setSmartStatus(prev => [`CRITICAL ERROR: ${e.message}`, ...prev]);
+      } finally {
+          setIsSmartMatching(false);
+      }
   };
 
+  // --- STORAGE CLEANUP LOGIC ---
   const executeStorageCleanup = async () => {
+      setShowCleanupConfirm(false);
       setCleaningStorage(true);
-      setTimeout(() => { setCleaningStorage(false); setShowCleanupConfirm(false); showMsg("Очищено!"); }, 1000);
+      setCleanupStatus('Аналіз бази даних...');
+      setCleanupResult(null);
+
+      try {
+          const allTyres = await fetchAllIds('tyres', 'image_url');
+          const allGallery = await fetchAllIds('gallery', 'url');
+          const allArticles = await fetchAllIds('articles', 'image_url');
+          const allPromo = await fetchAllIds('settings', 'value', (q) => q.eq('key', 'promo_data'));
+
+          const activeUrls = new Set<string>();
+          allTyres.forEach(t => t.image_url && activeUrls.add(t.image_url));
+          allGallery.forEach(g => g.url && activeUrls.add(g.url));
+          allArticles.forEach(a => a.image_url && activeUrls.add(a.image_url));
+          
+          if(allPromo.length > 0) {
+              try {
+                  const promos = JSON.parse(allPromo[0].value);
+                  if(Array.isArray(promos)) {
+                      promos.forEach((p:any) => {
+                          if(p.image_url) activeUrls.add(p.image_url);
+                          if(p.backgroundImage) activeUrls.add(p.backgroundImage);
+                      });
+                  } else if(promos.image_url) {
+                      activeUrls.add(promos.image_url);
+                  }
+              } catch(e) {}
+          }
+
+          setCleanupStatus(`Знайдено ${activeUrls.size} активних посилань. Сканування сховища...`);
+          
+          let allFiles: any[] = [];
+          const { data: files, error } = await supabase.storage.from('galery').list('', { limit: 10000 }); 
+          if (error) throw error;
+          allFiles = files || [];
+
+          const orphans: string[] = [];
+          const projectUrl = "https://zzxueclhkhvwdmxflmyx.supabase.co/storage/v1/object/public/galery/";
+          
+          allFiles.forEach(file => {
+              const fullUrl = projectUrl + file.name;
+              if (!activeUrls.has(fullUrl)) {
+                  orphans.push(file.name);
+              }
+          });
+
+          setCleanupStatus(`Знайдено ${orphans.length} файлів для видалення.`);
+
+          if (orphans.length > 0) {
+              const BATCH = 50;
+              for(let i=0; i<orphans.length; i+=BATCH) {
+                  const batch = orphans.slice(i, i+BATCH);
+                  await supabase.storage.from('galery').remove(batch);
+              }
+          }
+
+          setCleanupResult({
+              total: allFiles.length,
+              active: allFiles.length - orphans.length,
+              deleted: orphans.length,
+              broken: 0
+          });
+          setCleanupStatus('Завершено успішно.');
+
+      } catch (e: any) {
+          setCleanupStatus('Помилка: ' + e.message);
+      } finally {
+          setCleaningStorage(false);
+      }
   };
 
+  // --- BROKEN LINK SCANNER ---
   const executeBrokenLinkScan = async () => {
+      setShowScanConfirm(false);
       setIsScanningImages(true);
-      setTimeout(() => { setIsScanningImages(false); setShowScanConfirm(false); showMsg("Посилання перевірено!"); }, 1000);
+      setScanStatus('Завантаження списку товарів...');
+      setScanProgress({ checked: 0, broken: 0, removed: 0 });
+
+      try {
+          const products = await fetchAllIds('tyres', 'id, image_url');
+          const productsWithImages = products.filter(p => p.image_url);
+          
+          setScanStatus(`Перевірка ${productsWithImages.length} зображень...`);
+          
+          const BATCH_SIZE = 20; 
+          let processed = 0;
+          let brokenCount = 0;
+          let removedCount = 0;
+
+          const checkUrl = async (url: string) => {
+              try {
+                  const res = await fetch(url, { method: 'HEAD' });
+                  return res.ok;
+              } catch {
+                  return false;
+              }
+          };
+
+          for (let i = 0; i < productsWithImages.length; i += BATCH_SIZE) {
+              const batch = productsWithImages.slice(i, i + BATCH_SIZE);
+              
+              const results = await Promise.all(batch.map(async (p) => {
+                  const isOk = await checkUrl(p.image_url);
+                  return { id: p.id, isOk };
+              }));
+
+              const brokenIds = results.filter(r => !r.isOk).map(r => r.id);
+              
+              if (brokenIds.length > 0) {
+                  await supabase.from('tyres').update({ image_url: null }).in('id', brokenIds);
+                  brokenCount += brokenIds.length;
+                  removedCount += brokenIds.length;
+              }
+
+              processed += batch.length;
+              setScanProgress({ checked: processed, broken: brokenCount, removed: removedCount });
+          }
+
+          setScanStatus(`Завершено. Перевірено: ${processed}. Видалено битих: ${removedCount}.`);
+
+      } catch (e: any) {
+          setScanStatus('Помилка: ' + e.message);
+      } finally {
+          setIsScanningImages(false);
+      }
   };
 
   // --- AI DESCRIPTION GENERATOR ---
+  const handleStopAi = () => {
+      setAiGenerating(false);
+      aiGeneratingRef.current = false;
+      setAiStatusLog(prev => ["Користувач зупинив генерацію.", ...prev]);
+  };
+
   const generateAiDescriptions = async () => {
       setAiGenerating(true);
+      aiGeneratingRef.current = true;
       setAiStatusLog([]);
       setAiProgress({ total: 0, current: 0, updated: 0 });
 
       try {
-          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' }); 
-          // Note: Since process.env might not work in Vite without config, relying on user potentially having it configured or assuming valid key available in context.
-          // If strictly following prompt "The API key must be obtained exclusively from the environment variable process.env.API_KEY", we assume it is there.
-          
-          if (!process.env.API_KEY) {
-              setAiStatusLog(prev => ["ПОМИЛКА: Не знайдено API KEY в змінних оточення (process.env.API_KEY)", ...prev]);
+          if (!geminiKey) {
+              setAiStatusLog(prev => ["ПОМИЛКА: Відсутній Google Gemini API Key. Введіть його у вкладці 'Безпека / API'.", ...prev]);
               setAiGenerating(false);
               return;
           }
 
-          // 1. Fetch products with empty or short descriptions
-          const { data: products } = await supabase
+          const ai = new GoogleGenAI({ apiKey: geminiKey }); 
+
+          // 1. Fetch products
+          const { data: allProducts, error } = await supabase
               .from('tyres')
-              .select('id, title, manufacturer, width, height, radius, season, vehicle_type, description')
-              .or('description.is.null,description.eq."",description.eq."API Import"');
+              .select('id, title, manufacturer, radius, season, vehicle_type, description');
 
-          if (!products || products.length === 0) {
-              setAiStatusLog(prev => ["Всі товари вже мають опис.", ...prev]);
+          if (error) throw error;
+
+          if (!allProducts || allProducts.length === 0) {
+              setAiStatusLog(prev => ["В базі немає товарів для обробки.", ...prev]);
               setAiGenerating(false);
               return;
           }
 
-          setAiProgress({ total: products.length, current: 0, updated: 0 });
-          setAiStatusLog(prev => [`Знайдено ${products.length} товарів без опису. Починаємо...`, ...prev]);
+          // 2. Client-side filtering logic
+          const productsToProcess = allProducts.filter(p => {
+              if (aiOverwrite) return true; // Force mode ON = process all
 
-          // Process in small batches to avoid rate limits
-          const BATCH_SIZE = 5; 
-          
-          for (let i = 0; i < products.length; i += BATCH_SIZE) {
-              const batch = products.slice(i, i + BATCH_SIZE);
+              // Check if description is missing or "bad"
+              if (!p.description) return true;
+              const desc = p.description.trim();
+              if (desc === '') return true;
+              if (desc === 'API Import') return true;
               
-              await Promise.all(batch.map(async (tyre) => {
-                  try {
-                      const seasonName = tyre.season === 'winter' ? 'зимова' : tyre.season === 'summer' ? 'літня' : 'всесезонна';
-                      const prompt = `Напиши унікальний, короткий (2-3 речення) SEO-опис українською мовою для шини: ${tyre.manufacturer} ${tyre.title}. 
-                      Розмір: ${tyre.width}/${tyre.height} ${tyre.radius}. Сезон: ${seasonName}. Тип: ${tyre.vehicle_type || 'легкова'}. 
-                      Використовуй слова "купити", "ціна", "Синельникове". Без списків, тільки текст.`;
+              // Smart check: treat short descriptions (e.g. "allseason", "winter") as needing update
+              if (desc.length < 30) return true;
 
-                      const response = await ai.models.generateContent({
-                          model: 'gemini-2.5-flash',
-                          contents: prompt,
-                      });
-                      
-                      const newDesc = response.text.trim();
-                      
-                      if (newDesc) {
-                          await supabase.from('tyres').update({ description: newDesc }).eq('id', tyre.id);
-                          setAiProgress(p => ({ ...p, updated: p.updated + 1 }));
-                      }
-                  } catch (err: any) {
-                      console.error("AI Error for ID " + tyre.id, err);
-                  }
-              }));
+              return false; // Good description, skip
+          });
 
-              setAiProgress(p => ({ ...p, current: Math.min(p.current + BATCH_SIZE, p.total) }));
-              // Delay to respect rate limits
-              await new Promise(r => setTimeout(r, 4000));
+          if (productsToProcess.length === 0) {
+              setAiStatusLog(prev => ["Всі товари вже мають якісний опис (довше 30 символів). Спробуйте увімкнути 'Перезаписувати'.", ...prev]);
+              setAiGenerating(false);
+              return;
           }
 
-          setAiStatusLog(prev => ["Генерацію завершено успішно!", ...prev]);
+          setAiProgress({ total: productsToProcess.length, current: 0, updated: 0 });
+          setAiStatusLog(prev => [`Знайдено ${productsToProcess.length} товарів для оновлення. Починаємо (по 1 шт)...`, ...prev]);
+
+          // RATE LIMIT SETTINGS
+          const DELAY_MS = 4500; // ~4.5 seconds delay = ~13 requests per minute (safe for free tier 15 RPM)
+          
+          for (let i = 0; i < productsToProcess.length; i++) {
+              if (!aiGeneratingRef.current) break; // Check manual stop
+
+              const tyre = productsToProcess[i];
+              
+              try {
+                  // Parse size for prompt
+                  const sizeRegex = /(\d{3})[\/\s](\d{2})[\s\w]*R(\d{2}(?:\.5|\.3)?[C|c]?)/i;
+                  const match = tyre.title.match(sizeRegex);
+                  let sizeStr = match ? `${match[1]}/${match[2]} R${match[3]}` : (tyre.radius || '');
+
+                  const seasonName = tyre.season === 'winter' ? 'зимова' : tyre.season === 'summer' ? 'літня' : 'всесезонна';
+                  
+                  const prompt = `Напиши унікальний, привабливий SEO-опис (2-3 речення) українською мовою для шини: ${tyre.manufacturer || ''} ${tyre.title}. 
+                  Розмір: ${sizeStr}. Сезон: ${seasonName}. Тип: ${tyre.vehicle_type || 'легкова'}. 
+                  Використовуй слова "купити", "ціна", "Синельникове", "якісний монтаж", "Форсаж". Акцентуй на надійності та комфорті.`;
+
+                  const response = await ai.models.generateContent({
+                      model: 'gemini-2.5-flash',
+                      contents: prompt,
+                  });
+                  
+                  const newDesc = response.text.trim();
+                  
+                  if (newDesc) {
+                      await supabase.from('tyres').update({ description: newDesc }).eq('id', tyre.id);
+                      setAiProgress(p => ({ ...p, updated: p.updated + 1 }));
+                  }
+                  
+                  // Update UI progress
+                  setAiProgress(p => ({ ...p, current: i + 1 }));
+
+              } catch (err: any) {
+                  const errMsg = err.message || '';
+                  if (errMsg.includes('quota') || errMsg.includes('429') || errMsg.includes('exceeded')) {
+                      setAiStatusLog(prev => [`ЛІМІТ КВОТИ (429)! Процес зупинено на товарі ${i+1}. Зачекайте хвилину і запустіть знову.`, ...prev]);
+                      setAiGenerating(false);
+                      aiGeneratingRef.current = false;
+                      return; // STOP execution
+                  }
+                  console.error("AI Error for ID " + tyre.id, err);
+              }
+
+              // Delay between requests
+              if (i < productsToProcess.length - 1) {
+                  await new Promise(r => setTimeout(r, DELAY_MS));
+              }
+          }
+
+          if (aiGeneratingRef.current) {
+              setAiStatusLog(prev => ["Генерацію завершено успішно!", ...prev]);
+          }
 
       } catch (e: any) {
           setAiStatusLog(prev => [`Критична помилка: ${e.message}`, ...prev]);
       } finally {
           setAiGenerating(false);
+          aiGeneratingRef.current = false;
       }
   };
 
@@ -381,7 +725,7 @@ const SettingsTab: React.FC = () => {
        {/* SIDEBAR NAVIGATION */}
        <div className="md:w-64 flex-shrink-0 flex flex-col gap-2">
            <h3 className="text-xl font-black text-white px-4 mb-2 flex items-center gap-2"><Settings className="text-[#FFC300]"/> Налаштування</h3>
-           <div className="bg-zinc-900 rounded-2xl p-2 border border-zinc-800 space-y-1">
+           <div className="bg-zinc-950 rounded-2xl p-2 border border-zinc-800 space-y-1">
                <NavButton id="general" label="Контакти" icon={Smartphone} />
                <NavButton id="security" label="Безпека / API" icon={Shield} />
                <NavButton id="suppliers" label="Постачальники" icon={Briefcase} />
@@ -396,34 +740,113 @@ const SettingsTab: React.FC = () => {
        {/* MAIN CONTENT AREA */}
        <div className="flex-grow bg-zinc-900 rounded-2xl border border-zinc-800 p-6 shadow-xl overflow-y-auto min-h-[500px]">
            
-           {/* ... (Previous tabs content for 'general', 'security', 'suppliers' omitted for brevity - assume they exist) ... */}
+           {/* --- TAB: GENERAL --- */}
            {activeTab === 'general' && (
-               <div className="space-y-6">
-                   <h4 className="text-lg font-bold text-white mb-4 border-b border-zinc-800 pb-2">Контакти</h4>
-                   <div className="grid grid-cols-1 gap-4">
-                       <input value={contactSettings.phone1} onChange={e=>setContactSettings({...contactSettings, phone1: e.target.value})} className="bg-black p-3 rounded border border-zinc-700 text-white" placeholder="Phone 1"/>
-                       <input value={contactSettings.phone2} onChange={e=>setContactSettings({...contactSettings, phone2: e.target.value})} className="bg-black p-3 rounded border border-zinc-700 text-white" placeholder="Phone 2"/>
-                       <input value={contactSettings.address} onChange={e=>setContactSettings({...contactSettings, address: e.target.value})} className="bg-black p-3 rounded border border-zinc-700 text-white" placeholder="Address"/>
-                       <input value={contactSettings.mapLink} onChange={e=>setContactSettings({...contactSettings, mapLink: e.target.value})} className="bg-black p-3 rounded border border-zinc-700 text-white" placeholder="Map Link"/>
+               <div className="space-y-6 animate-in slide-in-from-right-4">
+                   <h4 className="text-lg font-bold text-white mb-4 flex items-center gap-2 pb-4 border-b border-zinc-800"><Phone className="text-[#FFC300]" size={20}/> Контактна Інформація</h4>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                          <label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Телефон 1 (Основний)</label>
+                          <input type="text" value={contactSettings.phone1} onChange={e => setContactSettings({...contactSettings, phone1: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-bold" placeholder="099 167 44 24"/>
+                      </div>
+                      <div>
+                          <label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Телефон 2 (Додатковий)</label>
+                          <input type="text" value={contactSettings.phone2} onChange={e => setContactSettings({...contactSettings, phone2: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-bold" placeholder="063 582 38 58"/>
+                      </div>
+                      <div>
+                          <label className="block text-zinc-400 text-xs font-bold uppercase mb-1 flex items-center gap-2"><MapPin size={14}/> Текст Адреси</label>
+                          <input type="text" value={contactSettings.address} onChange={e => setContactSettings({...contactSettings, address: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white" placeholder="м. Синельникове, вул. Квітнева 9"/>
+                      </div>
+                      <div>
+                          <label className="block text-zinc-400 text-xs font-bold uppercase mb-1 flex items-center gap-2"><Link2 size={14}/> Посилання на Google Maps</label>
+                          <input type="text" value={contactSettings.mapLink} onChange={e => setContactSettings({...contactSettings, mapLink: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-zinc-300 text-sm font-mono" placeholder="https://maps.google..."/>
+                      </div>
                    </div>
                </div>
            )}
 
+           {/* --- TAB: SECURITY --- */}
            {activeTab === 'security' && (
-               <div className="space-y-6">
-                   <h4 className="text-lg font-bold text-white mb-4 border-b border-zinc-800 pb-2">Безпека</h4>
-                   <input value={adminEmail} onChange={e=>setAdminEmail(e.target.value)} className="w-full bg-black p-3 rounded border border-zinc-700 text-white mb-4" placeholder="Admin Email"/>
-                   <input value={serviceEmail} onChange={e=>setServiceEmail(e.target.value)} className="w-full bg-black p-3 rounded border border-zinc-700 text-white mb-4" placeholder="Service Email"/>
-                   <input value={supplierKey} type="password" onChange={e=>setSupplierKey(e.target.value)} className="w-full bg-black p-3 rounded border border-zinc-700 text-white mb-4" placeholder="Supplier API Key"/>
+               <div className="space-y-6 animate-in slide-in-from-right-4">
+                   <h4 className="text-lg font-bold text-white mb-4 flex items-center gap-2 pb-4 border-b border-zinc-800"><Shield className="text-[#FFC300]" size={20}/> Безпека та Ключі</h4>
+                   <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800">
+                        <label className="block text-[#FFC300] text-xs font-bold uppercase mb-2 flex items-center gap-2"><Crown size={16}/> Email Власника (Головний Адмін)</label>
+                        <input type="email" value={adminEmail} onChange={e => setAdminEmail(e.target.value)} className="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-3 text-white font-bold" placeholder="admin@forsage.com"/>
+                   </div>
+                   <div className="bg-blue-900/10 p-4 rounded-xl border border-blue-900/30">
+                        <label className="block text-blue-200 text-xs font-bold uppercase mb-2 flex items-center gap-2"><UserCog size={16}/> Вхід для Співробітника</label>
+                        <p className="text-zinc-400 text-sm mb-3">Користувач з цим email матиме доступ <strong>ТІЛЬКИ</strong> до вкладки "Сервіс" (Розклад/Клієнти).</p>
+                        <input type="email" value={serviceEmail} onChange={e => setServiceEmail(e.target.value)} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-bold" placeholder="staff@forsage.com"/>
+                   </div>
+                   
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-zinc-800">
+                        <div>
+                            <label className="block text-zinc-400 text-xs font-bold uppercase mb-1 flex items-center gap-2"><Truck size={14}/> Ключ Нова Пошта</label>
+                            <input type="text" value={novaPoshtaKey} onChange={e => setNovaPoshtaKey(e.target.value)} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-mono text-sm" placeholder="Ключ API Нової Пошти"/>
+                        </div>
+                        <div>
+                            <label className="block text-zinc-400 text-xs font-bold uppercase mb-1 flex items-center gap-2"><KeyRound size={14}/> Ключ Постачальника (Omega)</label>
+                            <input type="password" value={supplierKey} onChange={e => setSupplierKey(e.target.value)} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-mono text-sm" placeholder="API ключ постачальника"/>
+                        </div>
+                        <div className="md:col-span-2 bg-purple-900/10 p-4 rounded-xl border border-purple-900/30">
+                            <label className="block text-purple-300 text-xs font-bold uppercase mb-2 flex items-center gap-2"><Sparkles size={14}/> Google Gemini API Key (AI Generator)</label>
+                            <div className="relative">
+                                <input 
+                                    type={showGeminiKey ? "text" : "password"} 
+                                    value={geminiKey} 
+                                    onChange={e => setGeminiKey(e.target.value)} 
+                                    className="w-full bg-black border border-zinc-700 rounded-lg p-3 pr-10 text-white font-mono text-sm mb-1 focus:border-purple-500 outline-none" 
+                                    placeholder="Вставте ключ AIza..."
+                                />
+                                <button 
+                                    onClick={() => setShowGeminiKey(!showGeminiKey)} 
+                                    className="absolute right-3 top-3 text-zinc-500 hover:text-white"
+                                    title={showGeminiKey ? "Приховати" : "Показати"}
+                                >
+                                    {showGeminiKey ? <EyeOff size={18}/> : <Eye size={18}/>}
+                                </button>
+                            </div>
+                            <p className="text-[10px] text-zinc-400 mt-2">
+                                Необхідний для генерації описів. Отримати безкоштовно: <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline font-bold">aistudio.google.com</a>
+                            </p>
+                        </div>
+                   </div>
                </div>
            )}
 
+           {/* --- TAB: SUPPLIERS --- */}
            {activeTab === 'suppliers' && (
-                <div className="space-y-4">
-                    <h4 className="text-lg font-bold text-white mb-4 border-b border-zinc-800 pb-2">Постачальники</h4>
-                    <div className="flex gap-2 mb-4"><input value={newSupplierName} onChange={e=>setNewSupplierName(e.target.value)} className="flex-grow bg-black p-3 rounded border border-zinc-700 text-white" placeholder="New Supplier"/><button onClick={handleAddSupplier} className="bg-blue-600 text-white px-4 rounded">Add</button></div>
-                    {suppliers.map(s => <div key={s.id} className="bg-zinc-800 p-3 rounded flex justify-between"><span>{s.name}</span><button onClick={()=>initiateDelete('full_supplier', s.id, s.name)}><Trash2 size={16}/></button></div>)}
-                </div>
+               <div className="space-y-6 animate-in slide-in-from-right-4">
+                   <h4 className="text-lg font-bold text-white mb-4 flex items-center gap-2 pb-4 border-b border-zinc-800"><Briefcase className="text-[#FFC300]" size={20}/> Керування Постачальниками</h4>
+                   <div className="flex gap-4 mb-6">
+                       <input type="text" value={newSupplierName} onChange={(e) => setNewSupplierName(e.target.value)} placeholder="Назва нового постачальника" className="bg-black border border-zinc-700 rounded-lg p-3 text-white flex-grow font-bold" />
+                       <button onClick={handleAddSupplier} className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-6 py-3 rounded-lg flex items-center gap-2 justify-center"><Plus size={18} /> Додати</button>
+                   </div>
+                   <div className="grid grid-cols-1 gap-3">
+                       {suppliers.map(s => {
+                           const count = supplierCounts[s.id] || 0;
+                           return (
+                               <div key={s.id} className="bg-black/40 p-4 rounded-xl border border-zinc-800 flex justify-between items-center hover:border-zinc-600 transition-colors group">
+                                   <div className="flex items-center gap-3">
+                                       <div className="bg-zinc-800 p-2 rounded-lg text-zinc-400">
+                                           <Briefcase size={20}/>
+                                       </div>
+                                       <div>
+                                           <h5 className="font-bold text-white text-lg">{s.name}</h5>
+                                           <span className={`text-xs px-2 py-0.5 rounded font-bold ${count > 0 ? 'bg-green-900/30 text-green-400 border border-green-900/50' : 'bg-zinc-800 text-zinc-500'}`}>
+                                               {count} позицій
+                                           </span>
+                                       </div>
+                                   </div>
+                                   <div className="flex gap-2">
+                                       <button onClick={() => initiateDelete('products_only', s.id, s.name)} className="p-2 bg-zinc-800 text-zinc-400 hover:text-orange-500 hover:bg-orange-900/20 rounded-lg border border-zinc-700 hover:border-orange-500 transition-all" title="Очистити склад" disabled={count === 0}><PackageX size={20}/></button>
+                                       <button onClick={() => initiateDelete('full_supplier', s.id, s.name)} className="p-2 bg-zinc-800 text-zinc-400 hover:text-red-500 hover:bg-red-900/20 rounded-lg border border-zinc-700 hover:border-red-500 transition-all" title="Видалити постачальника"><Trash2 size={20}/></button>
+                                   </div>
+                               </div>
+                           );
+                       })}
+                   </div>
+               </div>
            )}
 
            {/* --- TAB: SYSTEM / WAREHOUSE / IMPORT / AI --- */}
@@ -442,9 +865,22 @@ const SettingsTab: React.FC = () => {
                        <div className="relative z-10">
                            <h4 className="text-purple-400 text-lg font-bold mb-1 flex items-center gap-2"><Wand2 size={20}/> AI Генератор Описів (Gemini)</h4>
                            <p className="text-zinc-400 text-sm max-w-2xl mb-4">
-                               Автоматично створює унікальні SEO-описи для товарів, у яких поле "Опис" пусте. 
+                               Автоматично створює унікальні SEO-описи для товарів. 
                                Використовує штучний інтелект для генерації тексту на основі параметрів шини.
                            </p>
+                           
+                           {/* OVERWRITE TOGGLE */}
+                           <label className="flex items-center gap-2 cursor-pointer mb-4 w-fit bg-black/40 px-3 py-2 rounded-lg border border-purple-900/30">
+                               <input 
+                                   type="checkbox" 
+                                   checked={aiOverwrite} 
+                                   onChange={e => setAiOverwrite(e.target.checked)} 
+                                   className="w-4 h-4 accent-purple-500 rounded"
+                               />
+                               <span className={`text-sm font-bold ${aiOverwrite ? 'text-white' : 'text-zinc-400'}`}>
+                                   Перезаписувати існуючі описи
+                               </span>
+                           </label>
                            
                            {aiStatusLog.length > 0 && (
                                <div className="bg-black/50 p-3 rounded-lg border border-purple-900/30 font-mono text-xs text-purple-200 mb-4 h-24 overflow-y-auto">
@@ -459,13 +895,14 @@ const SettingsTab: React.FC = () => {
                                            <div className="h-full bg-purple-500 transition-all duration-300" style={{ width: `${(aiProgress.current / (aiProgress.total || 1)) * 100}%` }}></div>
                                        </div>
                                        <span className="text-xs font-bold text-purple-400 whitespace-nowrap">{aiProgress.current} / {aiProgress.total}</span>
+                                       <button onClick={handleStopAi} className="p-2 bg-red-900/50 text-red-300 rounded hover:bg-red-900 border border-red-900/50" title="Зупинити"><StopCircle size={16}/></button>
                                    </div>
                                ) : (
                                    <button 
                                        onClick={generateAiDescriptions} 
                                        className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-3 rounded-xl shadow-lg flex items-center gap-2 transition-transform active:scale-95"
                                    >
-                                       <Sparkles size={18}/> ЗАПУСТИТИ ГЕНЕРАЦІЮ
+                                       <Sparkles size={18}/> {aiProgress.current > 0 && aiProgress.current < aiProgress.total ? 'ПРОДОВЖИТИ ГЕНЕРАЦІЮ' : 'ЗАПУСТИТИ ГЕНЕРАЦІЮ'}
                                    </button>
                                )}
                            </div>
@@ -484,20 +921,18 @@ const SettingsTab: React.FC = () => {
                        </button>
                    </div>
 
-                   {/* ... (Existing maintenance blocks like Stock Toggle, DB Maintenance etc.) ... */}
-                   {/* Simplified view of existing blocks to keep file valid */}
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                        <div className="bg-black/30 p-6 rounded-xl border border-zinc-800 flex flex-col justify-between">
                             <div>
                                 <h4 className="text-lg font-bold text-white mb-1">Відображення залишків</h4>
-                                <p className="text-zinc-400 text-sm mb-4">Якщо вимкнено — всі товари вважаються доступними.</p>
+                                <p className="text-zinc-400 text-sm mb-4">Якщо вимкнено — всі товари вважаються доступними (навіть 0 шт).</p>
                             </div>
                             <button onClick={toggleStockQty} className={`w-full flex items-center justify-center gap-3 px-6 py-3 rounded-xl font-bold transition-colors ${enableStockQty ? 'bg-[#FFC300] text-black' : 'bg-zinc-800 text-zinc-400'}`}>
                                 {enableStockQty ? <ToggleRight size={32}/> : <ToggleLeft size={32}/>} 
                                 {enableStockQty ? 'Точний облік (ВКЛ)' : 'Все в наявності (ВИКЛ)'}
                             </button>
                        </div>
-                       
+
                        <div className="bg-black/30 p-6 rounded-xl border border-zinc-800 flex flex-col justify-between">
                             <div>
                                 <h4 className="text-white text-lg font-bold mb-1 flex items-center gap-2"><Database size={18}/> Обслуговування БД</h4>
@@ -510,31 +945,92 @@ const SettingsTab: React.FC = () => {
                                         <RotateCcw size={16}/> Скинути статус (Все в наявності)
                                     </button>
                                 ) : (
-                                    <div className="flex gap-2">
-                                        <button onClick={processResetStock} className="flex-1 bg-red-600 text-white font-bold py-3 rounded-xl text-xs">Підтвердити</button>
-                                        <button onClick={() => setShowResetStockConfirm(false)} className="flex-1 bg-zinc-700 text-white font-bold py-3 rounded-xl text-xs">Скасувати</button>
+                                    <div className="flex gap-2 animate-in fade-in">
+                                        <button onClick={processResetStock} className="flex-1 bg-red-600 text-white font-bold py-2 rounded-lg">Підтвердити</button>
+                                        <button onClick={() => setShowResetStockConfirm(false)} className="flex-1 bg-zinc-700 text-white font-bold py-2 rounded-lg">Скасувати</button>
+                                    </div>
+                                )}
+
+                                {!showCleanupConfirm ? (
+                                    <button onClick={() => setShowCleanupConfirm(true)} disabled={cleaningStorage} className="w-full bg-red-900/20 text-red-300 px-6 py-3 rounded-xl font-bold border border-red-900/50 hover:bg-red-900/40 flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-sm">
+                                        <Eraser size={16}/> Очистити сховище (Видалити зайве)
+                                    </button>
+                                ) : (
+                                    <div className="flex gap-2 animate-in fade-in">
+                                        <button onClick={executeStorageCleanup} className="flex-1 bg-red-600 text-white font-bold py-2 rounded-lg">Підтвердити</button>
+                                        <button onClick={() => setShowCleanupConfirm(false)} className="flex-1 bg-zinc-700 text-white font-bold py-2 rounded-lg">Скасувати</button>
+                                    </div>
+                                )}
+                                {cleanupStatus && <p className="text-xs text-zinc-400 mt-1">{cleanupStatus}</p>}
+
+                                {!showScanConfirm ? (
+                                    <button onClick={() => setShowScanConfirm(true)} disabled={isScanningImages} className="w-full bg-orange-900/20 text-orange-300 px-6 py-3 rounded-xl font-bold border border-orange-900/50 hover:bg-orange-900/40 flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-sm">
+                                        <FileSearch size={16}/> Перевірка битих фото
+                                    </button>
+                                ) : (
+                                    <div className="flex gap-2 animate-in fade-in">
+                                        <button onClick={executeBrokenLinkScan} className="flex-1 bg-orange-600 text-white font-bold py-2 rounded-lg">Запуск</button>
+                                        <button onClick={() => setShowScanConfirm(false)} className="flex-1 bg-zinc-700 text-white font-bold py-2 rounded-lg">Скасувати</button>
+                                    </div>
+                                )}
+                                {scanStatus && <p className="text-xs text-zinc-400 mt-1">{scanStatus}</p>}
+
+                                {!showSortConfirm ? (
+                                    <button onClick={() => setShowSortConfirm(true)} disabled={sortingCategories} className="w-full bg-green-900/20 text-green-300 px-6 py-3 rounded-xl font-bold border border-green-900/50 hover:bg-green-900/40 flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-sm">
+                                        <Tags size={16}/> Авто-сортування категорій
+                                    </button>
+                                ) : (
+                                    <div className="flex gap-2 animate-in fade-in">
+                                        <button onClick={executeAutoCategorization} className="flex-1 bg-green-600 text-white font-bold py-2 rounded-lg">Старт</button>
+                                        <button onClick={() => setShowSortConfirm(false)} className="flex-1 bg-zinc-700 text-white font-bold py-2 rounded-lg">Скасувати</button>
                                     </div>
                                 )}
                             </div>
                        </div>
                    </div>
 
-                   {/* BROKEN IMAGE SCANNER (Existing) */}
-                   <div className="bg-orange-900/10 p-6 rounded-xl border border-orange-900/30 mt-6">
-                        <div className="flex flex-col md:flex-row justify-between items-start gap-4">
-                            <div className="flex-grow">
-                                <h4 className="text-orange-400 text-lg font-bold mb-1 flex items-center gap-2"><Stethoscope size={20}/> Лікар Фото (Scanner)</h4>
-                                <p className="text-zinc-400 text-sm max-w-xl mb-4">Перевіряє всі товари на наявність "битого" фото.</p>
+                   {/* SMART PHOTO MATCHING */}
+                   <div className="mt-6 bg-black/30 p-6 rounded-xl border border-zinc-800">
+                        <h4 className="text-lg font-bold text-white mb-2 flex items-center gap-2"><Wand2 size={18} className="text-[#FFC300]"/> Розумне завантаження фото</h4>
+                        <p className="text-zinc-400 text-sm mb-4">Завантажте файли, і система знайде відповідні товари за назвою файлу.</p>
+                        
+                        <div className="flex flex-col gap-4">
+                            <div className="flex items-center gap-4 bg-zinc-900 p-4 rounded-xl border border-dashed border-zinc-700">
+                                <button onClick={() => smartInputRef.current?.click()} className="bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 border border-zinc-600">
+                                    <Upload size={16}/> Обрати файли
+                                </button>
+                                <input type="file" multiple ref={smartInputRef} onChange={e => setSmartFiles(Array.from(e.target.files || []))} className="hidden" accept="image/*" />
+                                <span className="text-zinc-400 text-sm">{smartFiles.length > 0 ? `Обрано ${smartFiles.length} файлів` : 'Файли не обрано'}</span>
                             </div>
-                            <button onClick={() => setShowScanConfirm(true)} disabled={isScanningImages} className="w-full md:w-auto bg-orange-600 hover:bg-orange-500 text-white font-bold px-6 py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed h-fit whitespace-nowrap">
-                                {isScanningImages ? <Loader2 className="animate-spin" size={20}/> : <Stethoscope size={20}/>}
-                                {isScanningImages ? 'Сканування...' : 'Знайти та Видалити биті'}
+
+                            <div className="flex flex-col sm:flex-row gap-4">
+                                <label className="flex items-center gap-2 cursor-pointer w-fit">
+                                    <input type="checkbox" checked={smartOverwrite} onChange={e => setSmartOverwrite(e.target.checked)} className="w-4 h-4 rounded accent-[#FFC300]" />
+                                    <span className="text-zinc-300 text-sm font-bold">Перезаписувати існуючі фото</span>
+                                </label>
+
+                                <label className="flex items-center gap-2 cursor-pointer w-fit">
+                                    <input type="checkbox" checked={smartExactMatch} onChange={e => setSmartExactMatch(e.target.checked)} className="w-4 h-4 rounded accent-green-500" />
+                                    <span className={`text-sm font-bold ${smartExactMatch ? 'text-green-400' : 'text-zinc-400'}`}>
+                                        Точний збіг назви (для спецтехніки)
+                                    </span>
+                                </label>
+                            </div>
+
+                            <button onClick={handleSmartUpload} disabled={isSmartMatching || smartFiles.length === 0} className="w-full bg-[#FFC300] hover:bg-[#e6b000] text-black font-black py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50">
+                                {isSmartMatching ? <Loader2 className="animate-spin"/> : <CheckCircle size={18}/>}
+                                Розпочати обробку
                             </button>
+
+                            {smartStatus.length > 0 && (
+                                <div className="bg-black border border-zinc-700 rounded-xl p-3 max-h-40 overflow-y-auto custom-scrollbar text-xs font-mono text-zinc-400">
+                                    {smartStatus.map((s, i) => <div key={i}>{s}</div>)}
+                                </div>
+                            )}
                         </div>
                    </div>
                </div>
            )}
-
        </div>
 
        {/* UNIFIED DELETE MODAL */}
@@ -559,7 +1055,7 @@ const SettingsTab: React.FC = () => {
                    <button onClick={() => setShowScanConfirm(false)} className="absolute top-4 right-4 text-zinc-500 hover:text-white"><X size={24}/></button>
                    <div className="bg-orange-900/20 p-4 rounded-full text-orange-500 mb-4 border border-orange-900/50"><Stethoscope size={40} /></div>
                    <h3 className="text-xl font-black text-white mb-2">Запустити сканування фото?</h3>
-                   <p className="text-zinc-400 text-sm mb-6">Це перевірить <strong>всі товари</strong> в базі на наявність посилань, що не працюють.<br/><br/>Якщо фото не завантажується, посилання буде <span className="text-red-400 font-bold">автоматично видалено</span>.</p>
+                   <p className="text-zinc-400 text-sm mb-6">Це перевірить <strong>всі товари</strong> в базі (незалежно від кількості) на наявність посилань, що не працюють.<br/><br/>Якщо фото не завантажується (404 Error), посилання буде <span className="text-red-400 font-bold">автоматично видалено</span>.</p>
                    <div className="flex gap-4 w-full">
                         <button onClick={() => setShowScanConfirm(false)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-xl border border-zinc-700">Скасувати</button>
                         <button onClick={executeBrokenLinkScan} className="flex-1 bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-orange-900/20">Запустити</button>

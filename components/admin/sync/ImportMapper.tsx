@@ -92,8 +92,7 @@ const KEYWORD_MAP = {
     stock: ['stock', 'qty', 'quant', 'count', 'rest', 'zalishok', 'quantity', 'amount', 'q', 'r', 'ostatok', 'rests'],
     code: ['code', 'art', 'sku', 'id', 'num', 'articul', 'article', 'c', 'kod', 'itemid', 'number', 'card'],
     product_number: ['productid', 'product_id', 'p_id', 'pn', 'item_no', 'part_number', 'id'],
-    image: ['img', 'photo', 'url', 'picture', 'foto', 'image', 'i', 'pic', 'link', 'guid'],
-    axis: ['axis', 'axle', 'position', 'vis', 'os', 'axistype', 'typeaxis'] // NEW: Axis keywords
+    image: ['img', 'photo', 'url', 'picture', 'foto', 'image', 'i', 'pic', 'link', 'guid']
 };
 
 const detectSeason = (text: string): string => {
@@ -121,8 +120,7 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
         image: '',
         code: '',
         product_number: '',
-        stock: '',
-        axis: '' // NEW FIELD
+        stock: ''
     });
 
     const [importing, setImporting] = useState(false);
@@ -225,7 +223,6 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
         if (!newMap.code) newMap.code = findKey(KEYWORD_MAP.code);
         if (!newMap.product_number) newMap.product_number = findKey(KEYWORD_MAP.product_number);
         if (!newMap.image) newMap.image = findKey(KEYWORD_MAP.image);
-        if (!newMap.axis) newMap.axis = findKey(KEYWORD_MAP.axis); // Auto map axis
 
         setFieldMapping(newMap);
         if (showAlert) alert("Поля підібрано! Перевірте правильність.");
@@ -265,9 +262,6 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
         const brand = fieldMapping.brand ? safeExtractString(getValueByPath(item, fieldMapping.brand)) || 'Unknown' : 'Unknown';
         const imageUrl = fieldMapping.image ? safeExtractString(getValueByPath(item, fieldMapping.image)) : null;
         
-        // Extract Axis Type
-        const axisType = fieldMapping.axis ? safeExtractString(getValueByPath(item, fieldMapping.axis)) : null;
-
         let radius='';
         // Updated regex to support decimal radii (e.g. R17.5)
         const sizeMatch = title.match(/(\d{3})[\/\s](\d{2})[\s\w]*R(\d{2}(?:\.5)?[C|c]?)/);
@@ -318,8 +312,7 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
             description: desc || 'API Import',
             season,
             radius,
-            vehicle_type,
-            axis_type: axisType // Add to payload
+            vehicle_type
         };
     };
 
@@ -571,7 +564,6 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
                                         { label: 'Ціна Продаж (Retail)*', key: 'price', desc: 'Ціна для клієнта' },
                                         { label: 'Ціна Закупка (Base)', key: 'base_price', desc: 'Собівартість' },
                                         { label: 'Бренд (Brand)', key: 'brand', desc: 'Виробник' },
-                                        { label: 'Тип Вісі (TIR/Agro)', key: 'axis', desc: 'Рульова, Ведуча і т.д.' }, // NEW
                                         { label: 'Опис', key: 'description', desc: 'Для визначення сезону' },
                                         { label: 'Фото URL', key: 'image', desc: 'Якщо є пряме посилання' },
                                     ].map((field) => (

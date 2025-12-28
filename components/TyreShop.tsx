@@ -76,17 +76,17 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
 
   // Filters & Search
   const [activeCategory, setActiveCategory] = useState<CategoryType>(initialCategory);
+  // Default sort set to newest but we will override with priority weights in JS
   const [activeSort, setActiveSort] = useState<'newest' | 'oldest' | 'price_asc' | 'price_desc' | 'with_photo' | 'no_photo'>('newest');
-  const [searchQuery, setSearchQuery] = useState(''); // Text search state
-  const [showOnlyInStock, setShowOnlyInStock] = useState(false); // New Stock Filter
+  const [searchQuery, setSearchQuery] = useState(''); 
+  const [showOnlyInStock, setShowOnlyInStock] = useState(false); 
 
   const [filterWidth, setFilterWidth] = useState('');
   const [filterHeight, setFilterHeight] = useState('');
   const [filterRadius, setFilterRadius] = useState('');
   const [filterBrand, setFilterBrand] = useState(''); 
-  const [filterAxle, setFilterAxle] = useState(''); // NEW: Truck Axle Filter
+  const [filterAxle, setFilterAxle] = useState(''); 
   
-  // GLOBAL FILTER OPTIONS (Not dependent on current page)
   const [filterOptions, setFilterOptions] = useState({
       widths: [] as string[],
       heights: [] as string[],
@@ -94,16 +94,13 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
       brands: [] as string[]
   });
 
-  // Price Range State
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
 
-  // Stock Quantity Logic
   const [enableStockQty, setEnableStockQty] = useState(false);
   const [promoBanner, setPromoBanner] = useState<any>(null);
   const [novaPoshtaKey, setNovaPoshtaKey] = useState('');
   
-  // Dynamic Contact Info
   const [shopPhone, setShopPhone] = useState(PHONE_NUMBER_1);
   const [shopPhoneLink, setShopPhoneLink] = useState(PHONE_LINK_1);
 
@@ -112,7 +109,6 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   const [deliveryMethod, setDeliveryMethod] = useState<'pickup' | 'newpost'>('pickup');
   const [paymentMethod, setPaymentMethod] = useState<'prepayment' | 'full'>('prepayment');
   
-  // Nova Poshta State
   const [npSearchCity, setNpSearchCity] = useState('');
   const [npCities, setNpCities] = useState<any[]>([]);
   const [npWarehouses, setNpWarehouses] = useState<any[]>([]);
@@ -131,9 +127,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   const touchStartRef = useRef<number | null>(null);
   const touchEndRef = useRef<number | null>(null);
 
-  // --- DEEP LINKING & SEO LOGIC ---
   useEffect(() => {
-    // Check for product_id in URL on mount
     const params = new URLSearchParams(window.location.search);
     const prodId = params.get('product_id');
     if (prodId) {
@@ -174,7 +168,6 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
       updateUrlForProduct(null);
   };
 
-  // Generate Schema.org JSON-LD
   const renderSchema = (product: TyreProduct) => {
       const schema = {
           "@context": "https://schema.org/",
@@ -195,15 +188,9 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
               "itemCondition": "https://schema.org/NewCondition"
           }
       };
-      
-      return (
-          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
-      );
+      return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />;
   };
 
-  // --- EXISTING LOGIC BELOW ---
-
-  // Nova Poshta API Logic
   useEffect(() => {
       const timer = setTimeout(() => {
           if (npSearchCity.length > 1 && !selectedCityRef && novaPoshtaKey) {
@@ -223,25 +210,15 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                   apiKey: novaPoshtaKey,
                   modelName: "Address",
                   calledMethod: "searchSettlements",
-                  methodProperties: {
-                      CityName: term,
-                      Limit: "20",
-                      Page: "1"
-                  }
+                  methodProperties: { CityName: term, Limit: "20", Page: "1" }
               })
           });
           const data = await res.json();
           if (data.success && data.data && data.data[0]) {
               setNpCities(data.data[0].Addresses || []);
               setShowCityDropdown(true);
-          } else {
-              setNpCities([]);
-          }
-      } catch (e) {
-          console.error("NP API Error", e);
-      } finally {
-          setIsNpLoadingCities(false);
-      }
+          } else { setNpCities([]); }
+      } catch (e) { console.error("NP API Error", e); } finally { setIsNpLoadingCities(false); }
   };
 
   const fetchNpWarehouses = async (cityRef: string) => {
@@ -254,37 +231,25 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                   apiKey: novaPoshtaKey,
                   modelName: "Address",
                   calledMethod: "getWarehouses",
-                  methodProperties: {
-                      CityRef: cityRef,
-                      Language: "UA"
-                  }
+                  methodProperties: { CityRef: cityRef, Language: "UA" }
               })
           });
           const data = await res.json();
-          if (data.success) {
-              setNpWarehouses(data.data);
-          }
-      } catch (e) {
-          console.error("NP Warehouse Error", e);
-      } finally {
-          setIsNpLoadingWarehouses(false);
-      }
+          if (data.success) { setNpWarehouses(data.data); }
+      } catch (e) { console.error("NP Warehouse Error", e); } finally { setIsNpLoadingWarehouses(false); }
   };
 
   const handleCitySelect = (city: any) => {
       const cityName = city.Present; 
       const cityRef = city.DeliveryCity; 
-      
       setNpSearchCity(cityName);
       setSelectedCityName(cityName);
       setSelectedCityRef(cityRef);
       setNpCities([]);
       setShowCityDropdown(false);
-      
       setSelectedWarehouseRef('');
       setSelectedWarehouseName('');
       setNpWarehouses([]);
-      
       fetchNpWarehouses(cityRef);
   };
 
@@ -300,16 +265,12 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
       const { data } = await supabase.from('settings').select('key, value').in('key', ['enable_stock_quantity', 'promo_data', 'contact_phone1', 'nova_poshta_key']);
       if (data) {
           data.forEach(item => {
-              if (item.key === 'enable_stock_quantity') {
-                  setEnableStockQty(item.value === 'true');
-              }
+              if (item.key === 'enable_stock_quantity') setEnableStockQty(item.value === 'true');
               if (item.key === 'contact_phone1') {
                   setShopPhone(item.value);
                   setShopPhoneLink(`tel:${item.value.replace(/[^\d+]/g, '')}`);
               }
-              if (item.key === 'nova_poshta_key') {
-                  setNovaPoshtaKey(item.value);
-              }
+              if (item.key === 'nova_poshta_key') setNovaPoshtaKey(item.value);
               if (item.key === 'promo_data' && item.value) {
                   try {
                       const p = JSON.parse(item.value);
@@ -328,25 +289,17 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
             const radii = new Set<string>();
             const widths = new Set<string>();
             const heights = new Set<string>();
-
             data.forEach(item => {
                 if (item.manufacturer) {
                     let brand = item.manufacturer.trim();
-                    if (brand === 'Ш.Ханкук тайр' || brand === 'Ш.Ханкук Тайр' || brand === 'Lfufen') {
-                        brand = 'Laufenn';
-                    }
+                    if (brand === 'Ш.Ханкук тайр' || brand === 'Ш.Ханкук Тайр' || brand === 'Lfufen') brand = 'Laufenn';
                     brands.add(brand);
                 }
                 if (item.radius) radii.add(item.radius.trim());
-                
                 const sizeRegex = /(\d{3})[\/\s](\d{2})/;
                 const match = item.title.match(sizeRegex);
-                if (match) {
-                    widths.add(match[1]);
-                    heights.add(match[2]);
-                }
+                if (match) { widths.add(match[1]); heights.add(match[2]); }
             });
-
             setFilterOptions({
                 brands: Array.from(brands).sort(),
                 radii: Array.from(radii).sort((a, b) => {
@@ -359,16 +312,11 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
             });
         }
     };
-
     fetchSettings();
     fetchGlobalFilters();
   }, []);
 
-  useEffect(() => {
-    if (initialCategory) {
-      setActiveCategory(initialCategory);
-    }
-  }, [initialCategory]);
+  useEffect(() => { if (initialCategory) setActiveCategory(initialCategory); }, [initialCategory]);
 
   useEffect(() => {
     setPage(0);
@@ -379,31 +327,28 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   const parseTyreSpecs = (tyre: TyreProduct): TyreProduct => {
     const sizeRegex = /(\d{3})[\/\s](\d{2})[\s\w]*R(\d{2}(?:\.5|\.3)?[C|c]?)/; 
     const match = tyre.title.match(sizeRegex) || tyre.description?.match(sizeRegex);
-    
     let width = ''; 
     let height = ''; 
     let parsedRadius = tyre.radius || ''; 
-    
     let vehicle_type: 'car' | 'cargo' | 'suv' | 'truck' | 'agro' = tyre.vehicle_type || 'car';
 
     if (match) { 
         width = match[1]; 
         height = match[2]; 
         const rawRadius = match[3].toUpperCase(); 
-        
         if (!parsedRadius) parsedRadius = `R${rawRadius}`;
-        
-        if (vehicle_type === 'car' && rawRadius.endsWith('C')) {
-            vehicle_type = 'cargo';
-        }
+        if (vehicle_type === 'car' && rawRadius.endsWith('C')) vehicle_type = 'cargo';
     }
 
-    if (vehicle_type === 'car') {
-        const upperTitle = tyre.title.toUpperCase();
-        if (upperTitle.includes('R12C') || upperTitle.includes('R13C') || upperTitle.includes('R14C') || 
-            upperTitle.includes('R15C') || upperTitle.includes('R16C') || upperTitle.includes('LT')) { 
-            vehicle_type = 'cargo'; 
-        }
+    const upperTitle = tyre.title.toUpperCase();
+    const rVal = parsedRadius.toUpperCase();
+
+    // Forced detection for TIR/Cargo if it's currently marked as 'car'
+    if (rVal === 'R17.5' || rVal === 'R19.5' || rVal === 'R22.5' || upperTitle.includes('TIR') || upperTitle.includes('BUS ')) {
+        vehicle_type = 'truck';
+    } else if (upperTitle.includes('R12C') || upperTitle.includes('R13C') || upperTitle.includes('R14C') || 
+        upperTitle.includes('R15C') || upperTitle.includes('R16C') || upperTitle.includes('LT') || rVal.endsWith('C')) { 
+        vehicle_type = 'cargo'; 
     }
 
     const lowerTitle = (tyre.title + ' ' + tyre.description).toLowerCase();
@@ -413,40 +358,25 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
         else if (lowerTitle.includes('літо') || lowerTitle.includes('summer')) season = 'summer';
         else if (lowerTitle.includes('всесезон') || lowerTitle.includes('all season')) season = 'all-season';
     }
-    
-    // Agro logic override for season if not set
-    if (vehicle_type === 'agro') {
-        season = 'all-season';
-    }
+    if (vehicle_type === 'agro') season = 'all-season';
 
     let in_stock = true; 
     if (enableStockQty) {
-        // If qty is enabled, trust the DB value and quantity
         in_stock = tyre.in_stock !== false;
-        if (tyre.stock_quantity !== undefined && tyre.stock_quantity !== null && tyre.stock_quantity <= 0) {
-            in_stock = false;
-        }
-    } else {
-        // If qty logic is DISABLED, everything is ALWAYS in stock (ignore manual flag)
-        in_stock = true;
-    }
-
+        if (tyre.stock_quantity !== undefined && tyre.stock_quantity !== null && tyre.stock_quantity <= 0) in_stock = false;
+    } else { in_stock = tyre.in_stock !== false; }
+    
     let manufacturer = tyre.manufacturer || '';
-    if (manufacturer === 'Ш.Ханкук тайр' || manufacturer === 'Ш.Ханкук Тайр' || manufacturer === 'Lfufen') {
-        manufacturer = 'Laufenn';
-    }
+    if (manufacturer === 'Ш.Ханкук тайр' || manufacturer === 'Ш.Ханкук Тайр' || manufacturer === 'Lfufen') manufacturer = 'Laufenn';
     
     return { ...tyre, width, height, radius: parsedRadius, season, vehicle_type, in_stock, manufacturer };
   };
 
   const fetchTyres = async (pageIndex: number, isRefresh = false) => {
     try {
-      if (isRefresh) setLoading(true);
-      else setLoadingMore(true);
-
+      if (isRefresh) setLoading(true); else setLoadingMore(true);
       const from = pageIndex * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
-
       let query = supabase.from('tyres').select('*', { count: 'exact' });
 
       if (searchQuery.trim()) {
@@ -455,41 +385,23 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
       }
 
       if (filterBrand) {
-          if (filterBrand === 'Laufenn') {
-              query = query.or('manufacturer.eq.Laufenn,manufacturer.eq.Ш.Ханкук тайр,manufacturer.eq.Ш.Ханкук Тайр');
-          } else {
-              query = query.eq('manufacturer', filterBrand);
-          }
+          if (filterBrand === 'Laufenn') query = query.or('manufacturer.eq.Laufenn,manufacturer.eq.Ш.Ханкук тайр,manufacturer.eq.Ш.Ханкук Тайр');
+          else query = query.eq('manufacturer', filterBrand);
       }
-      if (filterRadius) {
-          query = query.eq('radius', filterRadius);
-      }
-      if (filterWidth) {
-          query = query.ilike('title', `%${filterWidth}%`);
-      }
-      if (filterHeight) {
-          query = query.ilike('title', `%/${filterHeight}%`);
-      }
-      
-      // Truck Axle Filter (Using the new column)
-      if (filterAxle) {
-          query = query.eq('axis_type', filterAxle);
-      }
+      if (filterRadius) query = query.eq('radius', filterRadius);
+      if (filterWidth) query = query.ilike('title', `%${filterWidth}%`);
+      if (filterHeight) query = query.ilike('title', `%/${filterHeight}%`);
+      if (filterAxle) query = query.eq('axis_type', filterAxle);
 
       if (showOnlyInStock) {
           if (enableStockQty) query = query.or('stock_quantity.gt.0,stock_quantity.is.null').neq('in_stock', false);
           else query = query.neq('in_stock', false);
       }
 
-      // CATEGORY FILTERS
       if (activeCategory === 'hot_light') {
-         // HOT Light: is_hot + (car OR suv OR cargo OR null vehicle_type)
          query = query.eq('is_hot', true).or('vehicle_type.eq.car,vehicle_type.eq.suv,vehicle_type.eq.cargo,vehicle_type.is.null');
-         if (!showOnlyInStock && enableStockQty) query = query.neq('in_stock', false);
       } else if (activeCategory === 'hot_heavy') {
-         // HOT Heavy: is_hot + (truck OR agro)
          query = query.eq('is_hot', true).or('vehicle_type.eq.truck,vehicle_type.eq.agro');
-         if (!showOnlyInStock && enableStockQty) query = query.neq('in_stock', false);
       } else if (activeCategory === 'winter') {
          query = query.or('title.ilike.%winter%,title.ilike.%зима%,description.ilike.%winter%,description.ilike.%зима%');
       } else if (activeCategory === 'summer') {
@@ -499,38 +411,22 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
       } else if (activeCategory === 'cargo') {
          query = query.or('vehicle_type.eq.cargo,radius.ilike.%C%').not('radius', 'in', '("R17.5","R19.5","R22.5")');
       } else if (activeCategory === 'truck') {
-         // TIR Logic Update: Use vehicle_type OR legacy radius checks
          query = query.or('vehicle_type.eq.truck,radius.eq.R17.5,radius.eq.R19.5,radius.eq.R22.5,title.ilike.%TIR%,title.ilike.%R17.5%,title.ilike.%R19.5%,title.ilike.%R22.5%');
       } else if (activeCategory === 'agro') {
-         // STRICTER AGRO FILTER (Updated to use vehicle_type):
-         const strictAgroRadii = [
-             "R10","R12","R14.5","R15.3","R15.5","R24","R26","R28","R30","R32","R34","R36","R38","R40","R42","R44","R46","R48","R50","R52"
-         ];
+         const strictAgroRadii = ["R10","R12","R14.5","R15.3","R15.5","R24","R26","R28","R30","R32","R34","R36","R38","R40","R42","R44","R46","R48","R50","R52"];
          const specKeywords = "title.ilike.%PR%,title.ilike.%OZKA%,title.ilike.%BKT%,title.ilike.%KNK%,title.ilike.%MPT%,title.ilike.%IND%,title.ilike.%TR-%,title.ilike.%IMP%,title.ilike.%Ф-%,title.ilike.%В-%";
-         
-         // Logic: (Type is Agro OR Matches Radii/Keywords) AND (Type NOT car/suv/cargo) AND (Title does NOT contain 'C'/'LT')
          query = query.or(`vehicle_type.eq.agro,and(vehicle_type.neq.car,vehicle_type.neq.suv,vehicle_type.neq.cargo,or(radius.in.("${strictAgroRadii.join('","')}"),${specKeywords}))`)
-                      .not('title', 'ilike', '%(C)%')
-                      .not('title', 'ilike', '% LT%')
-                      .not('title', 'ilike', '%R14C%')
-                      .not('title', 'ilike', '%R15C%')
-                      .not('title', 'ilike', '%R16C%');
-         
+                      .not('title', 'ilike', '%(C)%').not('title', 'ilike', '% LT%').not('title', 'ilike', '%R14C%').not('title', 'ilike', '%R15C%').not('title', 'ilike', '%R16C%');
       } else if (activeCategory === 'out_of_stock') {
          if (enableStockQty) query = query.or('in_stock.eq.false,stock_quantity.eq.0');
          else query = query.eq('in_stock', false);
       } 
       
-      if (minPrice) {
-         query = query.gte('price', parseInt(minPrice));
-      }
-      if (maxPrice) {
-         query = query.lte('price', parseInt(maxPrice));
-      }
+      if (minPrice) query = query.gte('price', parseInt(minPrice));
+      if (maxPrice) query = query.lte('price', parseInt(maxPrice));
 
-      if (enableStockQty) {
-          query = query.order('in_stock', { ascending: false });
-      }
+      // Always order by availability first in DB
+      query = query.order('in_stock', { ascending: false });
 
       if (activeSort === 'with_photo') {
          query = query.order('image_url', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false });
@@ -543,6 +439,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
       } else if (activeSort === 'oldest') {
          query = query.order('created_at', { ascending: true });
       } else {
+         // Default DB sort is newest, but we'll re-sort in JS
          query = query.order('created_at', { ascending: false });
       }
 
@@ -552,42 +449,56 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
       if (data) {
         let processed = data.map(parseTyreSpecs);
         
-        if (activeSort === 'with_photo') {
-            processed = processed.sort((a, b) => {
-                if (enableStockQty && a.in_stock !== b.in_stock) return a.in_stock ? -1 : 1;
-                const aHas = !!a.image_url && a.image_url.length > 5;
-                const bHas = !!b.image_url && b.image_url.length > 5;
-                if (aHas === bHas) return 0;
-                return aHas ? -1 : 1;
-            });
-        }
-
-        if (isRefresh) { 
-            setTyres(processed); 
-        } else { 
-            setTyres(prev => [...prev, ...processed]); 
-        }
+        // --- ПРІОРІТЕТНЕ ЖОРСТКЕ СОРТУВАННЯ В JS (Щоб не було конфлікту з "новими") ---
+        const isGeneralCategory = ['all', 'winter', 'summer', 'all-season'].includes(activeCategory);
         
-        setPage(pageIndex);
+        processed = processed.sort((a, b) => {
+            // 1. Пріоритет наявності (спочатку ті, що є)
+            if (a.in_stock !== b.in_stock) return a.in_stock ? -1 : 1;
 
-        if (data.length < PAGE_SIZE) setHasMore(false);
-        else setHasMore(true);
+            // 2. Пріоритет ТИПУ (Тільки для загальних категорій)
+            // Вага: 0 - легкова/suv, 1 - cargo, 2 - вантажна TIR, 3 - агро/спец
+            if (isGeneralCategory) {
+                const getWeight = (t: TyreProduct) => {
+                    const type = t.vehicle_type;
+                    if (type === 'agro') return 3;
+                    if (type === 'truck') return 2;
+                    if (type === 'cargo') return 1;
+                    return 0; // car, suv або undefined — найвищий пріоритет
+                };
+
+                const weightA = getWeight(a);
+                const weightB = getWeight(b);
+
+                if (weightA !== weightB) return weightA - weightB;
+            }
+
+            // 3. Сортування всередині груп згідно з обраним фільтром (activeSort)
+            if (activeSort === 'price_asc') {
+                return safeParsePrice(a.price) - safeParsePrice(b.price);
+            } else if (activeSort === 'price_desc') {
+                return safeParsePrice(b.price) - safeParsePrice(a.price);
+            } else if (activeSort === 'oldest') {
+                return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+            } else {
+                // Default: Newer first within groups
+                return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+            }
+        });
+
+        if (isRefresh) setTyres(processed); else setTyres(prev => [...prev, ...processed]);
+        setPage(pageIndex);
+        if (data.length < PAGE_SIZE) setHasMore(false); else setHasMore(true);
       }
     } catch (error) { console.error("Error fetching tyres:", error); } finally { setLoading(false); setLoadingMore(false); }
   };
 
   const handleCategoryChange = (cat: CategoryType) => {
      setActiveCategory(cat);
-     if (cat === 'all') setActiveSort('newest');
-     if (cat !== 'truck') setFilterAxle(''); // Reset Axle filter when changing category
+     if (cat !== 'truck') setFilterAxle(''); 
   };
 
-  const handleForceSearch = () => {
-     setPage(0);
-     setTyres([]);
-     fetchTyres(0, true);
-  };
-
+  const handleForceSearch = () => { setPage(0); setTyres([]); fetchTyres(0, true); };
   const loadMore = () => { const nextPage = page + 1; fetchTyres(nextPage); };
   
   const addToCart = (tyre: TyreProduct) => { 
@@ -601,9 +512,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                   return prev;
               }
           }
-          if (existing) {
-              return prev.map(item => item.id === tyre.id ? { ...item, quantity: item.quantity + 1 } : item); 
-          }
+          if (existing) return prev.map(item => item.id === tyre.id ? { ...item, quantity: item.quantity + 1 } : item); 
           return [...prev, { ...tyre, quantity: 1 }]; 
       }); 
       setIsCartOpen(true); 
@@ -626,11 +535,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   const cartTotal = useMemo(() => cart.reduce((total, item) => total + (safeParsePrice(item.price) * item.quantity), 0), [cart]);
   const openLightbox = (tyre: TyreProduct) => { let images: string[] = []; if (tyre.image_url) images.push(tyre.image_url); if (tyre.gallery && Array.isArray(tyre.gallery)) { const additional = tyre.gallery.filter(url => url !== tyre.image_url); images = [...images, ...additional]; } if (images.length === 0) return; setCurrentLightboxImages(images); setCurrentImageIndex(0); setLightboxOpen(true); };
   
-  useEffect(() => {
-    if (initialProduct) {
-      setSelectedProductForModal(initialProduct);
-    }
-  }, [initialProduct]);
+  useEffect(() => { if (initialProduct) setSelectedProductForModal(initialProduct); }, [initialProduct]);
 
   const nextImage = (e?: React.MouseEvent) => { e?.stopPropagation(); setCurrentImageIndex(prev => (prev + 1) % currentLightboxImages.length); };
   const prevImage = (e?: React.MouseEvent) => { e?.stopPropagation(); setCurrentImageIndex(prev => (prev - 1 + currentLightboxImages.length) % currentLightboxImages.length); };
@@ -644,86 +549,38 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
     if (cart.length === 0) { setOrderError("Кошик порожній"); return; }
     setOrderSending(true); setOrderError('');
     try {
-      const itemsPayload = cart.map(i => ({ 
-         id: i.id, 
-         title: i.title, 
-         quantity: i.quantity, 
-         price: i.price, 
-         base_price: i.base_price 
-      }));
-      const { error } = await supabase.from('tyre_orders').insert([{ 
-          customer_name: orderName, 
-          customer_phone: orderPhone, 
-          status: 'new', 
-          delivery_method: deliveryMethod, 
-          delivery_city: deliveryMethod === 'newpost' ? selectedCityName : null, 
-          delivery_warehouse: deliveryMethod === 'newpost' ? selectedWarehouseName : null, 
-          payment_method: deliveryMethod === 'newpost' ? paymentMethod : null, 
-          items: itemsPayload 
-      }]);
+      const itemsPayload = cart.map(i => ({ id: i.id, title: i.title, quantity: i.quantity, price: i.price, base_price: i.base_price }));
+      const { error } = await supabase.from('tyre_orders').insert([{ customer_name: orderName, customer_phone: orderPhone, status: 'new', delivery_method: deliveryMethod, delivery_city: deliveryMethod === 'newpost' ? selectedCityName : null, delivery_warehouse: deliveryMethod === 'newpost' ? selectedWarehouseName : null, payment_method: deliveryMethod === 'newpost' ? paymentMethod : null, items: itemsPayload }]);
       if (error) throw new Error("Помилка бази даних: " + error.message);
       try {
         const itemsDesc = cart.map(i => `${i.title} (${i.quantity} шт) - ${formatPrice(i.price)} грн`).join('\n');
-        const formData = { 
-            subject: `Замовлення шин (${cart.length} поз.)`, 
-            customer_name: orderName, 
-            customer_phone: orderPhone, 
-            items: itemsDesc, 
-            total_price: `${cartTotal} грн`, 
-            delivery_method: deliveryMethod === 'pickup' ? "Самовивіз" : "Нова Пошта", 
-            delivery_address: deliveryMethod === 'pickup' ? "-" : `${selectedCityName}, ${selectedWarehouseName}`, 
-            payment_method: deliveryMethod === 'newpost' ? (paymentMethod === 'prepayment' ? 'Предоплата' : 'Повна оплата') : '-' 
-        };
+        const formData = { subject: `Замовлення шин (${cart.length} поз.)`, customer_name: orderName, customer_phone: orderPhone, items: itemsDesc, total_price: `${cartTotal} грн`, delivery_method: deliveryMethod === 'pickup' ? "Самовивіз" : "Нова Пошта", delivery_address: deliveryMethod === 'pickup' ? "-" : `${selectedCityName}, ${selectedWarehouseName}`, payment_method: deliveryMethod === 'newpost' ? (paymentMethod === 'prepayment' ? 'Предоплата' : 'Повна оплата') : '-' };
         await fetch(FORMSPREE_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData) });
       } catch (emailErr) { console.error("Email sending failed", emailErr); }
       setOrderSuccess(true); setCart([]);
     } catch (err: any) { console.error(err); setOrderError("Помилка при створенні замовлення. Спробуйте ще раз."); } finally { setOrderSending(false); }
   };
 
-  const filteredTyres = tyres;
-  
-  const resetFilters = () => { 
-      setFilterWidth(''); 
-      setFilterHeight(''); 
-      setFilterRadius(''); 
-      setFilterBrand('');
-      setFilterAxle('');
-      setSearchQuery(''); 
-      setMinPrice('');
-      setMaxPrice('');
-      handleForceSearch(); 
-  };
+  const resetFilters = () => { setFilterWidth(''); setFilterHeight(''); setFilterRadius(''); setFilterBrand(''); setFilterAxle(''); setSearchQuery(''); setMinPrice(''); setMaxPrice(''); handleForceSearch(); };
 
   return (
     <div className="min-h-screen bg-[#09090b] py-8 md:py-12 animate-in fade-in duration-500 pb-32">
       <div className="max-w-7xl mx-auto px-2 md:px-4">
-        
-        {/* HEADER SECTION with Mini Banner */}
         <div className="flex flex-col lg:flex-row justify-between items-start md:items-center gap-4 mb-8 px-2 relative">
            <div className="shrink-0">
               <h2 className="text-3xl md:text-4xl font-black text-white mb-2 border-b-2 border-[#FFC300] inline-block pb-2">Магазин Шин та Дисків</h2>
               <p className="text-zinc-400">Широкий вибір нових та б/в шин у Синельниковому.</p>
            </div>
-
-           {/* MINI BANNER */}
            {promoBanner && (
                (() => {
                    const imgConfig = { ...DEFAULT_IMG_CONFIG, ...(promoBanner.imageConfig || {}) };
                    const bgConfig = { ...DEFAULT_BG_CONFIG, ...(promoBanner.backgroundConfig || {}) };
                    let maskImageStyle: React.CSSProperties = {};
                    if (imgConfig.vignette) {
-                       if (imgConfig.maskType === 'linear') {
-                           const fadeStart = Math.max(0, 50 - (imgConfig.vignetteStrength / 2));
-                           const direction = imgConfig.maskDirection || 'right';
-                           const val = `linear-gradient(to ${direction}, black 0%, black ${fadeStart}%, transparent 100%)`;
-                           maskImageStyle = { maskImage: val, WebkitMaskImage: val };
-                       } else {
-                           const maskStop = Math.max(0, 95 - imgConfig.vignetteStrength);
-                           const val = `radial-gradient(circle at center, black ${maskStop}%, transparent 100%)`;
-                           maskImageStyle = { maskImage: val, WebkitMaskImage: val };
-                       }
+                       const fadeStart = Math.max(0, 50 - (imgConfig.vignetteStrength / 2));
+                       const val = imgConfig.maskType === 'linear' ? `linear-gradient(to ${imgConfig.maskDirection || 'right'}, black 0%, black ${fadeStart}%, transparent 100%)` : `radial-gradient(circle at center, black ${Math.max(0, 95 - imgConfig.vignetteStrength)}%, transparent 100%)`;
+                       maskImageStyle = { maskImage: val, WebkitMaskImage: val };
                    }
-
                    return (
                        <div className={`hidden lg:flex flex-1 mx-8 rounded-xl relative overflow-hidden items-center justify-between shadow-lg border border-white/10 max-w-2xl h-36 ${promoBanner.color}`}>
                            {promoBanner.backgroundImage && (
@@ -732,13 +589,10 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                                     <div className="absolute inset-0 bg-black" style={{ opacity: (bgConfig.overlayOpacity ?? 40) / 100 }}></div>
                                 </div>
                            )}
-                           {promoBanner.pattern && promoBanner.pattern !== 'none' && (
-                               <div className="absolute inset-0 z-0 pointer-events-none" style={{ backgroundImage: promoBanner.pattern, opacity: (promoBanner.patternOpacity || 10) / 100, mixBlendMode: 'screen', backgroundSize: 'auto', backgroundRepeat: 'repeat' }}></div>
-                           )}
                            <div className="relative z-10 flex flex-col justify-center pl-6 py-4 h-full flex-grow">
                                 <div className="text-[10px] font-bold text-[#FFC300] uppercase tracking-widest mb-1 flex items-center gap-2"><div className="w-1.5 h-1.5 bg-[#FFC300] rounded-full animate-pulse"></div>Active Promo</div>
                                 <h3 className="text-2xl font-black text-white italic uppercase leading-none drop-shadow-md">{promoBanner.title}</h3>
-                                <p className="text-xs text-zinc-300 mt-1 line-clamp-2 max-w-xs leading-tight drop-shadow-sm font-medium">{promoBanner.text}</p>
+                                <p className="text-xs text-zinc-300 mt-1 line-clamp-2 max-w-xs leading-tight font-medium">{promoBanner.text}</p>
                            </div>
                            {promoBanner.image_url && (
                                <div className="w-48 h-full relative mr-4 flex items-center justify-center pointer-events-none">
@@ -752,24 +606,17 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                    );
                })()
            )}
-
            <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex items-center gap-4 w-full md:w-auto shrink-0">
               <div className="p-2 bg-[#FFC300] rounded-full text-black"><Phone size={20}/></div>
               <div><p className="text-xs text-zinc-500 uppercase font-bold">Консультація</p><a href={shopPhoneLink} className="text-white font-bold text-lg hover:text-[#FFC300]">{shopPhone}</a></div>
            </div>
         </div>
-        
-        {/* CATEGORY NAV */}
         <div className="mb-8 px-2">
            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-10 gap-2 md:gap-3">
               {CATEGORIES.map(cat => {
                  const isActive = activeCategory === cat.id;
                  return (
-                    <button 
-                       key={cat.id} 
-                       onClick={() => handleCategoryChange(cat.id)}
-                       className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl transition-all duration-300 border ${isActive ? 'bg-[#FFC300] border-[#FFC300] text-black shadow-lg scale-105 z-10' : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:border-zinc-600 hover:text-white'}`}
-                    >
+                    <button key={cat.id} onClick={() => handleCategoryChange(cat.id)} className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl transition-all duration-300 border ${isActive ? 'bg-[#FFC300] border-[#FFC300] text-black shadow-lg scale-105 z-10' : 'bg-zinc-900 border-zinc-400 text-zinc-400 hover:bg-zinc-800 hover:border-zinc-600 hover:text-white'}`}>
                        <cat.icon size={18} className={`md:w-5 md:h-5 ${isActive ? 'animate-bounce' : ''}`} />
                        <span className="font-bold text-[10px] uppercase tracking-wide text-center leading-tight whitespace-pre-wrap">{cat.label}</span>
                     </button>
@@ -777,24 +624,16 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
               })}
            </div>
         </div>
-
-        {/* TOOLBAR: SEARCH, FILTERS & SORT */}
         <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-2xl mb-8 shadow-xl mx-2">
            <div className="flex flex-col gap-4">
-              {/* Top Row: Search Input */}
               <div className="flex gap-2">
                  <div className="relative flex-grow">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={18}/>
                     <input type="text" placeholder="Пошук..." value={searchQuery} onChange={(e) => { const val = e.target.value; setSearchQuery(val); if (val === '') setTimeout(() => handleForceSearch(), 0); }} onKeyDown={(e) => e.key === 'Enter' && handleForceSearch()} className="w-full bg-black border border-zinc-700 rounded-xl pl-10 pr-4 py-3 text-base text-white outline-none focus:border-[#FFC300]" />
                  </div>
-                 <button onClick={() => setShowOnlyInStock(!showOnlyInStock)} className={`hidden md:flex items-center gap-2 px-4 rounded-xl font-bold border transition-colors ${showOnlyInStock ? 'bg-green-600 text-white border-green-500' : 'bg-black border-zinc-700 text-zinc-500 hover:text-white'}`} title="Тільки в наявності"> {showOnlyInStock ? <Eye size={20}/> : <EyeOff size={20}/>} <span className="text-xs uppercase whitespace-nowrap">В наявності</span></button>
+                 <button onClick={() => setShowOnlyInStock(!showOnlyInStock)} className={`hidden md:flex items-center gap-2 px-4 rounded-xl font-bold border transition-colors ${showOnlyInStock ? 'bg-green-600 text-white border-green-500' : 'bg-black border-zinc-700 text-zinc-500 hover:text-white'}`}> {showOnlyInStock ? <Eye size={20}/> : <EyeOff size={20}/>} <span className="text-xs uppercase whitespace-nowrap">В наявності</span></button>
                  <button onClick={handleForceSearch} className="bg-[#FFC300] hover:bg-[#e6b000] text-black font-black px-6 py-3 rounded-xl flex items-center gap-2 shadow-lg active:scale-95 transition-transform uppercase tracking-wider text-sm md:text-base whitespace-nowrap">ЗНАЙТИ</button>
               </div>
-
-              {/* Mobile Stock Toggle */}
-              <div className="md:hidden"><button onClick={() => setShowOnlyInStock(!showOnlyInStock)} className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold border transition-colors ${showOnlyInStock ? 'bg-green-600 text-white border-green-500' : 'bg-black border-zinc-700 text-zinc-500'}`}>{showOnlyInStock ? <Eye size={18}/> : <EyeOff size={18}/>}<span>Тільки в наявності</span></button></div>
-
-              {/* Bottom Row: Dropdowns */}
               <div className="flex flex-col lg:flex-row gap-4">
                  <div className="flex flex-col sm:flex-row gap-2 w-full lg:flex-grow">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-0 sm:bg-black/50 sm:rounded-xl sm:border sm:border-zinc-800 flex-grow sm:overflow-hidden sm:divide-x sm:divide-zinc-800">
@@ -809,22 +648,14 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                           <select value={filterBrand} onChange={(e) => setFilterBrand(e.target.value)} className="bg-transparent text-white text-base md:text-sm font-bold p-3 sm:pl-8 w-full outline-none cursor-pointer hover:bg-zinc-800/50 transition-colors text-center sm:text-left appearance-none sm:appearance-auto"><option value="">Бренд</option>{filterOptions.brands.map(b => <option key={b} value={b}>{b}</option>)}</select>
                        </div>
                     </div>
-                    
-                    {/* TRUCK AXLE FILTER */}
                     {activeCategory === 'truck' && (
                         <div className="relative group bg-black/50 border border-zinc-800 rounded-xl sm:min-w-[150px]">
                             <Route size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-blue-400 hidden sm:block" />
-                            <select 
-                                value={filterAxle} 
-                                onChange={(e) => setFilterAxle(e.target.value)} 
-                                className="bg-transparent text-white text-base md:text-sm font-bold p-3 sm:pl-8 w-full outline-none cursor-pointer hover:bg-zinc-800/50 transition-colors text-center sm:text-left appearance-none sm:appearance-auto"
-                            >
-                                <option value="">Тип вісі</option>
-                                {AXLE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                            <select value={filterAxle} onChange={(e) => setFilterAxle(e.target.value)} className="bg-transparent text-white text-base md:text-sm font-bold p-3 sm:pl-8 w-full outline-none cursor-pointer hover:bg-zinc-800/50 transition-colors text-center sm:text-left appearance-none sm:appearance-auto">
+                                <option value="">Тип вісі</option>{AXLE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                             </select>
                         </div>
                     )}
-
                     <div className="flex items-center gap-2 bg-black/50 p-1 rounded-xl border border-zinc-800 px-3 sm:w-auto w-full justify-center"><span className="text-zinc-500 text-xs font-bold whitespace-nowrap">Ціна:</span><input type="number" placeholder="Від" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} className="w-16 bg-transparent text-white text-base md:text-sm font-bold p-2 outline-none text-center border-b border-zinc-700 focus:border-[#FFC300]"/><span className="text-zinc-600">-</span><input type="number" placeholder="До" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} className="w-16 bg-transparent text-white text-base md:text-sm font-bold p-2 outline-none text-center border-b border-zinc-700 focus:border-[#FFC300]"/></div>
                     {(filterWidth || filterHeight || filterRadius || filterBrand || filterAxle || searchQuery || minPrice || maxPrice) && <button onClick={resetFilters} className="bg-zinc-800 text-white p-3 rounded-xl hover:bg-red-900/50 transition-colors flex-shrink-0 border border-zinc-700 flex justify-center items-center"><X size={20}/></button>}
                  </div>
@@ -834,71 +665,50 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
               </div>
            </div>
        </div>
-
-        {/* PRODUCTS GRID */}
         {loading ? (
            <div className="flex flex-col items-center justify-center py-20"><Loader2 className="animate-spin text-[#FFC300] mb-4" size={48} /><p className="text-zinc-500 animate-pulse">Завантаження шин...</p></div>
-        ) : filteredTyres.length === 0 ? (
+        ) : tyres.length === 0 ? (
            <div className="text-center py-20 bg-zinc-900 rounded-xl border border-zinc-800 mx-2"><ShoppingBag size={48} className="mx-auto text-zinc-600 mb-4" /><h3 className="text-xl font-bold text-white">Шин не знайдено</h3><p className="text-zinc-500 text-sm mt-2">Спробуйте змінити фільтри або категорію</p><button onClick={() => {resetFilters(); handleCategoryChange('all');}} className="mt-6 px-6 py-2 bg-[#FFC300] text-black font-bold rounded-lg hover:bg-[#e6b000]">Показати всі шини</button></div>
         ) : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6 px-2">
-               {filteredTyres.map((tyre) => {
+               {tyres.map((tyre) => {
                   const priceNum = safeParsePrice(tyre.price);
                   const oldPriceNum = safeParsePrice(tyre.old_price);
                   const hasDiscount = oldPriceNum > priceNum;
-                  
                   return (
-                  <a // Wrap in <a> for SEO crawler linking
-                    key={tyre.id}
-                    href={`?product_id=${tyre.id}`}
-                    onClick={(e) => { e.preventDefault(); handleProductClick(tyre); }}
-                    className="block"
-                  >
+                  <a key={tyre.id} href={`?product_id=${tyre.id}`} onClick={(e) => { e.preventDefault(); handleProductClick(tyre); }} className="block">
                   <div className={`h-full bg-zinc-900 border rounded-xl overflow-hidden hover:border-[#FFC300] transition-colors group flex flex-col relative ${tyre.in_stock === false ? 'border-zinc-800 opacity-70' : 'border-zinc-800'}`}>
-                     
-                     {/* BADGES */}
                      <div className="absolute top-2 left-2 z-10 flex flex-wrap gap-1 max-w-[70%]">
                         {tyre.is_hot && <div className="bg-orange-600 text-white p-1 rounded shadow-lg flex items-center gap-1 text-[10px] font-bold px-2 uppercase"><Flame size={12} className="fill-current"/> HOT</div>}
                         {hasDiscount && <div className="bg-red-600 text-white p-1 rounded shadow-lg flex items-center gap-1 text-[10px] font-bold px-2 uppercase">SALE</div>}
-                        {tyre.season === 'winter' && <div className="bg-blue-600 text-white p-1 rounded shadow-lg" title="Зима"><Snowflake size={14} /></div>}
-                        {tyre.season === 'summer' && <div className="bg-orange-500 text-white p-1 rounded shadow-lg" title="Літо"><Sun size={14} /></div>}
-                        {tyre.season === 'all-season' && <div className="bg-green-600 text-white p-1 rounded shadow-lg" title="Всесезон"><CloudSun size={14} /></div>}
-                        {tyre.vehicle_type === 'cargo' && <div className="bg-purple-600 text-white p-1 rounded shadow-lg" title="Вантажна"><Truck size={14} /></div>}
-                        {tyre.vehicle_type === 'agro' && <div className="bg-green-700 text-white p-1 rounded shadow-lg" title="Агро"><Tractor size={14} /></div>}
-                        {tyre.vehicle_type === 'truck' && <div className="bg-blue-800 text-white p-1 rounded shadow-lg" title="TIR"><Truck size={14} /></div>}
+                        {tyre.season === 'winter' && <div className="bg-blue-600 text-white p-1 rounded shadow-lg"><Snowflake size={14} /></div>}
+                        {tyre.season === 'summer' && <div className="bg-orange-500 text-white p-1 rounded shadow-lg"><Sun size={14} /></div>}
+                        {tyre.season === 'all-season' && <div className="bg-green-600 text-white p-1 rounded shadow-lg"><CloudSun size={14} /></div>}
+                        {tyre.vehicle_type === 'cargo' && <div className="bg-purple-600 text-white p-1 rounded shadow-lg"><Truck size={14} /></div>}
+                        {tyre.vehicle_type === 'agro' && <div className="bg-green-700 text-white p-1 rounded shadow-lg"><Tractor size={14} /></div>}
+                        {tyre.vehicle_type === 'truck' && <div className="bg-blue-800 text-white p-1 rounded shadow-lg"><Truck size={14} /></div>}
                      </div>
-
-                     {(tyre.width || tyre.height) && (
-                        <div className="absolute top-2 right-2 z-10 text-[10px] md:text-xs font-black bg-zinc-900/90 backdrop-blur-sm text-white px-2 py-1 rounded border border-zinc-700 shadow-lg">
-                           {tyre.width}/{tyre.height} <span className="text-[#FFC300]">{tyre.radius}</span>
-                        </div>
-                     )}
-
                      {tyre.in_stock === false && <div className="absolute inset-0 z-20 bg-black/60 flex items-center justify-center pointer-events-none"><div className="bg-red-600 text-white px-3 py-1 font-black uppercase -rotate-12 border-2 border-white shadow-xl text-sm">Немає в наявності</div></div>}
-
                      <div className={`aspect-square bg-black relative overflow-hidden cursor-pointer`}>
                         {tyre.image_url && tyre.in_stock !== false ? (
                            <img src={tyre.image_url} alt={tyre.title} className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500`} />
                         ) : (
                            <div className="w-full h-full flex flex-col items-center justify-center text-zinc-700 bg-zinc-950"><ShoppingBag size={32} className="opacity-20 mb-2"/><span className="text-xs font-bold">{tyre.in_stock === false ? 'Немає в наявності' : 'Немає фото'}</span></div>
                         )}
-                        {tyre.gallery && tyre.gallery.length > 0 && tyre.in_stock !== false && <div className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-full flex items-center gap-1 backdrop-blur-sm"><Plus size={10} /> {tyre.gallery.length} фото</div>}
                      </div>
-
                      <div className="p-3 md:p-4 flex flex-col flex-grow relative">
                         {tyre.manufacturer && <div className="text-[10px] text-zinc-500 uppercase font-bold mb-1 tracking-wider">{tyre.manufacturer}</div>}
                         <h3 className="text-sm md:text-base font-bold text-white mb-2 leading-snug line-clamp-2 min-h-[2.5em] pr-2 cursor-pointer hover:text-[#FFC300] transition-colors">{tyre.title}</h3>
-                        {tyre.season && <div className="text-[10px] text-zinc-400 font-bold uppercase mb-2">Сезон: <span className="text-white">{getSeasonLabel(tyre.season)}</span></div>}
-                        <div className="text-[10px] text-zinc-500 mb-2 flex flex-col gap-0.5">{tyre.catalog_number && <span>Арт: <span className="text-zinc-400 font-mono">{tyre.catalog_number}</span></span>}{tyre.product_number && <span>№: <span className="text-zinc-400 font-mono">{tyre.product_number}</span></span>}</div>
-                        
-                        {/* DESCRIPTION IN CARD */}
-                        {tyre.description && tyre.description !== 'API Import' && (
-                            <p className="text-xs text-zinc-400 line-clamp-2 mb-2 leading-relaxed">
-                                {tyre.description}
-                            </p>
+                        {(tyre.width || tyre.height || tyre.radius) && (
+                            <div className="mb-3 bg-zinc-800/40 p-2 rounded-lg border border-zinc-800 flex flex-col">
+                                <span className="text-[9px] text-zinc-500 uppercase font-black tracking-tighter mb-0.5">Розмір</span>
+                                <div className="text-lg md:text-xl font-black leading-none flex items-center gap-1.5">
+                                    <span className="text-white">{tyre.width && tyre.height ? `${tyre.width}/${tyre.height}` : ''}</span> 
+                                    <span className="text-[#FFC300]">{tyre.radius}</span>
+                                </div>
+                            </div>
                         )}
-
                         {enableStockQty && tyre.in_stock !== false && <div className="text-[10px] font-bold text-green-400 mb-2 flex items-center gap-1"><Check size={10} /> {tyre.stock_quantity ? <span>В наявності: {tyre.stock_quantity} шт.</span> : <span>В наявності</span>}</div>}
                         <div className="mt-auto pt-3 border-t border-zinc-800">
                            <div className="flex flex-col justify-between gap-2">
@@ -919,9 +729,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
           </>
         )}
       </div>
-
       {cart.length > 0 && <button onClick={() => setIsCartOpen(true)} className="fixed bottom-6 right-6 z-40 bg-[#FFC300] text-black p-4 rounded-full shadow-[0_0_20px_rgba(255,195,0,0.4)] animate-bounce hover:scale-110 transition-transform"><div className="relative"><ShoppingCart size={28} /><div className="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full border border-white">{cart.reduce((a,b) => a + b.quantity, 0)}</div></div></button>}
-
       {isCartOpen && (
         <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex justify-end animate-in slide-in-from-right">
            <div className="w-full max-w-md bg-zinc-900 h-full border-l border-zinc-700 p-6 flex flex-col shadow-2xl relative">
@@ -930,7 +738,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
               {!orderSuccess ? (
                 <>
                   <div className="flex-grow overflow-y-auto space-y-4 mb-4 pr-2">
-                    {cart.length === 0 ? <p className="text-zinc-500 text-center py-10">Кошик порожній</p> : cart.map(item => (<div key={item.id} className="bg-black border border-zinc-800 p-3 rounded-lg flex items-center gap-3"><div className="w-16 h-16 bg-zinc-800 rounded flex-shrink-0 overflow-hidden">{item.image_url && <img src={item.image_url} className="w-full h-full object-cover" alt="" />}</div><div className="flex-grow"><h4 className="text-white font-bold text-sm leading-tight line-clamp-1">{item.title}</h4><p className="text-[#FFC300] font-mono text-sm">{formatPrice(item.price)} грн</p>{enableStockQty && item.stock_quantity && <p className="text-zinc-500 text-[10px]">Доступно: {item.stock_quantity} шт</p>}</div><div className="flex flex-col items-center gap-1"><div className="flex items-center bg-zinc-800 rounded"><button onClick={() => updateQuantity(item.id, -1)} className="p-1 text-zinc-400 hover:text-white"><Minus size={14} /></button><span className="w-6 text-center text-sm font-bold">{item.quantity}</span><button onClick={() => updateQuantity(item.id, 1)} className={`p-1 text-zinc-400 hover:text-white ${enableStockQty && item.stock_quantity && item.quantity >= item.stock_quantity ? 'opacity-30 cursor-not-allowed' : ''}`}><Plus size={14} /></button></div><button onClick={() => removeFromCart(item.id)} className="text-red-500 hover:text-red-400 text-xs"><Trash2 size={14}/></button></div></div>))}
+                    {cart.length === 0 ? <p className="text-zinc-500 text-center py-10">Кошик порожній</p> : cart.map(item => (<div key={item.id} className="bg-black border border-zinc-800 p-3 rounded-lg flex items-center gap-3"><div className="w-16 h-16 bg-zinc-800 rounded flex-shrink-0 overflow-hidden">{item.image_url && <img src={item.image_url} className="w-full h-full object-cover" alt="" />}</div><div className="flex-grow"><h4 className="text-white font-bold text-sm leading-tight line-clamp-1">{item.title}</h4><p className="text-[#FFC300] font-mono text-sm">{formatPrice(item.price)} грн</p></div><div className="flex flex-col items-center gap-1"><div className="flex items-center bg-zinc-800 rounded"><button onClick={() => updateQuantity(item.id, -1)} className="p-1 text-zinc-400 hover:text-white"><Minus size={14} /></button><span className="w-6 text-center text-sm font-bold">{item.quantity}</span><button onClick={() => updateQuantity(item.id, 1)} className={`p-1 text-zinc-400 hover:text-white ${enableStockQty && item.stock_quantity && item.quantity >= item.stock_quantity ? 'opacity-30 cursor-not-allowed' : ''}`}><Plus size={14} /></button></div><button onClick={() => removeFromCart(item.id)} className="text-red-500 hover:text-red-400 text-xs"><Trash2 size={14}/></button></div></div>))}
                   </div>
                   {cart.length > 0 && (
                     <div className="border-t border-zinc-800 pt-4">
@@ -947,12 +755,9 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
            </div>
         </div>
       )}
-
       {selectedProductForModal && (
           <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-2 md:p-4 animate-in fade-in duration-200" onClick={handleCloseModal}>
-              {/* Inject Schema.org for SEO */}
               {renderSchema(selectedProductForModal)}
-              
               <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-4xl shadow-2xl relative flex flex-col md:flex-row overflow-hidden max-h-[90vh]" onClick={e => e.stopPropagation()}>
                   <button onClick={handleCloseModal} className="absolute top-4 right-4 text-zinc-500 hover:text-white z-20 bg-black/50 p-1 rounded-full"><X size={24} /></button>
                   <div className="w-full md:w-1/2 bg-black flex items-center justify-center relative group min-h-[300px]">
@@ -968,25 +773,15 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                           <div className="flex justify-between items-center border-b border-zinc-800 pb-2"><span className="text-zinc-400 text-sm">Ширина</span><span className="text-white font-bold">{selectedProductForModal.width || '-'}</span></div>
                           <div className="flex justify-between items-center border-b border-zinc-800 pb-2"><span className="text-zinc-400 text-sm">Висота</span><span className="text-white font-bold">{selectedProductForModal.height || '-'}</span></div>
                           <div className="flex justify-between items-center border-b border-zinc-800 pb-2"><span className="text-zinc-400 text-sm">Діаметр</span><span className="text-[#FFC300] font-bold">{selectedProductForModal.radius || '-'}</span></div>
-                          <div className="flex justify-between items-center border-b border-zinc-800 pb-2"><span className="text-zinc-400 text-sm">Сезон</span><span className="text-white font-bold flex items-center gap-2">{selectedProductForModal.season === 'winter' && <Snowflake size={14} className="text-blue-400"/>}{selectedProductForModal.season === 'summer' && <Sun size={14} className="text-orange-400"/>}{selectedProductForModal.season === 'all-season' && <CloudSun size={14} className="text-green-400"/>}{getSeasonLabel(selectedProductForModal.season)}</span></div>
+                          <div className="flex justify-between items-center border-b border-zinc-800 pb-2"><span className="text-zinc-400 text-sm">Сезон</span><span className="text-white font-bold flex items-center gap-2">{getSeasonLabel(selectedProductForModal.season)}</span></div>
                           <div className="flex justify-between items-center border-b border-zinc-800 pb-2"><span className="text-zinc-400 text-sm">Тип авто</span><span className="text-white font-bold capitalize">{selectedProductForModal.vehicle_type === 'cargo' ? 'Вантажний (C)' : selectedProductForModal.vehicle_type === 'suv' ? 'Позашляховик' : selectedProductForModal.vehicle_type === 'truck' ? 'Вантажний (TIR)' : selectedProductForModal.vehicle_type === 'agro' ? 'Спецтехніка' : 'Легковий'}</span></div>
-                          {(selectedProductForModal.catalog_number || selectedProductForModal.product_number) && (<div className="flex justify-between items-center border-b border-zinc-800 pb-2"><span className="text-zinc-400 text-sm">Артикул / Код</span><span className="text-zinc-300 font-mono text-sm">{selectedProductForModal.catalog_number || selectedProductForModal.product_number}</span></div>)}
-                          
-                          {/* SEO Description Block */}
-                          {selectedProductForModal.description && selectedProductForModal.description.length > 20 && (
-                              <div className="mt-4 p-4 bg-zinc-800/30 rounded-xl border border-zinc-800/50">
-                                  <h3 className="text-zinc-400 text-xs font-bold uppercase mb-2">Опис</h3>
-                                  <p className="text-sm text-zinc-300 leading-relaxed">{selectedProductForModal.description}</p>
-                              </div>
-                          )}
                       </div>
                       <div className="mt-auto"><div className="flex items-end gap-3 mb-4">{safeParsePrice(selectedProductForModal.old_price) > safeParsePrice(selectedProductForModal.price) && (<span className="text-zinc-500 line-through text-sm mb-1">{formatPrice(selectedProductForModal.old_price)} грн</span>)}<span className="text-3xl font-black text-[#FFC300]">{formatPrice(selectedProductForModal.price)} <span className="text-base text-white font-normal">грн</span></span></div><button onClick={() => { addToCart(selectedProductForModal); setSelectedProductForModal(null); }} disabled={selectedProductForModal.in_stock === false} className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 uppercase tracking-wide transition-all active:scale-95 ${selectedProductForModal.in_stock === false ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' : 'bg-white text-black hover:bg-[#FFC300] shadow-lg'}`}><ShoppingCart size={20} />{selectedProductForModal.in_stock === false ? 'Немає в наявності' : 'Додати в кошик'}</button></div>
                   </div>
               </div>
           </div>
       )}
-
-      {lightboxOpen && currentLightboxImages.length > 0 && (<div className="fixed inset-0 z-[200] bg-black flex items-center justify-center animate-in fade-in duration-300"><button onClick={() => setLightboxOpen(false)} className="absolute top-4 right-4 text-white hover:text-[#FFC300] z-50 p-2"><X size={32}/></button><div className="w-full h-full flex items-center justify-center relative touch-pan-y" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>{currentLightboxImages.length > 1 && (<><button onClick={prevImage} className="absolute left-2 md:left-8 text-white/50 hover:text-white z-50 hidden md:block"><ChevronLeft size={48}/></button><button onClick={nextImage} className="absolute right-2 md:right-8 text-white/50 hover:text-white z-50 hidden md:block"><ChevronRight size={48}/></button></>)}<img src={currentLightboxImages[currentImageIndex]} alt="" className="max-w-full max-h-full object-contain pointer-events-none select-none" />{currentLightboxImages.length > 1 && (<div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-2">{currentLightboxImages.map((_, idx) => (<div key={idx} className={`w-2 h-2 rounded-full transition-colors ${idx === currentImageIndex ? 'bg-[#FFC300]' : 'bg-white/30'}`} />))}</div>)}</div></div>)}
+      {lightboxOpen && currentLightboxImages.length > 0 && (<div className="fixed inset-0 z-[200] bg-black flex items-center justify-center animate-in fade-in duration-300"><button onClick={() => setLightboxOpen(false)} className="absolute top-4 right-4 text-white hover:text-[#FFC300] z-50 p-2"><X size={32}/></button><div className="w-full h-full flex items-center justify-center relative touch-pan-y" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>{currentLightboxImages.length > 1 && (<><button onClick={prevImage} className="absolute left-2 md:left-8 text-white/50 hover:text-white z-50 hidden md:block"><ChevronLeft size={48}/></button><button onClick={nextImage} className="absolute right-2 md:right-8 text-white/50 hover:text-white z-50 hidden md:block"><ChevronRight size={48}/></button></>)}<img src={currentLightboxImages[currentImageIndex]} alt="" className="max-w-full max-h-full object-contain pointer-events-none select-none" /></div></div>)}
     </div>
   );
 };

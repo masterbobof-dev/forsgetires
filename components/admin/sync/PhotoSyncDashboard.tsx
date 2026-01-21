@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ImageIcon, StopCircle, AlertTriangle } from 'lucide-react';
+import { ImageIcon, StopCircle, AlertTriangle, CheckCircle, X } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
 import { cleanHeaders, requestServerSideUpload, PHOTO_DEFAULT_CONFIG } from './syncUtils';
 
@@ -21,6 +21,7 @@ interface PhotoSyncDashboardProps {
 const PhotoSyncDashboard: React.FC<PhotoSyncDashboardProps> = ({ disabled, onSyncStateChange }) => {
     const [isPhotoSyncing, setIsPhotoSyncing] = useState(false);
     const isPhotoSyncingRef = useRef(false);
+    const [syncCompleted, setSyncCompleted] = useState(false);
     
     // Options
     const [forceOverwritePhotos, setForceOverwritePhotos] = useState(false);
@@ -67,6 +68,7 @@ const PhotoSyncDashboard: React.FC<PhotoSyncDashboardProps> = ({ disabled, onSyn
         // Init
         isPhotoSyncingRef.current = true;
         setIsPhotoSyncing(true);
+        setSyncCompleted(false);
         onSyncStateChange(true);
         setSyncProgress({ total: 0, processed: 0, updated: 0, inserted: 0 });
         setSyncLogs(['Запуск масової синхронізації...']);
@@ -225,6 +227,9 @@ const PhotoSyncDashboard: React.FC<PhotoSyncDashboardProps> = ({ disabled, onSyn
                     skippedCount = 0;
                 }
             }
+            if (isPhotoSyncingRef.current) {
+                setSyncCompleted(true);
+            }
         } catch (e: any) {
             setSyncError(e.message);
             addLog("CRITICAL ERROR: " + e.message);
@@ -239,7 +244,18 @@ const PhotoSyncDashboard: React.FC<PhotoSyncDashboardProps> = ({ disabled, onSyn
         <div className="bg-zinc-800/50 p-3 rounded-2xl border border-zinc-700 mt-2">
             <h4 className="text-white font-bold mb-3 flex items-center gap-2 text-sm uppercase"><ImageIcon size={16} className="text-[#FFC300]"/> Фото Синхронізація</h4>
             
-            {/* LOGS AND PROGRESS */}
+            {syncCompleted && !isPhotoSyncing && (
+                <div className="mb-4 bg-green-900/20 p-4 rounded-xl border border-green-500/50 animate-in zoom-in">
+                    <div className="flex justify-between items-center mb-2">
+                        <span className="text-green-400 font-bold text-xs uppercase flex items-center gap-1">
+                            <CheckCircle size={14}/> Завантаження завершено
+                        </span>
+                        <button onClick={() => setSyncCompleted(false)} className="text-green-400/50"><X size={14}/></button>
+                    </div>
+                    <p className="text-zinc-400 text-[10px] mb-2">Успішно оновлено фото для {syncProgress.updated} товарів.</p>
+                </div>
+            )}
+
             {(isPhotoSyncing || syncProgress.processed > 0 || syncLogs.length > 0) && (
                 <div className="mb-4 space-y-2">
                     <div className="grid grid-cols-3 gap-2 text-center bg-black/30 p-2 rounded-lg">

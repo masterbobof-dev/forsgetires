@@ -73,11 +73,17 @@ const PromoTab: React.FC = () => {
         setLoading(false);
     };
 
-    const handleSaveBanners = async () => {
+    const handleSaveBanners = async (updatedBanners?: Banner[]) => {
+        const dataToSave = updatedBanners || banners;
         setLoading(true);
-        await supabase.from('settings').upsert({ key: 'promo_data', value: JSON.stringify(banners) });
-        alert("Слайдер акцій оновлено!");
-        setLoading(false);
+        try {
+            await supabase.from('settings').upsert({ key: 'promo_data', value: JSON.stringify(dataToSave) });
+            if (!updatedBanners) alert("Слайдер акцій оновлено!");
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleSaveHeroText = async () => {
@@ -114,11 +120,14 @@ const PromoTab: React.FC = () => {
         setShowDeleteModal(true);
     };
 
-    const executeDelete = () => {
+    const executeDelete = async () => {
         if (bannerToDelete !== null) {
             const newBanners = banners.filter(b => b.id !== bannerToDelete);
             setBanners(newBanners);
             if (selectedId === bannerToDelete) setSelectedId(newBanners.length > 0 ? newBanners[0].id : null);
+            
+            // Автоматично зберігаємо зміни в базу даних після видалення
+            await handleSaveBanners(newBanners);
         }
         setShowDeleteModal(false);
         setBannerToDelete(null);
@@ -219,7 +228,7 @@ const PromoTab: React.FC = () => {
                 <h3 className="text-2xl font-black text-white flex items-center gap-2">
                     <Megaphone className="text-[#FFC300]" /> Слайдер Акцій
                 </h3>
-                <button onClick={handleSaveBanners} className="bg-[#FFC300] text-black font-black px-6 py-3 rounded-xl hover:bg-[#e6b000] flex items-center gap-2 shadow-lg shadow-yellow-900/20">
+                <button onClick={() => handleSaveBanners()} className="bg-[#FFC300] text-black font-black px-6 py-3 rounded-xl hover:bg-[#e6b000] flex items-center gap-2 shadow-lg shadow-yellow-900/20">
                     <Save size={20} /> Зберегти акції
                 </button>
             </div>

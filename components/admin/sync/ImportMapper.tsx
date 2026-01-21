@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Database, CheckCircle, Save, Loader2, AlertTriangle, FileJson, Wand2, Code, ArrowRight, MousePointer2, ListTree, RefreshCw, Zap } from 'lucide-react';
+import { Database, CheckCircle, Save, Loader2, AlertTriangle, FileJson, Wand2, Code, ArrowRight, MousePointer2, ListTree, RefreshCw, Zap, X } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
 import { Supplier } from '../../../types';
 
@@ -130,6 +130,7 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
 
     const [fullSyncProgress, setFullSyncProgress] = useState({ total: 0, processed: 0, updated: 0, inserted: 0 });
     const [isFullSync, setIsFullSync] = useState(false);
+    const [syncCompleted, setSyncCompleted] = useState(false);
 
     useEffect(() => {
         const fetchSuppliers = async () => {
@@ -228,17 +229,14 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
         if (showAlert) alert("Поля підібрано! Перевірте правильність.");
     };
 
-    // Updated Preview Helper to show Array Sums
     const getPreviewValueText = (key: string) => {
         if (!previewItem || !key) return null;
         const val = getValueByPath(previewItem, key);
         if (val === null || val === undefined) return 'не знайдено';
         
         if (Array.isArray(val)) {
-            // Try to calculate sum if it looks like stock
             const sum = val.reduce((acc: number, item: any) => {
                 const v = item.Value || item.value || item.amount || item.quantity || item.rest || 0;
-                // Parse ">5" as 5
                 const clean = String(v).replace(/[><+\s]/g, '');
                 return acc + (parseInt(clean) || 0);
             }, 0);
@@ -249,7 +247,6 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
         return String(val);
     };
 
-    // --- TRANSFORMATION LOGIC ---
     const transformItem = (item: any) => {
         const rawPrice = getValueByPath(item, fieldMapping.price);
         const price = parseFloat(String(rawPrice).replace(/[^\d.]/g, '')) || 0;
@@ -263,19 +260,15 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
         const imageUrl = fieldMapping.image ? safeExtractString(getValueByPath(item, fieldMapping.image)) : null;
         
         let radius='';
-        // Updated regex to support decimal radii (e.g. R17.5)
         const sizeMatch = title.match(/(\d{3})[\/\s](\d{2})[\s\w]*R(\d{2}(?:\.5)?[C|c]?)/);
         if (sizeMatch) { radius='R'+sizeMatch[3].toUpperCase(); }
 
-        // --- STOCK PARSING IMPROVED ---
         let stock = 0;
         const rawStock = fieldMapping.stock ? getValueByPath(item, fieldMapping.stock) : 0;
         
         if (Array.isArray(rawStock)) {
-            // Case: "Rests": [{"Key": "Kyiv", "Value": ">5"}]
             stock = rawStock.reduce((acc: number, wh: any) => {
                 const val = wh.Value || wh.value || wh.amount || wh.quantity || wh.rest || 0;
-                // Remove '>', '<', '+' and spaces to parse ">5" as 5
                 const cleanVal = String(val).replace(/[><+\s]/g, '');
                 return acc + (parseInt(cleanVal) || 0);
             }, 0);
@@ -340,6 +333,7 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
         if (!fieldMapping.code) { alert("Поле 'Артикул' обов'язкове!"); return; }
 
         setIsFullSync(true);
+        setSyncCompleted(false);
         setFullSyncProgress({ total: 0, processed: 0, updated: 0, inserted: 0 });
 
         try {
@@ -444,7 +438,7 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
                     offset += BATCH_SIZE;
                 }
             }
-            alert("Синхронізація завершена успішно!");
+            setSyncCompleted(true);
         } catch (e: any) {
             alert("Збій синхронізації: " + e.message);
         } finally {
@@ -470,11 +464,8 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
                 </div>
             ) : (
                 <>
-                    {/* SCROLLABLE AREA */}
                     <div className="flex-grow overflow-y-auto pr-2 custom-scrollbar pb-20">
                         <div className="flex flex-col gap-6">
-                            
-                            {/* DATA SOURCE SELECTOR */}
                             <div className="bg-black/40 p-4 rounded-xl border border-zinc-700">
                                 <div className="flex justify-between items-start mb-3">
                                     <label className="text-zinc-400 text-xs font-bold uppercase flex items-center gap-2"><ListTree size={14}/> Джерело даних (Масив)</label>
@@ -528,7 +519,6 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
                                 )}
                             </div>
 
-                            {/* SUPPLIER */}
                             <div>
                                 <label className="block text-white text-sm font-bold mb-2">Постачальник (для прив'язки товарів)</label>
                                 <select 
@@ -541,7 +531,6 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
                                 </select>
                             </div>
 
-                            {/* MAPPING FIELDS */}
                             <div>
                                 <div className="flex justify-between items-center mb-3">
                                     <h5 className="text-zinc-400 text-xs font-bold uppercase flex items-center gap-2">Співставлення полів</h5>
@@ -611,7 +600,6 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
                         </div>
                     </div>
 
-                    {/* FIXED FOOTER WITH BUTTONS - ALWAYS VISIBLE */}
                     <div className="shrink-0 pt-4 border-t border-zinc-800 bg-zinc-900 sticky bottom-0 z-20 space-y-3">
                         {isFullSync ? (
                             <div className="bg-zinc-800 p-4 rounded-xl border border-zinc-700 animate-pulse">
@@ -621,6 +609,37 @@ const ImportMapper: React.FC<ImportMapperProps> = ({ responseData, responseStatu
                                     <div className="flex justify-between"><span>Оновлено:</span> <span className="text-blue-400">{fullSyncProgress.updated}</span></div>
                                     <div className="flex justify-between"><span>Нових:</span> <span className="text-green-400">{fullSyncProgress.inserted}</span></div>
                                 </div>
+                            </div>
+                        ) : syncCompleted ? (
+                            <div className="bg-green-900/20 p-4 rounded-xl border border-green-500/50 animate-in zoom-in">
+                                <div className="flex justify-between items-center mb-3">
+                                    <h5 className="text-green-400 font-black flex items-center gap-2 uppercase tracking-wider">
+                                        <CheckCircle size={18}/> Звіт завершено
+                                    </h5>
+                                    <button onClick={() => setSyncCompleted(false)} className="text-green-400/50 hover:text-green-400">
+                                        <X size={18}/>
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2 mb-4">
+                                    <div className="bg-black/30 p-2 rounded text-center">
+                                        <div className="text-xl font-black text-white">{fullSyncProgress.processed}</div>
+                                        <div className="text-[8px] text-zinc-500 uppercase">Оброблено</div>
+                                    </div>
+                                    <div className="bg-black/30 p-2 rounded text-center">
+                                        <div className="text-xl font-black text-blue-400">{fullSyncProgress.updated}</div>
+                                        <div className="text-[8px] text-zinc-500 uppercase">Оновлено</div>
+                                    </div>
+                                    <div className="bg-black/30 p-2 rounded text-center">
+                                        <div className="text-xl font-black text-green-400">{fullSyncProgress.inserted}</div>
+                                        <div className="text-[8px] text-zinc-500 uppercase">Нових</div>
+                                    </div>
+                                </div>
+                                <button 
+                                    onClick={() => setSyncCompleted(false)}
+                                    className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-2 rounded-lg transition-colors text-sm"
+                                >
+                                    ОК, ПОВЕРНУТИСЯ
+                                </button>
                             </div>
                         ) : (
                             <>

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { TyreProduct, CartItem } from '../types';
-import { Loader2, Phone, ArrowDown, ArrowLeft, X, ShoppingCart } from 'lucide-react';
+import { Loader2, Phone, ArrowDown, ArrowLeft, X, ShoppingCart, Lock } from 'lucide-react';
 import { PHONE_LINK_1, PHONE_NUMBER_1, FORMSPREE_ENDPOINT } from '../constants';
 
 // Підкомпоненти

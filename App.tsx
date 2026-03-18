@@ -11,7 +11,7 @@ import Prices from './components/Prices';
 import AdminPanel from './components/AdminPanel';
 import TyreShop from './components/TyreShop';
 import { ViewState, TyreProduct } from './types';
-import { Lock, X, Loader2, Mail, Key, Briefcase, ArrowLeft, Send, Wrench } from 'lucide-react';
+import { X, Loader2, Mail, Key, Briefcase, ArrowLeft, Send, Wrench } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
 const App: React.FC = () => {

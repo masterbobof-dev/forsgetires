@@ -331,6 +331,29 @@ const PromoEditor: React.FC<PromoEditorProps> = ({ banner, onUpdate, onUpdateIma
                                         </div>
                                         <input type="range" min="0" max="90" value={bgConfig.overlayOpacity} onChange={e => updateBgConfig('overlayOpacity', parseInt(e.target.value))} className="w-full accent-[#FFC300]" />
                                     </div>
+                                    <div className="col-span-2">
+                                        <div className="flex justify-between text-[10px] text-zinc-400 mb-1">
+                                            <span>Масштаб фону (Scale)</span>
+                                            <span>{bgConfig.scale}%</span>
+                                        </div>
+                                        <input type="range" min="50" max="200" value={bgConfig.scale || 100} onChange={e => updateBgConfig('scale', parseInt(e.target.value))} className="w-full accent-[#FFC300]" />
+                                    </div>
+                                    <div className="col-span-2">
+                                        <div className="flex justify-between text-[10px] text-zinc-400 mb-1">
+                                            <span>Підгонка фону (Fit)</span>
+                                        </div>
+                                        <select 
+                                            value={bgConfig.objectFit || 'cover'} 
+                                            onChange={e => updateBgConfig('objectFit', e.target.value)}
+                                            className="w-full bg-black border border-zinc-700 rounded-lg p-2 text-xs text-white outline-none focus:border-[#FFC300]"
+                                        >
+                                            <option value="cover">Заповнити (Cover)</option>
+                                            <option value="contain">Вписати (Contain)</option>
+                                            <option value="fill">Розтягнути (Fill)</option>
+                                            <option value="none">Оригінал (None)</option>
+                                            <option value="scale-down">Зменшити (Scale Down)</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                         ) : (

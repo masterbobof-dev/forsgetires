@@ -42,10 +42,12 @@ const PromoPreview: React.FC<PromoPreviewProps> = ({ banner }) => {
                 <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
                     <img 
                         src={banner.backgroundImage} 
-                        className="w-full h-full object-cover transition-opacity duration-300"
+                        className="w-full h-full transition-opacity duration-300"
                         style={{ 
                             opacity: (bgConfig.opacity ?? 100) / 100,
-                            objectPosition: `center ${bgConfig.positionY ?? 50}%`
+                            objectPosition: `center ${bgConfig.positionY ?? 50}%`,
+                            objectFit: bgConfig.objectFit || 'cover',
+                            transform: `scale(${(bgConfig.scale || 100) / 100})`
                         }}
                         alt=""
                     />

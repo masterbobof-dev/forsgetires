@@ -43,6 +43,8 @@ export interface Banner {
         opacity: number;
         positionY: number;
         overlayOpacity: number;
+        objectFit?: 'cover' | 'contain' | 'fill' | 'none' | 'scale-down';
+        scale?: number;
     };
     imageConfig?: {
         scale: number;
@@ -74,5 +76,7 @@ export const DEFAULT_IMG_CONFIG = {
 export const DEFAULT_BG_CONFIG = {
     opacity: 100,
     positionY: 50,
-    overlayOpacity: 40
+    overlayOpacity: 40,
+    objectFit: 'cover' as const,
+    scale: 100
 };

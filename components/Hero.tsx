@@ -60,8 +60,26 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
 
   const handlePromoClick = (promo: any) => {
       if (!promo) return;
+      console.log('Banner clicked:', promo.title, 'Link:', promo.link);
+      
       if (promo.link === 'shop') onShopRedirect('all'); 
       else if (promo.link === 'booking') setShowWizard(true);
+      else if (promo.link === 'phone') window.location.href = `tel:${PHONE_NUMBER_1}`;
+      else if (promo.link && (promo.link.startsWith('http') || promo.link.startsWith('/'))) {
+          window.location.href = promo.link;
+      }
+  };
+
+  const nextPromo = () => {
+    if (promos.length > 1) {
+      setCurrentPromoIndex((prev) => (prev + 1) % promos.length);
+    }
+  };
+
+  const prevPromo = () => {
+    if (promos.length > 1) {
+      setCurrentPromoIndex((prev) => (prev - 1 + promos.length) % promos.length);
+    }
   };
 
   const scroll = (direction: 'left' | 'right') => {
@@ -72,6 +90,8 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
     }
   };
 
+  const currentPromo = promos[currentPromoIndex];
+
   return (
     <section className="relative w-full overflow-hidden pb-12">
       <div className="absolute inset-0 z-0 h-[120vh]">
@@ -81,20 +101,139 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
 
       <div className="relative z-10 max-w-6xl mx-auto px-4 py-8 md:py-20 flex flex-col gap-12">
         {/* PROMO SLIDER */}
-        {promos.length > 0 && (
+        {promos.length > 0 && currentPromo && (
             <div className="relative group/carousel">
-                <div onClick={() => handlePromoClick(promos[currentPromoIndex])} className={`w-full rounded-3xl p-6 md:p-12 text-white shadow-2xl relative overflow-hidden cursor-pointer transition-all duration-500 ${promos[currentPromoIndex].color}`}>
-                    <div className="relative z-20 flex flex-col md:flex-row items-center justify-between gap-8 min-h-[300px]">
+                <div 
+                  onClick={() => handlePromoClick(currentPromo)} 
+                  className={`w-full rounded-3xl p-6 md:p-12 text-white shadow-2xl relative overflow-hidden cursor-pointer transition-all duration-500 min-h-[350px] md:min-h-[450px] flex items-center ${currentPromo.color}`}
+                >
+                    {/* 1. CUSTOM BACKGROUND IMAGE LAYER */}
+                    {currentPromo.backgroundImage && (
+                        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+                            <img 
+                                src={currentPromo.backgroundImage} 
+                                className="w-full h-full transition-opacity duration-300"
+                                style={{ 
+                                    opacity: (currentPromo.backgroundConfig?.opacity ?? 100) / 100,
+                                    objectPosition: `center ${currentPromo.backgroundConfig?.positionY ?? 50}%`,
+                                    objectFit: currentPromo.backgroundConfig?.objectFit || 'cover',
+                                    transform: `scale(${(currentPromo.backgroundConfig?.scale || 100) / 100})`
+                                }}
+                                alt=""
+                            />
+                            <div 
+                                className="absolute inset-0 bg-black transition-opacity duration-300"
+                                style={{ opacity: (currentPromo.backgroundConfig?.overlayOpacity ?? 40) / 100 }}
+                            ></div>
+                        </div>
+                    )}
+
+                    {/* 2. PATTERN LAYER */}
+                    {currentPromo.pattern && currentPromo.pattern !== 'none' && (
+                        <div 
+                            className="absolute inset-0 z-0 pointer-events-none"
+                            style={{ 
+                                backgroundImage: currentPromo.pattern,
+                                opacity: (currentPromo.patternOpacity || 10) / 100,
+                                backgroundSize: 'auto', 
+                                backgroundRepeat: 'repeat',
+                                mixBlendMode: 'screen'
+                            }}
+                        ></div>
+                    )}
+
+                    <div className="relative z-20 flex flex-col md:flex-row items-center justify-between gap-8 w-full">
                         <div className="flex-grow text-center md:text-left z-20 max-w-2xl">
-                            <div className="inline-flex items-center gap-2 bg-white/5 backdrop-blur-md border border-[#FFC300]/50 text-[#FFC300] px-3 py-1.5 rounded-full text-[10px] md:text-xs font-bold uppercase tracking-widest mb-4">АКЦІЯ</div>
-                            <h2 className="text-3xl md:text-6xl font-black uppercase italic leading-tight mb-4 text-white">{promos[currentPromoIndex].title}</h2>
-                            <p className="text-base md:text-xl font-medium text-zinc-300 mb-6">{promos[currentPromoIndex].text}</p>
-                            <button className="w-full md:w-auto bg-[#FFC300] text-black font-black text-sm md:text-base px-10 py-4 rounded-xl uppercase tracking-widest active:scale-95 flex items-center justify-center gap-3 mx-auto md:mx-0">
-                                {promos[currentPromoIndex].buttonText} <ChevronRight size={20}/>
+                            <div className="inline-flex items-center gap-2 bg-white/5 backdrop-blur-md border border-[#FFC300]/50 text-[#FFC300] px-3 py-1.5 rounded-full text-[10px] md:text-xs font-bold uppercase tracking-widest mb-4">
+                                <div className="w-1.5 h-1.5 rounded-full bg-[#FFC300] animate-pulse"></div>
+                                АКЦІЯ
+                            </div>
+                            <h2 className="text-3xl md:text-6xl font-black uppercase italic leading-tight mb-4 text-white drop-shadow-2xl">{currentPromo.title}</h2>
+                            <div className="pl-4 border-l-2 border-[#FFC300] mb-8 hidden md:block">
+                                <p className="text-base md:text-xl font-medium text-zinc-300">{currentPromo.text}</p>
+                            </div>
+                            <p className="text-base font-medium text-zinc-300 mb-6 md:hidden">{currentPromo.text}</p>
+                            
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handlePromoClick(currentPromo); }}
+                              className="w-full md:w-auto bg-[#FFC300] text-black font-black text-sm md:text-base px-10 py-4 rounded-xl uppercase tracking-widest active:scale-95 flex items-center justify-center gap-3 mx-auto md:mx-0 hover:bg-[#e6b000] transition-all shadow-lg shadow-yellow-900/20"
+                            >
+                                {currentPromo.buttonText} <ChevronRight size={20}/>
                             </button>
+                        </div>
+
+                        {/* PRODUCT IMAGE COMPONENT */}
+                        <div className="absolute right-0 top-0 bottom-0 w-1/2 h-full z-10 pointer-events-none hidden md:flex items-center justify-center">
+                            {currentPromo.image_url && (
+                                <div 
+                                    className="relative w-full h-full flex items-center justify-center"
+                                    style={{
+                                        transform: `scale(${(currentPromo.imageConfig?.scale || 100) / 100}) translate(${currentPromo.imageConfig?.xOffset || 0}px, ${currentPromo.imageConfig?.yOffset || 0}px)`,
+                                        opacity: (currentPromo.imageConfig?.opacity || 100) / 100
+                                    }}
+                                >
+                                    {currentPromo.imageConfig?.glow && (
+                                        <div 
+                                            className="absolute inset-0 bg-[#FFC300]/30 blur-[80px] rounded-full scale-90 pointer-events-none"
+                                            style={{ mixBlendMode: 'screen' }}
+                                        ></div>
+                                    )}
+                                    
+                                    <img 
+                                        src={currentPromo.image_url} 
+                                        className={`
+                                            max-w-none max-h-none object-contain relative z-10
+                                            ${currentPromo.imageConfig?.shadow ? 'drop-shadow-[0_25px_50px_rgba(0,0,0,0.8)]' : ''}
+                                        `}
+                                        style={{
+                                            height: '100%',
+                                            maskImage: currentPromo.imageConfig?.vignette ? (
+                                                currentPromo.imageConfig.maskType === 'linear' 
+                                                ? `linear-gradient(to ${currentPromo.imageConfig.maskDirection || 'right'}, black 0%, black ${Math.max(0, 50 - ((currentPromo.imageConfig.vignetteStrength || 30) / 2))}%, transparent 100%)`
+                                                : `radial-gradient(circle at center, black ${Math.max(0, 95 - (currentPromo.imageConfig.vignetteStrength || 30))}%, transparent 100%)`
+                                            ) : 'none',
+                                            WebkitMaskImage: currentPromo.imageConfig?.vignette ? (
+                                                currentPromo.imageConfig.maskType === 'linear' 
+                                                ? `linear-gradient(to ${currentPromo.imageConfig.maskDirection || 'right'}, black 0%, black ${Math.max(0, 50 - ((currentPromo.imageConfig.vignetteStrength || 30) / 2))}%, transparent 100%)`
+                                                : `radial-gradient(circle at center, black ${Math.max(0, 95 - (currentPromo.imageConfig.vignetteStrength || 30))}%, transparent 100%)`
+                                            ) : 'none'
+                                        }}
+                                        alt="Promo" 
+                                    />
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
+
+                {/* SLIDER CONTROLS */}
+                {promos.length > 1 && (
+                  <>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); prevPromo(); }}
+                      className="absolute left-4 top-1/2 -translate-y-1/2 z-30 p-2 bg-black/20 hover:bg-black/40 text-white rounded-full backdrop-blur-sm opacity-0 group-hover/carousel:opacity-100 transition-opacity"
+                    >
+                      <ChevronLeft size={24}/>
+                    </button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); nextPromo(); }}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 z-30 p-2 bg-black/20 hover:bg-black/40 text-white rounded-full backdrop-blur-sm opacity-0 group-hover/carousel:opacity-100 transition-opacity"
+                    >
+                      <ChevronRight size={24}/>
+                    </button>
+                    
+                    {/* DOTS */}
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex gap-2">
+                      {promos.map((_, idx) => (
+                        <button 
+                          key={idx}
+                          onClick={(e) => { e.stopPropagation(); setCurrentPromoIndex(idx); }}
+                          className={`w-2 h-2 rounded-full transition-all ${idx === currentPromoIndex ? 'bg-[#FFC300] w-6' : 'bg-white/30'}`}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
             </div>
         )}
 

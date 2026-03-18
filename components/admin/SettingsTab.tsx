@@ -328,14 +328,35 @@ const SettingsTab: React.FC = () => {
           let updatedCount = 0;
           
           for (const file of smartFiles) {
-              const fileNameClean = file.name
-                  .replace(/\.[^/.]+$/, "") // Remove extension
+              const fileNameNoExt = file.name.replace(/\.[^/.]+$/, "");
+              const fileNameClean = fileNameNoExt
                   .replace(/[()]/g, " ")    
                   .replace(/[-_]/g, " ");   
               
               let matches = [];
 
-              if (smartExactMatch) {
+              // --- BRAND.MODEL MODE ---
+              if (fileNameNoExt.includes('.') && !smartExactMatch) {
+                  const dotIndex = fileNameNoExt.indexOf('.');
+                  const brand = fileNameNoExt.substring(0, dotIndex).trim();
+                  const model = fileNameNoExt.substring(dotIndex + 1).trim();
+                  
+                  if (brand.length >= 2 && model.length >= 2) {
+                      const { data: bmMatches } = await supabase
+                          .from('tyres')
+                          .select('id, title, image_url')
+                          .ilike('manufacturer', `%${brand}%`)
+                          .ilike('title', `%${model.replace(/[-_]/g, ' ')}%`);
+                      
+                      if (bmMatches && bmMatches.length > 0) {
+                          matches = bmMatches;
+                          setSmartStatus(prev => [`Знайдено за Брендом.Моделлю: ${brand} ${model} (${matches.length} шт)`, ...prev]);
+                      }
+                  }
+              }
+
+              if (matches.length === 0) {
+                  if (smartExactMatch) {
                   // --- EXACT MATCH MODE (SPECIAL MACHINERY) ---
                   // Search for exact title OR product_number OR catalog_number match
                   // We remove the extension but keep the full name string
@@ -389,6 +410,7 @@ const SettingsTab: React.FC = () => {
                       setSmartStatus(prev => [`NO MATCH (2+ keywords): ${file.name}`, ...prev]);
                       continue;
                   }
+              }
               }
 
               // --- COMMON UPLOAD LOGIC ---

@@ -29,11 +29,16 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick
               data.forEach(r => {
                   if (r.key === 'contact_phone1') {
                       newPhones.p1 = r.value;
-                      newPhones.link1 = `tel:${r.value.replace(/[^\d+]/g, '')}`;
+                      // Robust phone link generation
+                      const digits = r.value.replace(/[^\d]/g, '');
+                      const link = digits.startsWith('0') && digits.length === 10 ? `+38${digits}` : digits.startsWith('380') ? `+${digits}` : digits;
+                      newPhones.link1 = `tel:${link}`;
                   }
                   if (r.key === 'contact_phone2') {
                       newPhones.p2 = r.value;
-                      newPhones.link2 = `tel:${r.value.replace(/[^\d+]/g, '')}`;
+                      const digits = r.value.replace(/[^\d]/g, '');
+                      const link = digits.startsWith('0') && digits.length === 10 ? `+38${digits}` : digits.startsWith('380') ? `+${digits}` : digits;
+                      newPhones.link2 = `tel:${link}`;
                   }
               });
               setPhones(newPhones);
@@ -117,10 +122,10 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick
           </nav>
 
           {/* Mobile Controls */}
-          <div className="flex items-center gap-3 md:hidden">
+          <div className="flex items-center gap-2 md:hidden">
             {/* Quick Call Icon for Mobile */}
-            <a href={phones.link1} className="w-10 h-10 flex items-center justify-center bg-[#FFC300] rounded-full text-black active:scale-90 transition-transform">
-              <Phone size={20} />
+            <a href={phones.link1} className="w-8 h-8 flex items-center justify-center bg-[#FFC300] rounded-full text-black active:scale-90 transition-transform shadow-lg shadow-yellow-900/20">
+              <Phone size={16} />
             </a>
             
             <button 

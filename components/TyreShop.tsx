@@ -8,7 +8,7 @@ import { PHONE_LINK_1, PHONE_NUMBER_1, FORMSPREE_ENDPOINT } from '../constants';
 // Підкомпоненти
 import CartDrawer from './shop/CartDrawer';
 import ProductDetailModal from './shop/ProductDetailModal';
-import CategoryNav, { CategoryType } from './shop/CategoryNav';
+import CategoryNav, { CategoryType, CATEGORIES } from './shop/CategoryNav';
 import FilterToolbar from './shop/FilterToolbar';
 import ProductCard from './shop/ProductCard';
 
@@ -36,14 +36,18 @@ const getSeasonLabel = (s: string | undefined) => {
 interface TyreShopProps {
   initialCategory?: CategoryType;
   initialProduct?: TyreProduct | null;
+  onBack?: () => void;
+  isAdmin?: boolean;
+  onAdminClick?: () => void;
 }
 
-const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialProduct }) => {
+const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialProduct, onBack, isAdmin, onAdminClick }) => {
   const [tyres, setTyres] = useState<TyreProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -87,6 +91,13 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [orderError, setOrderError] = useState('');
 
+  // --- LOGIC: HANDLE INITIAL PRODUCT ---
+  useEffect(() => {
+    if (initialProduct) {
+      setSelectedProductForModal(initialProduct);
+    }
+  }, [initialProduct]);
+
   // --- LOGIC: FETCHING SETTINGS ---
   useEffect(() => {
     const fetchSettings = async () => {
@@ -94,7 +105,12 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
       if (setts) {
           setts.forEach(item => {
               if (item.key === 'enable_stock_quantity') setEnableStockQty(item.value === 'true');
-              if (item.key === 'contact_phone1') { setShopPhone(item.value); setShopPhoneLink(`tel:${item.value.replace(/[^\d+]/g, '')}`); }
+              if (item.key === 'contact_phone1') { 
+                  setShopPhone(item.value); 
+                  const digits = item.value.replace(/[^\d]/g, '');
+                  const link = digits.startsWith('0') && digits.length === 10 ? `+38${digits}` : digits.startsWith('380') ? `+${digits}` : digits;
+                  setShopPhoneLink(`tel:${link}`); 
+              }
               if (item.key === 'nova_poshta_key') setNovaPoshtaKey(item.value);
           });
       }
@@ -170,13 +186,21 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
       const sorts = { price_asc: 'price', price_desc: 'price', newest: 'created_at', oldest: 'created_at' };
       query = query.order((sorts as any)[activeSort] || 'created_at', { ascending: ['price_asc','oldest'].includes(activeSort) });
 
-      const { data, error } = await query.range(from, to);
+      const { data, error, count } = await query.range(from, to);
       if (error) throw error;
       if (data) {
         let processed = data.map(parseTyreSpecs);
-        setTyres(isRefresh ? processed : prev => [...prev, ...processed]); 
+        
+        // Thorough deduplication of the new data itself
+        const uniqueNew = Array.from(new Map(processed.map(item => [item.id, item])).values()) as TyreProduct[];
+
+        setTyres(isRefresh ? uniqueNew : prev => {
+            const newIds = new Set(uniqueNew.map(d => d.id));
+            return [...prev.filter(p => !newIds.has(p.id)), ...uniqueNew];
+        }); 
         setPage(pageIndex);
         setHasMore(data.length === PAGE_SIZE);
+        if (count !== null) setTotalCount(count);
       }
     } catch (error) { console.error(error); } finally { setLoading(false); setLoadingMore(false); }
   };
@@ -248,19 +272,57 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   };
 
   return (
-    <div className="min-h-screen bg-[#09090b] py-8 md:py-12 animate-in fade-in pb-32">
+    <div className="min-h-screen bg-[#09090b] py-8 md:py-12 animate-in fade-in duration-500 pb-32">
       <div className="max-w-7xl mx-auto px-2 md:px-4">
         
-        <header className="flex flex-col lg:flex-row justify-between items-start md:items-center gap-6 mb-8 px-2">
+        <header className="flex flex-col lg:flex-row justify-between items-start md:items-center gap-6 mb-10 px-2">
            <div className="flex flex-col gap-4">
-              <button onClick={() => window.history.back()} className="flex items-center gap-2 text-zinc-500 hover:text-[#FFC300] font-bold text-sm transition-colors">
-                <ArrowLeft size={18} /> На головну
-              </button>
-              <h1 className="text-3xl md:text-4xl font-black text-white border-b-2 border-[#FFC300] inline-block pb-2">Магазин Шин та Дисків</h1>
+              <nav className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-black text-zinc-600">
+                <button onClick={onBack} className="hover:text-[#FFC300] transition-colors">Головна</button>
+                <span className="text-zinc-800">/</span>
+                <span className="text-zinc-400">Магазин шин</span>
+                {activeCategory !== 'all' && (
+                  <>
+                    <span className="text-zinc-800">/</span>
+                    <span className="text-[#FFC300]">{CATEGORIES.find(c => c.id === activeCategory)?.label}</span>
+                  </>
+                )}
+              </nav>
+              <div className="flex flex-col">
+                <h1 className="text-4xl md:text-5xl font-black text-white tracking-tighter mb-2 uppercase italic">
+                  Магазин <span className="text-[#FFC300]">шин</span>
+                </h1>
+                <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                  <span className="w-8 h-[1px] bg-[#FFC300]"></span>
+                  Знайдено {totalCount} товарів
+                </p>
+              </div>
            </div>
-           <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex items-center gap-4 w-full md:w-auto">
-              <div className="p-2 bg-[#FFC300] rounded-full text-black"><Phone size={20}/></div>
-              <div><p className="text-xs text-zinc-500 font-bold uppercase">Консультація</p><a href={shopPhoneLink} className="text-white font-bold text-lg">{shopPhone}</a></div>
+           
+           <div className="flex items-center gap-4 w-full md:w-auto">
+              {isAdmin && (
+                <button 
+                  onClick={onAdminClick}
+                  className="flex-grow md:flex-none bg-zinc-900/80 backdrop-blur-sm border border-[#FFC300]/30 p-4 rounded-2xl flex items-center gap-4 hover:border-[#FFC300] transition-all group shadow-lg shadow-yellow-900/10"
+                >
+                  <div className="p-3 bg-zinc-800 rounded-xl text-[#FFC300] group-hover:scale-110 transition-transform">
+                    <Lock size={20} strokeWidth={2.5}/>
+                  </div>
+                  <div className="text-left">
+                    <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest mb-0.5">Адмін-панель</p>
+                    <span className="text-white font-black text-sm uppercase tracking-wider">Повернутися</span>
+                  </div>
+                </button>
+              )}
+              <div className="flex-grow md:flex-none bg-zinc-900/50 backdrop-blur-sm border border-zinc-800 p-4 rounded-2xl flex items-center gap-4 hover:border-zinc-700 transition-colors group">
+                <div className="p-3 bg-[#FFC300] rounded-xl text-black group-hover:scale-110 transition-transform shadow-lg shadow-yellow-900/20">
+                  <Phone size={20} strokeWidth={2.5}/>
+                </div>
+                <div>
+                  <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest mb-0.5">Підбір шин</p>
+                  <a href={shopPhoneLink} className="text-white font-black text-lg hover:text-[#FFC300] transition-colors">{shopPhone}</a>
+                </div>
+              </div>
            </div>
         </header>
         
@@ -276,28 +338,56 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
           activeSort={activeSort} setActiveSort={setActiveSort}
           filterOptions={filterOptions}
           onSearch={() => fetchTyres(0, true)}
-          onReset={() => { setSearchQuery(''); setFilterWidth(''); setFilterHeight(''); setFilterRadius(''); setFilterBrand(''); }}
+          onReset={() => { setSearchQuery(''); setFilterWidth(''); setFilterHeight(''); setFilterRadius(''); setFilterBrand(''); setActiveCategory('all'); }}
         />
 
         {loading ? (
-           <div className="flex flex-col items-center justify-center py-20"><Loader2 className="animate-spin text-[#FFC300] mb-4" size={48} /><p className="text-zinc-500">Завантаження...</p></div>
+           <div className="flex flex-col items-center justify-center py-32 animate-pulse">
+              <Loader2 className="animate-spin text-[#FFC300] mb-6" size={64} strokeWidth={1} />
+              <p className="text-zinc-500 font-black uppercase tracking-widest text-xs">Завантаження каталогу...</p>
+           </div>
         ) : tyres.length === 0 ? (
-           <div className="text-center py-20 bg-zinc-900 rounded-xl border border-zinc-800 mx-2 text-zinc-500 font-bold">За вашим запитом нічого не знайдено</div>
+           <div className="text-center py-32 bg-zinc-900/30 rounded-3xl border border-dashed border-zinc-800 mx-2 flex flex-col items-center gap-6">
+              <div className="p-6 bg-zinc-800/50 rounded-full text-zinc-600">
+                <ShoppingCart size={48} strokeWidth={1}/>
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-black text-white uppercase tracking-tight">Нічого не знайдено</h3>
+                <p className="text-zinc-500 text-sm max-w-xs mx-auto">Спробуйте змінити параметри фільтрації або скинути їх</p>
+              </div>
+              <button onClick={() => { setSearchQuery(''); setFilterWidth(''); setFilterHeight(''); setFilterRadius(''); setFilterBrand(''); setActiveCategory('all'); }} className="bg-white text-black font-black px-8 py-3 rounded-xl hover:bg-[#FFC300] transition-all">Скинути все</button>
+           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6 px-2">
-             {tyres.map((tyre) => (
-                <ProductCard 
-                  key={tyre.id} 
-                  tyre={tyre} 
-                  onClick={() => handleProductClick(tyre)} 
-                  onAddToCart={(e) => { e.stopPropagation(); addToCart(tyre); }} 
-                  formatPrice={formatPrice}
-                />
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-8 px-2">
+             {tyres.map((tyre, idx) => (
+                <div key={tyre.id} className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: `${Math.min(idx * 50, 500)}ms` }}>
+                  <ProductCard 
+                    tyre={tyre} 
+                    onClick={() => handleProductClick(tyre)} 
+                    onAddToCart={(e) => { e.stopPropagation(); addToCart(tyre); }} 
+                    formatPrice={formatPrice}
+                  />
+                </div>
              ))}
           </div>
         )}
 
-        {hasMore && <div className="mt-12 text-center"><button onClick={() => fetchTyres(page+1)} disabled={loadingMore} className="bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 px-8 rounded-xl border border-zinc-700 transition-colors flex items-center justify-center gap-2 mx-auto">{loadingMore ? <Loader2 className="animate-spin" size={20}/> : <ArrowDown size={20}/>} Завантажити ще</button></div>}
+        {hasMore && (
+          <div className="mt-20 text-center">
+            <button 
+              onClick={() => fetchTyres(page+1)} 
+              disabled={loadingMore} 
+              className="group relative bg-zinc-900 hover:bg-zinc-800 text-white font-black py-5 px-12 rounded-2xl border border-zinc-800 transition-all shadow-xl hover:shadow-yellow-900/5 flex items-center justify-center gap-4 mx-auto overflow-hidden"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+              {loadingMore ? <Loader2 className="animate-spin" size={24}/> : <ArrowDown size={24} className="group-hover:translate-y-1 transition-transform"/>} 
+              <span className="uppercase tracking-widest text-sm">Показати ще товари</span>
+            </button>
+            <p className="mt-4 text-zinc-600 text-[10px] font-bold uppercase tracking-widest">
+              Показано {tyres.length} з {totalCount}
+            </p>
+          </div>
+        )}
       </div>
 
       {cart.length > 0 && (

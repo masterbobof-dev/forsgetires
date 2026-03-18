@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Plus, X, Upload, Save, Loader2, FileSpreadsheet, CheckSquare, Square, Edit2, ArrowDown, Wand2, RefreshCw, Menu, FolderOpen, Car, Truck, Mountain, Flame, Ban, Briefcase, ArrowUpDown, Settings, ArrowRight, HelpCircle, Ruler, Copy, Image as ImageIcon, Percent, AlertCircle, FileWarning, FilterX, Trash2, LayoutGrid, List, Snowflake, Sun, CloudSun, CheckCircle, Eye, EyeOff, Tractor, CircleDot } from 'lucide-react';
+import { Search, Plus, X, Upload, Save, Loader2, FileSpreadsheet, CheckSquare, Square, Edit2, ArrowDown, Wand2, RefreshCw, Menu, FolderOpen, Car, Truck, Mountain, Flame, Ban, Briefcase, ArrowUpDown, Settings, ArrowRight, HelpCircle, Ruler, Copy, Image as ImageIcon, Percent, AlertCircle, FileWarning, FilterX, Trash2, LayoutGrid, List, Snowflake, Sun, CloudSun, CheckCircle, Eye, EyeOff, Tractor, CircleDot, Globe, AlertTriangle } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { TyreProduct, Supplier } from '../../types';
 import { WHEEL_RADII, CAR_RADII, CARGO_RADII, TRUCK_RADII, AGRO_RADII } from '../../constants';
@@ -79,7 +79,11 @@ const TyresTab: React.FC = () => {
       is_hot: false, 
       supplier_id: '', 
       stock_quantity: '',
-      axis: '' // NEW: Axis
+      axis: '',
+      seo_title: '',
+      seo_description: '',
+      seo_keywords: '',
+      slug: ''
   });
   const [tyreUploadFiles, setTyreUploadFiles] = useState<File[]>([]);
   const [existingGallery, setExistingGallery] = useState<string[]>([]);
@@ -227,14 +231,16 @@ const TyresTab: React.FC = () => {
               return { ...t, season: finalSeason };
           });
 
+          const uniqueNew = Array.from(new Map(processedData.map(item => [item.id, item])).values()) as TyreProduct[];
+
           if (isRefresh) { 
-              setTyres(processedData); 
+              setTyres(uniqueNew); 
               setTyrePage(0); 
               setSelectedTyreIds(new Set()); 
           } else { 
               setTyres(prev => {
-                  const newIds = new Set(processedData.map(d => d.id));
-                  return [...prev.filter(p => !newIds.has(p.id)), ...processedData];
+                  const newIds = new Set(uniqueNew.map(d => d.id));
+                  return [...prev.filter(p => !newIds.has(p.id)), ...uniqueNew];
               }); 
               setTyrePage(pageIdx); 
           }
@@ -481,6 +487,10 @@ const TyresTab: React.FC = () => {
         season: forcedSeason, 
         vehicle_type: tyreForm.vehicle_type,
         axis: tyreForm.axis, // Added Axis
+        seo_title: tyreForm.seo_title || null,
+        seo_description: tyreForm.seo_description || null,
+        seo_keywords: tyreForm.seo_keywords || null,
+        slug: tyreForm.slug || null,
         image_url: finalGallery[0] || null, 
         gallery: finalGallery, 
         is_hot: tyreForm.is_hot,
@@ -536,7 +546,11 @@ const TyresTab: React.FC = () => {
         is_hot: !!t.is_hot,
         supplier_id: t.supplier_id ? String(t.supplier_id) : '',
         stock_quantity: t.stock_quantity ? String(t.stock_quantity) : '',
-        axis: t.axis || '' // Load Axis
+        axis: t.axis || '',
+        seo_title: t.seo_title || '',
+        seo_description: t.seo_description || '',
+        seo_keywords: t.seo_keywords || '',
+        slug: t.slug || ''
       });
       
       let currentGallery = t.gallery || [];
@@ -588,10 +602,10 @@ const TyresTab: React.FC = () => {
         {successMessage && <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[300] bg-green-600/90 text-white px-6 py-3 rounded-full border border-green-400 shadow-2xl flex items-center gap-2"><CheckCircle size={20} />{successMessage}</div>}
         
         {/* --- TOP TOOLBAR --- */}
-        <div className="flex flex-col md:flex-row gap-4 justify-between mb-4">
-            <div className="relative flex items-center gap-2">
-                <button onClick={() => setShowCategoryMenu(!showCategoryMenu)} className="bg-zinc-800 text-white font-bold px-4 py-3 rounded-lg flex items-center gap-2 border border-zinc-700 hover:bg-zinc-700 transition-colors w-full md:w-auto justify-between">
-                    <div className="flex items-center gap-2"><Menu size={20} className="text-[#FFC300]"/> <span className="uppercase tracking-wide text-sm">{renderCategoryName()}</span></div>
+        <div className="flex flex-col lg:flex-row gap-4 justify-between mb-4">
+            <div className="flex gap-2 w-full lg:w-auto">
+                <button onClick={() => setShowCategoryMenu(!showCategoryMenu)} className="flex-grow lg:flex-none bg-zinc-800 text-white font-bold px-4 py-3 rounded-lg flex items-center gap-2 border border-zinc-700 hover:bg-zinc-700 transition-colors justify-between">
+                    <div className="flex items-center gap-2"><Menu size={20} className="text-[#FFC300]"/> <span className="uppercase tracking-wide text-xs sm:text-sm">{renderCategoryName()}</span></div>
                 </button>
                 
                 {/* Category Delete Button */}
@@ -620,43 +634,18 @@ const TyresTab: React.FC = () => {
                 )}
             </div>
 
-            <div className="relative min-w-[140px] hidden md:block">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"><Briefcase size={16}/></div>
-                <select value={filterSupplierId} onChange={(e) => setFilterSupplierId(e.target.value)} className="w-full h-full bg-zinc-900 border border-zinc-800 rounded-lg pl-9 pr-2 py-2 outline-none focus:border-[#FFC300] text-sm font-bold appearance-none cursor-pointer hover:bg-zinc-800 text-white">
-                    <option value="all">Всі Пост.</option>
-                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-            </div>
-
-            <div className="flex-grow flex gap-2">
-                <div className="relative flex-grow flex items-center">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={16}/>
-                    <input 
-                        type="text" 
-                        placeholder="Пошук шин..." 
-                        value={tyreSearch} 
-                        onChange={e => {
-                            const val = e.target.value;
-                            setTyreSearch(val);
-                            if (val === '') setTimeout(() => fetchTyres(0, true), 0);
-                        }} 
-                        onKeyDown={e => e.key==='Enter' && fetchTyres(0,true)} 
-                        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-10 pr-4 py-3 outline-none focus:border-[#FFC300] text-lg font-bold text-white" 
-                    />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-row gap-2 w-full lg:w-auto">
+                <div className="relative min-w-[140px]">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"><Briefcase size={16}/></div>
+                    <select value={filterSupplierId} onChange={(e) => setFilterSupplierId(e.target.value)} className="w-full h-full bg-zinc-900 border border-zinc-800 rounded-lg pl-9 pr-2 py-3 lg:py-2 outline-none focus:border-[#FFC300] text-sm font-bold appearance-none cursor-pointer hover:bg-zinc-800 text-white">
+                        <option value="all">Всі Пост.</option>
+                        {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
                 </div>
-                
-                <button 
-                    onClick={() => setShowOnlyInStock(!showOnlyInStock)}
-                    className={`flex items-center gap-2 px-3 rounded-lg border font-bold text-xs whitespace-nowrap transition-colors ${showOnlyInStock ? 'bg-green-900/30 border-green-500 text-green-400' : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:border-zinc-600'}`}
-                    title="Фільтр наявності"
-                >
-                    {showOnlyInStock ? <Eye size={18}/> : <EyeOff size={18}/>}
-                    <span className="hidden lg:inline">В наявності</span>
-                </button>
 
                 <div className="relative min-w-[140px]">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"><ArrowUpDown size={16}/></div>
-                    <select value={tyreSort} onChange={(e) => setTyreSort(e.target.value as any)} className="w-full h-full bg-zinc-900 border border-zinc-800 rounded-lg pl-9 pr-2 py-2 outline-none focus:border-[#FFC300] text-sm font-bold appearance-none cursor-pointer hover:bg-zinc-800 text-white">
+                    <select value={tyreSort} onChange={(e) => setTyreSort(e.target.value as any)} className="w-full h-full bg-zinc-900 border border-zinc-800 rounded-lg pl-9 pr-2 py-3 lg:py-2 outline-none focus:border-[#FFC300] text-sm font-bold appearance-none cursor-pointer hover:bg-zinc-800 text-white">
                         <option value="newest">Нові</option>
                         <option value="oldest">Старі</option>
                         <option value="price_asc">Дешеві</option>
@@ -667,13 +656,39 @@ const TyresTab: React.FC = () => {
                 </div>
             </div>
 
-            <div className="flex gap-2 flex-wrap justify-end">
+            <div className="flex-grow flex gap-2 w-full lg:w-auto">
+                <div className="relative flex-grow flex items-center">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={16}/>
+                    <input 
+                        type="text" 
+                        placeholder="Пошук..." 
+                        value={tyreSearch} 
+                        onChange={e => {
+                            const val = e.target.value;
+                            setTyreSearch(val);
+                            if (val === '') setTimeout(() => fetchTyres(0, true), 0);
+                        }} 
+                        onKeyDown={e => e.key==='Enter' && fetchTyres(0,true)} 
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-10 pr-4 py-3 outline-none focus:border-[#FFC300] text-base sm:text-lg font-bold text-white" 
+                    />
+                </div>
+                
+                <button 
+                    onClick={() => setShowOnlyInStock(!showOnlyInStock)}
+                    className={`flex items-center gap-2 px-3 rounded-lg border font-bold text-xs whitespace-nowrap transition-colors ${showOnlyInStock ? 'bg-green-900/30 border-green-500 text-green-400' : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:border-zinc-600'}`}
+                >
+                    {showOnlyInStock ? <Eye size={18}/> : <EyeOff size={18}/>}
+                    <span className="hidden sm:inline">В наявності</span>
+                </button>
+            </div>
+
+            <div className="flex gap-2 justify-between lg:justify-end w-full lg:w-auto">
                 <div className="flex bg-zinc-900 rounded-lg border border-zinc-800 p-1">
                     <button onClick={() => setViewMode('grid')} className={`p-2 rounded ${viewMode === 'grid' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-white'}`}><LayoutGrid size={18}/></button>
                     <button onClick={() => setViewMode('list')} className={`p-2 rounded ${viewMode === 'list' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-white'}`}><List size={18}/></button>
                 </div>
 
-                <button onClick={() => {setEditingTyreId(null); setTyreForm({ manufacturer: '', name: '', width: '', height: '', radius: 'R15', season: 'winter', vehicle_type: 'car', price: '', old_price: '', base_price: '', catalog_number: '', product_number: '', description: '', is_hot: false, supplier_id: '', stock_quantity: '', axis: '' }); setExistingGallery([]); setTyreUploadFiles([]); setShowAddTyreModal(true);}} className="bg-[#FFC300] text-black font-bold px-3 md:px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#e6b000]"><Plus size={18}/> <span className="hidden md:inline">Додати</span></button>
+                <button onClick={() => {setEditingTyreId(null); setTyreForm({ manufacturer: '', name: '', width: '', height: '', radius: 'R15', season: 'winter', vehicle_type: 'car', price: '', old_price: '', base_price: '', catalog_number: '', product_number: '', description: '', is_hot: false, supplier_id: '', stock_quantity: '', axis: '', seo_title: '', seo_description: '', seo_keywords: '', slug: '' }); setExistingGallery([]); setTyreUploadFiles([]); setShowAddTyreModal(true);}} className="flex-grow lg:flex-none bg-[#FFC300] text-black font-bold px-4 py-2 rounded-lg flex items-center justify-center gap-2 hover:bg-[#e6b000] transition-transform active:scale-95"><Plus size={18}/> <span>Додати</span></button>
             </div>
         </div>
 
@@ -728,94 +743,161 @@ const TyresTab: React.FC = () => {
                 <button onClick={resetAllFilters} className="bg-[#FFC300] text-black font-bold px-6 py-3 rounded-xl hover:bg-[#e6b000] flex items-center gap-2"><RefreshCw size={20}/> Скинути все</button>
             </div>
         ) : viewMode === 'list' ? (
-            /* --- LIST VIEW (Optimized for Visibility) --- */
-            <div className="bg-black border border-zinc-800 rounded-xl overflow-hidden shadow-xl">
-                {/* Header */}
-                <div className="grid grid-cols-[40px_100px_120px_40px_50px_80px_100px_1fr_50px_100px_80px] gap-2 p-3 bg-black border-b border-zinc-800 text-zinc-500 text-xs font-bold uppercase items-center sticky top-0 z-20">
-                    <div className="flex justify-center">
-                        <button onClick={handleSelectAllOnPage} className={`w-5 h-5 rounded border flex items-center justify-center ${tyres.every(t => selectedTyreIds.has(t.id)) ? 'bg-[#FFC300] border-[#FFC300] text-black' : 'border-zinc-600 hover:border-zinc-400'}`}>
-                            {tyres.every(t => selectedTyreIds.has(t.id)) && <CheckSquare size={14}/>}
-                        </button>
-                    </div>
-                    <div className="text-center">Фото</div>
-                    <div>Код</div>
-                    <div className="text-center text-orange-500 flex justify-center"><Flame size={16}/></div>
-                    <div className="text-center">Кат.</div>
-                    <div className="text-center font-bold">Сезон</div>
-                    <div>Пост.</div>
-                    <div>Назва</div>
-                    <div className="text-center">R</div>
-                    <div className="text-right">Ціна</div>
-                    <div className="text-center">Дії</div>
-                </div>
-
-                {/* Body */}
-                <div className="divide-y divide-zinc-800">
+            /* --- LIST VIEW (Responsive) --- */
+            <div className="space-y-3 md:space-y-0">
+                {/* Mobile List View (Cards) */}
+                <div className="md:hidden space-y-3">
                     {tyres.map(tyre => {
                         const isSelected = selectedTyreIds.has(tyre.id);
-                        const supplierName = suppliers.find(s => s.id === tyre.supplier_id)?.name || '-';
                         const isOutOfStock = tyre.in_stock === false;
-                        
                         return (
-                            <div key={tyre.id} className={`grid grid-cols-[40px_100px_120px_40px_50px_80px_100px_1fr_50px_100px_80px] gap-2 p-2 items-center hover:bg-zinc-900 transition-colors ${isSelected ? 'bg-zinc-800/50' : ''} ${isOutOfStock ? 'opacity-80' : ''}`}>
-                                <div className="flex justify-center">
-                                    <button onClick={() => toggleSelection(tyre.id)} className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-[#FFC300] border-[#FFC300] text-black' : 'border-zinc-600 hover:border-zinc-400'}`}>
-                                        {isSelected && <CheckSquare size={12}/>}
-                                    </button>
+                            <div key={tyre.id} className={`bg-zinc-900 border border-zinc-800 rounded-xl p-3 flex gap-4 relative transition-all ${isSelected ? 'ring-2 ring-[#FFC300]' : ''} ${isOutOfStock ? 'opacity-80' : ''}`}>
+                                <div className="w-20 h-20 bg-black rounded border border-zinc-800 flex-shrink-0 relative overflow-hidden cursor-pointer" onClick={() => openEditTyreModal(tyre)}>
+                                    {tyre.image_url ? (
+                                        <img src={tyre.image_url} className="w-full h-full object-cover" alt="" />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-zinc-800"><ImageIcon size={24}/></div>
+                                    )}
+                                    {isOutOfStock && <div className="absolute inset-0 bg-red-900/20 flex items-center justify-center"><span className="text-[8px] font-black bg-red-600 text-white px-1 rounded">OUT</span></div>}
                                 </div>
-                                <div className="relative flex justify-center group h-20 w-20 mx-auto">
-                                    <div className="w-20 h-20 bg-black rounded border border-zinc-700 overflow-visible relative flex items-center justify-center">
-                                        {tyre.image_url ? (
-                                            <img src={tyre.image_url} className="absolute left-0 top-0 w-full h-full object-cover rounded z-10 transition-all duration-200 group-hover:scale-[2.5] group-hover:z-50 group-hover:border-2 group-hover:border-[#FFC300] group-hover:shadow-2xl cursor-zoom-in" alt="" />
-                                        ) : (
-                                            <ImageIcon size={24} className="text-zinc-600"/>
-                                        )}
-                                        {isOutOfStock && <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none"><div className="bg-red-600 text-white text-[9px] px-2 py-0.5 font-bold uppercase -rotate-12 border border-red-900 shadow-md">Немає</div></div>}
+                                <div className="flex-grow min-w-0 flex flex-col justify-between">
+                                    <div className="cursor-pointer" onClick={() => openEditTyreModal(tyre)}>
+                                        <div className="flex justify-between items-start gap-2">
+                                            <span className="text-[10px] text-zinc-500 font-bold uppercase truncate">{tyre.manufacturer || 'Шина'}</span>
+                                            <button onClick={(e) => { e.stopPropagation(); toggleSelection(tyre.id); }} className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-[#FFC300] border-[#FFC300] text-black' : 'border-zinc-700'}`}>
+                                                {isSelected && <CheckSquare size={12}/>}
+                                            </button>
+                                        </div>
+                                        <h4 className="text-xs font-bold text-white line-clamp-1 mb-1">{tyre.title}</h4>
+                                        <div className="flex items-center gap-2 text-[10px]">
+                                            <span className="text-[#FFC300] font-bold">{tyre.price} грн</span>
+                                            <span className="text-zinc-500">|</span>
+                                            <span className="text-zinc-400">{tyre.radius}</span>
+                                        </div>
+                                    </div>
+                                    <div className="mt-2 flex gap-2">
+                                        <button onClick={() => openEditTyreModal(tyre)} className="flex-1 bg-[#FFC300] text-black text-[10px] font-black py-1.5 rounded-lg uppercase tracking-wider flex items-center justify-center gap-1">
+                                            <Edit2 size={12}/> Редагувати
+                                        </button>
+                                        <button onClick={() => { setTyreToDelete(tyre.id); setShowDeleteModal(true); }} className="px-3 bg-zinc-800 text-red-500 rounded-lg">
+                                            <Trash2 size={14}/>
+                                        </button>
                                     </div>
                                 </div>
-                                <div className="text-xs text-zinc-400 font-mono truncate" title={tyre.catalog_number}>{tyre.catalog_number || '-'}</div>
-                                <div className="flex justify-center"><input type="checkbox" checked={!!tyre.is_hot} onChange={() => handleQuickHotToggle(tyre)} className="w-5 h-5 accent-orange-600 cursor-pointer bg-zinc-800 border-zinc-600 rounded" /></div>
-                                <div className="flex justify-center">
-                                    {tyre.vehicle_type === 'cargo' ? <Truck size={16} className="text-blue-400"/> : tyre.vehicle_type === 'suv' ? <Mountain size={16} className="text-green-400"/> : tyre.vehicle_type === 'truck' ? <Truck size={16} className="text-blue-800"/> : tyre.vehicle_type === 'agro' ? <Tractor size={16} className="text-green-600"/> : <Car size={16} className="text-blue-300"/>}
-                                </div>
-                                <div className="text-center flex justify-center text-[10px] font-bold uppercase">
-                                    {tyre.season === 'winter' ? <span className="bg-blue-900/30 text-blue-300 px-2 py-1 rounded border border-blue-900/50">Зима</span> : 
-                                     tyre.season === 'summer' ? <span className="bg-orange-900/30 text-orange-300 px-2 py-1 rounded border border-orange-900/50">Літо</span> : 
-                                     tyre.season === 'all-season' ? <span className="bg-green-900/30 text-green-300 px-2 py-1 rounded border border-green-900/50">Всесезон</span> : 
-                                     <span className="text-zinc-600">-</span>}
-                                </div>
-                                <div className="text-xs text-white font-bold truncate" title={supplierName}>{supplierName}</div>
-                                <div className="flex flex-col">
-                                    <div onClick={() => handleCopyTitle(tyre.title)} className="text-sm text-white font-bold truncate leading-tight flex items-center gap-1 cursor-pointer hover:text-[#FFC300] active:scale-95 transition-all group/title" title={`${tyre.title} (Натисніть, щоб скопіювати)`}>
-                                        <span className="truncate">{tyre.title}</span><Copy size={12} className="opacity-0 group-hover/title:opacity-100 text-[#FFC300] transition-opacity"/>
-                                    </div>
-                                    {tyre.axis && <span className="text-[10px] text-zinc-500 flex items-center gap-1"><CircleDot size={10} className="text-blue-400"/> {tyre.axis}</span>}
-                                </div>
-                                <div className="text-center font-bold text-[#FFC300] text-sm">{tyre.radius?.replace('R','')}</div>
-                                <div className="text-right font-mono text-white text-sm">{tyre.price}</div>
-                                <div className="flex justify-center gap-1"><button onClick={() => openEditTyreModal(tyre)} className="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300"><Edit2 size={14}/></button><button onClick={() => { setTyreToDelete(tyre.id); setShowDeleteModal(true); }} className="p-1.5 bg-zinc-800 hover:bg-red-900/50 text-zinc-500 hover:text-red-500 rounded"><X size={14}/></button></div>
                             </div>
                         );
                     })}
                 </div>
+
+                {/* Desktop List View (Table) */}
+                <div className="hidden md:block bg-black border border-zinc-800 rounded-xl overflow-hidden shadow-xl overflow-x-auto no-scrollbar">
+                    <div className="min-w-[1000px]">
+                        {/* Header */}
+                        <div className="grid grid-cols-[40px_100px_120px_40px_50px_80px_100px_1fr_50px_100px_80px] gap-2 p-3 bg-black border-b border-zinc-800 text-zinc-500 text-xs font-bold uppercase items-center sticky top-0 z-20">
+                            <div className="flex justify-center">
+                                <button onClick={handleSelectAllOnPage} className={`w-5 h-5 rounded border flex items-center justify-center ${tyres.every(t => selectedTyreIds.has(t.id)) ? 'bg-[#FFC300] border-[#FFC300] text-black' : 'border-zinc-600 hover:border-zinc-400'}`}>
+                                    {tyres.every(t => selectedTyreIds.has(t.id)) && <CheckSquare size={14}/>}
+                                </button>
+                            </div>
+                            <div className="text-center">Фото</div>
+                            <div>Код</div>
+                            <div className="text-center text-orange-500 flex justify-center"><Flame size={16}/></div>
+                            <div className="text-center">Кат.</div>
+                            <div className="text-center font-bold">Сезон</div>
+                            <div>Пост.</div>
+                            <div>Назва</div>
+                            <div className="text-center">R</div>
+                            <div className="text-right">Ціна</div>
+                            <div className="text-center">Дії</div>
+                        </div>
+
+                        {/* Body */}
+                        <div className="divide-y divide-zinc-800">
+                            {tyres.map(tyre => {
+                                const isSelected = selectedTyreIds.has(tyre.id);
+                                const supplierName = suppliers.find(s => s.id === tyre.supplier_id)?.name || '-';
+                                const isOutOfStock = tyre.in_stock === false;
+                                
+                                return (
+                                    <div key={tyre.id} className={`grid grid-cols-[40px_100px_120px_40px_50px_80px_100px_1fr_50px_100px_80px] gap-2 p-2 items-center hover:bg-zinc-900 transition-colors ${isSelected ? 'bg-zinc-800/50' : ''} ${isOutOfStock ? 'opacity-80' : ''}`}>
+                                        <div className="flex justify-center">
+                                            <button onClick={() => toggleSelection(tyre.id)} className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-[#FFC300] border-[#FFC300] text-black' : 'border-zinc-600 hover:border-zinc-400'}`}>
+                                                {isSelected && <CheckSquare size={12}/>}
+                                            </button>
+                                        </div>
+                                        <div className="relative flex justify-center group h-20 w-20 mx-auto">
+                                            <div className="w-20 h-20 bg-black rounded border border-zinc-700 overflow-visible relative flex items-center justify-center">
+                                                {tyre.image_url ? (
+                                                    <img src={tyre.image_url} className="absolute left-0 top-0 w-full h-full object-cover rounded z-10 transition-all duration-200 group-hover:scale-[2.5] group-hover:z-50 group-hover:border-2 group-hover:border-[#FFC300] group-hover:shadow-2xl cursor-zoom-in" alt="" />
+                                                ) : (
+                                                    <ImageIcon size={24} className="text-zinc-600"/>
+                                                )}
+                                                {isOutOfStock && <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none"><div className="bg-red-600 text-white text-[9px] px-2 py-0.5 font-bold uppercase -rotate-12 border border-red-900 shadow-md">Немає</div></div>}
+                                            </div>
+                                        </div>
+                                        <div className="text-xs text-zinc-400 font-mono truncate" title={tyre.catalog_number}>{tyre.catalog_number || '-'}</div>
+                                        <div className="flex justify-center"><input type="checkbox" checked={!!tyre.is_hot} onChange={() => handleQuickHotToggle(tyre)} className="w-5 h-5 accent-orange-600 cursor-pointer bg-zinc-800 border-zinc-600 rounded" /></div>
+                                        <div className="flex justify-center">
+                                            {tyre.vehicle_type === 'cargo' ? <Truck size={16} className="text-blue-400"/> : tyre.vehicle_type === 'suv' ? <Mountain size={16} className="text-green-400"/> : tyre.vehicle_type === 'truck' ? <Truck size={16} className="text-blue-800"/> : tyre.vehicle_type === 'agro' ? <Tractor size={16} className="text-green-600"/> : <Car size={16} className="text-blue-300"/>}
+                                        </div>
+                                        <div className="text-center flex justify-center text-[10px] font-bold uppercase">
+                                            {tyre.season === 'winter' ? <span className="bg-blue-900/30 text-blue-300 px-2 py-1 rounded border border-blue-900/50">Зима</span> : 
+                                            tyre.season === 'summer' ? <span className="bg-orange-900/30 text-orange-300 px-2 py-1 rounded border border-orange-900/50">Літо</span> : 
+                                            tyre.season === 'all-season' ? <span className="bg-green-900/30 text-green-300 px-2 py-1 rounded border border-green-900/50">Всесезон</span> : 
+                                            <span className="text-zinc-600">-</span>}
+                                        </div>
+                                        <div className="text-xs text-white font-bold truncate" title={supplierName}>{supplierName}</div>
+                                        <div className="flex flex-col">
+                                            <div onClick={() => handleCopyTitle(tyre.title)} className="text-sm text-white font-bold truncate leading-tight flex items-center gap-1 cursor-pointer hover:text-[#FFC300] active:scale-95 transition-all group/title" title={`${tyre.title} (Натисніть, щоб скопіювати)`}>
+                                                <span className="truncate">{tyre.title}</span><Copy size={12} className="opacity-0 group-hover/title:opacity-100 text-[#FFC300] transition-opacity"/>
+                                            </div>
+                                            {tyre.axis && <span className="text-[10px] text-zinc-500 flex items-center gap-1"><CircleDot size={10} className="text-blue-400"/> {tyre.axis}</span>}
+                                        </div>
+                                        <div className="text-center font-bold text-[#FFC300] text-sm">{tyre.radius?.replace('R','')}</div>
+                                        <div className="text-right font-mono text-white text-sm">{tyre.price}</div>
+                                        <div className="flex justify-center gap-1">
+                                            <button onClick={() => openEditTyreModal(tyre)} className="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300" title="Редагувати">
+                                                <Edit2 size={14}/>
+                                            </button>
+                                            <button onClick={() => { setTyreToDelete(tyre.id); setShowDeleteModal(true); }} className="p-1.5 bg-zinc-800 hover:bg-red-900/50 text-zinc-500 hover:text-red-500 rounded" title="Видалити">
+                                                <Trash2 size={14}/>
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
             </div>
-        ) : (
+
+    ) : (
             /* --- GRID VIEW --- */
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
                 {tyres.map(tyre => (
                     <div key={tyre.id} className={`bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden group relative ${selectedTyreIds.has(tyre.id) ? 'ring-2 ring-[#FFC300]' : ''} ${tyre.in_stock === false ? 'opacity-80' : ''}`}>
-                        <div className="aspect-square bg-black relative">
+                        <div className="aspect-square bg-black relative cursor-pointer" onClick={() => openEditTyreModal(tyre)}>
                             {tyre.image_url ? <img src={tyre.image_url} className="w-full h-full object-cover opacity-80 group-hover:opacity-100" /> : <div className="w-full h-full flex items-center justify-center text-zinc-700"><ImageIcon/></div>}
-                            <button onClick={() => toggleSelection(tyre.id)} className={`absolute top-2 left-2 w-6 h-6 rounded border flex items-center justify-center z-20 ${selectedTyreIds.has(tyre.id) ? 'bg-[#FFC300] border-[#FFC300] text-black' : 'bg-black/50 border-white/50'}`}><CheckSquare size={14}/></button>
+                            <button onClick={(e) => { e.stopPropagation(); toggleSelection(tyre.id); }} className={`absolute top-2 left-2 w-6 h-6 rounded border flex items-center justify-center z-20 ${selectedTyreIds.has(tyre.id) ? 'bg-[#FFC300] border-[#FFC300] text-black' : 'bg-black/50 border-white/50'}`}><CheckSquare size={14}/></button>
                             {tyre.is_hot && <div className="absolute top-2 right-2 bg-orange-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded z-10 shadow-sm">HOT</div>}
                             {tyre.in_stock === false && <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none"><span className="text-red-500 font-bold uppercase text-xs border border-red-500 px-2 py-1 -rotate-12 bg-black/20 shadow-lg">Немає</span></div>}
                         </div>
                         <div className="p-3">
                             <div className="text-[10px] text-zinc-500 uppercase font-bold">{tyre.manufacturer}</div>
-                            <div onClick={() => handleCopyTitle(tyre.title)} title={`${tyre.title} (Натисніть, щоб скопіювати)`} className="text-xs font-bold text-white line-clamp-2 h-8 mb-1 cursor-pointer hover:text-[#FFC300] transition-colors">{tyre.title}</div>
+                            <div className="flex items-center justify-between gap-1 mb-1">
+                                <div onClick={() => openEditTyreModal(tyre)} className="text-xs font-bold text-white line-clamp-2 h-8 cursor-pointer hover:text-[#FFC300] transition-colors flex-grow">{tyre.title}</div>
+                                <button onClick={(e) => { e.stopPropagation(); handleCopyTitle(tyre.title); }} className="p-1 text-zinc-600 hover:text-[#FFC300] transition-colors" title="Копіювати назву"><Copy size={12}/></button>
+                            </div>
                             {tyre.axis && <div className="text-[9px] text-blue-300 font-bold mb-1 flex items-center gap-1"><CircleDot size={8}/> {tyre.axis}</div>}
-                            <div className="flex justify-between items-end"><div className="text-[#FFC300] font-mono font-bold">{tyre.price}</div><div className="text-[10px] text-zinc-500">{tyre.radius}</div></div>
-                            <div className="mt-2 flex gap-1"><button onClick={() => openEditTyreModal(tyre)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white text-xs py-1 rounded">Ред.</button><button onClick={() => { setTyreToDelete(tyre.id); setShowDeleteModal(true); }} className="px-2 bg-zinc-800 hover:bg-red-900/50 text-red-500 rounded"><Trash2 size={12}/></button></div>
+                            <div className="flex justify-between items-end cursor-pointer" onClick={() => openEditTyreModal(tyre)}><div className="text-[#FFC300] font-mono font-bold">{tyre.price}</div><div className="text-[10px] text-zinc-500">{tyre.radius}</div></div>
+                            <div className="mt-2 flex gap-1">
+                                <button onClick={() => openEditTyreModal(tyre)} className="flex-1 bg-[#FFC300] hover:bg-[#e6b000] text-black font-black text-xs py-2 rounded-lg transition-all active:scale-95 flex items-center justify-center gap-1">
+                                    <Edit2 size={12}/> Редагувати
+                                </button>
+                                <button onClick={() => { setTyreToDelete(tyre.id); setShowDeleteModal(true); }} className="px-3 bg-zinc-800 hover:bg-red-900/50 text-red-500 rounded-lg transition-colors">
+                                    <Trash2 size={14}/>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 ))}
@@ -830,7 +912,7 @@ const TyresTab: React.FC = () => {
         {/* Add/Edit Modal with PASTE Support */}
         {showAddTyreModal && (
             <div 
-                className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4 outline-none" 
+                className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4 outline-none" 
                 onPaste={(e: React.ClipboardEvent) => {
                     if (e.clipboardData.files.length > 0) {
                         e.preventDefault();
@@ -844,10 +926,13 @@ const TyresTab: React.FC = () => {
                 }}
                 tabIndex={0}
             >
-                <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-4xl h-[90vh] flex flex-col shadow-2xl relative" onClick={e => e.stopPropagation()}>
-                    <div className="flex justify-between items-center mb-6"><h3 className="text-2xl font-black text-white">{editingTyreId ? 'Редагування шини' : 'Нова шина'}</h3><button onClick={() => setShowAddTyreModal(false)} className="text-zinc-500 hover:text-white"><X size={28}/></button></div>
-                    <div className="flex-grow overflow-y-auto pr-2 custom-scrollbar">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-zinc-900 border-0 sm:border sm:border-zinc-700 p-4 sm:p-6 rounded-none sm:rounded-2xl w-full max-w-4xl h-full sm:h-[90vh] flex flex-col shadow-2xl relative" onClick={e => e.stopPropagation()}>
+                    <div className="flex justify-between items-center mb-4 sm:mb-6">
+                        <h3 className="text-xl sm:text-2xl font-black text-white">{editingTyreId ? 'Редагування' : 'Нова шина'}</h3>
+                        <button onClick={() => setShowAddTyreModal(false)} className="p-2 text-zinc-500 hover:text-white bg-zinc-800 rounded-full"><X size={24}/></button>
+                    </div>
+                    <div className="flex-grow overflow-y-auto pr-1 custom-scrollbar">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                             <div className="space-y-4">
                                 <div><label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Виробник (Бренд)</label><input list="brands" value={tyreForm.manufacturer} onChange={e => setTyreForm({...tyreForm, manufacturer: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-bold" placeholder="Напр. Michelin"/><datalist id="brands">{KNOWN_BRANDS.map(b => <option key={b} value={b}/>)}</datalist></div>
                                 <div><label className="block text-[#FFC300] text-xs font-bold uppercase mb-1">Назва (Модель)</label><input type="text" value={tyreForm.name} onChange={e => setTyreForm({...tyreForm, name: e.target.value})} className="w-full bg-black border border-[#FFC300]/50 rounded-lg p-3 text-white font-bold" placeholder="Напр. Alpin 6"/></div>
@@ -927,6 +1012,34 @@ const TyresTab: React.FC = () => {
                                 <div className="grid grid-cols-2 gap-4 bg-zinc-800/50 p-4 rounded-xl border border-zinc-800"><div><label className="block text-green-400 text-xs font-bold uppercase mb-1">Роздріб (Продаж)</label><input type="number" value={tyreForm.price} onChange={e => setTyreForm({...tyreForm, price: e.target.value})} className="w-full bg-black border border-green-900/50 rounded-lg p-3 text-white font-bold text-xl" placeholder="0"/></div><div><label className="block text-zinc-500 text-xs font-bold uppercase mb-1">Стара ціна</label><input type="number" value={tyreForm.old_price} onChange={e => setTyreForm({...tyreForm, old_price: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-zinc-400" placeholder="0"/></div><div><label className="block text-blue-400 text-xs font-bold uppercase mb-1">Закупка (База)</label><input type="number" value={tyreForm.base_price} onChange={e => setTyreForm({...tyreForm, base_price: e.target.value})} className="w-full bg-black border border-blue-900/50 rounded-lg p-3 text-white" placeholder="0"/></div><div><label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Залишок (шт)</label><input type="number" value={tyreForm.stock_quantity} onChange={e => setTyreForm({...tyreForm, stock_quantity: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-bold" placeholder="0"/></div></div>
                                 <div className="grid grid-cols-2 gap-4"><div><label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Артикул (Код)</label><input type="text" value={tyreForm.catalog_number} onChange={e => setTyreForm({...tyreForm, catalog_number: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-mono" /></div><div><label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Номер товару</label><input type="text" value={tyreForm.product_number} onChange={e => setTyreForm({...tyreForm, product_number: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-mono" /></div></div>
                                 <div><label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Опис</label><textarea value={tyreForm.description} onChange={e => setTyreForm({...tyreForm, description: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white h-24 text-sm" /></div>
+                                
+                                {/* SEO SECTION */}
+                                <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-800 space-y-4">
+                                    <h4 className="text-zinc-500 text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
+                                        <Globe size={14} className="text-[#FFC300]"/> SEO Налаштування (Google)
+                                    </h4>
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="block text-zinc-400 text-[10px] font-bold uppercase mb-1">SEO Заголовок (Title)</label>
+                                            <input type="text" value={tyreForm.seo_title} onChange={e => setTyreForm({...tyreForm, seo_title: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-2 text-white text-xs" placeholder="Залиште порожнім для авто-генерації"/>
+                                        </div>
+                                        <div>
+                                            <label className="block text-zinc-400 text-[10px] font-bold uppercase mb-1">SEO Опис (Description)</label>
+                                            <textarea rows={2} value={tyreForm.seo_description} onChange={e => setTyreForm({...tyreForm, seo_description: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-2 text-white text-xs" placeholder="Короткий опис для пошуковика"/>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-zinc-400 text-[10px] font-bold uppercase mb-1">Slug (URL)</label>
+                                                <input type="text" value={tyreForm.slug} onChange={e => setTyreForm({...tyreForm, slug: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-2 text-white text-xs font-mono" placeholder="michelin-alpin-6"/>
+                                            </div>
+                                            <div>
+                                                <label className="block text-zinc-400 text-[10px] font-bold uppercase mb-1">Ключові слова</label>
+                                                <input type="text" value={tyreForm.seo_keywords} onChange={e => setTyreForm({...tyreForm, seo_keywords: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-2 text-white text-xs" placeholder="шина, купити, зимова"/>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div><label className="flex items-center gap-2 cursor-pointer bg-zinc-800 px-4 py-2 rounded-lg border border-zinc-700 w-fit"><input type="checkbox" checked={tyreForm.is_hot} onChange={e => setTyreForm({...tyreForm, is_hot: e.target.checked})} className="w-5 h-5 accent-[#FFC300]"/><span className="font-bold text-white"><Flame className="inline text-orange-500 mr-1" size={16}/> HOT Пропозиція</span></label>{tyreForm.is_hot && (<div className="flex gap-2 mt-2 animate-in fade-in slide-in-from-top-1">{[2, 3, 5, 10].map(pct => (<button key={pct} onClick={() => applyDiscount(pct)} className="flex-1 bg-red-900/20 border border-red-800 text-red-400 hover:bg-red-900/40 py-1 rounded text-xs font-bold">-{pct}%</button>))}</div>)}</div>
                             </div>
                         </div>

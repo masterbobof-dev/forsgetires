@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ShoppingCart, Flame, ShoppingBag } from 'lucide-react';
+import { ShoppingCart, Flame, ShoppingBag, Eye, Info } from 'lucide-react';
 import { TyreProduct } from '../../types';
 
 interface ProductCardProps {
@@ -21,57 +21,118 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, f
   return (
     <article 
       onClick={onClick} 
-      className={`h-full bg-zinc-900 border rounded-xl overflow-hidden hover:border-[#FFC300] transition-all group flex flex-col relative cursor-pointer ${isOutOfStock ? 'opacity-70 border-zinc-800' : 'border-zinc-800 shadow-lg hover:shadow-yellow-900/10'}`}
+      className={`group relative flex flex-col h-full bg-zinc-900/50 backdrop-blur-sm border rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-2xl hover:shadow-yellow-900/20 ${
+        isOutOfStock 
+          ? 'opacity-60 border-zinc-800 grayscale-[0.5]' 
+          : 'border-zinc-800 hover:border-[#FFC300] cursor-pointer'
+      }`}
     >
-       <div className="aspect-square bg-black relative overflow-hidden">
-          {tyre.image_url && !isOutOfStock ? (
+       {/* Image Section */}
+       <div className="aspect-[4/5] bg-zinc-950 relative overflow-hidden">
+          {tyre.image_url ? (
             <img 
               src={tyre.image_url} 
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
               alt={altText}
               loading="lazy"
+              referrerPolicy="no-referrer"
             />
           ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center text-zinc-700 bg-zinc-950">
-              <ShoppingBag size={32} className="opacity-20 mb-2"/>
-              <span className="text-[10px] font-bold uppercase">{isOutOfStock ? 'Немає' : 'Без фото'}</span>
+            <div className="w-full h-full flex flex-col items-center justify-center text-zinc-800">
+              <ShoppingBag size={48} strokeWidth={1} className="opacity-20 mb-2"/>
+              <span className="text-[10px] font-bold uppercase tracking-widest">Немає фото</span>
             </div>
           )}
           
-          <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
-            {tyre.is_hot && <div className="bg-orange-600 text-white text-[10px] font-black px-2 py-0.5 rounded shadow-lg uppercase flex items-center gap-1"><Flame size={10} fill="currentColor"/> HOT</div>}
-            {hasDiscount && <div className="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded shadow-lg uppercase">SALE</div>}
+          {/* Badges */}
+          <div className="absolute top-3 left-3 z-10 flex flex-col gap-1.5">
+            {tyre.is_hot && (
+              <div className="bg-orange-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-lg uppercase flex items-center gap-1 animate-pulse">
+                <Flame size={12} fill="currentColor"/> 
+                <span>HOT</span>
+              </div>
+            )}
+            {hasDiscount && (
+              <div className="bg-red-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-lg uppercase">
+                SALE
+              </div>
+            )}
           </div>
+
+          {/* Quick View Overlay (Desktop) */}
+          {!isOutOfStock && (
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-2">
+               <div className="bg-white text-black p-3 rounded-full transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300 shadow-xl">
+                  <Eye size={20} />
+               </div>
+            </div>
+          )}
           
-          {isOutOfStock && <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-20"><span className="text-white text-[10px] font-black uppercase bg-red-600 px-2 py-1 -rotate-12">Архів</span></div>}
+          {isOutOfStock && (
+            <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20">
+              <span className="text-white text-xs font-black uppercase bg-zinc-800 border border-zinc-700 px-4 py-2 rounded-lg tracking-widest -rotate-6 shadow-2xl">
+                Архів
+              </span>
+            </div>
+          )}
        </div>
 
-       <div className="p-3 md:p-4 flex flex-col flex-grow">
-          <div className="text-[10px] text-zinc-500 uppercase font-bold mb-1 truncate">{tyre.manufacturer || 'Шина'}</div>
-          <h3 className="text-sm md:text-base font-bold text-white mb-2 leading-tight line-clamp-2 min-h-[2.5em] group-hover:text-[#FFC300] transition-colors">{tyre.title}</h3>
-          
-          <div className="text-[10px] text-zinc-500 mb-2 flex flex-col gap-0.5">
-            {tyre.catalog_number && <span>Арт: <span className="text-zinc-400 font-mono">{tyre.catalog_number}</span></span>}
-            {(tyre.width || tyre.height || tyre.radius) && (
-              <span className="text-[#FFC300] font-black uppercase mt-0.5 text-[11px]">
-                {tyre.width}{tyre.height ? '/' + tyre.height : ''} {tyre.radius}
+       {/* Content Section */}
+       <div className="p-4 flex flex-col flex-grow">
+          <div className="flex justify-between items-start mb-1">
+            <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider truncate max-w-[70%]">
+              {tyre.manufacturer || 'Шина'}
+            </span>
+            {tyre.season && (
+              <span className="text-[9px] text-zinc-400 border border-zinc-800 px-1.5 py-0.5 rounded uppercase font-medium">
+                {tyre.season === 'winter' ? 'Зима' : tyre.season === 'summer' ? 'Літо' : 'Всесезон'}
               </span>
             )}
           </div>
 
-          <div className="mt-auto pt-3 border-t border-zinc-800 flex flex-col gap-2">
+          <h3 className="text-sm md:text-base font-bold text-white mb-3 leading-tight line-clamp-2 min-h-[2.5em] group-hover:text-[#FFC300] transition-colors">
+            {tyre.title}
+          </h3>
+          
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            {tyre.width && (
+              <span className="bg-zinc-800/50 text-zinc-300 text-[10px] font-bold px-2 py-0.5 rounded border border-zinc-800">
+                {tyre.width}/{tyre.height}
+              </span>
+            )}
+            {tyre.radius && (
+              <span className="bg-[#FFC300]/10 text-[#FFC300] text-[10px] font-black px-2 py-0.5 rounded border border-[#FFC300]/20">
+                {tyre.radius}
+              </span>
+            )}
+          </div>
+
+          <div className="mt-auto pt-4 border-t border-zinc-800/50 flex items-center justify-between gap-2">
             <div className="flex flex-col">
-              {hasDiscount && <span className="text-zinc-500 text-[10px] line-through">{formatPrice(tyre.old_price)} грн</span>}
-              <span className="text-xl font-black text-[#FFC300]">{formatPrice(tyre.price)} <span className="text-[10px] font-normal text-zinc-500">грн</span></span>
+              {hasDiscount && (
+                <span className="text-zinc-500 text-[10px] line-through decoration-red-500/50">
+                  {formatPrice(tyre.old_price)}
+                </span>
+              )}
+              <div className="flex items-baseline gap-1">
+                <span className="text-xl font-black text-[#FFC300]">
+                  {formatPrice(tyre.price)}
+                </span>
+                <span className="text-[10px] font-bold text-zinc-500 uppercase">грн</span>
+              </div>
             </div>
+            
             <button 
               onClick={onAddToCart} 
               disabled={isOutOfStock} 
-              className={`w-full py-3 rounded-lg font-bold text-[10px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 ${
-                isOutOfStock ? 'bg-zinc-800 text-zinc-500' : 'bg-white text-black hover:bg-[#FFC300]'
+              className={`p-3 rounded-xl transition-all active:scale-90 shadow-lg ${
+                isOutOfStock 
+                  ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed' 
+                  : 'bg-[#FFC300] text-black hover:bg-white hover:shadow-yellow-400/20'
               }`}
+              title={isOutOfStock ? 'Немає в наявності' : 'Додати у кошик'}
             >
-              <ShoppingCart size={14} /> {isOutOfStock ? 'Відсутня' : 'Купити'}
+              <ShoppingCart size={20} strokeWidth={2.5} />
             </button>
           </div>
        </div>

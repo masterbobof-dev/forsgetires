@@ -61,26 +61,8 @@ const OrdersTab: React.FC = () => {
        {orders.map((order) => (
           <div key={order.id} className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col gap-4 relative group hover:border-zinc-700 transition-colors shadow-lg">
              
-             {/* Action Buttons */}
-             <div className="absolute top-4 right-4 flex gap-2 z-10">
-                 <button 
-                    onClick={(e) => { e.stopPropagation(); setEditingOrder(order); setShowModal(true); }} 
-                    className="p-2 bg-zinc-800 rounded-lg hover:bg-zinc-700 hover:text-white border border-zinc-700 transition-colors"
-                    title="Редагувати"
-                 >
-                    <Edit2 size={16}/>
-                 </button>
-                 <button 
-                    onClick={(e) => { e.stopPropagation(); setOrderToDelete(order.id); }} 
-                    className="p-2 bg-red-900/10 rounded-lg hover:bg-red-600 hover:text-white border border-red-900/30 text-red-500 transition-colors"
-                    title="Видалити"
-                 >
-                    <Trash2 size={16}/>
-                 </button>
-             </div>
-
-             <div className="flex justify-between items-start pr-24">
-                <div>
+             <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                <div className="flex-grow">
                     <h3 className="font-bold text-white text-lg flex items-center gap-2">
                         {order.customer_name}
                     </h3>
@@ -91,15 +73,35 @@ const OrdersTab: React.FC = () => {
                         <Calendar size={12}/> {new Date(order.created_at).toLocaleString('uk-UA')}
                     </div>
                 </div>
-                <span className={`px-3 py-1 rounded text-xs font-bold uppercase border ${
-                    order.status === 'new' ? 'bg-green-900/20 text-green-400 border-green-900/50' : 
-                    order.status === 'confirmed' ? 'bg-blue-900/20 text-blue-400 border-blue-900/50' :
-                    order.status === 'shipped' ? 'bg-purple-900/20 text-purple-400 border-purple-900/50' :
-                    order.status === 'completed' ? 'bg-zinc-700/50 text-zinc-300 border-zinc-600' : 
-                    'bg-red-900/20 text-red-500 border-red-900/50'
-                }`}>
-                    {order.status === 'new' ? 'Нове' : order.status === 'confirmed' ? 'Підтверджено' : order.status === 'shipped' ? 'Відправлено' : order.status === 'completed' ? 'Виконано' : 'Скасовано'}
-                </span>
+                
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                    <span className={`px-3 py-1 rounded text-xs font-bold uppercase border ${
+                        order.status === 'new' ? 'bg-green-900/20 text-green-400 border-green-900/50' : 
+                        order.status === 'confirmed' ? 'bg-blue-900/20 text-blue-400 border-blue-900/50' :
+                        order.status === 'shipped' ? 'bg-purple-900/20 text-purple-400 border-purple-900/50' :
+                        order.status === 'completed' ? 'bg-zinc-700/50 text-zinc-300 border-zinc-600' : 
+                        'bg-red-900/20 text-red-500 border-red-900/50'
+                    }`}>
+                        {order.status === 'new' ? 'Нове' : order.status === 'confirmed' ? 'Підтверджено' : order.status === 'shipped' ? 'Відправлено' : order.status === 'completed' ? 'Виконано' : 'Скасовано'}
+                    </span>
+
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); setEditingOrder(order); setShowModal(true); }} 
+                            className="p-2 bg-zinc-800 rounded-lg hover:bg-zinc-700 hover:text-white border border-zinc-700 transition-colors"
+                            title="Редагувати"
+                        >
+                            <Edit2 size={16}/>
+                        </button>
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); setOrderToDelete(order.id); }} 
+                            className="p-2 bg-red-900/10 rounded-lg hover:bg-red-600 hover:text-white border border-red-900/30 text-red-500 transition-colors"
+                            title="Видалити"
+                        >
+                            <Trash2 size={16}/>
+                        </button>
+                    </div>
+                </div>
              </div>
 
              {/* Order Items */}

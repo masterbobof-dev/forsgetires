@@ -11,7 +11,7 @@ import Prices from './components/Prices';
 import AdminPanel from './components/AdminPanel';
 import TyreShop from './components/TyreShop';
 import { ViewState, TyreProduct } from './types';
-import { Lock, X, Loader2, Mail, Key, UserPlus, LogIn, AlertCircle, Wrench, Briefcase, ArrowLeft, Send } from 'lucide-react';
+import { Lock, X, Loader2, Mail, Key, Briefcase, ArrowLeft, Send, Wrench } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
 const App: React.FC = () => {
@@ -152,16 +152,21 @@ const App: React.FC = () => {
       }
   };
 
+  const handleBackToHome = () => {
+    setCurrentView('home');
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  };
+
   const renderContent = () => {
     switch (currentView) {
       case 'admin':
-        return session ? <AdminPanel onLogout={() => supabase.auth.signOut()} mode={adminPanelMode} setMode={setAdminPanelMode} /> : <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin text-[#FFC300]" size={48}/></div>;
+        return session ? <AdminPanel onLogout={() => supabase.auth.signOut()} onBackToSite={handleBackToHome} mode={adminPanelMode} setMode={setAdminPanelMode} /> : <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin text-[#FFC300]" size={48}/></div>;
       case 'prices':
         return <Prices />;
       case 'gallery':
         return <Gallery />;
       case 'shop':
-        return <TyreShop initialCategory={shopCategory} initialProduct={shopInitialProduct} />;
+        return <TyreShop onBack={handleBackToHome} initialCategory={shopCategory} initialProduct={shopInitialProduct} isAdmin={!!session} onAdminClick={() => setCurrentView('admin')} />;
       case 'home':
       default:
         return (
@@ -170,7 +175,7 @@ const App: React.FC = () => {
                setShopCategory(category);
                setShopInitialProduct(tyre || null);
                setCurrentView('shop');
-               window.scrollTo({ top: 0, behavior: 'smooth' });
+               window.scrollTo({ top: 0, behavior: 'instant' });
             }} />
             <Services />
             <Tips />
@@ -228,7 +233,7 @@ const App: React.FC = () => {
                 <div className="flex flex-col items-center gap-4 animate-in slide-in-from-left">
                     <div className="flex w-full bg-black p-1 rounded-xl border border-zinc-800 mb-2">
                         <button onClick={() => setAuthTab('admin')} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold uppercase transition-all ${authTab === 'admin' ? 'bg-[#FFC300] text-black shadow-lg' : 'text-zinc-500 hover:text-white'}`}>
-                            <Briefcase size={14}/> Магазин
+                            <Briefcase size={14}/> Магазин шин
                         </button>
                         <button onClick={() => setAuthTab('service')} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold uppercase transition-all ${authTab === 'service' ? 'bg-blue-600 text-white shadow-lg' : 'text-zinc-500 hover:text-white'}`}>
                             <Wrench size={14}/> Сервіс
@@ -248,8 +253,39 @@ const App: React.FC = () => {
                         </div>
                     </div>
                     <button onClick={handleAuthAction} disabled={verifying} className={`w-full font-black py-3 rounded-xl transition-transform active:scale-95 ${authMode === 'register' ? 'bg-white text-black' : (authTab === 'service' ? 'bg-blue-600 text-white' : 'bg-[#FFC300] text-black')}`}>
-                        {verifying ? <Loader2 className="animate-spin" /> : (authMode === 'register' ? 'СТВОРИТИ АКАУНТ' : 'УВІЙТИ')}
+                        {verifying ? <Loader2 className="animate-spin mx-auto" /> : (authMode === 'register' ? 'СТВОРИТИ АКАУНТ' : 'УВІЙТИ')}
                     </button>
+
+                    <div className="flex flex-col gap-2 items-center mt-2">
+                        <button 
+                            onClick={() => {
+                                setAuthMode(authMode === 'login' ? 'register' : 'login');
+                                setAuthError('');
+                                setAuthSuccess('');
+                            }}
+                            className="text-zinc-400 hover:text-white text-xs font-bold transition-colors"
+                        >
+                            {authMode === 'login' ? 'Немає акаунту? Реєстрація' : 'Вже є акаунт? Увійти'}
+                        </button>
+                        {authMode === 'login' && (
+                            <button 
+                                onClick={() => {
+                                    setAuthMode('forgot');
+                                    setAuthError('');
+                                    setAuthSuccess('');
+                                }}
+                                className="text-zinc-500 hover:text-zinc-300 text-[10px] uppercase tracking-widest font-bold"
+                            >
+                                Забули пароль?
+                            </button>
+                        )}
+                    </div>
+
+                    {(authError || authSuccess) && (
+                        <div className={`text-center p-3 rounded-xl text-xs font-bold animate-in fade-in zoom-in ${authError ? 'bg-red-900/20 text-red-400 border border-red-900/50' : 'bg-green-900/20 text-green-400 border border-green-900/50'}`}>
+                            {authError || authSuccess}
+                        </div>
+                    )}
                 </div>
             )}
           </div>

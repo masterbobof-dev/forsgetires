@@ -27,20 +27,28 @@ interface CategoryNavProps {
 
 const CategoryNav: React.FC<CategoryNavProps> = ({ activeCategory, onCategoryChange }) => {
   return (
-    <div className="mb-8 px-2">
-      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-11 gap-2 md:gap-3">
+    <div className="mb-12 -mx-2 px-2 overflow-x-auto no-scrollbar">
+      <div className="flex lg:grid lg:grid-cols-11 gap-3 min-w-max lg:min-w-0 pb-4 lg:pb-0">
         {CATEGORIES.map(cat => (
           <button 
             key={cat.id} 
             onClick={() => onCategoryChange(cat.id)} 
-            className={`flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border transition-all duration-300 ${
+            className={`group flex flex-col items-center justify-center gap-3 p-4 rounded-2xl border transition-all duration-500 min-w-[100px] lg:min-w-0 ${
               activeCategory === cat.id 
-                ? 'bg-[#FFC300] text-black scale-105 shadow-lg shadow-yellow-900/20 border-[#FFC300]' 
-                : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                ? 'bg-[#FFC300] text-black border-[#FFC300] shadow-2xl shadow-yellow-900/30 -translate-y-1' 
+                : 'bg-zinc-900/50 backdrop-blur-sm border-zinc-800 text-zinc-500 hover:bg-zinc-800 hover:text-white hover:border-zinc-700'
             }`}
           >
-            <cat.icon size={18} />
-            <span className="font-bold text-[10px] uppercase text-center leading-tight whitespace-pre-wrap">{cat.label}</span>
+            <div className={`p-2 rounded-xl transition-all duration-500 ${
+              activeCategory === cat.id ? 'bg-black/10' : 'bg-zinc-800 group-hover:bg-zinc-700 group-hover:scale-110'
+            }`}>
+              <cat.icon size={20} strokeWidth={activeCategory === cat.id ? 2.5 : 2} />
+            </div>
+            <span className={`font-black text-[9px] uppercase tracking-widest text-center leading-tight transition-all duration-500 ${
+              activeCategory === cat.id ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'
+            }`}>
+              {cat.label}
+            </span>
           </button>
         ))}
       </div>

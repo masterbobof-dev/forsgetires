@@ -21,11 +21,15 @@ const Contact: React.FC = () => {
               data.forEach(r => {
                   if (r.key === 'contact_phone1') {
                       newContacts.p1 = r.value;
-                      newContacts.link1 = `tel:${r.value.replace(/[^\d+]/g, '')}`;
+                      const digits = r.value.replace(/[^\d]/g, '');
+                      const link = digits.startsWith('0') && digits.length === 10 ? `+38${digits}` : digits.startsWith('380') ? `+${digits}` : digits;
+                      newContacts.link1 = `tel:${link}`;
                   }
                   if (r.key === 'contact_phone2') {
                       newContacts.p2 = r.value;
-                      newContacts.link2 = `tel:${r.value.replace(/[^\d+]/g, '')}`;
+                      const digits = r.value.replace(/[^\d]/g, '');
+                      const link = digits.startsWith('0') && digits.length === 10 ? `+38${digits}` : digits.startsWith('380') ? `+${digits}` : digits;
+                      newContacts.link2 = `tel:${link}`;
                   }
                   if (r.key === 'contact_map_link') {
                       newContacts.mapLink = r.value;

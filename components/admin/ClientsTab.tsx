@@ -57,7 +57,58 @@ const ClientsTab: React.FC = () => {
     <div className="animate-in fade-in">
         <h3 className="text-2xl font-black text-white mb-6 flex items-center gap-2"><Users className="text-[#FFC300]"/> Клієнти</h3>
         <div className="mb-4 relative max-w-md"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={18} /><input type="text" placeholder="Пошук..." value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} className="w-full bg-zinc-900 border border-zinc-700 rounded-xl pl-10 pr-4 py-3 text-white"/></div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-xl"><table className="w-full text-left text-sm"><thead className="bg-black text-zinc-500 uppercase font-bold text-xs"><tr><th className="p-4">Ім'я</th><th className="p-4">Телефон</th><th className="p-4">Візитів</th><th className="p-4 text-right">Останній</th><th className="p-4"></th></tr></thead><tbody className="divide-y divide-zinc-800">{uniqueClients.map((c, idx) => (<tr key={idx} className="hover:bg-zinc-800/50 cursor-pointer" onClick={() => { setSelectedClientHistory(clients.filter(x => x.customer_phone === c.customer_phone)); setShowHistoryModal(true); }}><td className="p-4 font-bold text-white text-lg">{c.customer_name}</td><td className="p-4 font-mono text-[#FFC300] font-bold">{c.customer_phone}</td><td className="p-4 text-zinc-400 font-bold">{c.total_visits}</td><td className="p-4 text-right text-zinc-400">{c.booking_date}</td><td className="p-4 text-right flex justify-end gap-2"><button onClick={(e) => { e.stopPropagation(); initiateDelete(c.customer_phone); }} className="p-2 rounded bg-red-900/20 text-red-500"><Trash2 size={18} /></button></td></tr>))}</tbody></table></div>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-xl">
+            {/* Desktop Table */}
+            <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                    <thead className="bg-black text-zinc-500 uppercase font-bold text-xs">
+                        <tr>
+                            <th className="p-4">Ім'я</th>
+                            <th className="p-4">Телефон</th>
+                            <th className="p-4">Візитів</th>
+                            <th className="p-4 text-right">Останній</th>
+                            <th className="p-4"></th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800">
+                        {uniqueClients.map((c, idx) => (
+                            <tr key={idx} className="hover:bg-zinc-800/50 cursor-pointer" onClick={() => { setSelectedClientHistory(clients.filter(x => x.customer_phone === c.customer_phone)); setShowHistoryModal(true); }}>
+                                <td className="p-4 font-bold text-white text-lg">{c.customer_name}</td>
+                                <td className="p-4 font-mono text-[#FFC300] font-bold">{c.customer_phone}</td>
+                                <td className="p-4 text-zinc-400 font-bold">{c.total_visits}</td>
+                                <td className="p-4 text-right text-zinc-400">{c.booking_date}</td>
+                                <td className="p-4 text-right flex justify-end gap-2">
+                                    <button onClick={(e) => { e.stopPropagation(); initiateDelete(c.customer_phone); }} className="p-2 rounded bg-red-900/20 text-red-500 hover:bg-red-600 hover:text-white transition-colors">
+                                        <Trash2 size={18} />
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Mobile Cards */}
+            <div className="md:hidden divide-y divide-zinc-800">
+                {uniqueClients.map((c, idx) => (
+                    <div key={idx} className="p-4 hover:bg-zinc-800/50 active:bg-zinc-800 transition-colors cursor-pointer" onClick={() => { setSelectedClientHistory(clients.filter(x => x.customer_phone === c.customer_phone)); setShowHistoryModal(true); }}>
+                        <div className="flex justify-between items-start mb-2">
+                            <div>
+                                <h4 className="font-bold text-white text-lg">{c.customer_name}</h4>
+                                <p className="font-mono text-[#FFC300] font-bold">{c.customer_phone}</p>
+                            </div>
+                            <button onClick={(e) => { e.stopPropagation(); initiateDelete(c.customer_phone); }} className="p-2 rounded bg-red-900/20 text-red-500">
+                                <Trash2 size={18} />
+                            </button>
+                        </div>
+                        <div className="flex justify-between text-xs text-zinc-500 uppercase font-bold">
+                            <span>Візитів: <span className="text-zinc-300">{c.total_visits}</span></span>
+                            <span>Останній: <span className="text-zinc-300">{c.booking_date}</span></span>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
         
         {showHistoryModal && (
              <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">

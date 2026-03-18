@@ -48,6 +48,12 @@ export interface TyreProduct {
   axis?: string; // Added Axis (Position) for Truck tires
   vehicle_type?: 'car' | 'cargo' | 'suv' | 'truck' | 'agro'; // Added truck (TIR) and agro (Special)
   
+  // SEO fields
+  seo_title?: string;
+  seo_description?: string;
+  seo_keywords?: string;
+  slug?: string;
+
   // Cart Logic
   quantity?: number;
 }

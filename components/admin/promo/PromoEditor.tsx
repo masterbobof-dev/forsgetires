@@ -109,7 +109,7 @@ const PromoEditor: React.FC<PromoEditorProps> = ({ banner, onUpdate, onUpdateIma
                                 onChange={e => onUpdate('link', e.target.value)}
                                 className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white text-sm font-bold"
                             >
-                                <option value="shop">Магазин</option>
+                                <option value="shop">Магазин шин</option>
                                 <option value="booking">Запис</option>
                                 <option value="phone">Дзвінок</option>
                             </select>

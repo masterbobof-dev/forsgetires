@@ -6,6 +6,7 @@ import { Phone, Edit2, Truck, Save, Trash2, X, AlertTriangle, Calendar, Package 
 
 const OrdersTab: React.FC = () => {
   const [orders, setOrders] = useState<TyreOrder[]>([]);
+  const [searchPhone, setSearchPhone] = useState('');
   const [editingOrder, setEditingOrder] = useState<TyreOrder | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState<number | null>(null);
@@ -16,6 +17,11 @@ const OrdersTab: React.FC = () => {
       const { data } = await supabase.from('tyre_orders').select('*').order('created_at', { ascending: false }); 
       if(data) setOrders(data); 
   };
+
+  const filteredOrders = orders.filter(order => 
+    order.customer_phone.includes(searchPhone) || 
+    order.customer_name.toLowerCase().includes(searchPhone.toLowerCase())
+  );
 
   const handleSave = async () => {
     if (!editingOrder) return;
@@ -51,14 +57,39 @@ const OrdersTab: React.FC = () => {
 
   return (
     <div className="space-y-4 animate-in fade-in pb-20">
-       {orders.length === 0 && (
+       {/* Search Bar */}
+       <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-2xl shadow-xl flex flex-col md:flex-row gap-4 items-center">
+           <div className="relative flex-grow w-full">
+               <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={18}/>
+               <input 
+                   type="text" 
+                   placeholder="Пошук за телефоном або ім'ям (Історія клієнта)..." 
+                   value={searchPhone}
+                   onChange={(e) => setSearchPhone(e.target.value)}
+                   className="w-full bg-black border border-zinc-800 rounded-xl py-3 pl-12 pr-4 text-white focus:border-[#FFC300] outline-none transition-all"
+               />
+               {searchPhone && (
+                   <button onClick={() => setSearchPhone('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white">
+                       <X size={18}/>
+                   </button>
+               )}
+           </div>
+           {searchPhone && (
+               <div className="bg-[#FFC300]/10 border border-[#FFC300]/30 px-4 py-2 rounded-xl flex items-center gap-2">
+                   <AlertTriangle size={16} className="text-[#FFC300]"/>
+                   <span className="text-[#FFC300] text-xs font-bold uppercase">Історія клієнта активована</span>
+               </div>
+           )}
+       </div>
+
+       {filteredOrders.length === 0 && (
            <div className="flex flex-col items-center justify-center py-20 text-zinc-500 border border-dashed border-zinc-800 rounded-2xl bg-zinc-900/50">
                <Package size={48} className="mb-4 opacity-50"/>
-               <p>Немає активних замовлень</p>
+               <p>{searchPhone ? 'За вашим запитом нічого не знайдено' : 'Немає активних замовлень'}</p>
            </div>
        )}
        
-       {orders.map((order) => (
+       {filteredOrders.map((order) => (
           <div key={order.id} className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col gap-4 relative group hover:border-zinc-700 transition-colors shadow-lg">
              
              <div className="flex flex-col sm:flex-row justify-between items-start gap-4">

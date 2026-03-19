@@ -57,6 +57,12 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   const [selectedProductForModal, setSelectedProductForModal] = useState<TyreProduct | null>(null);
 
   const [activeCategory, setActiveCategory] = useState<CategoryType>(initialCategory);
+
+  // --- LOGIC: SYNC INITIAL CATEGORY ---
+  useEffect(() => {
+    setActiveCategory(initialCategory);
+  }, [initialCategory]);
+
   const [activeSort, setActiveSort] = useState<'newest' | 'oldest' | 'price_asc' | 'price_desc' | 'with_photo' | 'no_photo'>('newest');
   const [searchQuery, setSearchQuery] = useState('');
   const [showOnlyInStock, setShowOnlyInStock] = useState(false);
@@ -91,12 +97,39 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [orderError, setOrderError] = useState('');
 
+  const [quickOrderProduct, setQuickOrderProduct] = useState<TyreProduct | null>(null);
+  const [quickOrderPhone, setQuickOrderPhone] = useState('');
+  const [quickOrderSending, setQuickOrderSending] = useState(false);
+
   // --- LOGIC: HANDLE INITIAL PRODUCT ---
   useEffect(() => {
     if (initialProduct) {
       setSelectedProductForModal(initialProduct);
     }
   }, [initialProduct]);
+
+  // ... (rest of the code)
+
+  const submitQuickOrder = async () => {
+    if (!quickOrderPhone || quickOrderPhone.length < 9) { setOrderError("Введіть коректний номер телефону"); return; }
+    if (!quickOrderProduct) return;
+    
+    setQuickOrderSending(true); setOrderError('');
+    try {
+      const { error } = await supabase.from('tyre_orders').insert([{ 
+          customer_name: 'Швидке замовлення', 
+          customer_phone: quickOrderPhone, 
+          status: 'new', 
+          items: [{ id: quickOrderProduct.id, title: quickOrderProduct.title, quantity: 1, price: quickOrderProduct.price }] 
+      }]);
+      if (error) throw error;
+      setOrderSuccess(true);
+      setQuickOrderProduct(null);
+      setQuickOrderPhone('');
+    } catch (err) { setOrderError("Помилка при відправці замовлення"); } finally { setQuickOrderSending(false); }
+  };
+
+  // --- NOVA POSHTA LOGIC ---
 
   // --- LOGIC: FETCHING SETTINGS ---
   useEffect(() => {
@@ -179,6 +212,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
       else if (activeCategory === 'truck') query = query.eq('vehicle_type', 'truck');
       else if (activeCategory === 'agro') query = query.eq('vehicle_type', 'agro');
       else if (activeCategory === 'suv') query = query.eq('vehicle_type', 'suv');
+      else if (activeCategory === 'out_of_stock') query = query.eq('in_stock', false);
       else if (['winter','summer','all-season'].includes(activeCategory)) query = query.eq('season', activeCategory);
       else if (activeCategory.startsWith('hot')) query = query.eq('is_hot', true);
       
@@ -326,7 +360,20 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
            </div>
         </header>
         
-        <CategoryNav activeCategory={activeCategory} onCategoryChange={setActiveCategory} />
+        <CategoryNav 
+          activeCategory={activeCategory} 
+          onCategoryChange={(cat) => {
+            if (cat === 'all') {
+              setSearchQuery('');
+              setFilterWidth('');
+              setFilterHeight('');
+              setFilterRadius('');
+              setFilterBrand('');
+              setShowOnlyInStock(false);
+            }
+            setActiveCategory(cat);
+          }} 
+        />
 
         <FilterToolbar 
           searchQuery={searchQuery} setSearchQuery={setSearchQuery}
@@ -365,6 +412,7 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
                     tyre={tyre} 
                     onClick={() => handleProductClick(tyre)} 
                     onAddToCart={(e) => { e.stopPropagation(); addToCart(tyre); }} 
+                    onQuickOrder={(p) => setQuickOrderProduct(p)}
                     formatPrice={formatPrice}
                   />
                 </div>
@@ -416,12 +464,51 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
         product={selectedProductForModal} onClose={() => setSelectedProductForModal(null)} 
         addToCart={addToCart} formatPrice={formatPrice} getSeasonLabel={getSeasonLabel} renderSchema={renderSchema}
         openLightbox={(p) => { setCurrentLightboxImages([p.image_url].filter(Boolean) as string[]); setLightboxOpen(true); }}
+        onQuickOrder={(p) => setQuickOrderProduct(p)}
       />
 
       {lightboxOpen && (
         <div className="fixed inset-0 z-[200] bg-black flex items-center justify-center p-4 animate-in fade-in" onClick={() => setLightboxOpen(false)}>
           <button className="absolute top-4 right-4 text-white p-2 hover:bg-white/10 rounded-full"><X size={32}/></button>
           <img src={currentLightboxImages[0]} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
+        </div>
+      )}
+
+      {quickOrderProduct && (
+        <div className="fixed inset-0 z-[250] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in zoom-in duration-300" onClick={() => setQuickOrderProduct(null)}>
+          <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-3xl w-full max-w-md shadow-2xl relative" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setQuickOrderProduct(null)} className="absolute top-4 right-4 text-zinc-500 hover:text-white"><X size={24}/></button>
+            <div className="flex flex-col items-center text-center gap-4">
+              <div className="bg-[#FFC300]/10 p-4 rounded-full text-[#FFC300] mb-2">
+                <Phone size={32} strokeWidth={2.5}/>
+              </div>
+              <h3 className="text-xl font-black text-white uppercase tracking-tight">Купити в 1 клік</h3>
+              <p className="text-zinc-500 text-sm">Введіть ваш номер телефону, і ми зателефонуємо вам для оформлення замовлення.</p>
+              
+              <div className="w-full mt-4">
+                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-2 text-left">Ваш телефон</p>
+                <input 
+                  type="tel" 
+                  placeholder="0XX XXX XX XX" 
+                  value={quickOrderPhone}
+                  onChange={e => setQuickOrderPhone(e.target.value)}
+                  className="w-full bg-black border border-zinc-800 rounded-xl py-4 px-6 text-white text-xl font-black focus:border-[#FFC300] outline-none transition-all placeholder:text-zinc-800"
+                />
+              </div>
+
+              {orderError && <p className="text-red-500 text-xs font-bold bg-red-500/10 p-3 rounded-xl w-full">{orderError}</p>}
+
+              <button 
+                onClick={submitQuickOrder}
+                disabled={quickOrderSending}
+                className="w-full bg-[#FFC300] hover:bg-white text-black font-black py-5 rounded-2xl mt-4 transition-all active:scale-95 shadow-xl shadow-yellow-900/20 uppercase tracking-widest flex items-center justify-center gap-3"
+              >
+                {quickOrderSending ? <Loader2 className="animate-spin" size={24}/> : "Замовити дзвінок"}
+              </button>
+              
+              <p className="text-[9px] text-zinc-600 font-bold uppercase mt-4">Натискаючи кнопку, ви погоджуєтесь на обробку персональних даних.</p>
+            </div>
+          </div>
         </div>
       )}
     </div>

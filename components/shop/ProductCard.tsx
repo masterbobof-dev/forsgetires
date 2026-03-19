@@ -7,15 +7,23 @@ interface ProductCardProps {
   tyre: TyreProduct;
   onClick: () => void;
   onAddToCart: (e: React.MouseEvent) => void;
+  onQuickOrder?: (tyre: TyreProduct) => void;
   formatPrice: (p: string | undefined) => string;
 }
 
-const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, formatPrice }) => {
+const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, onQuickOrder, formatPrice }) => {
   const isOutOfStock = tyre.in_stock === false;
   const priceNum = parseFloat(tyre.price || '0');
   const oldPriceNum = parseFloat(tyre.old_price || '0');
   const hasDiscount = oldPriceNum > priceNum;
+  const discountPercent = hasDiscount ? Math.round(((oldPriceNum - priceNum) / oldPriceNum) * 100) : 0;
   
+  // Check if product is new (last 7 days)
+  const isNew = tyre.created_at ? (new Date().getTime() - new Date(tyre.created_at).getTime()) < (7 * 24 * 60 * 60 * 1000) : false;
+  
+  // Low stock logic
+  const isLowStock = tyre.stock_quantity !== undefined && tyre.stock_quantity > 0 && tyre.stock_quantity <= 4;
+
   const altText = `Шина ${tyre.manufacturer || ''} ${tyre.title} ${tyre.width ? tyre.width + '/' + tyre.height : ''} ${tyre.radius || ''} купити в Синельниковому`;
 
   return (
@@ -46,6 +54,11 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, f
           
           {/* Badges */}
           <div className="absolute top-3 left-3 z-10 flex flex-col gap-1.5">
+            {isNew && (
+              <div className="bg-emerald-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-lg uppercase">
+                NEW
+              </div>
+            )}
             {tyre.is_hot && (
               <div className="bg-orange-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-lg uppercase flex items-center gap-1 animate-pulse">
                 <Flame size={12} fill="currentColor"/> 
@@ -53,11 +66,19 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, f
               </div>
             )}
             {hasDiscount && (
-              <div className="bg-red-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-lg uppercase">
-                SALE
+              <div className="bg-red-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-lg uppercase flex items-center gap-1">
+                SALE -{discountPercent}%
               </div>
             )}
           </div>
+          
+          {isLowStock && !isOutOfStock && (
+            <div className="absolute bottom-3 left-3 z-10">
+              <div className="bg-black/60 backdrop-blur-md text-red-500 text-[9px] font-black px-2 py-1 rounded-lg border border-red-500/30 uppercase tracking-tighter">
+                Залишилося: {tyre.stock_quantity} шт
+              </div>
+            </div>
+          )}
 
           {/* Quick View Overlay (Desktop) */}
           {!isOutOfStock && (
@@ -65,6 +86,14 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, f
                <div className="bg-white text-black p-3 rounded-full transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300 shadow-xl">
                   <Eye size={20} />
                </div>
+               {onQuickOrder && (
+                 <button 
+                  onClick={(e) => { e.stopPropagation(); onQuickOrder(tyre); }}
+                  className="bg-[#FFC300] text-black px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300 delay-75 shadow-xl hover:bg-white"
+                 >
+                   Швидке замовлення
+                 </button>
+               )}
             </div>
           )}
           

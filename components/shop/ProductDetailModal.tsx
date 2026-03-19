@@ -11,12 +11,19 @@ interface ProductDetailModalProps {
   getSeasonLabel: (s: string | undefined) => string;
   renderSchema: (p: TyreProduct) => React.ReactNode;
   openLightbox: (p: TyreProduct) => void;
+  onQuickOrder?: (p: TyreProduct) => void;
 }
 
-const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClose, addToCart, formatPrice, getSeasonLabel, renderSchema, openLightbox }) => {
+const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClose, addToCart, formatPrice, getSeasonLabel, renderSchema, openLightbox, onQuickOrder }) => {
   if (!product) return null;
 
   const isOutOfStock = product.in_stock === false;
+  const priceNum = parseFloat(product.price || '0');
+  const oldPriceNum = parseFloat(product.old_price || '0');
+  const hasDiscount = oldPriceNum > priceNum;
+  const discountPercent = hasDiscount ? Math.round(((oldPriceNum - priceNum) / oldPriceNum) * 100) : 0;
+  
+  const isLowStock = product.stock_quantity !== undefined && product.stock_quantity > 0 && product.stock_quantity <= 4;
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center p-2 md:p-4 animate-in fade-in duration-300" onClick={onClose}>
@@ -34,6 +41,13 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                     <span className="font-bold uppercase tracking-widest text-xs">Фото відсутнє</span>
                   </div>
               )}
+              
+              {hasDiscount && (
+                <div className="absolute top-6 left-6 bg-red-600 text-white px-4 py-2 rounded-2xl font-black text-sm shadow-2xl animate-bounce">
+                  ЗНИЖКА -{discountPercent}%
+                </div>
+              )}
+
               <div className="absolute bottom-6 right-6 bg-black/60 backdrop-blur-md p-3 rounded-2xl text-white/70 opacity-0 group-hover:opacity-100 transition-opacity">
                 <ZoomIn size={24}/>
               </div>
@@ -47,6 +61,11 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                     {product.manufacturer || 'Шина'}
                   </span>
                   {product.is_hot && <span className="bg-orange-600 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter">HOT</span>}
+                  {isLowStock && !isOutOfStock && (
+                    <span className="bg-red-600/20 text-red-500 border border-red-500/30 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter animate-pulse">
+                      Залишилося: {product.stock_quantity} шт
+                    </span>
+                  )}
                 </div>
                 
                 <h1 className="text-2xl md:text-3xl font-black text-white leading-tight mb-4">{product.title}</h1>
@@ -111,17 +130,28 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                       <span className="text-4xl font-black text-[#FFC300]">{formatPrice(product.price)} <span className="text-sm text-white font-normal uppercase">грн</span></span>
                     </div>
                 </div>
-                <button 
-                  disabled={isOutOfStock}
-                  onClick={() => { addToCart(product); onClose(); }} 
-                  className={`w-full py-5 rounded-2xl font-black text-lg flex items-center justify-center gap-3 uppercase tracking-widest transition-all active:scale-95 shadow-xl ${
-                    isOutOfStock 
-                      ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed' 
-                      : 'bg-white text-black hover:bg-[#FFC300] hover:shadow-yellow-400/20'
-                  }`}
-                >
-                  <ShoppingCart size={24} strokeWidth={2.5} /> {isOutOfStock ? 'Немає' : 'Купити зараз'}
-                </button>
+                <div className="flex flex-col gap-3">
+                  <button 
+                    disabled={isOutOfStock}
+                    onClick={() => { addToCart(product); onClose(); }} 
+                    className={`w-full py-5 rounded-2xl font-black text-lg flex items-center justify-center gap-3 uppercase tracking-widest transition-all active:scale-95 shadow-xl ${
+                      isOutOfStock 
+                        ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed' 
+                        : 'bg-white text-black hover:bg-[#FFC300] hover:shadow-yellow-400/20'
+                    }`}
+                  >
+                    <ShoppingCart size={24} strokeWidth={2.5} /> {isOutOfStock ? 'Немає' : 'Додати у кошик'}
+                  </button>
+                  
+                  {!isOutOfStock && onQuickOrder && (
+                    <button 
+                      onClick={() => { onQuickOrder(product); onClose(); }}
+                      className="w-full py-4 rounded-2xl font-bold text-sm text-[#FFC300] border border-[#FFC300]/30 hover:bg-[#FFC300]/10 transition-all uppercase tracking-widest"
+                    >
+                      Купити в 1 клік
+                    </button>
+                  )}
+                </div>
               </div>
           </div>
       </div>

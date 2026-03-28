@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Lock, LogOut, ShieldAlert, UserCheck, Loader2, Menu, X as CloseIcon, ChevronRight, Settings as SettingsIcon, ShoppingBag, Wrench, BarChart3, Globe, Megaphone, FileText, Database, Users, Calendar, LayoutDashboard, AlertCircle } from 'lucide-react';
+import { Lock, LogOut, ShieldAlert, UserCheck, Loader2, Menu, X as CloseIcon, ChevronRight, Settings as SettingsIcon, ShoppingBag, Wrench, BarChart3, Globe, Megaphone, FileText, Database, Users, Calendar, LayoutDashboard, AlertCircle, Sparkles } from 'lucide-react';
 import ScheduleTab from './admin/ScheduleTab';
 import ClientsTab from './admin/ClientsTab';
 import GalleryTab from './admin/GalleryTab';
@@ -12,6 +12,7 @@ import ArticlesTab from './admin/ArticlesTab';
 import SeoTab from './admin/SeoTab';
 import PromoTab from './admin/PromoTab';
 import SyncTab from './admin/SyncTab';
+import AiAssistantTab from './admin/AiAssistantTab';
 import { supabase } from '../supabaseClient';
 
 interface AdminPanelProps {
@@ -223,6 +224,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite, mode, s
       schedule: 'Розклад', clients: 'Клієнти', prices: 'Прайс', gallery: 'Галерея',
       tyres: 'Шини', orders: 'Замовлення', promo: 'Маркетинг', sync: 'API / Синхр.',
       seo: 'SEO', articles: 'Статті', settings: 'Налашт.', stats: 'Стат.',
+      ai: 'AI Помічник',
     };
     return labels[tab] ?? tab;
   };
@@ -233,12 +235,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite, mode, s
       gallery: <LayoutDashboard size={18} />, tyres: <ShoppingBag size={18} />, orders: <FileText size={18} />,
       promo: <Megaphone size={18} />, sync: <Database size={18} />, seo: <Globe size={18} />,
       articles: <FileText size={18} />, settings: <SettingsIcon size={18} />, stats: <BarChart3 size={18} />,
+      ai: <Sparkles size={18} />,
     };
     return icons[tab] ?? null;
   };
 
   const serviceTabs = isStaff ? ['schedule', 'clients'] : ['schedule', 'clients', 'prices', 'gallery'];
-  const tyreTabs = ['orders', 'tyres', 'promo', 'sync', 'seo', 'articles', 'stats', 'settings'];
+  const tyreTabs = ['orders', 'tyres', 'ai', 'promo', 'sync', 'seo', 'articles', 'stats', 'settings'];
   const currentTabs = mode === 'service' ? serviceTabs : tyreTabs;
 
   return (
@@ -390,6 +393,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite, mode, s
         {!isStaff && activeTab === 'seo' && <SeoTab />}
         {!isStaff && activeTab === 'promo' && <PromoTab />}
         {!isStaff && activeTab === 'sync' && <SyncTab />}
+        {!isStaff && activeTab === 'ai' && <AiAssistantTab />}
       </main>
     </div>
   );

@@ -39,9 +39,19 @@ interface TyreShopProps {
   onBack?: () => void;
   isAdmin?: boolean;
   onAdminClick?: () => void;
+  cartItems: CartItem[];
+  onCartChange: (items: CartItem[]) => void;
 }
 
-const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialProduct, onBack, isAdmin, onAdminClick }) => {
+const TyreShop: React.FC<TyreShopProps> = ({ 
+  initialCategory = 'all', 
+  initialProduct, 
+  onBack, 
+  isAdmin, 
+  onAdminClick,
+  cartItems,
+  onCartChange
+}) => {
   const [tyres, setTyres] = useState<TyreProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -49,7 +59,6 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
 
-  const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
 
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -242,10 +251,11 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
   // --- LOGIC: CART ---
   const addToCart = (tyre: TyreProduct) => { 
       if (!tyre.in_stock) return; 
-      setCart(prev => { 
-          const ex = prev.find(item => item.id === tyre.id);
-          return ex ? prev.map(i => i.id === tyre.id ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { ...tyre, quantity: 1 }]; 
-      }); 
+      const ex = cartItems.find(item => item.id === tyre.id);
+      const newCart = ex 
+        ? cartItems.map(i => i.id === tyre.id ? { ...i, quantity: i.quantity + 1 } : i) 
+        : [...cartItems, { ...tyre, quantity: 1 }];
+      onCartChange(newCart);
       setIsCartOpen(true); 
   };
 
@@ -261,10 +271,11 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
           delivery_city: selectedCityName, 
           delivery_warehouse: selectedWarehouseName, 
           payment_method: paymentMethod, 
-          items: cart.map(i => ({ id: i.id, title: i.title, quantity: i.quantity, price: i.price })) 
+          items: cartItems.map(i => ({ id: i.id, title: i.title, quantity: i.quantity, price: i.price })) 
       }]);
       if (error) throw error;
-      setOrderSuccess(true); setCart([]);
+      setOrderSuccess(true); 
+      onCartChange([]);
     } catch (err) { setOrderError("Помилка при відправці замовлення"); } finally { setOrderSending(false); }
   };
 
@@ -438,17 +449,17 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
         )}
       </div>
 
-      {cart.length > 0 && (
+      {cartItems.length > 0 && (
         <button onClick={() => setIsCartOpen(true)} className="fixed bottom-6 right-6 z-40 bg-[#FFC300] text-black p-4 rounded-full shadow-2xl animate-bounce hover:scale-110 transition-transform">
            <div className="relative">
              <ShoppingCart size={28} />
-             <div className="absolute -top-2 -right-2 bg-red-600 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-zinc-900">{cart.reduce((a,b)=>a+b.quantity,0)}</div>
+             <div className="absolute -top-2 -right-2 bg-red-600 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-zinc-900">{cartItems.reduce((a,b)=>a+b.quantity,0)}</div>
            </div>
         </button>
       )}
 
       <CartDrawer 
-        isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} cart={cart} cartTotal={useMemo(() => cart.reduce((a,b) => a + (safeParsePrice(b.price)*b.quantity), 0), [cart])}
+        isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} cart={cartItems} cartTotal={useMemo(() => cartItems.reduce((a,b) => a + (safeParsePrice(b.price)*b.quantity), 0), [cartItems])}
         orderName={orderName} setOrderName={setOrderName} orderPhone={orderPhone} setOrderPhone={setOrderPhone}
         deliveryMethod={deliveryMethod} setDeliveryMethod={setDeliveryMethod} paymentMethod={paymentMethod} setPaymentMethod={setPaymentMethod}
         npSearchCity={npSearchCity} handleCityInputChange={(e) => { setNpSearchCity(e.target.value); if(e.target.value.length > 2) fetchNpCities(e.target.value); }}
@@ -456,8 +467,8 @@ const TyreShop: React.FC<TyreShopProps> = ({ initialCategory = 'all', initialPro
         handleCitySelect={(city) => { setNpSearchCity(city.Present); setSelectedCityName(city.Present); setSelectedCityRef(city.DeliveryCity); setShowCityDropdown(false); fetchNpWarehouses(city.DeliveryCity); }}
         selectedWarehouseName={selectedWarehouseName} setSelectedWarehouseName={setSelectedWarehouseName} isNpLoadingWarehouses={isNpLoadingWarehouses} npWarehouses={npWarehouses}
         selectedCityRef={selectedCityRef} formatPrice={formatPrice} orderSending={orderSending} orderSuccess={orderSuccess} orderError={orderError}
-        setOrderSuccess={setOrderSuccess} submitOrder={submitOrder} removeFromCart={(id) => setCart(prev => prev.filter(i => i.id !== id))}
-        updateQuantity={(id, d) => setCart(prev => prev.map(i => i.id === id ? { ...i, quantity: Math.max(1, i.quantity + d) } : i))}
+        setOrderSuccess={setOrderSuccess} submitOrder={submitOrder} removeFromCart={(id) => onCartChange(cartItems.filter(i => i.id !== id))}
+        updateQuantity={(id, d) => onCartChange(cartItems.map(i => i.id === id ? { ...i, quantity: Math.max(1, i.quantity + d) } : i))}
       />
 
       <ProductDetailModal 

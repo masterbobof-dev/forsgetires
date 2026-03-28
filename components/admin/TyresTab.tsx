@@ -116,6 +116,10 @@ const TyresTab: React.FC = () => {
       setTimeout(() => setSuccessMessage(''), 2500);
   };
 
+  const isProductReady = (tyre: TyreProduct) => {
+    return !!(tyre.description && tyre.seo_title && tyre.seo_description && tyre.image_url && !tyre.image_url.includes('picsum.photos'));
+  };
+
   const handleInlineUpdate = async (id: number, field: 'price' | 'stock_quantity', value: string) => {
       const numVal = parseInt(value);
       if (isNaN(numVal)) {
@@ -169,17 +173,23 @@ const TyresTab: React.FC = () => {
   const fetchCategoryCounts = async () => {
     try {
         const base = supabase.from('tyres').select('*', { count: 'exact', head: true });
-        const [all, car, cargo, truck, agro, suv, hot, out, no_photo] = await Promise.all([
+        const [all, car, cargo, truck, agro, suv, hot, out, no_photo, ready] = await Promise.all([
             base.then(r => r.count),
             supabase.from('tyres').select('*', { count: 'exact', head: true }).or('vehicle_type.eq.car,vehicle_type.is.null').neq('vehicle_type', 'cargo').neq('vehicle_type', 'suv').not('radius', 'ilike', '%C%').then(r => r.count),
             supabase.from('tyres').select('*', { count: 'exact', head: true }).or('vehicle_type.eq.cargo,radius.ilike.%C%').not('radius', 'in', '("R17.5","R19.5","R22.5")').then(r => r.count),
             supabase.from('tyres').select('*', { count: 'exact', head: true }).or('radius.eq.R17.5,radius.eq.R19.5,radius.eq.R22.5,title.ilike.%TIR%,title.ilike.%R17.5%,title.ilike.%R19.5%,title.ilike.%R22.5%').then(r => r.count),
-            // Updated AGRO count logic - STRICT
             supabase.from('tyres').select('*', { count: 'exact', head: true }).or('vehicle_type.eq.agro,and(vehicle_type.neq.car,vehicle_type.neq.suv,vehicle_type.neq.cargo,radius.in.("R10","R12","R14.5","R15.3","R15.5","R20","R24","R26","R28","R30","R32","R34","R36","R38","R40","R42"))').then(r => r.count),
             supabase.from('tyres').select('*', { count: 'exact', head: true }).eq('vehicle_type', 'suv').then(r => r.count),
             supabase.from('tyres').select('*', { count: 'exact', head: true }).eq('is_hot', true).then(r => r.count),
             supabase.from('tyres').select('*', { count: 'exact', head: true }).eq('in_stock', false).then(r => r.count),
-            supabase.from('tyres').select('*', { count: 'exact', head: true }).is('image_url', null).then(r => r.count)
+            supabase.from('tyres').select('*', { count: 'exact', head: true }).is('image_url', null).then(r => r.count),
+            supabase.from('tyres').select('*', { count: 'exact', head: true })
+                .not('description', 'is', null)
+                .not('seo_title', 'is', null)
+                .not('seo_description', 'is', null)
+                .not('image_url', 'is', null)
+                .not('image_url', 'ilike', '%picsum.photos%')
+                .then(r => r.count)
         ]);
         setCategoryCounts({ 
             all: all || 0, 
@@ -190,7 +200,8 @@ const TyresTab: React.FC = () => {
             suv: suv || 0, 
             hot: hot || 0, 
             out: out || 0,
-            no_photo: no_photo || 0
+            no_photo: no_photo || 0,
+            ready: ready || 0
         });
     } catch (e) { console.error(e); }
   };
@@ -231,6 +242,13 @@ const TyresTab: React.FC = () => {
        else if (tyreCategoryTab === 'hot') query = query.eq('is_hot', true);
        else if (tyreCategoryTab === 'out_of_stock') query = query.eq('in_stock', false);
        else if (tyreCategoryTab === 'no_photo') query = query.is('image_url', null);
+       else if (tyreCategoryTab === 'ready') {
+           query = query.not('description', 'is', null)
+                        .not('seo_title', 'is', null)
+                        .not('seo_description', 'is', null)
+                        .not('image_url', 'is', null)
+                        .not('image_url', 'ilike', '%picsum.photos%');
+       }
 
        if (showOnlyInStock && tyreCategoryTab !== 'out_of_stock') {
            if (enableStockQty) query = query.or('stock_quantity.gt.0,stock_quantity.is.null').neq('in_stock', false);
@@ -446,6 +464,13 @@ const TyresTab: React.FC = () => {
           else if (tyreCategoryTab === 'hot') query = query.eq('is_hot', true);
           else if (tyreCategoryTab === 'out_of_stock') query = query.eq('in_stock', false);
           else if (tyreCategoryTab === 'no_photo') query = query.is('image_url', null);
+          else if (tyreCategoryTab === 'ready') {
+              query = query.not('description', 'is', null)
+                           .not('seo_title', 'is', null)
+                           .not('seo_description', 'is', null)
+                           .not('image_url', 'is', null)
+                           .not('image_url', 'ilike', '%picsum.photos%');
+          }
 
           // We intentionally do NOT use tyreSearch or supplier filters here to ensure we clear the Category bucket completely
           
@@ -665,6 +690,7 @@ const TyresTab: React.FC = () => {
                         <button onClick={() => { setTyreCategoryTab('agro'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50 text-green-300"><Tractor size={18}/> Агро / Спец ({categoryCounts.agro})</button>
                         <button onClick={() => { setTyreCategoryTab('suv'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50"><Mountain size={18}/> SUV ({categoryCounts.suv})</button>
                         <button onClick={() => { setTyreCategoryTab('hot'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50"><Flame size={18}/> HOT ({categoryCounts.hot})</button>
+                        <button onClick={() => { setTyreCategoryTab('ready'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50 text-green-400"><CheckCircle size={18}/> Готові ({categoryCounts.ready})</button>
                         <button onClick={() => { setTyreCategoryTab('no_photo'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50 text-orange-300"><ImageIcon size={18}/> Без фото ({categoryCounts.no_photo})</button>
                         <button onClick={() => { setTyreCategoryTab('out_of_stock'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3"><Ban size={18}/> Немає ({categoryCounts.out})</button>
                     </div>
@@ -800,7 +826,10 @@ const TyresTab: React.FC = () => {
                                 <div className="flex-grow min-w-0 flex flex-col justify-between">
                                     <div className="cursor-pointer" onClick={() => openEditTyreModal(tyre)}>
                                         <div className="flex justify-between items-start gap-2">
-                                            <span className="text-[10px] text-zinc-500 font-bold uppercase truncate">{tyre.manufacturer || 'Шина'}</span>
+                                            <div className="flex items-center gap-1 min-w-0">
+                                                <span className="text-[10px] text-zinc-500 font-bold uppercase truncate">{tyre.manufacturer || 'Шина'}</span>
+                                                {isProductReady(tyre) && <CheckCircle size={10} className="text-green-500 flex-shrink-0" />}
+                                            </div>
                                             <button onClick={(e) => { e.stopPropagation(); toggleSelection(tyre.id); }} className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-[#FFC300] border-[#FFC300] text-black' : 'border-zinc-700'}`}>
                                                 {isSelected && <CheckSquare size={12}/>}
                                             </button>
@@ -909,8 +938,10 @@ const TyresTab: React.FC = () => {
                                         </div>
                                         <div className="text-xs text-white font-bold truncate min-w-0" title={supplierName}>{supplierName}</div>
                                         <div className="flex flex-col min-w-0 overflow-hidden">
-                                            <div onClick={() => handleCopyTitle(tyre.title)} className="text-sm text-white font-bold leading-tight flex items-center gap-1 cursor-pointer hover:text-[#FFC300] active:scale-95 transition-all group/title overflow-hidden" title={`${tyre.title} (Натисніть, щоб скопіювати)`}>
-                                                <span className="truncate block flex-grow">{tyre.title}</span><Copy size={12} className="flex-shrink-0 opacity-0 group-hover/title:opacity-100 text-[#FFC300] transition-opacity"/>
+                                            <div onClick={() => handleCopyTitle(tyre.title)} className="text-sm text-white font-bold leading-tight flex items-center gap-2 cursor-pointer hover:text-[#FFC300] active:scale-95 transition-all group/title overflow-hidden" title={`${tyre.title} (Натисніть, щоб скопіювати)`}>
+                                                <span className="truncate block flex-grow">{tyre.title}</span>
+                                                {isProductReady(tyre) && <CheckCircle size={14} className="text-green-500 flex-shrink-0" title="Товар повністю готовий" />}
+                                                <Copy size={12} className="flex-shrink-0 opacity-0 group-hover/title:opacity-100 text-[#FFC300] transition-opacity"/>
                                             </div>
                                             {tyre.axis && <span className="text-[10px] text-zinc-500 flex items-center gap-1"><CircleDot size={10} className="text-blue-400"/> {tyre.axis}</span>}
                                         </div>

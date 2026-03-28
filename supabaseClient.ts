@@ -3,12 +3,9 @@ import { createClient } from '@supabase/supabase-js';
 // Keys should be stored in .env.local:
 // VITE_SUPABASE_URL=https://zzxueclhkhvwdmxflmyx.supabase.co
 // VITE_SUPABASE_KEY=your_anon_key
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY as string;
-
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-  throw new Error('Missing Supabase environment variables. Check your .env.local file.');
-}
+// Uses env variables if available, otherwise falls back to hardcoded values
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://zzxueclhkhvwdmxflmyx.supabase.co';
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6eHVlY2xoa2h2d2RteGZsbXl4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2NjEzMTAsImV4cCI6MjA4MDIzNzMxMH0.yJW-HC03EwyYPpyWTrDbTN4t0YrlNe1H40fwLZ_ZxfU';
 
 // Singleton pattern to avoid multiple instances on hot reload
 const getSupabase = () => {

@@ -49,8 +49,8 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick
   }, []);
 
   const navItems: { label: string; view: ViewState }[] = [
-    { label: 'Головна', view: 'home' },
-    { label: 'Шини', view: 'shop' },
+    { label: 'Каталог Шини', view: 'home' },
+    { label: 'Послуги СТО', view: 'service' },
     { label: 'Ціни', view: 'prices' },
     { label: 'Фотогалерея', view: 'gallery' },
   ];
@@ -121,7 +121,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick
                 )}
 
                 {/* Cart badge on Шини */}
-                {item.view === 'shop' ? (
+                {item.view === 'home' ? (
                   <span className="relative">
                     <ShoppingBag size={16} className="-mt-0.5" />
                     {cartCount > 0 && (
@@ -140,7 +140,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick
           <div className="flex items-center gap-2 md:hidden">
             {/* Cart badge — mobile */}
             <button
-              onClick={() => handleNavClick('shop')}
+              onClick={() => handleNavClick('home')}
               className="relative w-9 h-9 flex items-center justify-center text-zinc-300 hover:text-[#FFC300] transition-colors"
             >
               <ShoppingBag size={20} />
@@ -203,7 +203,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick
                 }`}
               >
                 {/* Cart badge in mobile menu */}
-                {item.view === 'shop' ? (
+                {item.view === 'home' ? (
                   <span className="relative">
                     <ShoppingBag size={20} />
                     {cartCount > 0 && (

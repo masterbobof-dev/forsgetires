@@ -9,6 +9,7 @@ import { ViewState, TyreProduct, CartItem } from './types';
 import { X, Loader2, Mail, Key, Briefcase, ArrowLeft, Send, Wrench, CheckCircle2, AlertCircle } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { useAuth } from './useAuth';
+import { logAnalyticsEvent } from './components/admin/analytics';
 
 const AdminPanel = lazy(() => import('./components/AdminPanel'));
 const Gallery = lazy(() => import('./components/Gallery'));
@@ -162,9 +163,13 @@ const App: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
+  useEffect(() => {
+    logAnalyticsEvent('page_view', undefined, undefined, `/${currentView === 'home' ? '' : currentView}`);
+  }, [currentView]);
+
   const handleChangeView = (view: ViewState) => {
-    if (view === 'shop') {
-      if (currentView !== 'home') setShopCategory('all');
+    if (view === 'home' && currentView !== 'home') {
+      setShopCategory('all');
       setShopInitialProduct(null);
     }
     setCurrentView(view);
@@ -181,7 +186,22 @@ const App: React.FC = () => {
         return <Prices />;
       case 'gallery':
         return <Gallery />;
-      case 'shop':
+      case 'service':
+        return (
+          <>
+            <Hero onShopRedirect={(category, tyre) => {
+              setShopCategory((category as ShopCategory) || 'all');
+              setShopInitialProduct(tyre || null);
+              setCurrentView('home');
+              window.scrollTo({ top: 0, behavior: 'instant' });
+            }} />
+            <Services />
+            <Tips />
+            <Contact />
+          </>
+        );
+      case 'home':
+      default:
         return (
           <TyreShop
             onBack={handleBackToHome}
@@ -192,21 +212,6 @@ const App: React.FC = () => {
             cartItems={cartItems}
             onCartChange={setCartItems}
           />
-        );
-      case 'home':
-      default:
-        return (
-          <>
-            <Hero onShopRedirect={(category, tyre) => {
-              setShopCategory((category as ShopCategory) || 'all');
-              setShopInitialProduct(tyre || null);
-              setCurrentView('shop');
-              window.scrollTo({ top: 0, behavior: 'instant' });
-            }} />
-            <Services />
-            <Tips />
-            <Contact />
-          </>
         );
     }
   };

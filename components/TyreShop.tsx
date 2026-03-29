@@ -11,6 +11,8 @@ import ProductDetailModal from './shop/ProductDetailModal';
 import CategoryNav, { CategoryType, CATEGORIES } from './shop/CategoryNav';
 import FilterToolbar from './shop/FilterToolbar';
 import ProductCard from './shop/ProductCard';
+import ServiceBanner from './shop/ServiceBanner';
+import { logAnalyticsEvent } from './admin/analytics';
 
 const PAGE_SIZE = 60;
 
@@ -41,6 +43,7 @@ interface TyreShopProps {
   onAdminClick?: () => void;
   cartItems: CartItem[];
   onCartChange: (items: CartItem[]) => void;
+  onServiceClick?: () => void;
 }
 
 const TyreShop: React.FC<TyreShopProps> = ({ 
@@ -50,7 +53,8 @@ const TyreShop: React.FC<TyreShopProps> = ({
   isAdmin, 
   onAdminClick,
   cartItems,
-  onCartChange
+  onCartChange,
+  onServiceClick
 }) => {
   const [tyres, setTyres] = useState<TyreProduct[]>([]);
   const [loading, setLoading] = useState(true);
@@ -141,6 +145,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
       // Sync URL
       url.searchParams.set('p', String(selectedProductForModal.id));
       window.history.replaceState({}, '', url.toString());
+      logAnalyticsEvent('view_item', String(selectedProductForModal.id), selectedProductForModal.title);
     } else {
       document.title = "Forsage Tires — Магазин шин та дисків у Синельниково";
       url.searchParams.delete('p');
@@ -282,6 +287,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
   // --- LOGIC: CART ---
   const addToCart = (tyre: TyreProduct) => { 
       if (!tyre.in_stock) return; 
+      logAnalyticsEvent('add_to_cart', String(tyre.id), tyre.title);
       const ex = cartItems.find(item => item.id === tyre.id);
       const newCart = ex 
         ? cartItems.map(i => i.id === tyre.id ? { ...i, quantity: i.quantity + 1 } : i) 
@@ -436,6 +442,8 @@ const TyreShop: React.FC<TyreShopProps> = ({
             setActiveCategory(cat);
           }} 
         />
+
+        {onServiceClick && <ServiceBanner onServiceClick={onServiceClick} />}
 
         <FilterToolbar 
           searchQuery={searchQuery} setSearchQuery={setSearchQuery}

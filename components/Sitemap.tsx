@@ -19,8 +19,8 @@ const Sitemap: React.FC<SitemapProps> = ({ onNavigate }) => {
     {
       title: "Основне",
       links: [
-        { label: "Головна сторінка", view: 'home', icon: Home },
-        { label: "Магазин Шин та Дисків", view: 'shop', icon: ShoppingBag },
+        { label: "Інтернет-магазин Шин", view: 'home', icon: ShoppingBag },
+        { label: "Послуги Шиномонтажу", view: 'service', icon: Home },
         { label: "Прайс-лист та Послуги", view: 'prices', icon: DollarSign },
         { label: "Фотогалерея", view: 'gallery', icon: ImageIcon },
       ]

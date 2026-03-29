@@ -700,7 +700,7 @@ const SettingsTab: React.FC = () => {
                    <h4 className="text-lg font-bold text-white mb-4 flex items-center gap-2 pb-4 border-b border-zinc-800"><LayoutGrid className="text-[#FFC300]" size={20}/> Керування Складом та Імпортом</h4>
                    
                    {/* EXCEL IMPORT SECTION */}
-                   <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-1 mb-6 h-[600px] overflow-hidden">
+                   <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-1 mb-6 ">
                        <ExcelImportPanel suppliers={suppliers} />
                    </div>
 

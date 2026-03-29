@@ -4,7 +4,7 @@ import readXlsxFile from 'read-excel-file';
 import { 
     Upload, FileSpreadsheet, Save, Loader2, RefreshCw, AlertTriangle, 
     ArrowDown, CheckCircle, HelpCircle, Sparkles, Info, 
-    Image, X, Trash2, Camera, Download 
+    Image, X, Trash2, Camera, Download, Globe 
 } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
 import { safeExtractString, smartExtractPrice, detectSeason, normalizeQuery } from './syncUtils';
@@ -302,8 +302,6 @@ const ExcelImportPanel: React.FC<ExcelImportPanelProps> = ({ suppliers }) => {
                             stock_quantity: 10,
                             in_stock: true,
                             // AI Predicted Fields
-                            width: aiMatch?.width || '',
-                            height: aiMatch?.height || '',
                             radius: aiMatch?.radius || '',
                             manufacturer: aiMatch?.manufacturer || '',
                             season: aiMatch?.season || detectSeason(title),
@@ -315,7 +313,11 @@ const ExcelImportPanel: React.FC<ExcelImportPanelProps> = ({ suppliers }) => {
                         };
                     });
 
-                    await supabase.from('tyres').upsert(upserts, { onConflict: 'catalog_number,supplier_id' });
+                    const { error } = await supabase.from('tyres').upsert(upserts, { onConflict: 'catalog_number,supplier_id' });
+                    if (error) {
+                        console.error('Supabase AI Upsert Error:', error);
+                        alert(`Помилка збереження рядків ${i} - ${i + CHUNK_SIZE}: ${error.message}`);
+                    }
                 }
 
                 setAiProgress({ current: Math.min(i + CHUNK_SIZE, dataRows.length), total: dataRows.length });
@@ -503,7 +505,7 @@ const ExcelImportPanel: React.FC<ExcelImportPanelProps> = ({ suppliers }) => {
                     </div>
 
                     {/* SCROLLABLE TABLE AREA - Forced Height for visibility */}
-                    <div className="overflow-auto border border-zinc-700 rounded-xl bg-black relative flex-grow h-[600px] custom-scrollbar">
+                    <div className="overflow-auto border border-zinc-700 rounded-xl bg-black relative flex-grow min-h-[400px] max-h-[600px] custom-scrollbar">
                         <table className="w-full text-xs text-left border-collapse">
                             <thead className="sticky top-0 z-10 shadow-lg">
                                 <tr>
@@ -557,10 +559,11 @@ const ExcelImportPanel: React.FC<ExcelImportPanelProps> = ({ suppliers }) => {
                             <>
                                 <button 
                                     onClick={handleAiImport} 
-                                    disabled={!selectedSupplierId || importing || !hasKey}
-                                    className="w-full md:w-auto bg-[#8B5CF6] hover:bg-[#7C3AED] text-white font-black px-8 py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed group"
+                                    disabled={importing || isAiProcessing} // Only block if actively importing
+                                    className={`w-full md:w-auto text-white font-black px-8 py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed group ${!hasKey ? 'bg-red-600/50 hover:bg-red-500' : 'bg-[#8B5CF6] hover:bg-[#7C3AED]'}`}
                                 >
-                                    <Sparkles size={18} className="group-hover:animate-spin" /> ✨ AI ІМПОРТ (Опис + SEO)
+                                    <Sparkles size={18} className={!hasKey || isAiProcessing ? '' : 'animate-pulse'} /> 
+                                    {hasKey ? '✨ AI ІМПОРТ (Опис + SEO)' : '🚨 AI ІМПОРТ (Перевірте ключ!)'}
                                 </button>
 
                                 {importing ? (
@@ -570,8 +573,8 @@ const ExcelImportPanel: React.FC<ExcelImportPanelProps> = ({ suppliers }) => {
                                 ) : (
                                     <button 
                                         onClick={handleImport} 
-                                        disabled={!selectedSupplierId || isAiProcessing}
-                                        className="w-full md:w-auto bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold px-8 py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-95 disabled:opacity-50 border border-zinc-700"
+                                        disabled={isAiProcessing}
+                                        className="w-full md:w-auto bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold px-8 py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-95 disabled:opacity-50 border border-zinc-700 disabled:cursor-not-allowed"
                                     >
                                         <Save size={18}/> ЗВИЧАЙНИЙ ІМПОРТ
                                     </button>
@@ -649,6 +652,66 @@ const ExcelImportPanel: React.FC<ExcelImportPanelProps> = ({ suppliers }) => {
                         <p className="text-[9px] text-zinc-500 mt-2 uppercase text-right tracking-widest">Будь ласка, не закривайте вікно</p>
                     </div>
                 )}
+            </div>
+
+            {/* 🗺️ SEO & SITEMAP GENERATOR */}
+            <div className="bg-zinc-950 p-6 rounded-2xl border border-zinc-800 space-y-4">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-500/10 rounded-lg text-blue-500">
+                        <Globe size={20}/>
+                    </div>
+                    <div>
+                        <h4 className="text-white font-black uppercase tracking-tighter">SEO & Sitemap</h4>
+                        <p className="text-zinc-500 text-[10px] uppercase font-bold">Для індексації в Google Search Console</p>
+                    </div>
+                </div>
+
+                <div className="p-4 bg-zinc-900/50 rounded-xl border border-zinc-800">
+                    <p className="text-zinc-400 text-xs mb-4">
+                        Ця функція збирає посилання на всі ваші товари (<strong>{stats.total || '...'}</strong> шт.) 
+                        і створює спеціальний файл <code>sitemap.xml</code> для Google.
+                    </p>
+                    
+                    <button 
+                        onClick={async () => {
+                            try {
+                                const { data: allTyres, error } = await supabase.from('tyres').select('id, created_at');
+                                if (error) throw error;
+                                if (!allTyres) return;
+
+                                const baseUrl = 'https://www.forsage-tires.com';
+                                let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
+                                
+                                // Homepage
+                                xml += `  <url>\n    <loc>${baseUrl}/</loc>\n    <changefreq>daily</changefreq>\n    <priority>1.0</priority>\n  </url>\n`;
+
+                                // Products
+                                allTyres.forEach(t => {
+                                    const lastMod = t.created_at ? new Date(t.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+                                    xml += `  <url>\n    <loc>${baseUrl}/?p=${t.id}</loc>\n    <lastmod>${lastMod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.8</priority>\n  </url>\n`;
+                                });
+
+                                xml += `</urlset>`;
+
+                                const blob = new Blob([xml], { type: 'application/xml' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = 'sitemap.xml';
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                alert("🗺️ Sitemap згенеровано! Тепер завантажте цей файл у корінь сайту або надішліть у Google Search Console.");
+                            } catch (e: any) {
+                                alert("Помилка генерації: " + e.message);
+                            }
+                        }}
+                        className="bg-blue-600 hover:bg-blue-500 text-white font-black px-6 py-3 rounded-xl flex items-center gap-2 shadow-lg transition-all active:scale-95"
+                    >
+                        <Download size={18}/>
+                        <span>Згенерувати Sitemap.xml</span>
+                    </button>
+                </div>
             </div>
         </div>
     );

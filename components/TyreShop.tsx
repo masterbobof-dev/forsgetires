@@ -110,12 +110,43 @@ const TyreShop: React.FC<TyreShopProps> = ({
   const [quickOrderPhone, setQuickOrderPhone] = useState('');
   const [quickOrderSending, setQuickOrderSending] = useState(false);
 
-  // --- LOGIC: HANDLE INITIAL PRODUCT ---
+  // --- LOGIC: HANDLE INITIAL PRODUCT & URL SYNC ---
   useEffect(() => {
-    if (initialProduct) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const productId = urlParams.get('p') || urlParams.get('product');
+
+    if (productId && tyres.length > 0) {
+      const p = tyres.find(t => String(t.id) === productId);
+      if (p) setSelectedProductForModal(p);
+    } else if (initialProduct) {
       setSelectedProductForModal(initialProduct);
     }
-  }, [initialProduct]);
+  }, [initialProduct, tyres.length]);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (selectedProductForModal) {
+      // SEO: Dynamic Title
+      document.title = `${selectedProductForModal.title} — Купити шини ${selectedProductForModal.radius} в Україні | Forsage Tires`;
+      
+      // SEO: Meta Description
+      let metaDesc = document.querySelector('meta[name="description"]');
+      if (!metaDesc) {
+        metaDesc = document.createElement('meta');
+        metaDesc.setAttribute('name', 'description');
+        document.head.appendChild(metaDesc);
+      }
+      metaDesc.setAttribute('content', `Купити ${selectedProductForModal.title}. Ціна: ${formatPrice(selectedProductForModal.price)} грн. В наявності. Безкоштовний підбір та доставка по Україні.`);
+
+      // Sync URL
+      url.searchParams.set('p', String(selectedProductForModal.id));
+      window.history.replaceState({}, '', url.toString());
+    } else {
+      document.title = "Forsage Tires — Магазин шин та дисків у Синельниково";
+      url.searchParams.delete('p');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [selectedProductForModal]);
 
   // ... (rest of the code)
 
@@ -312,8 +343,28 @@ const TyreShop: React.FC<TyreShopProps> = ({
   };
 
   const renderSchema = (product: TyreProduct) => {
-    const s = { "@context": "https://schema.org/", "@type": "Product", "name": product.title, "image": product.image_url, "offers": { "@type": "Offer", "price": safeParsePrice(product.price), "priceCurrency": "UAH", "availability": product.in_stock ? "InStock" : "OutOfStock" } };
-    return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(s) }} />;
+    const schema = {
+      "@context": "https://schema.org/",
+      "@type": "Product",
+      "name": product.title,
+      "image": [product.image_url, ...(product.gallery || [])].filter(Boolean),
+      "description": product.description || `Якісна шина ${product.title} для вашого авто. В наявності на Forsage Tires.`,
+      "sku": `tyre-${product.id}`,
+      "brand": {
+        "@type": "Brand",
+        "name": product.manufacturer || "Forsage Tires"
+      },
+      "offers": {
+        "@type": "Offer",
+        "url": `https://www.forsage-tires.com/?p=${product.id}`,
+        "priceCurrency": "UAH",
+        "price": safeParsePrice(product.price),
+        "priceValidUntil": "2026-12-31",
+        "availability": product.in_stock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+        "itemCondition": "https://schema.org/NewCondition"
+      }
+    };
+    return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />;
   };
 
   return (

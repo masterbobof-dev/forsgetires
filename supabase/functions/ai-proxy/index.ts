@@ -86,7 +86,7 @@ serve(async (req) => {
     }
 
     // SEO / PLAIN TEXT MODES
-    if (mode === 'seo' || mode === 'plain' || mode === 'seo_batch') {
+    if (mode === 'seo' || mode === 'plain' || mode === 'seo_batch' || mode === 'seo_bulk') {
       const keysData = await supabaseAdmin.from('ai_api_keys').select('*').eq('id', 1).maybeSingle();
       const keys = keysData.data || {};
       
@@ -99,7 +99,7 @@ serve(async (req) => {
 
       if (provider === 'gemini') {
         apiKey = keys.gemini_key || '';
-        targetUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        targetUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey.trim())}`;
       } else if (provider === 'openai') {
         apiKey = keys.openai_key || '';
         targetUrl = 'https://api.openai.com/v1/chat/completions';
@@ -116,15 +116,23 @@ serve(async (req) => {
       }
 
       let payload: any = {};
-      const userPrompt = query;
+      const finalUserPrompt = body.userPrompt || body.prompt || query || '';
+      const finalSystemPrompt = body.systemPrompt || '';
 
       if (provider === 'gemini') {
-        payload = { contents: [{ parts: [{ text: userPrompt }] }] };
+        const fullPrompt = finalSystemPrompt ? `${finalSystemPrompt}\n\n${finalUserPrompt}` : finalUserPrompt;
+        payload = { contents: [{ parts: [{ text: fullPrompt }] }] };
       } else {
         // OpenAI / Custom format
+        const messages = [];
+        if (finalSystemPrompt) {
+          messages.push({ role: 'system', content: finalSystemPrompt });
+        }
+        messages.push({ role: 'user', content: finalUserPrompt });
+
         payload = {
           model: targetModel || (provider === 'openai' ? 'gpt-4o-mini' : targetModel),
-          messages: [{ role: 'user', content: userPrompt }],
+          messages: messages,
           temperature: 0.7
         };
       }
@@ -148,6 +156,20 @@ serve(async (req) => {
         resultText = aiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
       } else {
         resultText = aiData?.choices?.[0]?.message?.content || '';
+      }
+
+      // If SEO mode, try to parse JSON from text to return it as 'data' object
+      if (mode === 'seo' || mode === 'seo_bulk' || mode === 'seo_batch') {
+        try {
+          // Look for JSON block in AI response
+          const match = resultText.match(/\{[\s\S]*\}/);
+          const jsonStr = match ? match[0] : resultText;
+          const parsed = JSON.parse(jsonStr);
+          return jsonResponse({ ok: true, data: parsed, text: resultText });
+        } catch (e) {
+          console.warn('[ai-proxy] Failed to parse AI JSON:', e);
+          // Fallback to plain text
+        }
       }
 
       return jsonResponse({ ok: true, text: resultText });

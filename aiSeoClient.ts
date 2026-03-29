@@ -48,22 +48,41 @@ export async function generateSeoJson(params: {
   return res.data;
 }
 
-/** SEO Bulk JSON через Edge Function `ai-proxy` (масова обробка). */
 export async function generateSeoBulkJson(params: {
   provider: AIProviderId;
   systemPrompt: string;
   userPrompt: string;
 }): Promise<{ results: any[] }> {
+  // Use mode 'seo_batch' or 'seo' because the older deployed edge function only supports those.
+  // Pass the combined prompt via 'query' to support the old edge function format.
   const res = await invokeAiProxy({
-    mode: 'seo_bulk',
+    mode: 'seo',
     provider: params.provider,
     systemPrompt: params.systemPrompt,
     userPrompt: params.userPrompt,
-  });
-  if (!res.data || !Array.isArray(res.data.results)) {
-    throw new Error('AI не повернув масив результатів. Можливо, потрібно оновити Edge Function.');
+    query: `${params.systemPrompt}\n\n${params.userPrompt}`
+  } as any);
+
+  let parsedData: any = null;
+
+  // Try to use pre-parsed data if the new edge function processed it
+  if (res.data && typeof res.data === 'object' && Array.isArray((res.data as any).results)) {
+    parsedData = res.data;
+  } 
+  // Otherwise, manually extract and parse JSON from the raw text (for the old edge function)
+  else if (res.text) {
+    try {
+      parsedData = parseJsonFromAiText(res.text);
+    } catch (e) {
+      console.error("Local JSON parse failed:", e);
+    }
   }
-  return res.data;
+
+  if (!parsedData || !Array.isArray(parsedData.results)) {
+    throw new Error('AI не повернув масив результатів. Спробуйте ще раз або перевірте налаштування AI.');
+  }
+
+  return parsedData;
 }
 
 /** Простий текст через Edge Function `ai-proxy`. */

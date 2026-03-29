@@ -7,6 +7,7 @@ import { WHEEL_RADII, CAR_RADII, CARGO_RADII, TRUCK_RADII, AGRO_RADII } from '..
 import readXlsxFile from 'read-excel-file';
 import AiSortModal from './AiSortModal';
 import { invokeAiProxy } from '../../aiProxyClient';
+import { normalizeQuery } from './sync/syncUtils';
 
 const PAGE_SIZE = 50;
 
@@ -43,6 +44,7 @@ const TyresTab: React.FC = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [showKeyNeededError, setShowKeyNeededError] = useState(false);
   
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
@@ -57,6 +59,16 @@ const TyresTab: React.FC = () => {
   const [categoryCounts, setCategoryCounts] = useState({ all: 0, car: 0, cargo: 0, truck: 0, agro: 0, suv: 0, hot: 0, out: 0, no_photo: 0 });
   const [enableStockQty, setEnableStockQty] = useState(false);
   
+  const normalizeQuery = (title: string): string => {
+      return title
+          .replace(/^Шина\s+/i, '')
+          .replace(/\(.*\)/g, '')
+          .replace(/DOT\d{4}/gi, '')
+          .replace(/Шина/gi, '')
+          .replace(/\d{4}$/, '') // remove year at the end
+          .replace(/\s+/g, ' ')
+          .trim();
+  };
   // Inline editing state
   const [editingPriceId, setEditingPriceId] = useState<number | null>(null);
   const [editingStockId, setEditingStockId] = useState<number | null>(null);
@@ -111,8 +123,16 @@ const TyresTab: React.FC = () => {
   const [showAiSearchModal, setShowAiSearchModal] = useState(false);
   const [aiSearchQuery, setAiSearchQuery] = useState('');
   const [aiSearchResults, setAiSearchResults] = useState<any[]>([]);
+  const [selectedAiUrls, setSelectedAiUrls] = useState<string[]>([]);
   const [isSearchingAi, setIsSearchingAi] = useState(false);
   const [targetTyreForAi, setTargetTyreForAi] = useState<TyreProduct | null>(null);
+  const [aiSearchError, setAiSearchError] = useState<string | null>(null);
+  const [apiErrorHint, setApiErrorHint] = useState(false);
+
+  // BULK AI PHOTO PROCESSING STATE
+  const [isBulkPhotoProcessing, setIsBulkPhotoProcessing] = useState(false);
+  const [bulkPhotoProgress, setBulkPhotoProgress] = useState(0);
+  const [bulkPhotoTotal, setBulkPhotoTotal] = useState(0);
 
   const showError = (msg: string) => { setErrorMessage(msg); setTimeout(() => setErrorMessage(''), 6000); };
   
@@ -523,14 +543,19 @@ const TyresTab: React.FC = () => {
   // --- AI IMAGE SEARCH LOGIC ---
   const handleOpenAiSearch = (tyre: TyreProduct) => {
       setTargetTyreForAi(tyre);
-      setAiSearchQuery(tyre.title);
+      const q = normalizeQuery(tyre.title);
+      setAiSearchQuery(q);
       setAiSearchResults([]);
+      setSelectedAiUrls([]);
+      setAiSearchError(null);
       setShowAiSearchModal(true);
-      performAiSearch(tyre.title);
+      performAiSearch(q);
   };
 
   const performAiSearch = async (query: string) => {
       setIsSearchingAi(true);
+      setAiSearchError(null);
+      setApiErrorHint(false);
       try {
           const res = await invokeAiProxy({
               mode: 'image_search',
@@ -538,27 +563,44 @@ const TyresTab: React.FC = () => {
           });
           if (res.ok && Array.isArray(res.data)) {
               setAiSearchResults(res.data);
-          } else if (res.data?.error) {
-              showError(res.data.error);
+              if (res.data.length === 0) {
+                  setAiSearchError("Нічого не знайдено. Спробуйте змінити запит.");
+              }
           }
       } catch (e: any) {
-          showError("Помилка пошуку: " + e.message);
+          if (e.message && e.message.includes('Додайте Serper')) {
+              setApiErrorHint(true);
+          } else {
+              setAiSearchError(e.message);
+          }
       } finally {
           setIsSearchingAi(false);
       }
   };
 
-  const handleSelectAiImage = async (url: string) => {
-      if (!targetTyreForAi) return;
+  const toggleAiImage = (url: string) => {
+      setSelectedAiUrls(prev => 
+          prev.includes(url) ? prev.filter(u => u !== url) : [...prev, url]
+      );
+  };
+
+  const handleSaveAiImages = async () => {
+      if (!targetTyreForAi || selectedAiUrls.length === 0) return;
       const tId = targetTyreForAi.id;
       
+      const mainUrl = selectedAiUrls[0];
+      const gallery = selectedAiUrls.slice(1);
+      
       // Optimistic update
-      setTyres(prev => prev.map(t => t.id === tId ? { ...t, image_url: url } : t));
+      setTyres(prev => prev.map(t => t.id === tId ? { ...t, image_url: mainUrl, gallery } : t));
       
       try {
-          const { error } = await supabase.from('tyres').update({ image_url: url }).eq('id', tId);
+          const { error } = await supabase.from('tyres').update({ 
+              image_url: mainUrl,
+              gallery: gallery 
+          }).eq('id', tId);
           if (error) throw error;
-          setSuccessMessage("Фото оновлено!");
+          setSuccessMessage("Фото та галерею оновлено!");
           setTimeout(() => setSuccessMessage(''), 2000);
           setShowAiSearchModal(false);
           fetchCategoryCounts();
@@ -566,6 +608,79 @@ const TyresTab: React.FC = () => {
           showError("Помилка збереження: " + e.message);
           fetchTyres(tyrePage, true);
       }
+  };
+
+  // --- BULK PHOTO OPERATIONS ---
+  const handleBulkDeletePhotos = async () => {
+      if (selectedTyreIds.size === 0) return;
+      if (!confirm(`Видалити фото для ${selectedTyreIds.size} товарів?`)) return;
+      
+      setIsApplyingBulk(true);
+      try {
+          const ids = Array.from(selectedTyreIds);
+          const { error } = await supabase.from('tyres').update({ image_url: null, gallery: [] }).in('id', ids);
+          if (error) throw error;
+          
+          setTyres(prev => prev.map(t => selectedTyreIds.has(t.id) ? { ...t, image_url: null, gallery: [] } : t));
+          setSuccessMessage(`Видалено фото для ${ids.length} товарів.`);
+          setSelectedTyreIds(new Set());
+          fetchCategoryCounts();
+      } catch (e: any) {
+          showError("Помилка видалення фото: " + e.message);
+      } finally {
+          setIsApplyingBulk(false);
+      }
+  };
+
+  const handleBulkAiSearch = async (onlyMissing: boolean) => {
+      if (selectedTyreIds.size === 0) return;
+      
+      const idsToProcess = Array.from(selectedTyreIds).filter(id => {
+          if (!onlyMissing) return true;
+          const t = tyres.find(ty => ty.id === id);
+          return !t?.image_url;
+      });
+
+      if (idsToProcess.length === 0) {
+          showError("Немає товарів для обробки.");
+          return;
+      }
+
+      setIsBulkPhotoProcessing(true);
+      setBulkPhotoTotal(idsToProcess.length);
+      setBulkPhotoProgress(0);
+
+      let successCount = 0;
+      for (const [index, id] of idsToProcess.entries()) {
+          const tyre = tyres.find(t => t.id === id);
+          if (!tyre) continue;
+
+          try {
+              const cleanQ = normalizeQuery(tyre.title);
+              const res = await invokeAiProxy({ mode: 'image_search', query: cleanQ });
+              if (res.ok && Array.isArray(res.data) && res.data.length > 0) {
+                  const firstImg = res.data[0].imageUrl;
+                  await supabase.from('tyres').update({ image_url: firstImg }).eq('id', id);
+                  setTyres(prev => prev.map(t => t.id === id ? { ...t, image_url: firstImg } : t));
+                  successCount++;
+              }
+              // Rate limiting delay
+              await new Promise(r => setTimeout(r, 600)); 
+          } catch (e: any) {
+              if (e.message && e.message.includes('Додайте Serper')) {
+                  setShowKeyNeededError(true);
+                  setIsBulkPhotoProcessing(false);
+                  return;
+              }
+              console.error(`Error processing ID ${id}:`, e);
+          }
+          setBulkPhotoProgress(index + 1);
+      }
+
+      setIsBulkPhotoProcessing(false);
+      setSuccessMessage(`Оброблено! Додано фото для ${successCount} товарів.`);
+      setSelectedTyreIds(new Set());
+      fetchCategoryCounts();
   };
 
   const applyDiscount = (pct: number) => {
@@ -853,6 +968,30 @@ const TyresTab: React.FC = () => {
                                     <option value="truck">TIR</option>
                                     <option value="agro">Агро</option>
                                 </select>
+                            </div>
+
+                            <div className="flex gap-1.5 border-r border-zinc-700 pr-2">
+                                <button 
+                                    onClick={() => handleBulkAiSearch(true)} 
+                                    className="p-2 bg-purple-900/30 hover:bg-purple-600 border border-purple-500/30 text-purple-200 rounded-lg text-[9px] font-black flex items-center gap-1.5"
+                                    title="Тільки де немає фото"
+                                >
+                                    <Sparkles size={14}/> ШІ НОВІ
+                                </button>
+                                <button 
+                                    onClick={() => handleBulkAiSearch(false)} 
+                                    className="p-2 bg-zinc-800 hover:bg-purple-600 border border-zinc-700 text-zinc-300 rounded-lg text-[9px] font-black flex items-center gap-1.5"
+                                    title="Замінити наявні через ШІ"
+                                >
+                                    <RefreshCw size={14}/> ШІ ЗАМІНА
+                                </button>
+                                <button 
+                                    onClick={handleBulkDeletePhotos} 
+                                    className="p-2 bg-zinc-800 hover:bg-red-600 border border-zinc-700 text-zinc-400 rounded-lg text-[9px] font-black flex items-center gap-1.5"
+                                    title="Видалити фото"
+                                >
+                                    <ImageIcon size={14}/> ОЧИСТИТИ
+                                </button>
                             </div>
 
                             <div className="flex items-center gap-1.5 flex-grow md:flex-none">
@@ -1385,23 +1524,31 @@ const TyresTab: React.FC = () => {
                         <button onClick={() => setShowAiSearchModal(false)} className="p-2 hover:bg-zinc-800 rounded-xl transition-colors text-zinc-500 hover:text-white"><X size={24}/></button>
                     </div>
 
-                    <div className="p-4 bg-black/20 flex gap-2">
-                        <input 
-                            type="text" 
-                            value={aiSearchQuery} 
-                            onChange={e => setAiSearchQuery(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && performAiSearch(aiSearchQuery)}
-                            className="flex-grow bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-purple-500 outline-none"
-                            placeholder="Назва для пошуку..."
-                        />
-                        <button 
-                            onClick={() => performAiSearch(aiSearchQuery)}
-                            disabled={isSearchingAi}
-                            className="bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold px-6 py-2.5 rounded-xl flex items-center gap-2 transition-all"
-                        >
-                            {isSearchingAi ? <Loader2 className="animate-spin" size={18}/> : <Search size={18}/>}
-                            <span>Шукати</span>
-                        </button>
+                    <div className="p-4 bg-black/20 flex flex-col gap-3">
+                        <div className="flex gap-2">
+                            <input 
+                                type="text" 
+                                value={aiSearchQuery} 
+                                onChange={e => setAiSearchQuery(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && performAiSearch(aiSearchQuery)}
+                                className="flex-grow bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-purple-500 outline-none"
+                                placeholder="Назва для пошуку..."
+                            />
+                            <button 
+                                onClick={() => performAiSearch(aiSearchQuery)}
+                                disabled={isSearchingAi}
+                                className="bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold px-6 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-lg"
+                            >
+                                {isSearchingAi ? <Loader2 className="animate-spin" size={18}/> : <Search size={18}/>}
+                                <span>Шукати</span>
+                            </button>
+                        </div>
+                        {aiSearchError && (
+                            <div className="flex items-center gap-2 text-red-500 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-lg animate-in fade-in slide-in-from-top-1">
+                                <AlertTriangle size={14}/>
+                                <span className="text-[11px] font-bold uppercase tracking-tight">{aiSearchError}</span>
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex-grow overflow-y-auto p-4 max-h-[60vh] custom-scrollbar bg-black/40">
@@ -1412,18 +1559,29 @@ const TyresTab: React.FC = () => {
                             </div>
                         ) : aiSearchResults.length > 0 ? (
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                {aiSearchResults.map((img, idx) => (
-                                    <div 
-                                        key={idx} 
-                                        onClick={() => handleSelectAiImage(img.imageUrl)}
-                                        className="group relative aspect-square bg-black rounded-xl overflow-hidden cursor-pointer border border-zinc-800 hover:border-purple-500 transition-all active:scale-95"
-                                    >
-                                        <img src={img.imageUrl} alt={`Result ${idx}`} className="w-full h-full object-contain p-1" />
-                                        <div className="absolute inset-0 bg-purple-600/0 group-hover:bg-purple-600/20 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100">
-                                            <div className="bg-white text-black text-[10px] font-black px-2 py-1 rounded-md shadow-lg">ВИБРАТИ</div>
+                                {aiSearchResults.map((img, idx) => {
+                                    const isSelected = selectedAiUrls.includes(img.imageUrl);
+                                    const selectIndex = selectedAiUrls.indexOf(img.imageUrl);
+                                    return (
+                                        <div 
+                                            key={idx} 
+                                            onClick={() => toggleAiImage(img.imageUrl)}
+                                            className={`group relative aspect-square bg-black rounded-xl overflow-hidden cursor-pointer border-2 transition-all active:scale-95 ${isSelected ? 'border-purple-500 ring-4 ring-purple-500/20 shadow-2xl' : 'border-zinc-800 hover:border-zinc-600'}`}
+                                        >
+                                            <img src={img.imageUrl} alt={`Result ${idx}`} className="w-full h-full object-contain p-1" />
+                                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <p className="text-[10px] text-zinc-300 truncate">{img.title}</p>
+                                            </div>
+                                            {isSelected && (
+                                                <div className="absolute inset-0 bg-purple-500/20 flex items-center justify-center backdrop-blur-[1px]">
+                                                    <div className="bg-purple-600 text-white rounded-full w-8 h-8 flex items-center justify-center font-black shadow-xl border-2 border-white/50 animate-in zoom-in-50">
+                                                        {selectIndex === 0 ? <CheckCircle size={16}/> : selectIndex + 1}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         ) : (
                             <div className="flex flex-col items-center justify-center py-20 text-zinc-600 gap-4">
@@ -1433,9 +1591,88 @@ const TyresTab: React.FC = () => {
                         )}
                     </div>
 
-                    <div className="p-4 bg-zinc-900 border-t border-zinc-800 flex justify-between items-center">
-                        <span className="text-[10px] text-zinc-500 uppercase font-black">Powered by Serper.dev</span>
-                        <button onClick={() => setShowAiSearchModal(false)} className="text-zinc-400 hover:text-white text-xs font-bold">Скасувати</button>
+                    <div className="p-4 bg-zinc-900 border-t border-zinc-800 flex justify-between items-center sm:flex-row flex-col gap-4">
+                        <div className="flex flex-col items-center sm:items-start text-center sm:text-left">
+                            <span className="text-[10px] text-zinc-500 uppercase font-black tracking-tighter">Обрано для галереї</span>
+                            <span className="text-white text-sm font-bold">{selectedAiUrls.length} фото</span>
+                        </div>
+                        <div className="flex gap-3 w-full sm:w-auto">
+                            <button onClick={() => setShowAiSearchModal(false)} className="px-6 py-2.5 rounded-xl text-zinc-500 hover:text-white font-bold transition-colors flex-1 sm:flex-none">Скасувати</button>
+                            <button 
+                                onClick={handleSaveAiImages}
+                                disabled={selectedAiUrls.length === 0}
+                                className="bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-black px-8 py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 flex-1 sm:flex-none"
+                            >
+                                <Save size={18}/>
+                                <span>Зберегти {selectedAiUrls.length > 0 && selectedAiUrls.length}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* BULK PROCESSING OVERLAY */}
+        {isBulkPhotoProcessing && (
+            <div className="fixed inset-0 z-[600] bg-black/80 backdrop-blur-md flex items-center justify-center p-6 text-center animate-in fade-in">
+                <div className="max-w-md w-full bg-zinc-900 border border-zinc-700 p-8 rounded-3xl shadow-3xl">
+                    <div className="relative w-20 h-20 mx-auto mb-6">
+                        <div className="absolute inset-0 border-4 border-purple-500/20 rounded-full"></div>
+                        <div 
+                            className="absolute inset-0 border-4 border-t-purple-500 rounded-full animate-spin"
+                            style={{ animationDuration: '1.5s' }}
+                        ></div>
+                        <Sparkles className="absolute inset-0 m-auto text-purple-500 animate-pulse" size={32} />
+                    </div>
+                    
+                    <h3 className="text-xl font-black text-white mb-2 uppercase tracking-wide">ШІ-Масова обробка</h3>
+                    <p className="text-zinc-500 text-sm mb-6 font-medium">Пошук та додавання фото для вибраних товарів...</p>
+                    
+                    <div className="relative h-3 bg-zinc-800 rounded-full overflow-hidden mb-3">
+                        <div 
+                            className="absolute top-0 left-0 h-full bg-gradient-to-r from-purple-600 to-blue-500 transition-all duration-500"
+                            style={{ width: `${(bulkPhotoProgress / bulkPhotoTotal) * 100}%` }}
+                        ></div>
+                    </div>
+                    
+                    <div className="flex justify-between items-center text-[10px] uppercase font-black tracking-widest px-1">
+                        <span className="text-purple-400">Прогрес: {bulkPhotoProgress} / {bulkPhotoTotal}</span>
+                        <span className="text-zinc-500">{Math.round((bulkPhotoProgress / bulkPhotoTotal) * 100)}%</span>
+                    </div>
+                    
+                    <p className="mt-8 text-[9px] text-zinc-600 uppercase font-black italic">Будь ласка, не закривайте вкладку до завершення</p>
+                </div>
+            </div>
+        )}
+
+        {/* ERROR HINT OVERLAY */}
+        {(showKeyNeededError || apiErrorHint) && (
+            <div className="fixed inset-0 z-[700] bg-black/90 backdrop-blur-xl flex items-center justify-center p-6 animate-in zoom-in-95">
+                <div className="max-w-md w-full bg-zinc-900 border-2 border-red-500/50 p-8 rounded-[2.5rem] shadow-[0_0_100px_rgba(239,68,68,0.2)] text-center">
+                    <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-500/30">
+                        <AlertTriangle className="text-red-500" size={40}/>
+                    </div>
+                    <h3 className="text-2xl font-black text-white mb-3 uppercase tracking-tight italic">Налаштування ШІ не завершене</h3>
+                    <p className="text-zinc-400 text-sm mb-8 leading-relaxed">Система каже, що у вас не вписано <b>Serper API Key</b> або не виконано SQL-запит до бази даних.</p>
+                    
+                    <div className="flex flex-col gap-3">
+                        <button 
+                            onClick={() => {
+                                setShowKeyNeededError(false);
+                                setApiErrorHint(false);
+                                // Here we would ideally navigate to settings
+                                alert("Будь ласка, перейдіть у вкладку 'API / Синхр.' або 'Налашт.' та вкажіть ключ Serper. Крім того, переконайтеся, що ви виконали SQL запит у Supabase.");
+                            }}
+                            className="w-full bg-white text-black font-black py-4 rounded-2xl hover:bg-zinc-200 transition-all active:scale-95 text-sm uppercase tracking-widest shadow-lg"
+                        >
+                            Я РОЗУМІЮ
+                        </button>
+                        <button 
+                            onClick={() => { setShowKeyNeededError(false); setApiErrorHint(false); }}
+                            className="w-full bg-zinc-800 text-zinc-500 font-bold py-3 rounded-2xl hover:text-white transition-colors"
+                        >
+                            Закрити
+                        </button>
                     </div>
                 </div>
             </div>

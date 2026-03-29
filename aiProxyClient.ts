@@ -36,16 +36,27 @@ export type AdminAiKeyStatus = {
   hasGroq: boolean;
   hasCustom: boolean;
   hasSerper: boolean;
+  customUrl?: string;
+  customModel?: string;
 };
 
 export async function invokeAiProxy(
   payload: AiProxySeoPayload | AiProxySeoBulkPayload | AiProxyPlainPayload | AiProxyImageSearchPayload
 ): Promise<{ ok: true; data?: any; text?: string }> {
+  console.log('[AI Proxy Request]', payload);
   const { data, error } = await supabase.functions.invoke('ai-proxy', { body: payload });
-  if (error) throw new Error(error.message);
+  
+  if (error) {
+    console.error('[AI Proxy Network Error]', error);
+    throw new Error(error.message);
+  }
+  
   if (data && typeof data === 'object' && 'error' in data && (data as { error?: string }).error) {
+    console.error('[AI Proxy Response Error]', data.error);
     throw new Error((data as { error: string }).error);
   }
+  
+  console.log('[AI Proxy Response OK]', data);
   return data as { ok: true; data?: Record<string, unknown>; text?: string };
 }
 
@@ -58,18 +69,20 @@ export async function fetchAdminAiKeyStatus(): Promise<AdminAiKeyStatus> {
   if (data && typeof data === 'object' && 'error' in data && (data as { error?: string }).error) {
     throw new Error((data as { error: string }).error);
   }
-  const d = data as { ok?: boolean; hasGemini?: boolean; hasOpenai?: boolean; hasGroq?: boolean; hasCustom?: boolean; hasSerper?: boolean };
+  const d = data as { ok?: boolean; hasGemini?: boolean; hasOpenai?: boolean; hasGroq?: boolean; hasCustom?: boolean; hasSerper?: boolean; customUrl?: string; customModel?: string };
   return {
     hasGemini: !!d.hasGemini,
     hasOpenai: !!d.hasOpenai,
     hasGroq: !!d.hasGroq,
     hasCustom: !!d.hasCustom,
     hasSerper: !!d.hasSerper,
+    customUrl: d.customUrl || '',
+    customModel: d.customModel || '',
   };
 }
 
 /** Зберегти лише передані поля (непорожній рядок). Порожній рядок у полі — видалити цей ключ. */
-export async function saveAdminAiKeys(keys: Partial<Record<'gemini' | 'openai' | 'groq' | 'custom' | 'serper', string>>): Promise<void> {
+export async function saveAdminAiKeys(keys: Partial<Record<'gemini' | 'openai' | 'groq' | 'custom' | 'serper' | 'customUrl' | 'customModel', string>>): Promise<void> {
   const { data, error } = await supabase.functions.invoke('admin-ai-keys', { body: keys });
   if (error) throw new Error(error.message);
   if (data && typeof data === 'object' && 'error' in data && (data as { error?: string }).error) {

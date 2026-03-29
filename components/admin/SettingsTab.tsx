@@ -84,6 +84,8 @@ const SettingsTab: React.FC = () => {
       setHasKeyGroq(s.hasGroq);
       setHasKeyCustom(s.hasCustom);
       setHasKeySerper(s.hasSerper);
+      if (s.customUrl) setCustomBaseUrl(s.customUrl);
+      if (s.customModel) setCustomModel(s.customModel);
     } catch {
       setHasKeyGemini(false);
       setHasKeyOpenai(false);
@@ -233,6 +235,8 @@ const SettingsTab: React.FC = () => {
         if (groqKey.trim()) aiPayload.groq = groqKey.trim();
         if (customKey.trim()) aiPayload.custom = customKey.trim();
         if (serperKey.trim()) aiPayload.serper = serperKey.trim();
+        if (customBaseUrl.trim()) aiPayload.customUrl = customBaseUrl.trim();
+        if (customModel.trim()) aiPayload.customModel = customModel.trim();
         if (Object.keys(aiPayload).length > 0) {
           await saveAdminAiKeys(aiPayload);
           setGeminiKey('');

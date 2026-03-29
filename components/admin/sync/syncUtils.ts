@@ -102,6 +102,20 @@ export const findPriceRecursively = (obj: any): number => {
     return 0;
 };
 
+export const normalizeQuery = (text: string): string => {
+    if (!text) return '';
+    let q = text;
+    // Remove common technical noise
+    q = q.replace(/Шина\s+/gi, '');
+    q = q.replace(/DOT\d{4}/gi, '');
+    q = q.replace(/\d{4}\s*рік/gi, '');
+    q = q.replace(/шт/gi, '');
+    q = q.replace(/\([^)]*\)/g, ''); // Remove anything in brackets
+    q = q.replace(/\[[^\]]*\]/g, ''); // Remove square brackets
+    q = q.replace(/[\*\!\?]/g, '');   // Remove special chars
+    return q.trim();
+};
+
 export const detectSeason = (text: string): string => {
     const t = String(text).toLowerCase();
     if (t.includes('зима') || t.includes('зимн') || t.includes('winter') || t.includes('snow') || t.includes('ice') || t.includes('stud') || t.includes('w442') || t.includes('ws')) return 'winter';

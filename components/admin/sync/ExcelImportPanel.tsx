@@ -1,11 +1,15 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import readXlsxFile from 'read-excel-file';
-import { Upload, FileSpreadsheet, Save, Loader2, RefreshCw, AlertTriangle, ArrowDown, CheckCircle, HelpCircle, Sparkles, Info } from 'lucide-react';
+import { 
+    Upload, FileSpreadsheet, Save, Loader2, RefreshCw, AlertTriangle, 
+    ArrowDown, CheckCircle, HelpCircle, Sparkles, Info, 
+    Image, X, Trash2, Camera, Download 
+} from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
-import { safeExtractString, smartExtractPrice, detectSeason } from './syncUtils';
+import { safeExtractString, smartExtractPrice, detectSeason, normalizeQuery } from './syncUtils';
 import { generateSeoBulkJson, normalizeProviderId, type AIProviderId } from '../../../aiSeoClient';
-import { fetchAdminAiKeyStatus, hasProviderKey } from '../../../aiProxyClient';
+import { fetchAdminAiKeyStatus, hasProviderKey, invokeAiProxy } from '../../../aiProxyClient';
 
 interface ExcelImportPanelProps {
     suppliers: any[];
@@ -42,6 +46,10 @@ const ExcelImportPanel: React.FC<ExcelImportPanelProps> = ({ suppliers }) => {
     const [hasKey, setHasKey] = useState(false);
     const [isAiProcessing, setIsAiProcessing] = useState(false);
     const [aiProgress, setAiProgress] = useState({ current: 0, total: 0 });
+
+    // PHOTO MANAGER STATE
+    const [isPhotoProcessing, setIsPhotoProcessing] = useState(false);
+    const [photoProgress, setPhotoProgress] = useState({ current: 0, total: 0 });
 
     useEffect(() => {
         const init = async () => {
@@ -324,6 +332,82 @@ const ExcelImportPanel: React.FC<ExcelImportPanelProps> = ({ suppliers }) => {
         }
     };
 
+    const handleBulkAiPhotos = async (mode: 'missing' | 'replace') => {
+        if (!hasKey) { alert("API ключ не активний. Перевірте налаштування."); return; }
+        
+        const confirmMsg = mode === 'missing' 
+            ? "🔍 Знайти фото для всіх товарів БЕЗ зображень?" 
+            : "⚠️ УВАГА! Це ЗАМІНИТЬ існуючі фото новими для ВСІХ товарів. Продовжити?";
+            
+        if (!confirm(confirmMsg)) return;
+
+        setIsPhotoProcessing(true);
+        try {
+            // 1. Fetch tyres
+            let queryBuilder = supabase.from('tyres').select('id, title, image_url');
+            if (mode === 'missing') {
+                queryBuilder = queryBuilder.or('image_url.is.null,image_url.eq.""');
+            }
+            
+            const { data: tyres, error } = await queryBuilder;
+            if (error) throw error;
+            if (!tyres || tyres.length === 0) {
+                alert("Нічого обробляти!");
+                return;
+            }
+
+            setPhotoProgress({ current: 0, total: tyres.length });
+
+            for (let i = 0; i < tyres.length; i++) {
+                const tyre = tyres[i];
+                const normalizedQ = normalizeQuery(tyre.title);
+                
+                try {
+                    const res = await invokeAiProxy({
+                        mode: 'image_search',
+                        query: normalizedQ
+                    });
+
+                    if (res.ok && Array.isArray(res.data) && res.data.length > 0) {
+                        const newUrl = res.data[0].imageUrl;
+                        await supabase.from('tyres').update({ image_url: newUrl }).eq('id', tyre.id);
+                    }
+                } catch (e) {
+                    console.error(`Error for tyre ${tyre.id}:`, e);
+                }
+
+                setPhotoProgress(prev => ({ ...prev, current: i + 1 }));
+                // Rate limiting delay
+                await new Promise(r => setTimeout(r, 600));
+            }
+
+            alert("🌠 Масовий пошук фото завершено!");
+        } catch (e: any) {
+            alert("Помилка: " + e.message);
+        } finally {
+            setIsPhotoProcessing(false);
+        }
+    };
+
+    const handleClearAllPhotos = async () => {
+        if (!confirm("🚨 Ви впевнені? Це ВИДАЛИТЬ посилання на фото та галереї для ВСІХ товарів у базі!")) return;
+        
+        setIsPhotoProcessing(true);
+        try {
+            const { error } = await supabase.from('tyres').update({ 
+                image_url: null,
+                gallery: null 
+            }).not('id', 'is', null);
+            
+            if (error) throw error;
+            alert("🧹 Базу фото очищено.");
+        } catch (e: any) {
+            alert("Помилка очищення: " + e.message);
+        } finally {
+            setIsPhotoProcessing(false);
+        }
+    };
+
     return (
         <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800 shadow-xl space-y-6 h-full flex flex-col relative overflow-hidden">
             <div className="flex flex-col md:flex-row justify-between items-start gap-4 flex-shrink-0">
@@ -504,6 +588,68 @@ const ExcelImportPanel: React.FC<ExcelImportPanelProps> = ({ suppliers }) => {
                     )}
                 </div>
             )}
+
+            {/* 🌠 AI PHOTO MANAGER PULT */}
+            <div className="bg-black/30 p-6 rounded-2xl border border-zinc-800 space-y-6">
+                <div>
+                    <h4 className="text-white font-black flex items-center gap-2 uppercase tracking-tighter">
+                        <Camera size={20} className="text-purple-500" />
+                        🌠 ШІ Фото Менеджер
+                    </h4>
+                    <p className="text-zinc-500 text-xs mt-1">Автоматичне наповнення бази зображеннями через Google Images (Serper).</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <button 
+                        onClick={() => handleBulkAiPhotos('missing')}
+                        disabled={isPhotoProcessing || !hasKey}
+                        className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white p-4 rounded-xl border border-zinc-700 flex flex-col items-center gap-2 transition-all hover:scale-[1.02] active:scale-95 group"
+                    >
+                        <Download className="text-green-500 group-hover:animate-bounce" />
+                        <span className="font-bold text-sm">ШІ: Тільки нові</span>
+                        <span className="text-[10px] text-zinc-500">Для товарів без фото</span>
+                    </button>
+
+                    <button 
+                        onClick={() => handleBulkAiPhotos('replace')}
+                        disabled={isPhotoProcessing || !hasKey}
+                        className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white p-4 rounded-xl border border-zinc-700 flex flex-col items-center gap-2 transition-all hover:scale-[1.02] active:scale-95 group"
+                    >
+                        <RefreshCw className="text-blue-500 group-hover:rotate-180 transition-transform duration-500" />
+                        <span className="font-bold text-sm">ШІ: Повне оновлення</span>
+                        <span className="text-[10px] text-zinc-500">Замінити ВСІ фото</span>
+                    </button>
+
+                    <button 
+                        onClick={handleClearAllPhotos}
+                        disabled={isPhotoProcessing}
+                        className="bg-zinc-900/50 hover:bg-red-950/30 disabled:opacity-50 text-zinc-400 hover:text-red-400 p-4 rounded-xl border border-zinc-800 hover:border-red-900/50 flex flex-col items-center gap-2 transition-all active:scale-95"
+                    >
+                        <Trash2 size={20} />
+                        <span className="font-bold text-sm">Очистити все</span>
+                        <span className="text-[10px] opacity-60">Видалити фото з бази</span>
+                    </button>
+                </div>
+
+                {isPhotoProcessing && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 bg-purple-900/20 p-5 rounded-2xl border border-purple-500/30">
+                        <div className="flex justify-between items-center mb-3">
+                            <div className="flex items-center gap-3">
+                                <Loader2 className="animate-spin text-purple-400" size={20} />
+                                <span className="text-white font-black text-sm uppercase tracking-tighter">Йде масова обробка...</span>
+                            </div>
+                            <span className="text-purple-300 font-mono text-xs">{photoProgress.current} / {photoProgress.total}</span>
+                        </div>
+                        <div className="h-3 bg-black rounded-full overflow-hidden border border-white/5">
+                            <div 
+                                className="h-full bg-gradient-to-r from-purple-600 to-blue-500 transition-all duration-300" 
+                                style={{ width: `${(photoProgress.current / photoProgress.total) * 100}%` }}
+                            ></div>
+                        </div>
+                        <p className="text-[9px] text-zinc-500 mt-2 uppercase text-right tracking-widest">Будь ласка, не закривайте вікно</p>
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

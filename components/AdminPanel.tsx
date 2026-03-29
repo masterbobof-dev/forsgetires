@@ -245,11 +245,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite, mode, s
   const currentTabs = mode === 'service' ? serviceTabs : tyreTabs;
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white pb-20 animate-in fade-in duration-500">
-      {/* Confirm dialog renders here (portal-like, fixed position) */}
+    <div className="min-h-screen bg-zinc-950 text-white pb-20 md:pb-6 animate-in fade-in duration-500">
+      {/* Confirm dialog */}
       {confirmDialog}
 
-      <header className="bg-zinc-900 border-b border-zinc-800 p-3 md:p-4 sticky top-0 z-50 shadow-md print:hidden">
+      <header className="bg-zinc-900 border-b border-zinc-800 p-2 md:p-4 sticky top-0 z-50 shadow-md print:hidden">
         <div className="max-w-7xl mx-auto flex justify-between items-center gap-4">
           <div className="flex items-center gap-3">
             <button
@@ -275,18 +275,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite, mode, s
             )}
 
             {!isStaff && (
-              <div className="bg-black p-1 rounded-lg border border-zinc-700 flex ml-2">
+              <div className="bg-black p-0.5 rounded-lg border border-zinc-700 flex ml-1">
                 <button
                   onClick={() => { setMode('tyre'); setIsMobileMenuOpen(false); }}
-                  className={`px-2 sm:px-3 py-1 rounded text-[10px] sm:text-xs font-bold transition-colors flex items-center gap-1 ${mode === 'tyre' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+                  className={`px-1.5 sm:px-3 py-1 rounded text-[9px] sm:text-xs font-bold transition-colors flex items-center gap-0.5 sm:gap-1 ${mode === 'tyre' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
                 >
-                  <ShoppingBag size={12} /> Магазин шин
+                  <ShoppingBag size={10} /> <span className="hidden xs:inline">Магазин</span>
                 </button>
                 <button
                   onClick={() => { setMode('service'); setIsMobileMenuOpen(false); }}
-                  className={`px-2 sm:px-3 py-1 rounded text-[10px] sm:text-xs font-bold transition-colors flex items-center gap-1 ${mode === 'service' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+                  className={`px-1.5 sm:px-3 py-1 rounded text-[9px] sm:text-xs font-bold transition-colors flex items-center gap-0.5 sm:gap-1 ${mode === 'service' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
                 >
-                  <Wrench size={12} /> Сервіс
+                  <Wrench size={10} /> Сервіс
                 </button>
               </div>
             )}
@@ -294,12 +294,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite, mode, s
 
           {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-2">
-            <div className="flex bg-black rounded-lg p-1 overflow-x-auto scrollbar-hide max-w-[400px] lg:max-w-none">
+            <div className="flex bg-black rounded-lg p-1 overflow-x-auto scrollbar-hide max-w-[400px] lg:max-w-none gap-0.5">
               {currentTabs.map(t => (
                 <button
                   key={t}
                   onClick={() => setActiveTab(t)}
-                  className={`px-4 py-2 rounded font-bold text-sm uppercase whitespace-nowrap transition-all flex items-center gap-2 ${
+                  className={`px-3 py-1.5 rounded font-bold text-xs uppercase whitespace-nowrap transition-all flex items-center gap-1.5 ${
                     activeTab === t ? 'bg-[#FFC300] text-black shadow-lg' : 'text-zinc-400 hover:text-white'
                   }`}
                 >
@@ -310,9 +310,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite, mode, s
             </div>
             <button
               onClick={handleLogout}
-              className="flex-shrink-0 px-4 py-2 text-zinc-500 hover:text-red-400 ml-2 flex items-center gap-2 whitespace-nowrap border-l border-zinc-800 transition-colors"
+              className="flex-shrink-0 px-3 py-1.5 text-zinc-500 hover:text-red-400 ml-2 flex items-center gap-2 whitespace-nowrap border-l border-zinc-800 transition-colors text-xs"
             >
-              <LogOut size={16} /> Вихід
+              <LogOut size={14} /> Вихід
             </button>
           </div>
 
@@ -380,7 +380,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite, mode, s
         </div>
       )}
 
-      <main className="max-w-7xl mx-auto p-3 md:p-4 print:hidden">
+      <main className="max-w-7xl mx-auto p-2 md:p-4 print:hidden">
         {activeTab === 'schedule' && <ScheduleTab />}
         {activeTab === 'clients' && <ClientsTab />}
         {!isStaff && activeTab === 'gallery' && <GalleryTab />}
@@ -395,6 +395,30 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite, mode, s
         {!isStaff && activeTab === 'sync' && <SyncTab />}
         {!isStaff && activeTab === 'ai' && <AiAssistantTab />}
       </main>
+
+      {/* Mobile Bottom Tab Bar */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 border-t border-zinc-800 shadow-2xl print:hidden">
+        <div className="admin-tab-scroll flex">
+          {currentTabs.map(t => (
+            <button
+              key={t}
+              onClick={() => { setActiveTab(t); setIsMobileMenuOpen(false); }}
+              className={`flex flex-col items-center justify-center gap-1 px-3 py-2.5 flex-shrink-0 min-w-[60px] transition-all ${
+                activeTab === t
+                  ? 'text-[#FFC300] border-t-2 border-[#FFC300] -mt-0.5 bg-zinc-800/50'
+                  : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              <span className={`transition-transform ${activeTab === t ? 'scale-110' : ''}`}>
+                {getTabIcon(t)}
+              </span>
+              <span className="text-[8px] font-black uppercase tracking-wide whitespace-nowrap">
+                {getTabLabel(t)}
+              </span>
+            </button>
+          ))}
+        </div>
+      </nav>
     </div>
   );
 };

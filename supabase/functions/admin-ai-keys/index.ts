@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
   if (body.action === 'status') {
     const { data, error } = await adminClient
       .from('ai_api_keys')
-      .select('gemini_key, openai_key, groq_key, custom_key')
+      .select('gemini_key, openai_key, groq_key, custom_key, serper_key')
       .eq('id', 1)
       .maybeSingle();
 
@@ -119,6 +119,7 @@ Deno.serve(async (req) => {
         hasOpenai: !!(data?.openai_key?.trim()),
         hasGroq: !!(data?.groq_key?.trim()),
         hasCustom: !!(data?.custom_key?.trim()),
+        hasSerper: !!(data?.serper_key?.trim()),
       }),
       { headers: { ...cors, 'Content-Type': 'application/json' } }
     );
@@ -127,7 +128,7 @@ Deno.serve(async (req) => {
   // Handle saving keys
   const { data: row, error: fetchErr } = await adminClient
     .from('ai_api_keys')
-    .select('gemini_key, openai_key, groq_key, custom_key')
+    .select('gemini_key, openai_key, groq_key, custom_key, serper_key')
     .eq('id', 1)
     .maybeSingle();
 
@@ -139,13 +140,14 @@ Deno.serve(async (req) => {
     });
   }
 
-  const current = row ?? { gemini_key: null, openai_key: null, groq_key: null, custom_key: null };
+  const current = row ?? { gemini_key: null, openai_key: null, groq_key: null, custom_key: null, serper_key: null };
   const next = { ...current };
 
   if (body.gemini !== undefined) next.gemini_key = body.gemini.trim() || null;
   if (body.openai !== undefined) next.openai_key = body.openai.trim() || null;
   if (body.groq !== undefined) next.groq_key = body.groq.trim() || null;
   if (body.custom !== undefined) next.custom_key = body.custom.trim() || null;
+  if (body.serper !== undefined) next.serper_key = body.serper.trim() || null;
 
   console.log('[DB] Attempting upsert with id=1');
   const { error: upsertErr } = await adminClient.from('ai_api_keys').upsert({

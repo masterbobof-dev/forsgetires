@@ -4,16 +4,42 @@ body {
   color: #f4f4f5;
 }
 
-.scrollbar-hide::-webkit-scrollbar {
+/* Hide scrollbars but allow scrolling */
+.scrollbar-hide::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar {
   display: none;
 }
 
-.scrollbar-hide {
+.scrollbar-hide,
+.no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* Smooth touch scrolling on mobile */
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
 }
 
 input[type='date']::-webkit-calendar-picker-indicator {
   filter: invert(1);
   cursor: pointer;
+}
+
+/* Mobile admin bottom nav — visible only on small screens */
+@media (max-width: 767px) {
+  .admin-tab-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .admin-tab-scroll::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Prevent text selection while dragging category nav */
+.select-none {
+  -webkit-user-select: none;
+  user-select: none;
 }

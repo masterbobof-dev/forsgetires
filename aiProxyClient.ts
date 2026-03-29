@@ -24,15 +24,22 @@ export type AiProxyPlainPayload = {
   prompt: string;
 };
 
+export type AiProxyImageSearchPayload = {
+  mode: 'image_search';
+  query: string;
+  provider?: AIProviderId;
+};
+
 export type AdminAiKeyStatus = {
   hasGemini: boolean;
   hasOpenai: boolean;
   hasGroq: boolean;
   hasCustom: boolean;
+  hasSerper: boolean;
 };
 
 export async function invokeAiProxy(
-  payload: AiProxySeoPayload | AiProxySeoBulkPayload | AiProxyPlainPayload
+  payload: AiProxySeoPayload | AiProxySeoBulkPayload | AiProxyPlainPayload | AiProxyImageSearchPayload
 ): Promise<{ ok: true; data?: any; text?: string }> {
   const { data, error } = await supabase.functions.invoke('ai-proxy', { body: payload });
   if (error) throw new Error(error.message);
@@ -51,17 +58,18 @@ export async function fetchAdminAiKeyStatus(): Promise<AdminAiKeyStatus> {
   if (data && typeof data === 'object' && 'error' in data && (data as { error?: string }).error) {
     throw new Error((data as { error: string }).error);
   }
-  const d = data as { ok?: boolean; hasGemini?: boolean; hasOpenai?: boolean; hasGroq?: boolean; hasCustom?: boolean };
+  const d = data as { ok?: boolean; hasGemini?: boolean; hasOpenai?: boolean; hasGroq?: boolean; hasCustom?: boolean; hasSerper?: boolean };
   return {
     hasGemini: !!d.hasGemini,
     hasOpenai: !!d.hasOpenai,
     hasGroq: !!d.hasGroq,
     hasCustom: !!d.hasCustom,
+    hasSerper: !!d.hasSerper,
   };
 }
 
 /** Зберегти лише передані поля (непорожній рядок). Порожній рядок у полі — видалити цей ключ. */
-export async function saveAdminAiKeys(keys: Partial<Record<'gemini' | 'openai' | 'groq' | 'custom', string>>): Promise<void> {
+export async function saveAdminAiKeys(keys: Partial<Record<'gemini' | 'openai' | 'groq' | 'custom' | 'serper', string>>): Promise<void> {
   const { data, error } = await supabase.functions.invoke('admin-ai-keys', { body: keys });
   if (error) throw new Error(error.message);
   if (data && typeof data === 'object' && 'error' in data && (data as { error?: string }).error) {

@@ -39,10 +39,13 @@ const SettingsTab: React.FC = () => {
   const [showOpenaiKey, setShowOpenaiKey] = useState(false);
   const [showGroqKey, setShowGroqKey] = useState(false);
   const [showCustomKey, setShowCustomKey] = useState(false);
+  const [showSerperKey, setShowSerperKey] = useState(false);
+  const [serperKey, setSerperKey] = useState('');
   const [hasKeyGemini, setHasKeyGemini] = useState(false);
   const [hasKeyOpenai, setHasKeyOpenai] = useState(false);
   const [hasKeyGroq, setHasKeyGroq] = useState(false);
   const [hasKeyCustom, setHasKeyCustom] = useState(false);
+  const [hasKeySerper, setHasKeySerper] = useState(false);
   const [serviceEmail, setServiceEmail] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
 
@@ -80,11 +83,13 @@ const SettingsTab: React.FC = () => {
       setHasKeyOpenai(s.hasOpenai);
       setHasKeyGroq(s.hasGroq);
       setHasKeyCustom(s.hasCustom);
+      setHasKeySerper(s.hasSerper);
     } catch {
       setHasKeyGemini(false);
       setHasKeyOpenai(false);
       setHasKeyGroq(false);
       setHasKeyCustom(false);
+      setHasKeySerper(false);
     }
   };
 
@@ -227,12 +232,14 @@ const SettingsTab: React.FC = () => {
         if (openaiKey.trim()) aiPayload.openai = openaiKey.trim();
         if (groqKey.trim()) aiPayload.groq = groqKey.trim();
         if (customKey.trim()) aiPayload.custom = customKey.trim();
+        if (serperKey.trim()) aiPayload.serper = serperKey.trim();
         if (Object.keys(aiPayload).length > 0) {
           await saveAdminAiKeys(aiPayload);
           setGeminiKey('');
           setOpenaiKey('');
           setGroqKey('');
           setCustomKey('');
+          setSerperKey('');
           await refreshAiKeyFlags();
         }
 
@@ -615,6 +622,33 @@ const SettingsTab: React.FC = () => {
                             <p className="text-[10px] text-zinc-400 mt-2">Модель: llama-3.3-70b-versatile. Безкоштовний рівень: <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-bold">console.groq.com</a></p>
                             {hasKeyGroq && (
                               <p className="text-[10px] text-emerald-500 font-bold mt-1">Ключ збережено на сервері.</p>
+                            )}
+                        </div>
+
+                        <div className="md:col-span-2 bg-[#FFC300]/5 p-4 rounded-xl border border-[#FFC300]/20">
+                            <label className="block text-[#FFC300] text-xs font-bold uppercase mb-2 flex items-center gap-2"><Sparkles size={14}/> Serper.dev API Key (Google Images Search)</label>
+                            <div className="relative">
+                                <input 
+                                    type={showSerperKey ? "text" : "password"} 
+                                    value={serperKey} 
+                                    onChange={e => setSerperKey(e.target.value)} 
+                                    className="w-full bg-black border border-zinc-700 rounded-lg p-3 pr-10 text-white font-mono text-sm mb-1 focus:border-[#FFC300] outline-none" 
+                                    placeholder="Ваш Serper API Key..."
+                                />
+                                <button 
+                                    type="button"
+                                    onClick={() => setShowSerperKey(!showSerperKey)} 
+                                    className="absolute right-3 top-3 text-zinc-500 hover:text-white"
+                                    title={showSerperKey ? "Приховати" : "Показати"}
+                                >
+                                    {showSerperKey ? <EyeOff size={18}/> : <Eye size={18}/>}
+                                </button>
+                            </div>
+                            <p className="text-[10px] text-zinc-400 mt-2">
+                                Отримати безкоштовно (2500 запитів): <a href="https://serper.dev" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-bold">serper.dev</a>
+                            </p>
+                            {hasKeySerper && (
+                              <p className="text-[10px] text-emerald-500 font-bold mt-1">Ключ пошуку збережено на сервері.</p>
                             )}
                         </div>
                    </div>

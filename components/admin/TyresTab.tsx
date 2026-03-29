@@ -6,6 +6,7 @@ import { TyreProduct, Supplier } from '../../types';
 import { WHEEL_RADII, CAR_RADII, CARGO_RADII, TRUCK_RADII, AGRO_RADII } from '../../constants';
 import readXlsxFile from 'read-excel-file';
 import AiSortModal from './AiSortModal';
+import { invokeAiProxy } from '../../aiProxyClient';
 
 const PAGE_SIZE = 50;
 
@@ -98,10 +99,20 @@ const TyresTab: React.FC = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [tyreToDelete, setTyreToDelete] = useState<number | null>(null);
   
+  // Mobile UI state
+  const [showFilters, setShowFilters] = useState(false);
+  
   // Custom Bulk Delete Modal State
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   // Custom Category Delete Modal State
   const [showCategoryDeleteConfirm, setShowCategoryDeleteConfirm] = useState(false);
+
+  // AI IMAGE SEARCH STATE
+  const [showAiSearchModal, setShowAiSearchModal] = useState(false);
+  const [aiSearchQuery, setAiSearchQuery] = useState('');
+  const [aiSearchResults, setAiSearchResults] = useState<any[]>([]);
+  const [isSearchingAi, setIsSearchingAi] = useState(false);
+  const [targetTyreForAi, setTargetTyreForAi] = useState<TyreProduct | null>(null);
 
   const showError = (msg: string) => { setErrorMessage(msg); setTimeout(() => setErrorMessage(''), 6000); };
   
@@ -509,6 +520,54 @@ const TyresTab: React.FC = () => {
       }
   };
 
+  // --- AI IMAGE SEARCH LOGIC ---
+  const handleOpenAiSearch = (tyre: TyreProduct) => {
+      setTargetTyreForAi(tyre);
+      setAiSearchQuery(tyre.title);
+      setAiSearchResults([]);
+      setShowAiSearchModal(true);
+      performAiSearch(tyre.title);
+  };
+
+  const performAiSearch = async (query: string) => {
+      setIsSearchingAi(true);
+      try {
+          const res = await invokeAiProxy({
+              mode: 'image_search',
+              query: query
+          });
+          if (res.ok && Array.isArray(res.data)) {
+              setAiSearchResults(res.data);
+          } else if (res.data?.error) {
+              showError(res.data.error);
+          }
+      } catch (e: any) {
+          showError("Помилка пошуку: " + e.message);
+      } finally {
+          setIsSearchingAi(false);
+      }
+  };
+
+  const handleSelectAiImage = async (url: string) => {
+      if (!targetTyreForAi) return;
+      const tId = targetTyreForAi.id;
+      
+      // Optimistic update
+      setTyres(prev => prev.map(t => t.id === tId ? { ...t, image_url: url } : t));
+      
+      try {
+          const { error } = await supabase.from('tyres').update({ image_url: url }).eq('id', tId);
+          if (error) throw error;
+          setSuccessMessage("Фото оновлено!");
+          setTimeout(() => setSuccessMessage(''), 2000);
+          setShowAiSearchModal(false);
+          fetchCategoryCounts();
+      } catch (e: any) {
+          showError("Помилка збереження: " + e.message);
+          fetchTyres(tyrePage, true);
+      }
+  };
+
   const applyDiscount = (pct: number) => {
       const price = parseFloat(tyreForm.price);
       if (!price) return;
@@ -666,135 +725,151 @@ const TyresTab: React.FC = () => {
         {successMessage && <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[300] bg-green-600/90 text-white px-6 py-3 rounded-full border border-green-400 shadow-2xl flex items-center gap-2"><CheckCircle size={20} />{successMessage}</div>}
         
         {/* --- TOP TOOLBAR --- */}
-        <div className="flex flex-col lg:flex-row gap-4 justify-between mb-4">
-            <div className="relative flex gap-2 w-full lg:w-auto">
-                <button onClick={() => setShowCategoryMenu(!showCategoryMenu)} className="flex-grow lg:flex-none bg-zinc-800 text-white font-bold px-4 py-3 rounded-lg flex items-center gap-2 border border-zinc-700 hover:bg-zinc-700 transition-colors justify-between">
-                    <div className="flex items-center gap-2"><Menu size={20} className="text-[#FFC300]"/> <span className="uppercase tracking-wide text-xs sm:text-sm">{renderCategoryName()}</span></div>
-                </button>
-                
-                {/* Category Delete Button */}
-                {tyreCategoryTab !== 'all' && (
+        <div className="flex flex-col gap-3 mb-4">
+            <div className="flex items-center gap-2">
+                <div className="relative flex-grow">
                     <button 
-                        onClick={() => setShowCategoryDeleteConfirm(true)}
-                        className="bg-red-900/20 text-red-500 hover:bg-red-600 hover:text-white border border-red-900/50 p-3 rounded-lg transition-colors flex items-center justify-center"
-                        title={`Очистити категорію: ${renderCategoryName()}`}
+                        onClick={() => setShowCategoryMenu(!showCategoryMenu)} 
+                        className="w-full bg-zinc-900 text-white font-bold px-3 py-2.5 rounded-xl flex items-center gap-2 border border-zinc-800 hover:bg-zinc-800 transition-colors justify-between text-left"
                     >
-                        <Trash2 size={20} />
+                        <div className="flex items-center gap-2 min-w-0">
+                            <Menu size={18} className="text-[#FFC300] shrink-0"/> 
+                            <span className="uppercase tracking-tight text-[11px] sm:text-xs truncate">{renderCategoryName()}</span>
+                        </div>
                     </button>
-                )}
+                    
+                    {showCategoryMenu && (
+                        <div className="absolute top-full left-0 mt-2 w-72 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl z-[100] overflow-hidden animate-in zoom-in-95 duration-200">
+                            <div className="max-h-[60vh] overflow-y-auto no-scrollbar">
+                                <button onClick={() => { resetAllFilters(); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50 text-sm font-medium"><FolderOpen size={18}/> Всі ({categoryCounts.all})</button>
+                                <button onClick={() => { setTyreCategoryTab('car'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50 text-sm font-medium"><Car size={18}/> Легкові ({categoryCounts.car})</button>
+                                <button onClick={() => { setTyreCategoryTab('cargo'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50 text-sm font-medium"><Truck size={18}/> Вантажні C ({categoryCounts.cargo})</button>
+                                <button onClick={() => { setTyreCategoryTab('truck'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50 text-sm font-medium text-blue-300"><Truck size={18}/> TIR ({categoryCounts.truck})</button>
+                                <button onClick={() => { setTyreCategoryTab('agro'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50 text-sm font-medium text-green-300"><Tractor size={18}/> Агро ({categoryCounts.agro})</button>
+                                <button onClick={() => { setTyreCategoryTab('suv'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50 text-sm font-medium"><Mountain size={18}/> SUV ({categoryCounts.suv})</button>
+                                <button onClick={() => { setTyreCategoryTab('hot'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50 text-sm font-medium"><Flame size={18}/> HOT ({categoryCounts.hot})</button>
+                                <button onClick={() => { setTyreCategoryTab('ready'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50 text-sm font-medium text-green-400"><CheckCircle size={18}/> Готові ({categoryCounts.ready})</button>
+                                <button onClick={() => { setTyreCategoryTab('no_photo'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50 text-sm font-medium text-orange-300"><ImageIcon size={18}/> Без фото ({categoryCounts.no_photo})</button>
+                                <button onClick={() => { setTyreCategoryTab('out_of_stock'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 text-sm font-medium"><Ban size={18}/> Немає ({categoryCounts.out})</button>
+                            </div>
+                        </div>
+                    )}
+                </div>
 
-                {showCategoryMenu && (
-                    <div className="absolute top-full left-0 mt-2 w-72 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl z-50 overflow-hidden">
-                        <button onClick={() => { resetAllFilters(); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50"><FolderOpen size={18}/> Всі ({categoryCounts.all})</button>
-                        <button onClick={() => { setTyreCategoryTab('car'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50"><Car size={18}/> Легкові ({categoryCounts.car})</button>
-                        <button onClick={() => { setTyreCategoryTab('cargo'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50"><Truck size={18}/> Вантажні C ({categoryCounts.cargo})</button>
-                        <button onClick={() => { setTyreCategoryTab('truck'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50 text-blue-300"><Truck size={18}/> Вантажні TIR ({categoryCounts.truck})</button>
-                        <button onClick={() => { setTyreCategoryTab('agro'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50 text-green-300"><Tractor size={18}/> Агро / Спец ({categoryCounts.agro})</button>
-                        <button onClick={() => { setTyreCategoryTab('suv'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50"><Mountain size={18}/> SUV ({categoryCounts.suv})</button>
-                        <button onClick={() => { setTyreCategoryTab('hot'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50"><Flame size={18}/> HOT ({categoryCounts.hot})</button>
-                        <button onClick={() => { setTyreCategoryTab('ready'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50 text-green-400"><CheckCircle size={18}/> Готові ({categoryCounts.ready})</button>
-                        <button onClick={() => { setTyreCategoryTab('no_photo'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800/50 text-orange-300"><ImageIcon size={18}/> Без фото ({categoryCounts.no_photo})</button>
-                        <button onClick={() => { setTyreCategoryTab('out_of_stock'); setShowCategoryMenu(false); }} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3"><Ban size={18}/> Немає ({categoryCounts.out})</button>
+                <div className="flex gap-1.5 md:hidden">
+                    <button 
+                        onClick={() => setShowFilters(!showFilters)}
+                        className={`p-2.5 rounded-xl border transition-all ${showFilters ? 'bg-[#FFC300] border-[#FFC300] text-black shadow-lg shadow-yellow-900/20' : 'bg-zinc-900 border-zinc-800 text-zinc-400'}`}
+                    >
+                        <Settings size={20} />
+                    </button>
+                    <button onClick={() => setShowAiModal(true)} className="p-2.5 bg-purple-600 text-white rounded-xl shadow-lg shadow-purple-900/20"><Sparkles size={20}/></button>
+                    <button onClick={() => {setEditingTyreId(null); setShowAddTyreModal(true);}} className="p-2.5 bg-[#FFC300] text-black rounded-xl shadow-lg shadow-yellow-900/20"><Plus size={20}/></button>
+                </div>
+
+                <div className="hidden md:flex gap-2">
+                    <button onClick={() => setShowAiModal(true)} className="bg-purple-600 text-white font-bold px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-purple-500 transition-all shadow-lg active:scale-95"><Sparkles size={18}/> <span>AI Сортування</span></button>
+                    <button onClick={() => {setEditingTyreId(null); setShowAddTyreModal(true);}} className="bg-[#FFC300] text-black font-black px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-[#e6b000] transition-all shadow-lg active:scale-95"><Plus size={18}/> <span>Додати</span></button>
+                </div>
+            </div>
+
+            {/* Mobile Expandable Filters */}
+            <div className={`${showFilters ? 'flex' : 'hidden md:flex'} flex-col md:flex-row gap-2 animate-in slide-in-from-top-2 duration-200`}>
+                <div className="grid grid-cols-2 md:flex gap-2 w-full md:w-auto">
+                    <div className="relative">
+                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"><Briefcase size={14}/></div>
+                        <select value={filterSupplierId} onChange={(e) => setFilterSupplierId(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-2 py-2.5 outline-none focus:border-[#FFC300] text-[11px] font-bold appearance-none cursor-pointer text-white">
+                            <option value="all">Всі Пост.</option>
+                            {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
                     </div>
-                )}
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-row gap-2 w-full lg:w-auto">
-                <div className="relative min-w-[140px]">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"><Briefcase size={16}/></div>
-                    <select value={filterSupplierId} onChange={(e) => setFilterSupplierId(e.target.value)} className="w-full h-full bg-zinc-900 border border-zinc-800 rounded-lg pl-9 pr-2 py-3 lg:py-2 outline-none focus:border-[#FFC300] text-sm font-bold appearance-none cursor-pointer hover:bg-zinc-800 text-white">
-                        <option value="all">Всі Пост.</option>
-                        {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
+                    <div className="relative">
+                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"><ArrowUpDown size={14}/></div>
+                        <select value={tyreSort} onChange={(e) => setTyreSort(e.target.value as any)} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-2 py-2.5 outline-none focus:border-[#FFC300] text-[11px] font-bold appearance-none cursor-pointer text-white">
+                            <option value="newest">Нові</option>
+                            <option value="oldest">Старі</option>
+                            <option value="price_asc">Дешеві</option>
+                            <option value="price_desc">Дорогі</option>
+                        </select>
+                    </div>
                 </div>
 
-                <div className="relative min-w-[140px]">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"><ArrowUpDown size={16}/></div>
-                    <select value={tyreSort} onChange={(e) => setTyreSort(e.target.value as any)} className="w-full h-full bg-zinc-900 border border-zinc-800 rounded-lg pl-9 pr-2 py-3 lg:py-2 outline-none focus:border-[#FFC300] text-sm font-bold appearance-none cursor-pointer hover:bg-zinc-800 text-white">
-                        <option value="newest">Нові</option>
-                        <option value="oldest">Старі</option>
-                        <option value="price_asc">Дешеві</option>
-                        <option value="price_desc">Дорогі</option>
-                        <option value="with_photo">З фото</option>
-                        <option value="no_photo">Без фото</option>
-                    </select>
+                <div className="flex gap-2 w-full md:flex-grow">
+                    <div className="relative flex-grow flex items-center">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={16}/>
+                        <input 
+                            type="text" 
+                            placeholder="Пошук (Назва, Код)..." 
+                            value={tyreSearch} 
+                            onChange={e => {
+                                const val = e.target.value;
+                                setTyreSearch(val);
+                                if (val === '') setTimeout(() => fetchTyres(0, true), 0);
+                            }} 
+                            onKeyDown={e => e.key==='Enter' && fetchTyres(0,true)} 
+                            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-2.5 outline-none focus:border-[#FFC300] text-xs font-bold text-white placeholder:text-zinc-600" 
+                        />
+                    </div>
+                    
+                    <button 
+                        onClick={() => setShowOnlyInStock(!showOnlyInStock)}
+                        className={`flex items-center justify-center p-2.5 rounded-xl border transition-all ${showOnlyInStock ? 'bg-green-900/30 border-green-500 text-green-400' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`}
+                    >
+                        {showOnlyInStock ? <Eye size={18}/> : <EyeOff size={18}/>}
+                    </button>
+
+                    <div className="flex bg-zinc-900 rounded-xl border border-zinc-800 p-1">
+                        <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-lg ${viewMode === 'grid' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-500 hover:text-white'}`}><LayoutGrid size={18}/></button>
+                        <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-lg ${viewMode === 'list' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-500 hover:text-white'}`}><List size={18}/></button>
+                    </div>
                 </div>
-            </div>
-
-            <div className="flex-grow flex gap-2 w-full lg:w-auto">
-                <div className="relative flex-grow flex items-center">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={16}/>
-                    <input 
-                        type="text" 
-                        placeholder="Пошук..." 
-                        value={tyreSearch} 
-                        onChange={e => {
-                            const val = e.target.value;
-                            setTyreSearch(val);
-                            if (val === '') setTimeout(() => fetchTyres(0, true), 0);
-                        }} 
-                        onKeyDown={e => e.key==='Enter' && fetchTyres(0,true)} 
-                        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-10 pr-4 py-3 outline-none focus:border-[#FFC300] text-base sm:text-lg font-bold text-white" 
-                    />
-                </div>
-                
-                <button 
-                    onClick={() => setShowOnlyInStock(!showOnlyInStock)}
-                    className={`flex items-center gap-2 px-3 rounded-lg border font-bold text-xs whitespace-nowrap transition-colors ${showOnlyInStock ? 'bg-green-900/30 border-green-500 text-green-400' : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:border-zinc-600'}`}
-                >
-                    {showOnlyInStock ? <Eye size={18}/> : <EyeOff size={18}/>}
-                    <span className="hidden sm:inline">В наявності</span>
-                </button>
-            </div>
-
-            <div className="flex gap-2 justify-between lg:justify-end w-full lg:w-auto">
-                <div className="flex bg-zinc-900 rounded-lg border border-zinc-800 p-1">
-                    <button onClick={() => setViewMode('grid')} className={`p-2 rounded ${viewMode === 'grid' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-white'}`}><LayoutGrid size={18}/></button>
-                    <button onClick={() => setViewMode('list')} className={`p-2 rounded ${viewMode === 'list' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-white'}`}><List size={18}/></button>
-                </div>
-
-                <button onClick={() => setShowAiModal(true)} className="flex-grow lg:flex-none bg-purple-600 text-white font-bold px-4 py-2 rounded-lg flex items-center justify-center gap-2 hover:bg-purple-500 transition-transform active:scale-95 shadow-lg shadow-purple-900/20"><Sparkles size={18}/> <span className="hidden sm:inline">AI Сортування</span><span className="sm:hidden">АІ</span></button>
-
-                <button onClick={() => {setEditingTyreId(null); setTyreForm({ manufacturer: '', name: '', width: '', height: '', radius: 'R15', season: 'winter', vehicle_type: 'car', price: '', old_price: '', base_price: '', catalog_number: '', product_number: '', description: '', is_hot: false, supplier_id: '', stock_quantity: '', axis: '', seo_title: '', seo_description: '', seo_keywords: '', slug: '' }); setExistingGallery([]); setTyreUploadFiles([]); setShowAddTyreModal(true);}} className="flex-grow lg:flex-none bg-[#FFC300] text-black font-bold px-4 py-2 rounded-lg flex items-center justify-center gap-2 hover:bg-[#e6b000] transition-transform active:scale-95"><Plus size={18}/> <span>Додати</span></button>
             </div>
         </div>
 
         {selectedTyreIds.size > 0 && (
-            <div className="bg-zinc-800 border border-zinc-700 rounded-xl p-3 mb-4 flex flex-col md:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-2">
-                <div className="text-zinc-400 font-bold text-sm uppercase flex items-center gap-2">
-                    <Settings size={16} className="text-[#FFC300]" /> <span>Масове управління</span>
-                    <span className="text-xs normal-case text-white bg-zinc-600 px-2 py-0.5 rounded ml-1">обрано: {selectedTyreIds.size}</span>
-                </div>
-                <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
-                    
-                    {/* NEW BULK CATEGORY SELECTOR */}
-                    <div className="mr-2 border-r border-zinc-700 pr-2 hidden md:block">
-                        <select 
-                            value={bulkCategory}
-                            onChange={(e) => handleBulkCategoryUpdate(e.target.value)}
-                            className="bg-black border border-zinc-600 rounded-lg p-2 text-white text-xs font-bold w-40 outline-none focus:border-[#FFC300]"
-                        >
-                            <option value="">Встановити категорію...</option>
-                            <option value="car">Легкова</option>
-                            <option value="suv">Позашляховик (SUV)</option>
-                            <option value="cargo">Вантажна (C)</option>
-                            <option value="truck">Вантажна (TIR)</option>
-                            <option value="agro">Агро / Спец</option>
-                        </select>
-                    </div>
+            <div className="fixed bottom-20 left-4 right-4 md:relative md:bottom-auto md:left-auto md:right-auto z-[90] md:z-0 animate-in slide-in-from-bottom-4 duration-300">
+                <div className="bg-zinc-900/95 backdrop-blur-md border border-[#FFC300]/30 md:border-zinc-700 rounded-2xl p-3 shadow-2xl overflow-hidden">
+                    <div className="flex flex-col md:flex-row items-center justify-between gap-3">
+                        <div className="flex items-center justify-between w-full md:w-auto gap-4">
+                            <div className="text-zinc-400 font-bold text-[10px] uppercase flex items-center gap-2">
+                                <Settings size={14} className="text-[#FFC300]" /> <span>Масове управління</span>
+                                <span className="text-[10px] text-white bg-zinc-700 px-2 py-0.5 rounded-full">обрано: {selectedTyreIds.size}</span>
+                            </div>
+                            <button onClick={() => setSelectedTyreIds(new Set())} className="md:hidden text-zinc-500 hover:text-white"><X size={18}/></button>
+                        </div>
 
-                    <input type="text" value={bulkMarkup} onChange={e => setBulkMarkup(e.target.value)} placeholder="%" className="w-16 p-2 rounded-lg bg-black border border-zinc-600 text-white text-center font-bold outline-none focus:border-[#FFC300]" />
-                    <button onClick={() => handleBulkPriceUpdate(1)} className="flex-1 sm:flex-none bg-green-900/50 text-green-200 px-4 py-2 rounded-lg font-bold border border-green-800 hover:bg-green-800 flex items-center justify-center gap-1 transition-colors whitespace-nowrap text-xs md:text-sm"><ArrowRight size={14} className="-rotate-45"/> + Ціна</button>
-                    <button onClick={() => handleBulkPriceUpdate(-1)} className="flex-1 sm:flex-none bg-red-900/50 text-red-200 px-4 py-2 rounded-lg font-bold border border-red-800 hover:bg-red-800 flex items-center justify-center gap-1 transition-colors whitespace-nowrap text-xs md:text-sm"><ArrowRight size={14} className="rotate-45"/> - Ціна</button>
-                    <div className="w-px h-8 bg-zinc-700 mx-2 hidden md:block"></div>
-                    <button onClick={() => handleBulkHotUpdate('add')} className="flex-1 sm:flex-none bg-orange-900/50 text-orange-200 px-4 py-2 rounded-lg font-bold border border-orange-800 hover:bg-orange-800 flex items-center justify-center gap-1 transition-colors whitespace-nowrap text-xs md:text-sm"><Flame size={14} /> HOT -%</button>
-                    <button onClick={() => handleBulkHotUpdate('remove')} className="flex-1 sm:flex-none bg-zinc-700 text-zinc-300 px-4 py-2 rounded-lg font-bold border border-zinc-600 hover:bg-zinc-600 flex items-center justify-center gap-1 transition-colors whitespace-nowrap text-xs md:text-sm"><Ban size={14} /> NO HOT</button>
-                    
-                    {/* NEW DELETE BUTTON */}
-                    <button onClick={handleBulkDelete} disabled={isApplyingBulk} className="flex-1 sm:flex-none bg-red-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-red-500 flex items-center justify-center gap-1 transition-colors whitespace-nowrap text-xs md:text-sm shadow-lg ml-2 border border-red-800">
-                        {isApplyingBulk ? <Loader2 className="animate-spin" size={14}/> : <Trash2 size={14} />} 
-                        Видалити
-                    </button>
+                        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
+                            <div className="hidden lg:block border-r border-zinc-700 pr-2">
+                                <select 
+                                    value={bulkCategory}
+                                    onChange={(e) => handleBulkCategoryUpdate(e.target.value)}
+                                    className="bg-black border border-zinc-700 rounded-lg p-2 text-white text-[10px] font-bold w-36 outline-none focus:border-[#FFC300]"
+                                >
+                                    <option value="">Категорія...</option>
+                                    <option value="car">Легкова</option>
+                                    <option value="suv">SUV</option>
+                                    <option value="cargo">Вантажна C</option>
+                                    <option value="truck">TIR</option>
+                                    <option value="agro">Агро</option>
+                                </select>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 flex-grow md:flex-none">
+                                <input type="text" value={bulkMarkup} onChange={e => setBulkMarkup(e.target.value)} placeholder="%" className="w-12 h-9 p-0 rounded-lg bg-black border border-zinc-700 text-white text-center font-bold text-xs outline-none focus:border-[#FFC300]" />
+                                <button onClick={() => handleBulkPriceUpdate(1)} className="flex-grow md:flex-none h-9 bg-green-900/30 text-green-400 px-3 rounded-lg font-bold border border-green-800/50 hover:bg-green-800/50 flex items-center justify-center gap-1 transition-colors text-[10px] uppercase"><ArrowRight size={12} className="-rotate-45"/> Ціна</button>
+                                <button onClick={() => handleBulkPriceUpdate(-1)} className="flex-grow md:flex-none h-9 bg-red-900/30 text-red-400 px-3 rounded-lg font-bold border border-red-800/50 hover:bg-red-800/50 flex items-center justify-center gap-1 transition-colors text-[10px] uppercase"><ArrowRight size={12} className="rotate-45"/> Ціна</button>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 w-full md:w-auto">
+                                <button onClick={() => handleBulkHotUpdate('add')} className="flex-1 md:flex-none h-9 bg-orange-900/30 text-orange-400 px-3 rounded-lg font-bold border border-orange-800/50 hover:bg-orange-800/50 flex items-center justify-center gap-1 transition-colors text-[10px] uppercase"><Flame size={12} /> HOT</button>
+                                <button onClick={handleBulkDelete} disabled={isApplyingBulk} className="flex-1 md:flex-none h-9 bg-red-600/20 text-red-500 px-3 rounded-lg font-bold hover:bg-red-600 hover:text-white border border-red-900/30 flex items-center justify-center gap-1 transition-colors text-[10px] uppercase">
+                                    {isApplyingBulk ? <Loader2 className="animate-spin text-red-500" size={14}/> : <Trash2 size={12} />} 
+                                    Видалити
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         )}
@@ -813,66 +888,62 @@ const TyresTab: React.FC = () => {
             /* --- LIST VIEW (Responsive) --- */
             <div className="space-y-3 md:space-y-0">
                 {/* Mobile List View (Cards) */}
-                <div className="md:hidden space-y-3">
+                <div className="md:hidden space-y-2">
                     {tyres.map(tyre => {
                         const isSelected = selectedTyreIds.has(tyre.id);
                         const isOutOfStock = tyre.in_stock === false;
                         return (
-                            <div key={tyre.id} className={`bg-zinc-900 border border-zinc-800 rounded-xl p-3 flex gap-4 relative transition-all ${isSelected ? 'ring-2 ring-[#FFC300]' : ''} ${isOutOfStock ? 'opacity-80' : ''}`}>
-                                <div className="w-20 h-20 bg-black rounded border border-zinc-800 flex-shrink-0 relative overflow-hidden cursor-pointer" onClick={() => openEditTyreModal(tyre)}>
+                            <div key={tyre.id} className={`bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 flex gap-3 relative transition-all ${isSelected ? 'ring-2 ring-[#FFC300] bg-[#FFC300]/5' : ''} ${isOutOfStock ? 'opacity-70' : ''}`}>
+                                <div className="w-16 h-16 bg-black rounded-lg border border-zinc-800 flex-shrink-0 relative overflow-hidden cursor-pointer shadow-inner" onClick={() => openEditTyreModal(tyre)}>
                                     {tyre.image_url ? (
                                         <img src={tyre.image_url} className="w-full h-full object-cover" alt="" />
                                     ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-zinc-800"><ImageIcon size={24}/></div>
+                                        <div className="w-full h-full flex items-center justify-center text-zinc-800"><ImageIcon size={20}/></div>
                                     )}
-                                    {isOutOfStock && <div className="absolute inset-0 bg-red-900/20 flex items-center justify-center"><span className="text-[8px] font-black bg-red-600 text-white px-1 rounded">OUT</span></div>}
+                                    {isOutOfStock && <div className="absolute inset-0 bg-red-900/40 flex items-center justify-center"><span className="text-[7px] font-black bg-red-600 text-white px-1 rounded uppercase">Немає</span></div>}
                                 </div>
-                                <div className="flex-grow min-w-0 flex flex-col justify-between">
+                                <div className="flex-grow min-w-0 flex flex-col justify-between py-0.5">
                                     <div className="cursor-pointer" onClick={() => openEditTyreModal(tyre)}>
-                                        <div className="flex justify-between items-start gap-2">
+                                        <div className="flex justify-between items-start gap-2 mb-0.5">
                                             <div className="flex items-center gap-1 min-w-0">
-                                                <span className="text-[10px] text-zinc-500 font-bold uppercase truncate">{tyre.manufacturer || 'Шина'}</span>
+                                                <span className="text-[9px] text-zinc-500 font-black uppercase truncate tracking-wider">{tyre.manufacturer || 'Шина'}</span>
                                                 {isProductReady(tyre) && <CheckCircle size={10} className="text-green-500 flex-shrink-0" />}
                                             </div>
-                                            <button onClick={(e) => { e.stopPropagation(); toggleSelection(tyre.id); }} className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-[#FFC300] border-[#FFC300] text-black' : 'border-zinc-700'}`}>
+                                            <button onClick={(e) => { e.stopPropagation(); toggleSelection(tyre.id); }} className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${isSelected ? 'bg-[#FFC300] border-[#FFC300] text-black scale-110 shadow-lg shadow-yellow-900/20' : 'border-zinc-700 bg-black/40'}`}>
                                                 {isSelected && <CheckSquare size={12}/>}
                                             </button>
                                         </div>
-                                        <h4 className="text-xs font-bold text-white line-clamp-1 mb-1">{tyre.title}</h4>
-                                        <div className="flex items-center gap-2 text-[10px]">
-                                            <span className="text-[#FFC300] font-bold">{tyre.price} грн</span>
-                                            <span className="text-zinc-500">|</span>
-                                            <span className="text-zinc-400">{tyre.radius}</span>
+                                        <h4 className="text-[11px] font-bold text-white line-clamp-1 mb-1 leading-tight">{tyre.title}</h4>
+                                        <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-[10px]">
+                                            <span className="text-[#FFC300] font-black">{tyre.price} грн</span>
+                                            <span className="text-zinc-600">/</span>
+                                            <span className="text-zinc-400 font-medium">{tyre.radius}</span>
                                             {tyre.stock_quantity !== undefined && (
                                                 <>
-                                                    <span className="text-zinc-500">|</span>
-                                                    <span className={`font-bold ${parseInt(tyre.stock_quantity) < 4 ? 'text-red-500' : 'text-zinc-400'}`}>
+                                                    <span className="text-zinc-600">/</span>
+                                                    <span className={`font-black ${parseInt(tyre.stock_quantity) < 4 ? 'text-red-500' : 'text-zinc-500'}`}>
                                                         {tyre.stock_quantity} шт
                                                     </span>
                                                 </>
                                             )}
                                         </div>
                                     </div>
-                                    <div className="mt-2 flex gap-2">
+                                    <div className="mt-2 flex gap-1.5">
                                         <button 
                                             onClick={() => {
                                                 const msg = `Нове замовлення: ${tyre.title} (${tyre.price} грн)`;
                                                 navigator.clipboard.writeText(msg);
-                                                setSuccessMessage("Дані для замовлення скопійовано!");
+                                                setSuccessMessage("Дані копійовано!");
                                                 setTimeout(() => setSuccessMessage(''), 2000);
                                             }} 
-                                            className="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-blue-400" 
-                                            title="Швидке замовлення"
+                                            className="h-8 w-8 flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 rounded-lg text-blue-400 shrink-0 border border-zinc-700/50" 
                                         >
                                             <ShoppingCart size={14}/>
                                         </button>
-                                        <button onClick={() => handleShareProduct(tyre)} className="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-green-400" title="Поділитися в месенджер">
-                                            <ArrowRight size={14} className="-rotate-45"/>
-                                        </button>
-                                        <button onClick={() => openEditTyreModal(tyre)} className="flex-1 bg-[#FFC300] text-black text-[10px] font-black py-1.5 rounded-lg uppercase tracking-wider flex items-center justify-center gap-1">
+                                        <button onClick={() => openEditTyreModal(tyre)} className="flex-grow h-8 bg-[#FFC300] text-black text-[10px] font-black rounded-lg uppercase tracking-wider flex items-center justify-center gap-1 active:scale-95 transition-transform shadow-md shadow-yellow-900/10">
                                             <Edit2 size={12}/> Редагувати
                                         </button>
-                                        <button onClick={() => { setTyreToDelete(tyre.id); setShowDeleteModal(true); }} className="px-3 bg-zinc-800 text-red-500 rounded-lg">
+                                        <button onClick={() => { setTyreToDelete(tyre.id); setShowDeleteModal(true); }} className="h-8 w-8 flex items-center justify-center bg-zinc-800/50 text-red-500 rounded-lg border border-red-900/10 active:bg-red-900/20 shrink-0">
                                             <Trash2 size={14}/>
                                         </button>
                                     </div>
@@ -1010,6 +1081,11 @@ const TyresTab: React.FC = () => {
                                             <button onClick={() => handleShareProduct(tyre)} className="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-green-400" title="Поділитися в месенджер">
                                                 <ArrowRight size={14} className="-rotate-45"/>
                                             </button>
+                                            {!tyre.image_url && (
+                                                <button onClick={() => handleOpenAiSearch(tyre)} className="p-1.5 bg-purple-900/40 border border-purple-500/30 text-purple-300 hover:bg-purple-600 hover:text-white rounded transition-colors" title="Знайти фото ШІ">
+                                                    <Sparkles size={14}/>
+                                                </button>
+                                            )}
                                             <button onClick={() => openEditTyreModal(tyre)} className="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300" title="Редагувати">
                                                 <Edit2 size={14}/>
                                             </button>
@@ -1031,7 +1107,19 @@ const TyresTab: React.FC = () => {
                 {tyres.map(tyre => (
                     <div key={tyre.id} className={`bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden group relative ${selectedTyreIds.has(tyre.id) ? 'ring-2 ring-[#FFC300]' : ''} ${tyre.in_stock === false ? 'opacity-80' : ''}`}>
                         <div className="aspect-square bg-black relative cursor-pointer" onClick={() => openEditTyreModal(tyre)}>
-                            {tyre.image_url ? <img src={tyre.image_url} className="w-full h-full object-cover opacity-80 group-hover:opacity-100" /> : <div className="w-full h-full flex items-center justify-center text-zinc-700"><ImageIcon/></div>}
+                            {tyre.image_url ? (
+                                <img src={tyre.image_url} alt={tyre.title} className="w-full h-full object-cover opacity-80 group-hover:opacity-100" />
+                            ) : (
+                                <div className="w-full h-full flex flex-col items-center justify-center gap-3">
+                                    <ImageIcon className="text-zinc-800" size={32}/>
+                                    <button 
+                                        onClick={(e) => { e.stopPropagation(); handleOpenAiSearch(tyre); }}
+                                        className="bg-purple-900/40 text-purple-300 border border-purple-500/30 px-3 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1.5 hover:bg-purple-800 transition-colors"
+                                    >
+                                        <Sparkles size={12}/> Знайти ШІ
+                                    </button>
+                                </div>
+                            )}
                             <button onClick={(e) => { e.stopPropagation(); toggleSelection(tyre.id); }} className={`absolute top-2 left-2 w-6 h-6 rounded border flex items-center justify-center z-20 ${selectedTyreIds.has(tyre.id) ? 'bg-[#FFC300] border-[#FFC300] text-black' : 'bg-black/50 border-white/50'}`}><CheckSquare size={14}/></button>
                             {tyre.is_hot && <div className="absolute top-2 right-2 bg-orange-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded z-10 shadow-sm">HOT</div>}
                             {tyre.in_stock === false && <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none"><span className="text-red-500 font-bold uppercase text-xs border border-red-500 px-2 py-1 -rotate-12 bg-black/20 shadow-lg">Немає</span></div>}
@@ -1281,6 +1369,76 @@ const TyresTab: React.FC = () => {
         {/* AI Modal */}
         {showAiModal && (
             <AiSortModal onClose={() => setShowAiModal(false)} onRefreshTyres={() => fetchTyres(0, true)} />
+        )}
+        {/* AI SEARCH MODAL */}
+        {showAiSearchModal && (
+            <div className="fixed inset-0 z-[400] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
+                <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-2xl overflow-hidden flex flex-col shadow-3xl">
+                    <div className="p-6 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50">
+                        <div>
+                            <h3 className="text-xl font-black text-white flex items-center gap-3">
+                                <Sparkles className="text-purple-500 animate-pulse" /> 
+                                AI Пошук фото 🌠
+                            </h3>
+                            <p className="text-zinc-500 text-xs mt-1 truncate max-w-[300px]">{targetTyreForAi?.title}</p>
+                        </div>
+                        <button onClick={() => setShowAiSearchModal(false)} className="p-2 hover:bg-zinc-800 rounded-xl transition-colors text-zinc-500 hover:text-white"><X size={24}/></button>
+                    </div>
+
+                    <div className="p-4 bg-black/20 flex gap-2">
+                        <input 
+                            type="text" 
+                            value={aiSearchQuery} 
+                            onChange={e => setAiSearchQuery(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && performAiSearch(aiSearchQuery)}
+                            className="flex-grow bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-purple-500 outline-none"
+                            placeholder="Назва для пошуку..."
+                        />
+                        <button 
+                            onClick={() => performAiSearch(aiSearchQuery)}
+                            disabled={isSearchingAi}
+                            className="bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold px-6 py-2.5 rounded-xl flex items-center gap-2 transition-all"
+                        >
+                            {isSearchingAi ? <Loader2 className="animate-spin" size={18}/> : <Search size={18}/>}
+                            <span>Шукати</span>
+                        </button>
+                    </div>
+
+                    <div className="flex-grow overflow-y-auto p-4 max-h-[60vh] custom-scrollbar bg-black/40">
+                        {isSearchingAi ? (
+                            <div className="flex flex-col items-center justify-center py-20 gap-4">
+                                <div className="w-12 h-12 border-4 border-purple-500/20 border-t-purple-500 rounded-full animate-spin"></div>
+                                <p className="text-zinc-500 font-bold animate-pulse text-sm">Нейромережа підбирає варіанти...</p>
+                            </div>
+                        ) : aiSearchResults.length > 0 ? (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                {aiSearchResults.map((img, idx) => (
+                                    <div 
+                                        key={idx} 
+                                        onClick={() => handleSelectAiImage(img.imageUrl)}
+                                        className="group relative aspect-square bg-black rounded-xl overflow-hidden cursor-pointer border border-zinc-800 hover:border-purple-500 transition-all active:scale-95"
+                                    >
+                                        <img src={img.imageUrl} alt={`Result ${idx}`} className="w-full h-full object-contain p-1" />
+                                        <div className="absolute inset-0 bg-purple-600/0 group-hover:bg-purple-600/20 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100">
+                                            <div className="bg-white text-black text-[10px] font-black px-2 py-1 rounded-md shadow-lg">ВИБРАТИ</div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center py-20 text-zinc-600 gap-4">
+                                <HelpCircle size={48} />
+                                <p className="text-center font-medium">Результатів поки немає.<br/> Спробуйте змінити запит.</p>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="p-4 bg-zinc-900 border-t border-zinc-800 flex justify-between items-center">
+                        <span className="text-[10px] text-zinc-500 uppercase font-black">Powered by Serper.dev</span>
+                        <button onClick={() => setShowAiSearchModal(false)} className="text-zinc-400 hover:text-white text-xs font-bold">Скасувати</button>
+                    </div>
+                </div>
+            </div>
         )}
     </div>
   );

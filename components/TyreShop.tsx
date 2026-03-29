@@ -317,11 +317,11 @@ const TyreShop: React.FC<TyreShopProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#09090b] py-8 md:py-12 animate-in fade-in duration-500 pb-32">
+    <div className="min-h-screen bg-[#09090b] py-4 md:py-12 animate-in fade-in duration-500 pb-32">
       <div className="max-w-7xl mx-auto px-2 md:px-4">
         
-        <header className="flex flex-col lg:flex-row justify-between items-start md:items-center gap-6 mb-10 px-2">
-           <div className="flex flex-col gap-4">
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 md:gap-6 mb-5 md:mb-10 px-2">
+           <div className="flex flex-col gap-2 md:gap-4">
               <nav className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-black text-zinc-600">
                 <button onClick={onBack} className="hover:text-[#FFC300] transition-colors">Головна</button>
                 <span className="text-zinc-800">/</span>
@@ -334,7 +334,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
                 )}
               </nav>
               <div className="flex flex-col">
-                <h1 className="text-4xl md:text-5xl font-black text-white tracking-tighter mb-2 uppercase italic">
+                <h1 className="text-2xl md:text-5xl font-black text-white tracking-tighter mb-1 uppercase italic">
                   Магазин <span className="text-[#FFC300]">шин</span>
                 </h1>
                 <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest flex items-center gap-2">
@@ -344,28 +344,28 @@ const TyreShop: React.FC<TyreShopProps> = ({
               </div>
            </div>
            
-           <div className="flex items-center gap-4 w-full md:w-auto">
+           <div className="flex items-center gap-2 md:gap-4 w-full md:w-auto">
               {isAdmin && (
-                <button 
+                <button
                   onClick={onAdminClick}
-                  className="flex-grow md:flex-none bg-zinc-900/80 backdrop-blur-sm border border-[#FFC300]/30 p-4 rounded-2xl flex items-center gap-4 hover:border-[#FFC300] transition-all group shadow-lg shadow-yellow-900/10"
+                  className="flex-1 md:flex-none bg-zinc-900/80 backdrop-blur-sm border border-[#FFC300]/30 p-2.5 md:p-4 rounded-xl md:rounded-2xl flex items-center gap-2 md:gap-4 hover:border-[#FFC300] transition-all group shadow-lg shadow-yellow-900/10"
                 >
-                  <div className="p-3 bg-zinc-800 rounded-xl text-[#FFC300] group-hover:scale-110 transition-transform">
-                    <Lock size={20} strokeWidth={2.5}/>
+                  <div className="p-2 md:p-3 bg-zinc-800 rounded-lg md:rounded-xl text-[#FFC300] group-hover:scale-110 transition-transform">
+                    <Lock size={16} strokeWidth={2.5}/>
                   </div>
                   <div className="text-left">
-                    <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest mb-0.5">Адмін-панель</p>
-                    <span className="text-white font-black text-sm uppercase tracking-wider">Повернутися</span>
+                    <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest mb-0.5">Адмін</p>
+                    <span className="text-white font-black text-xs uppercase tracking-wider">Повернутися</span>
                   </div>
                 </button>
               )}
-              <div className="flex-grow md:flex-none bg-zinc-900/50 backdrop-blur-sm border border-zinc-800 p-4 rounded-2xl flex items-center gap-4 hover:border-zinc-700 transition-colors group">
-                <div className="p-3 bg-[#FFC300] rounded-xl text-black group-hover:scale-110 transition-transform shadow-lg shadow-yellow-900/20">
-                  <Phone size={20} strokeWidth={2.5}/>
+              <div className="flex-1 md:flex-none bg-zinc-900/50 backdrop-blur-sm border border-zinc-800 p-2.5 md:p-4 rounded-xl md:rounded-2xl flex items-center gap-2 md:gap-4 hover:border-zinc-700 transition-colors group">
+                <div className="p-2 md:p-3 bg-[#FFC300] rounded-lg md:rounded-xl text-black group-hover:scale-110 transition-transform shadow-lg shadow-yellow-900/20">
+                  <Phone size={16} strokeWidth={2.5}/>
                 </div>
                 <div>
-                  <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest mb-0.5">Підбір шин</p>
-                  <a href={shopPhoneLink} className="text-white font-black text-lg hover:text-[#FFC300] transition-colors">{shopPhone}</a>
+                  <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest mb-0.5">Підбір шин</p>
+                  <a href={shopPhoneLink} className="text-white font-black text-sm md:text-lg hover:text-[#FFC300] transition-colors">{shopPhone}</a>
                 </div>
               </div>
            </div>

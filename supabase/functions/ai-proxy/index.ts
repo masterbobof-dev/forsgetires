@@ -5,7 +5,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 
 async function loadAiConfig(): Promise<{ 
-  gemini: string; openai: string; groq: string; openaiBaseUrl: string; openaiModel: string 
+  gemini: string; openai: string; groq: string; openaiBaseUrl: string; openaiModel: string; serper: string 
 }> {
   console.log('[loadAiConfig] Initializing...');
   const url = Deno.env.get('SUPABASE_URL');
@@ -16,6 +16,7 @@ async function loadAiConfig(): Promise<{
     openai: '', 
     groq: '',
     custom: '',
+    serper: '',
     openaiBaseUrl: 'https://api.openai.com/v1',
     openaiModel: 'gpt-4o-mini',
     customBaseUrl: '',
@@ -39,6 +40,7 @@ async function loadAiConfig(): Promise<{
       config.openai = (keysData.openai_key ?? '').trim();
       config.groq = (keysData.groq_key ?? '').trim();
       config.custom = (keysData.custom_key ?? '').trim();
+      config.serper = (keysData.serper_key ?? '').trim();
     }
 
     // Load custom Base URL & Model from settings
@@ -307,7 +309,8 @@ async function resolveAiConfig(provider: Provider) {
     openaiBaseUrl: config.openaiBaseUrl,
     openaiModel: config.openaiModel,
     customBaseUrl: config.customBaseUrl,
-    customModel: config.customModel
+    customModel: config.customModel,
+    serper: config.serper
   };
 }
 
@@ -354,7 +357,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  const mode = payload.mode === 'plain' ? 'plain' : payload.mode === 'seo_bulk' ? 'seo_bulk' : 'seo';
+  const mode = payload.mode;
   const provider = payload.provider as Provider;
   
   if (provider !== 'gemini' && provider !== 'openai' && provider !== 'groq' && provider !== 'custom') {
@@ -364,7 +367,32 @@ Deno.serve(async (req) => {
     });
   }
 
-  const { apiKey, openaiBaseUrl, openaiModel, customBaseUrl, customModel } = await resolveAiConfig(provider);
+  const { apiKey, openaiBaseUrl, openaiModel, customBaseUrl, customModel, serper } = await resolveAiConfig(provider);
+  
+  if (mode === 'image_search') {
+      if (!serper) {
+          return new Response(JSON.stringify({ error: 'Додайте Serper API Key у налаштуваннях для пошуку фото.' }), {
+              status: 200, headers: { ...cors, 'Content-Type': 'application/json' }
+          });
+      }
+      const query = payload.query;
+      if (!query) return new Response(JSON.stringify({ error: 'Query is missing' }), { status: 400, headers: cors });
+
+      console.log('[Serper] Searching for images:', query);
+      const sRes = await fetch('https://google.serper.dev/images', {
+          method: 'POST',
+          headers: {
+              'X-API-KEY': serper,
+              'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ q: query, num: 10 })
+      });
+      const sData = await sRes.json();
+      return new Response(JSON.stringify({ ok: true, data: sData.images || [] }), {
+          headers: { ...cors, 'Content-Type': 'application/json' }
+      });
+  }
+
   if (!apiKey) {
     return new Response(
       JSON.stringify({

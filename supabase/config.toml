@@ -1,0 +1,8 @@
+# Після `supabase link` сюди підставиться project_id.
+# Документація: https://supabase.com/docs/guides/functions
+
+[functions.ai-proxy]
+verify_jwt = true
+
+[functions.admin-ai-keys]
+verify_jwt = true

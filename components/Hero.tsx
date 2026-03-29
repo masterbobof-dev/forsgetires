@@ -60,8 +60,7 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
 
   const handlePromoClick = (promo: any) => {
       if (!promo) return;
-      console.log('Banner clicked:', promo.title, 'Link:', promo.link);
-      
+
       if (promo.link === 'shop') onShopRedirect('all'); 
       else if (promo.link === 'booking') setShowWizard(true);
       else if (promo.link === 'phone') window.location.href = `tel:${PHONE_NUMBER_1}`;
@@ -95,7 +94,13 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
   return (
     <section className="relative w-full overflow-hidden pb-12">
       <div className="absolute inset-0 z-0 h-[120vh]">
-        <img src={HERO_BG_IMAGE} alt="Шиномонтаж Форсаж Синельникове" className="w-full h-full object-cover object-center opacity-50" />
+        <img
+          src={HERO_BG_IMAGE}
+          alt="Шиномонтаж Форсаж Синельникове"
+          className="w-full h-full object-cover object-center opacity-50"
+          fetchPriority="high"
+          decoding="async"
+        />
         <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-black/70 to-[#09090b]"></div>
       </div>
 

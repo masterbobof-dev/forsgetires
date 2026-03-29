@@ -1,9 +1,11 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import readXlsxFile from 'read-excel-file';
-import { Upload, FileSpreadsheet, Save, Loader2, RefreshCw, AlertTriangle, ArrowDown, CheckCircle, HelpCircle } from 'lucide-react';
+import { Upload, FileSpreadsheet, Save, Loader2, RefreshCw, AlertTriangle, ArrowDown, CheckCircle, HelpCircle, Sparkles, Info } from 'lucide-react';
 import { supabase } from '../../../supabaseClient';
 import { safeExtractString, smartExtractPrice, detectSeason } from './syncUtils';
+import { generateSeoBulkJson, normalizeProviderId, type AIProviderId } from '../../../aiSeoClient';
+import { fetchAdminAiKeyStatus, hasProviderKey } from '../../../aiProxyClient';
 
 interface ExcelImportPanelProps {
     suppliers: any[];
@@ -34,6 +36,25 @@ const ExcelImportPanel: React.FC<ExcelImportPanelProps> = ({ suppliers }) => {
     const [importing, setImporting] = useState(false);
     const [stats, setStats] = useState({ total: 0, updated: 0, created: 0, errors: 0 });
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // AI States
+    const [aiProvider, setAiProvider] = useState<AIProviderId>('gemini');
+    const [hasKey, setHasKey] = useState(false);
+    const [isAiProcessing, setIsAiProcessing] = useState(false);
+    const [aiProgress, setAiProgress] = useState({ current: 0, total: 0 });
+
+    useEffect(() => {
+        const init = async () => {
+            const { data } = await supabase.from('settings').select('value').eq('key', 'ai_provider').maybeSingle();
+            const p = normalizeProviderId(data?.value);
+            setAiProvider(p);
+            try {
+                const s = await fetchAdminAiKeyStatus();
+                setHasKey(hasProviderKey(s, p));
+            } catch { setHasKey(false); }
+        };
+        init();
+    }, []);
 
     const parseCSV = async (file: File): Promise<any[][]> => {
         const text = await file.text();
@@ -154,13 +175,14 @@ const ExcelImportPanel: React.FC<ExcelImportPanelProps> = ({ suppliers }) => {
         try {
             // Re-read full file for import
             let allRows: any[][] = [];
-            if (file.name.endsWith('.csv')) {
+            const ext = file.name.split('.').pop()?.toLowerCase();
+            if (ext === 'csv') {
                 allRows = await parseCSV(file);
             } else {
                 allRows = await readXlsxFile(file);
             }
 
-            const rowsToProcess = allRows.slice(startRow - 1); // Respect start row
+            const rowsToProcess = allRows.slice(startRow - 1).filter(r => r.some(c => !!c)); // Respect start row & not empty
             const batchSize = 100;
             
             for (let i = 0; i < rowsToProcess.length; i += batchSize) {
@@ -194,6 +216,111 @@ const ExcelImportPanel: React.FC<ExcelImportPanelProps> = ({ suppliers }) => {
             alert("Критична помилка: " + e.message);
         } finally {
             setImporting(false);
+        }
+    };
+
+    const handleAiImport = async () => {
+        if (!selectedSupplierId) { alert("Оберіть постачальника!"); return; }
+        if (!Object.values(columnMapping).includes('catalog_number')) { alert("Будь ласка, вкажіть стовпець 'Артикул'!"); return; }
+        if (!hasKey) { alert("API ключ не активний. Перевірте налаштування."); return; }
+        if (!file) return;
+
+        try {
+            let allRows: any[][] = [];
+            const ext = file.name.split('.').pop()?.toLowerCase();
+            if (ext === 'csv') {
+                allRows = await parseCSV(file);
+            } else {
+                allRows = await readXlsxFile(file);
+            }
+
+            const dataRows = allRows.slice(startRow - 1).filter(r => r.some(c => !!c));
+            if (dataRows.length === 0) return;
+
+            if (!confirm(`🧠 Почати AI Імпорт для ${dataRows.length} товарів? \n\nAI Створе опис, SEO та характеристики. \nЦе займе приблизно ${Math.ceil((dataRows.length / 15) * 5)} секунд.`)) return;
+
+            setIsAiProcessing(true);
+            setAiProgress({ current: 0, total: dataRows.length });
+
+            const systemPrompt = `Ти - професійний SEO та спеціаліст з шин. Оброби список товарів.
+Для кожного товару ПОВЕРНИ JSON у масиві "results":
+- "id": унікальний артикул (який я дам нижче)
+- "width", "height", "radius" (напр "205", "55", "R16")
+- "manufacturer" (бренд)
+- "season" ("winter", "summer", "all-season")
+- "vehicle_type" ("car", "cargo", "suv", "truck", "agro")
+- "description": КОРОТКИЙ ОПИС ДО 300 СИМВОЛІВ. БЕЗ ВОДИ. Тільки реальні переваги зачеплення, гальмування та комфорту.
+- "seo_title", "seo_description", "seo_keywords" (мовлення: українська).
+ОБОВ'ЯЗКОВО поверни "id" який відповідає артикулу.`;
+
+            // Helper to get col index by type
+            const getCol = (type: string) => {
+                const entry = Object.entries(columnMapping).find(([_, t]) => t === type);
+                return entry ? parseInt(entry[0]) : -1;
+            };
+
+            const artIdx = getCol('catalog_number');
+            const titleIdx = getCol('title');
+            const priceIdx = getCol('price');
+
+            const CHUNK_SIZE = 15;
+            for (let i = 0; i < dataRows.length; i += CHUNK_SIZE) {
+                const chunk = dataRows.slice(i, i + CHUNK_SIZE);
+                const userPrompt = JSON.stringify(chunk.map(r => ({
+                    id: String(r[artIdx] ?? ''),
+                    title: String(r[titleIdx] ?? ''),
+                    price: String(r[priceIdx] ?? '')
+                })));
+
+                const aiData = await generateSeoBulkJson({
+                    provider: aiProvider,
+                    systemPrompt,
+                    userPrompt
+                });
+
+                if (aiData.results && Array.isArray(aiData.results)) {
+                    const upserts = chunk.map((r) => {
+                        const art = String(r[artIdx] ?? '');
+                        const title = String(r[titleIdx] ?? '');
+                        const price = smartExtractPrice(r[priceIdx]);
+                        const aiMatch = aiData.results.find((a: any) => String(a.id) === art);
+                        
+                        return {
+                            catalog_number: art,
+                            title: title,
+                            price: String(price),
+                            base_price: String(price),
+                            supplier_id: parseInt(selectedSupplierId),
+                            stock_quantity: 10,
+                            in_stock: true,
+                            // AI Predicted Fields
+                            width: aiMatch?.width || '',
+                            height: aiMatch?.height || '',
+                            radius: aiMatch?.radius || '',
+                            manufacturer: aiMatch?.manufacturer || '',
+                            season: aiMatch?.season || detectSeason(title),
+                            vehicle_type: aiMatch?.vehicle_type || defaultCategory || 'car',
+                            description: aiMatch?.description || '',
+                            seo_title: aiMatch?.seo_title || '',
+                            seo_description: aiMatch?.seo_description || '',
+                            seo_keywords: aiMatch?.seo_keywords || ''
+                        };
+                    });
+
+                    await supabase.from('tyres').upsert(upserts, { onConflict: 'catalog_number,supplier_id' });
+                }
+
+                setAiProgress({ current: Math.min(i + CHUNK_SIZE, dataRows.length), total: dataRows.length });
+                await new Promise(r => setTimeout(r, 4500)); 
+            }
+
+            alert("✨ AI Імпорт завершено!");
+            setStats({ total: dataRows.length, updated: dataRows.length, created: 0, errors: 0 });
+
+        } catch (e: any) {
+            alert("Помилка AI Імпорту: " + e.message);
+        } finally {
+            setIsAiProcessing(false);
         }
     };
 
@@ -328,19 +455,44 @@ const ExcelImportPanel: React.FC<ExcelImportPanelProps> = ({ suppliers }) => {
                     </div>
 
                     {/* Footer Actions */}
-                    <div className="flex justify-end pt-4 border-t border-zinc-800 flex-shrink-0">
-                        {importing ? (
-                            <button disabled className="bg-zinc-800 text-white font-bold px-8 py-3 rounded-xl flex items-center gap-2 cursor-wait">
-                                <Loader2 className="animate-spin"/> Імпорт...
-                            </button>
+                    <div className="flex flex-col md:flex-row justify-end items-center gap-4 pt-4 border-t border-zinc-800 flex-shrink-0">
+                        {isAiProcessing ? (
+                             <div className="flex-1 w-full flex items-center gap-4 bg-purple-900/20 p-3 rounded-xl border border-purple-500/30">
+                                <Sparkles className="text-purple-400 animate-pulse shrink-0" size={20} />
+                                <div className="flex-1">
+                                    <div className="flex justify-between text-[10px] font-bold text-purple-400 uppercase mb-1">
+                                        <span>AI Оброблено</span>
+                                        <span>{aiProgress.current} / {aiProgress.total}</span>
+                                    </div>
+                                    <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                                        <div className="h-full bg-purple-500 transition-all duration-300" style={{ width: `${(aiProgress.current / aiProgress.total) * 100}%` }}></div>
+                                    </div>
+                                </div>
+                             </div>
                         ) : (
-                            <button 
-                                onClick={handleImport} 
-                                disabled={!selectedSupplierId}
-                                className="bg-[#FFC300] hover:bg-[#e6b000] text-black font-black px-8 py-3 rounded-xl flex items-center gap-2 shadow-lg transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <Save size={20}/> ЗАВАНТАЖИТИ В БАЗУ
-                            </button>
+                            <>
+                                <button 
+                                    onClick={handleAiImport} 
+                                    disabled={!selectedSupplierId || importing || !hasKey}
+                                    className="w-full md:w-auto bg-[#8B5CF6] hover:bg-[#7C3AED] text-white font-black px-8 py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed group"
+                                >
+                                    <Sparkles size={18} className="group-hover:animate-spin" /> ✨ AI ІМПОРТ (Опис + SEO)
+                                </button>
+
+                                {importing ? (
+                                    <button disabled className="w-full md:w-auto bg-zinc-800 text-white font-bold px-8 py-3 rounded-xl flex items-center justify-center gap-2 cursor-wait">
+                                        <Loader2 className="animate-spin"/> Імпорт...
+                                    </button>
+                                ) : (
+                                    <button 
+                                        onClick={handleImport} 
+                                        disabled={!selectedSupplierId || isAiProcessing}
+                                        className="w-full md:w-auto bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold px-8 py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-95 disabled:opacity-50 border border-zinc-700"
+                                    >
+                                        <Save size={18}/> ЗВИЧАЙНИЙ ІМПОРТ
+                                    </button>
+                                )}
+                            </>
                         )}
                     </div>
                     

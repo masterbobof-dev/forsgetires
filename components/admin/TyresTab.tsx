@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Plus, X, Upload, Save, Loader2, FileSpreadsheet, CheckSquare, Square, Edit2, ArrowDown, Wand2, RefreshCw, Menu, FolderOpen, Car, Truck, Mountain, Flame, Ban, Briefcase, ArrowUpDown, Settings, ArrowRight, HelpCircle, Ruler, Copy, Image as ImageIcon, Percent, AlertCircle, FileWarning, FilterX, Trash2, LayoutGrid, List, Snowflake, Sun, CloudSun, CheckCircle, Eye, EyeOff, Tractor, CircleDot, Globe, AlertTriangle, ShoppingCart } from 'lucide-react';
+import { Search, Plus, X, Upload, Save, Loader2, Sparkles, FileSpreadsheet, CheckSquare, Square, Edit2, ArrowDown, Wand2, RefreshCw, Menu, FolderOpen, Car, Truck, Mountain, Flame, Ban, Briefcase, ArrowUpDown, Settings, ArrowRight, HelpCircle, Ruler, Copy, Image as ImageIcon, Percent, AlertCircle, FileWarning, FilterX, Trash2, LayoutGrid, List, Snowflake, Sun, CloudSun, CheckCircle, Eye, EyeOff, Tractor, CircleDot, Globe, AlertTriangle, ShoppingCart } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { TyreProduct, Supplier } from '../../types';
 import { WHEEL_RADII, CAR_RADII, CARGO_RADII, TRUCK_RADII, AGRO_RADII } from '../../constants';
 import readXlsxFile from 'read-excel-file';
+import AiSortModal from './AiSortModal';
 
 const PAGE_SIZE = 50;
 
@@ -66,6 +67,7 @@ const TyresTab: React.FC = () => {
   const [isApplyingBulk, setIsApplyingBulk] = useState(false);
 
   const [showAddTyreModal, setShowAddTyreModal] = useState(false);
+  const [showAiModal, setShowAiModal] = useState(false);
   const [editingTyreId, setEditingTyreId] = useState<number | null>(null);
   const [tyreForm, setTyreForm] = useState({ 
       manufacturer: '', 
@@ -751,6 +753,8 @@ const TyresTab: React.FC = () => {
                     <button onClick={() => setViewMode('list')} className={`p-2 rounded ${viewMode === 'list' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-white'}`}><List size={18}/></button>
                 </div>
 
+                <button onClick={() => setShowAiModal(true)} className="flex-grow lg:flex-none bg-purple-600 text-white font-bold px-4 py-2 rounded-lg flex items-center justify-center gap-2 hover:bg-purple-500 transition-transform active:scale-95 shadow-lg shadow-purple-900/20"><Sparkles size={18}/> <span className="hidden sm:inline">AI Сортування</span><span className="sm:hidden">АІ</span></button>
+
                 <button onClick={() => {setEditingTyreId(null); setTyreForm({ manufacturer: '', name: '', width: '', height: '', radius: 'R15', season: 'winter', vehicle_type: 'car', price: '', old_price: '', base_price: '', catalog_number: '', product_number: '', description: '', is_hot: false, supplier_id: '', stock_quantity: '', axis: '', seo_title: '', seo_description: '', seo_keywords: '', slug: '' }); setExistingGallery([]); setTyreUploadFiles([]); setShowAddTyreModal(true);}} className="flex-grow lg:flex-none bg-[#FFC300] text-black font-bold px-4 py-2 rounded-lg flex items-center justify-center gap-2 hover:bg-[#e6b000] transition-transform active:scale-95"><Plus size={18}/> <span>Додати</span></button>
             </div>
         </div>
@@ -1272,6 +1276,11 @@ const TyresTab: React.FC = () => {
                    </div>
                </div>
             </div>
+        )}
+
+        {/* AI Modal */}
+        {showAiModal && (
+            <AiSortModal onClose={() => setShowAiModal(false)} onRefreshTyres={() => fetchTyres(0, true)} />
         )}
     </div>
   );

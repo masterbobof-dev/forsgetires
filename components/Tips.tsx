@@ -45,7 +45,7 @@ const Tips: React.FC = () => {
   if (articles.length === 0) return null;
 
   return (
-    <section className="py-12 bg-[#0c0c0e] border-t border-zinc-900">
+    <section id="tips" className="py-12 bg-[#0c0c0e] border-t border-zinc-900 scroll-mt-24">
       <div className="max-w-6xl mx-auto px-4">
         <div className="flex items-center gap-3 mb-8">
            <Lightbulb className="text-[#FFC300] w-8 h-8" />

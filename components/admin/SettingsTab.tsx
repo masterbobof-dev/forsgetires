@@ -1,16 +1,17 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-    Settings, Briefcase, Plus, PackageX, Trash2, ToggleRight, ToggleLeft, 
-    KeyRound, Save, RotateCcw, X, AlertTriangle, Loader2, Phone, MapPin, 
-    Link2, Shield, UserCog, Truck, Crown, LayoutGrid, Package, Smartphone,
-    Eraser, Database, FileSearch, CheckCircle, Tags, GitMerge, FileSpreadsheet, Stethoscope, Wand2, Upload, FileImage, Sparkles, FileCode, Eye, EyeOff, StopCircle, Tractor
+    Settings, Briefcase, Plus, PackageX, Trash2, 
+    KeyRound, Save, X, AlertTriangle, Loader2, Phone, MapPin, 
+    Link2, Shield, UserCog, Truck, Crown, LayoutGrid, Smartphone,
+    CheckCircle, Wand2, Upload, Sparkles, Eye, EyeOff, Globe
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { Supplier } from '../../types';
 import { PHONE_NUMBER_1, PHONE_NUMBER_2, MAP_DIRECT_LINK } from '../../constants';
 import ExcelImportPanel from './sync/ExcelImportPanel';
-import { GoogleGenAI } from "@google/genai";
+import { normalizeProviderId, type AIProviderId } from '../../aiSeoClient';
+import { fetchAdminAiKeyStatus, saveAdminAiKeys } from '../../aiProxyClient';
 
 type SettingsSubTab = 'general' | 'security' | 'suppliers' | 'system';
 
@@ -20,14 +21,28 @@ const SettingsTab: React.FC = () => {
   // Data State
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [supplierCounts, setSupplierCounts] = useState<Record<number, number>>({});
-  const [enableStockQty, setEnableStockQty] = useState(false);
   const [newSupplierName, setNewSupplierName] = useState('');
   
   // Security Settings
   const [novaPoshtaKey, setNovaPoshtaKey] = useState('');
   const [supplierKey, setSupplierKey] = useState('');
-  const [geminiKey, setGeminiKey] = useState(''); // NEW: Google Gemini API Key
+  const [geminiKey, setGeminiKey] = useState('');
+  const [openaiKey, setOpenaiKey] = useState('');
+  const [openaiBaseUrl, setOpenaiBaseUrl] = useState('https://api.openai.com/v1');
+  const [openaiModel, setOpenaiModel] = useState('gpt-4o-mini');
+  const [groqKey, setGroqKey] = useState('');
+  const [customKey, setCustomKey] = useState('');
+  const [customBaseUrl, setCustomBaseUrl] = useState('');
+  const [customModel, setCustomModel] = useState('');
+  const [aiProvider, setAiProvider] = useState<AIProviderId>('gemini');
   const [showGeminiKey, setShowGeminiKey] = useState(false);
+  const [showOpenaiKey, setShowOpenaiKey] = useState(false);
+  const [showGroqKey, setShowGroqKey] = useState(false);
+  const [showCustomKey, setShowCustomKey] = useState(false);
+  const [hasKeyGemini, setHasKeyGemini] = useState(false);
+  const [hasKeyOpenai, setHasKeyOpenai] = useState(false);
+  const [hasKeyGroq, setHasKeyGroq] = useState(false);
+  const [hasKeyCustom, setHasKeyCustom] = useState(false);
   const [serviceEmail, setServiceEmail] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
 
@@ -50,44 +65,33 @@ const SettingsTab: React.FC = () => {
   const [generatedCode, setGeneratedCode] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Storage Cleanup State
-  const [cleaningStorage, setCleaningStorage] = useState(false);
-  const [showCleanupConfirm, setShowCleanupConfirm] = useState(false);
-  const [cleanupStatus, setCleanupStatus] = useState<string>('');
-  const [cleanupResult, setCleanupResult] = useState<{ total: number, active: number, deleted: number, broken: number } | null>(null);
-
-  // BROKEN IMAGE SCANNER
-  const [isScanningImages, setIsScanningImages] = useState(false);
-  const [showScanConfirm, setShowScanConfirm] = useState(false);
-  const [scanProgress, setScanProgress] = useState({ checked: 0, broken: 0, removed: 0 });
-  const [scanStatus, setScanStatus] = useState('');
-
   // SMART PHOTO MATCHER STATE
   const [smartFiles, setSmartFiles] = useState<File[]>([]);
   const [isSmartMatching, setIsSmartMatching] = useState(false);
   const [smartStatus, setSmartStatus] = useState<string[]>([]);
   const [smartOverwrite, setSmartOverwrite] = useState(false);
-  const [smartExactMatch, setSmartExactMatch] = useState(false); // NEW: Exact Match Mode
+  const [smartExactMatch, setSmartExactMatch] = useState(false);
   const smartInputRef = useRef<HTMLInputElement>(null);
 
-  // Reset Stock State
-  const [showResetStockConfirm, setShowResetStockConfirm] = useState(false);
-  const [resettingStock, setResettingStock] = useState(false);
-
-  // Categorization State
-  const [sortingCategories, setSortingCategories] = useState(false);
-  const [showSortConfirm, setShowSortConfirm] = useState(false);
-
-  // AI Description Generator State
-  const [aiGenerating, setAiGenerating] = useState(false);
-  const aiGeneratingRef = useRef(false); // Ref for immediate stopping
-  const [aiProgress, setAiProgress] = useState({ total: 0, current: 0, updated: 0 });
-  const [aiStatusLog, setAiStatusLog] = useState<string[]>([]);
-  const [aiOverwrite, setAiOverwrite] = useState(false); 
+  const refreshAiKeyFlags = async () => {
+    try {
+      const s = await fetchAdminAiKeyStatus();
+      setHasKeyGemini(s.hasGemini);
+      setHasKeyOpenai(s.hasOpenai);
+      setHasKeyGroq(s.hasGroq);
+      setHasKeyCustom(s.hasCustom);
+    } catch {
+      setHasKeyGemini(false);
+      setHasKeyOpenai(false);
+      setHasKeyGroq(false);
+      setHasKeyCustom(false);
+    }
+  };
 
   useEffect(() => {
     fetchSettings();
     fetchSuppliersAndCounts();
+    refreshAiKeyFlags();
   }, []);
 
   const showMsg = (msg: string, type: 'error' | 'success' = 'success') => {
@@ -106,14 +110,16 @@ const SettingsTab: React.FC = () => {
         if (data) {
             const newContacts = { ...contactSettings };
             data.forEach((r: any) => {
-                if(r.key === 'enable_stock_quantity') setEnableStockQty(r.value === 'true');
-                
                 // Keys & Security
                 if(r.key === 'nova_poshta_key') setNovaPoshtaKey(r.value);
                 if(r.key === 'supplier_api_key') setSupplierKey(r.value);
-                if(r.key === 'google_gemini_api_key') setGeminiKey(r.value); // Fetch Gemini Key
+                if(r.key === 'ai_provider') setAiProvider(normalizeProviderId(r.value));
                 if(r.key === 'service_staff_email') setServiceEmail(r.value);
                 if(r.key === 'admin_email') setAdminEmail(r.value);
+                if(r.key === 'ai_openai_base_url') setOpenaiBaseUrl(r.value);
+                if(r.key === 'ai_openai_model') setOpenaiModel(r.value);
+                if(r.key === 'ai_custom_base_url') setCustomBaseUrl(r.value);
+                if(r.key === 'ai_custom_model') setCustomModel(r.value);
 
                 // Contacts
                 if(r.key === 'contact_phone1') newContacts.phone1 = r.value;
@@ -200,122 +206,37 @@ const SettingsTab: React.FC = () => {
           setShowDeleteModal(false);
       } catch (err: any) { showMsg(err.message, 'error'); } finally { setIsDeleting(false); setDeleteData(null); }
   };
-  
-  const toggleStockQty = async () => {
-      const newVal = !enableStockQty;
-      setEnableStockQty(newVal);
-      await supabase.from('settings').upsert({ key: 'enable_stock_quantity', value: String(newVal) });
-  };
 
   const saveAllSettings = async () => {
-       await supabase.from('settings').upsert({ key: 'nova_poshta_key', value: novaPoshtaKey });
-       await supabase.from('settings').upsert({ key: 'supplier_api_key', value: supplierKey });
-       await supabase.from('settings').upsert({ key: 'google_gemini_api_key', value: geminiKey }); // Save Gemini Key
-       await supabase.from('settings').upsert({ key: 'service_staff_email', value: serviceEmail });
-       await supabase.from('settings').upsert({ key: 'admin_email', value: adminEmail });
-       await supabase.from('settings').upsert({ key: 'contact_phone1', value: contactSettings.phone1 });
-       await supabase.from('settings').upsert({ key: 'contact_phone2', value: contactSettings.phone2 });
-       await supabase.from('settings').upsert({ key: 'contact_address', value: contactSettings.address });
-       await supabase.from('settings').upsert({ key: 'contact_map_link', value: contactSettings.mapLink });
-       showMsg("Всі налаштування збережено!");
-  };
+        await supabase.from('settings').upsert({ key: 'nova_poshta_key', value: novaPoshtaKey });
+        await supabase.from('settings').upsert({ key: 'supplier_api_key', value: supplierKey });
+        await supabase.from('settings').upsert({ key: 'ai_provider', value: aiProvider });
+        await supabase.from('settings').upsert({ key: 'service_staff_email', value: serviceEmail });
+        await supabase.from('settings').upsert({ key: 'admin_email', value: adminEmail });
+        await supabase.from('settings').upsert({ key: 'ai_openai_base_url', value: openaiBaseUrl });
+        await supabase.from('settings').upsert({ key: 'ai_openai_model', value: openaiModel });
+        await supabase.from('settings').upsert({ key: 'ai_custom_base_url', value: customBaseUrl });
+        await supabase.from('settings').upsert({ key: 'ai_custom_model', value: customModel });
+        await supabase.from('settings').upsert({ key: 'contact_phone1', value: contactSettings.phone1 });
+        await supabase.from('settings').upsert({ key: 'contact_phone2', value: contactSettings.phone2 });
+        await supabase.from('settings').upsert({ key: 'contact_address', value: contactSettings.address });
+        await supabase.from('settings').upsert({ key: 'contact_map_link', value: contactSettings.mapLink });
 
-  const processResetStock = async () => {
-     setShowResetStockConfirm(false);
-     setResettingStock(true);
-     try {
-        const { error } = await supabase.from('tyres').update({ in_stock: true }).neq('in_stock', true);
-        if (error) throw error;
-        showMsg("Всі товари відмічені як 'В наявності'!");
-     } catch (e: any) { showMsg(e.message, 'error'); }
-     finally { setResettingStock(false); }
-  };
+        const aiPayload: Record<string, string> = {};
+        if (geminiKey.trim()) aiPayload.gemini = geminiKey.trim();
+        if (openaiKey.trim()) aiPayload.openai = openaiKey.trim();
+        if (groqKey.trim()) aiPayload.groq = groqKey.trim();
+        if (customKey.trim()) aiPayload.custom = customKey.trim();
+        if (Object.keys(aiPayload).length > 0) {
+          await saveAdminAiKeys(aiPayload);
+          setGeminiKey('');
+          setOpenaiKey('');
+          setGroqKey('');
+          setCustomKey('');
+          await refreshAiKeyFlags();
+        }
 
-  // --- AUTO CATEGORIZATION LOGIC ---
-  const executeAutoCategorization = async () => {
-      setShowSortConfirm(false);
-      setSortingCategories(true);
-      try {
-          const allItems = await fetchAllIds('tyres', 'id, title, radius, vehicle_type, season');
-          if (!allItems || allItems.length === 0) { showMsg("Немає товарів.", 'error'); return; }
-
-          const updates = [];
-          let changedCount = 0;
-
-          const agroBrands = ['OZKA', 'BKT', 'SEHA', 'KNK', 'PETLAS', 'ALLIANCE', 'MITAS', 'CULTOR', 'KABAT', 'ROSAVA'];
-          const agroKeywords = ['AGRO', 'TRACTOR', 'IMPLEMENT', 'FARM', 'LOADER', 'INDUSTRIAL', 'SKID', 'BOBCAT', 'FORKLIFT', 'PR ', 'TR-', 'IMP', 'SGP', 'Ф-', 'В-', 'БЦФ', 'ИЯВ', 'ВЛ-', 'К-', 'Л-', 'М-', 'IND'];
-          
-          const agroRims = ['10', '12', '14.5', '15.3', '15.5', '24', '26', '28', '30', '32', '34', '36', '38', '40', '42', '44', '46', '48', '50', '52', '54'];
-          const truckRims = ['17.5', '19.5', '22.5', '24.5'];
-          const overlapRims = ['15', '16', '17', '18', '20', '22.5'];
-          const strictCarPattern = /\b\d{3}\/\d{2}[R|Z]?\d{2}\b/; 
-          const strictCargoFullProfile = /\b\d{3}R\d{2}(?:C|LT)\b/i;
-
-          for (const item of allItems) {
-              let newRadius = item.radius || '';
-              let newType = item.vehicle_type || 'car';
-              let newSeason = item.season || 'summer';
-              let isChanged = false;
-              const title = (item.title || '').toUpperCase();
-              
-              if (!newRadius || newRadius === 'R') {
-                  const dashMatch = title.match(/[0-9.,]+[-/](\d{1,2}(?:[.,]\d)?)/);
-                  if (dashMatch) { newRadius = `R${dashMatch[1].replace(',', '.')}`; isChanged = true; }
-              }
-              const decimalMatch = title.match(/R(14\.5|15\.3|15\.5|17\.5|19\.5|22\.5|24\.5)/);
-              if (decimalMatch) { 
-                  const correctR = decimalMatch[0]; 
-                  if (newRadius !== correctR) { newRadius = correctR; isChanged = true; } 
-              }
-
-              let detectedType = 'car';
-              const radiusVal = newRadius.replace('R', '');
-              
-              const isAgroBrand = agroBrands.some(b => title.includes(b));
-              const isAgroKey = agroKeywords.some(k => title.includes(k));
-              const isCargoStrong = newRadius.includes('C') || title.includes('R14C') || title.includes('R15C') || title.includes('R16C') || title.includes(' LT ') || title.includes('(C)') || strictCargoFullProfile.test(title);
-
-              if (isCargoStrong) detectedType = 'cargo';
-              else if (truckRims.includes(radiusVal) || title.includes('TIR ') || title.includes('BUS ')) {
-                  detectedType = 'truck';
-                  if (isAgroKey || isAgroBrand) detectedType = 'agro';
-              }
-              else if (agroRims.includes(radiusVal)) detectedType = 'agro';
-              else if (overlapRims.includes(radiusVal)) {
-                  if (strictCarPattern.test(title)) {
-                      if (title.includes('TRACTOR') || title.includes('AGRO') || title.includes('IMPLEMENT')) detectedType = 'agro';
-                      else detectedType = 'car';
-                  } else {
-                      const hasPR = /\d+\s*PR/.test(title); 
-                      const hasAgroSize = /\d{1,3}\.\d{2}-\d{2}/.test(title) || /\d{1,3}-\d{2}/.test(title);
-                      if (isAgroBrand || isAgroKey || hasPR || hasAgroSize) detectedType = 'agro';
-                  }
-              }
-              else if (title.includes('SUV') || title.includes('4X4') || title.includes('JEEP')) detectedType = 'suv';
-
-              if (newType !== detectedType) { newType = detectedType; isChanged = true; }
-              
-              // Force season for Truck/Agro
-              if ((newType === 'agro' || newType === 'truck') && newSeason !== 'all-season') { 
-                  newSeason = 'all-season'; 
-                  isChanged = true; 
-              }
-
-              if (isChanged) { updates.push({ id: item.id, title: item.title, radius: newRadius, vehicle_type: newType, season: newSeason }); changedCount++; }
-          }
-
-          if (updates.length > 0) {
-              const CHUNK_SIZE = 500;
-              for (let i = 0; i < updates.length; i += CHUNK_SIZE) {
-                  const chunk = updates.slice(i, i + CHUNK_SIZE);
-                  const { error: updErr } = await supabase.from('tyres').upsert(chunk);
-                  if (updErr) throw updErr;
-              }
-              showMsg(`Успішно оновлено ${changedCount} товарів!`);
-          } else {
-              showMsg("Всі товари вже мають правильні категорії.");
-          }
-      } catch (e: any) { showMsg("Помилка сортування: " + e.message, 'error'); } finally { setSortingCategories(false); }
+        showMsg("Всі налаштування збережено!");
   };
 
   // --- SMART UPLOAD LOGIC ---
@@ -358,8 +279,6 @@ const SettingsTab: React.FC = () => {
               if (matches.length === 0) {
                   if (smartExactMatch) {
                   // --- EXACT MATCH MODE (SPECIAL MACHINERY) ---
-                  // Search for exact title OR product_number OR catalog_number match
-                  // We remove the extension but keep the full name string
                   const exactName = file.name.replace(/\.[^/.]+$/, "").trim();
                   
                   const { data: exactMatches } = await supabase
@@ -447,294 +366,6 @@ const SettingsTab: React.FC = () => {
       }
   };
 
-  // --- STORAGE CLEANUP LOGIC ---
-  const executeStorageCleanup = async () => {
-      setShowCleanupConfirm(false);
-      setCleaningStorage(true);
-      setCleanupStatus('Аналіз бази даних...');
-      setCleanupResult(null);
-
-      try {
-          const allTyres = await fetchAllIds('tyres', 'image_url');
-          const allGallery = await fetchAllIds('gallery', 'url');
-          const allArticles = await fetchAllIds('articles', 'image_url');
-          const allPromo = await fetchAllIds('settings', 'value', (q) => q.eq('key', 'promo_data'));
-
-          const activeUrls = new Set<string>();
-          allTyres.forEach(t => t.image_url && activeUrls.add(t.image_url));
-          allGallery.forEach(g => g.url && activeUrls.add(g.url));
-          allArticles.forEach(a => a.image_url && activeUrls.add(a.image_url));
-          
-          if(allPromo.length > 0) {
-              try {
-                  const promos = JSON.parse(allPromo[0].value);
-                  if(Array.isArray(promos)) {
-                      promos.forEach((p:any) => {
-                          if(p.image_url) activeUrls.add(p.image_url);
-                          if(p.backgroundImage) activeUrls.add(p.backgroundImage);
-                      });
-                  } else if(promos.image_url) {
-                      activeUrls.add(promos.image_url);
-                  }
-              } catch(e) {}
-          }
-
-          setCleanupStatus(`Знайдено ${activeUrls.size} активних посилань. Сканування сховища...`);
-          
-          let allFiles: any[] = [];
-          const { data: files, error } = await supabase.storage.from('galery').list('', { limit: 10000 }); 
-          if (error) throw error;
-          allFiles = files || [];
-
-          const orphans: string[] = [];
-          const projectUrl = "https://zzxueclhkhvwdmxflmyx.supabase.co/storage/v1/object/public/galery/";
-          
-          allFiles.forEach(file => {
-              const fullUrl = projectUrl + file.name;
-              if (!activeUrls.has(fullUrl)) {
-                  orphans.push(file.name);
-              }
-          });
-
-          setCleanupStatus(`Знайдено ${orphans.length} файлів для видалення.`);
-
-          if (orphans.length > 0) {
-              const BATCH = 50;
-              for(let i=0; i<orphans.length; i+=BATCH) {
-                  const batch = orphans.slice(i, i+BATCH);
-                  await supabase.storage.from('galery').remove(batch);
-              }
-          }
-
-          setCleanupResult({
-              total: allFiles.length,
-              active: allFiles.length - orphans.length,
-              deleted: orphans.length,
-              broken: 0
-          });
-          setCleanupStatus('Завершено успішно.');
-
-      } catch (e: any) {
-          setCleanupStatus('Помилка: ' + e.message);
-      } finally {
-          setCleaningStorage(false);
-      }
-  };
-
-  // --- BROKEN LINK SCANNER ---
-  const executeBrokenLinkScan = async () => {
-      setShowScanConfirm(false);
-      setIsScanningImages(true);
-      setScanStatus('Завантаження списку товарів...');
-      setScanProgress({ checked: 0, broken: 0, removed: 0 });
-
-      try {
-          const products = await fetchAllIds('tyres', 'id, image_url');
-          const productsWithImages = products.filter(p => p.image_url);
-          
-          setScanStatus(`Перевірка ${productsWithImages.length} зображень...`);
-          
-          const BATCH_SIZE = 20; 
-          let processed = 0;
-          let brokenCount = 0;
-          let removedCount = 0;
-
-          const checkUrl = async (url: string) => {
-              try {
-                  const res = await fetch(url, { method: 'HEAD' });
-                  return res.ok;
-              } catch {
-                  return false;
-              }
-          };
-
-          for (let i = 0; i < productsWithImages.length; i += BATCH_SIZE) {
-              const batch = productsWithImages.slice(i, i + BATCH_SIZE);
-              
-              const results = await Promise.all(batch.map(async (p) => {
-                  const isOk = await checkUrl(p.image_url);
-                  return { id: p.id, isOk };
-              }));
-
-              const brokenIds = results.filter(r => !r.isOk).map(r => r.id);
-              
-              if (brokenIds.length > 0) {
-                  await supabase.from('tyres').update({ image_url: null }).in('id', brokenIds);
-                  brokenCount += brokenIds.length;
-                  removedCount += brokenIds.length;
-              }
-
-              processed += batch.length;
-              setScanProgress({ checked: processed, broken: brokenCount, removed: removedCount });
-          }
-
-          setScanStatus(`Завершено. Перевірено: ${processed}. Видалено битих: ${removedCount}.`);
-
-      } catch (e: any) {
-          setScanStatus('Помилка: ' + e.message);
-      } finally {
-          setIsScanningImages(false);
-      }
-  };
-
-  // --- AI DESCRIPTION GENERATOR ---
-  const handleStopAi = () => {
-      setAiGenerating(false);
-      aiGeneratingRef.current = false;
-      setAiStatusLog(prev => ["Користувач зупинив генерацію.", ...prev]);
-  };
-
-  const generateAiDescriptions = async () => {
-      setAiGenerating(true);
-      aiGeneratingRef.current = true;
-      setAiStatusLog([]);
-      setAiProgress({ total: 0, current: 0, updated: 0 });
-
-      try {
-          if (!geminiKey) {
-              setAiStatusLog(prev => ["ПОМИЛКА: Відсутній Google Gemini API Key. Введіть його у вкладці 'Безпека / API'.", ...prev]);
-              setAiGenerating(false);
-              return;
-          }
-
-          const ai = new GoogleGenAI({ apiKey: geminiKey }); 
-
-          // 1. Fetch products
-          const { data: allProducts, error } = await supabase
-              .from('tyres')
-              .select('id, title, manufacturer, radius, season, vehicle_type, description');
-
-          if (error) throw error;
-
-          if (!allProducts || allProducts.length === 0) {
-              setAiStatusLog(prev => ["В базі немає товарів для обробки.", ...prev]);
-              setAiGenerating(false);
-              return;
-          }
-
-          // 2. Client-side filtering logic
-          const productsToProcess = allProducts.filter(p => {
-              if (aiOverwrite) return true; // Force mode ON = process all
-
-              // Check if description is missing or "bad"
-              if (!p.description) return true;
-              const desc = p.description.trim();
-              if (desc === '') return true;
-              if (desc === 'API Import') return true;
-              
-              // Smart check: treat short descriptions (e.g. "allseason", "winter") as needing update
-              if (desc.length < 30) return true;
-
-              return false; // Good description, skip
-          });
-
-          if (productsToProcess.length === 0) {
-              setAiStatusLog(prev => ["Всі товари вже мають якісний опис (довше 30 символів). Спробуйте увімкнути 'Перезаписувати'.", ...prev]);
-              setAiGenerating(false);
-              return;
-          }
-
-          setAiProgress({ total: productsToProcess.length, current: 0, updated: 0 });
-          setAiStatusLog(prev => [`Знайдено ${productsToProcess.length} товарів для оновлення. Починаємо (по 1 шт)...`, ...prev]);
-
-          // RATE LIMIT SETTINGS
-          const DELAY_MS = 4500; // ~4.5 seconds delay = ~13 requests per minute (safe for free tier 15 RPM)
-          
-          for (let i = 0; i < productsToProcess.length; i++) {
-              if (!aiGeneratingRef.current) break; // Check manual stop
-
-              const tyre = productsToProcess[i];
-              
-              try {
-                  // Parse size for prompt
-                  const sizeRegex = /(\d{3})[\/\s](\d{2})[\s\w]*R(\d{2}(?:\.5|\.3)?[C|c]?)/i;
-                  const match = tyre.title.match(sizeRegex);
-                  let sizeStr = match ? `${match[1]}/${match[2]} R${match[3]}` : (tyre.radius || '');
-
-                  const seasonName = tyre.season === 'winter' ? 'зимова' : tyre.season === 'summer' ? 'літня' : 'всесезонна';
-                  
-                  const prompt = `Напиши унікальний, привабливий SEO-опис (2-3 речення) українською мовою для шини: ${tyre.manufacturer || ''} ${tyre.title}. 
-                  Розмір: ${sizeStr}. Сезон: ${seasonName}. Тип: ${tyre.vehicle_type || 'легкова'}. 
-                  Використовуй слова "купити", "ціна", "Синельникове", "якісний монтаж", "Форсаж". Акцентуй на надійності та комфорті.`;
-
-                  const response = await ai.models.generateContent({
-                      model: 'gemini-2.5-flash',
-                      contents: prompt,
-                  });
-                  
-                  const newDesc = response.text.trim();
-                  
-                  if (newDesc) {
-                      await supabase.from('tyres').update({ description: newDesc }).eq('id', tyre.id);
-                      setAiProgress(p => ({ ...p, updated: p.updated + 1 }));
-                  }
-                  
-                  // Update UI progress
-                  setAiProgress(p => ({ ...p, current: i + 1 }));
-
-              } catch (err: any) {
-                  const errMsg = err.message || '';
-                  if (errMsg.includes('quota') || errMsg.includes('429') || errMsg.includes('exceeded')) {
-                      setAiStatusLog(prev => [`ЛІМІТ КВОТИ (429)! Процес зупинено на товарі ${i+1}. Зачекайте хвилину і запустіть знову.`, ...prev]);
-                      setAiGenerating(false);
-                      aiGeneratingRef.current = false;
-                      return; // STOP execution
-                  }
-                  console.error("AI Error for ID " + tyre.id, err);
-              }
-
-              // Delay between requests
-              if (i < productsToProcess.length - 1) {
-                  await new Promise(r => setTimeout(r, DELAY_MS));
-              }
-          }
-
-          if (aiGeneratingRef.current) {
-              setAiStatusLog(prev => ["Генерацію завершено успішно!", ...prev]);
-          }
-
-      } catch (e: any) {
-          setAiStatusLog(prev => [`Критична помилка: ${e.message}`, ...prev]);
-      } finally {
-          setAiGenerating(false);
-          aiGeneratingRef.current = false;
-      }
-  };
-
-  // --- SITEMAP GENERATOR ---
-  const generateSitemap = async () => {
-      try {
-          const { data } = await supabase.from('tyres').select('id, created_at');
-          if (!data) return;
-
-          let xml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://forsage-sinelnikove.com/</loc>
-    <changefreq>daily</changefreq>
-    <priority>1.0</priority>
-  </url>`;
-
-          data.forEach(item => {
-              const date = new Date(item.created_at || Date.now()).toISOString().split('T')[0];
-              xml += `
-  <url>
-    <loc>https://forsage-sinelnikove.com/?product_id=${item.id}</loc>
-    <lastmod>${date}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>`;
-          });
-
-          xml += `\n</urlset>`;
-          
-          await navigator.clipboard.writeText(xml);
-          alert(`Sitemap згенеровано для ${data.length} товарів та скопійовано в буфер обміну! Створіть файл sitemap.xml в корені сайту.`);
-      } catch (e: any) {
-          alert("Помилка генерації: " + e.message);
-      }
-  };
-
   // --- RENDER HELPERS ---
   const NavButton = ({ id, label, icon: Icon }: { id: SettingsSubTab, label: string, icon: any }) => (
       <button 
@@ -816,17 +447,37 @@ const SettingsTab: React.FC = () => {
                             <label className="block text-zinc-400 text-xs font-bold uppercase mb-1 flex items-center gap-2"><KeyRound size={14}/> Ключ Постачальника (Omega)</label>
                             <input type="password" value={supplierKey} onChange={e => setSupplierKey(e.target.value)} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-mono text-sm" placeholder="API ключ постачальника"/>
                         </div>
+                        <div className="md:col-span-2 bg-zinc-950/80 p-4 rounded-xl border border-zinc-800 space-y-4">
+                            <label className="block text-[#FFC300] text-xs font-bold uppercase mb-1 flex items-center gap-2"><Sparkles size={14}/> Провайдер AI за замовчуванням</label>
+                            <p className="text-[11px] text-zinc-500 mb-2">
+                              Використовується в AI помічнику та масовій генерації. Ключі після збереження зберігаються на сервері (таблиця{' '}
+                              <code className="text-zinc-400">ai_api_keys</code>, без читання з браузера) і підхоплюються функцією{' '}
+                              <code className="text-zinc-400">ai-proxy</code>.
+                            </p>
+                            <select
+                                value={aiProvider}
+                                onChange={e => setAiProvider(e.target.value as AIProviderId)}
+                                className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-bold text-sm"
+                            >
+                                <option value="gemini">Google Gemini</option>
+                                <option value="openai">OpenAI (ChatGPT Oficial)</option>
+                                <option value="groq">Groq (швидкі моделі Llama тощо)</option>
+                                <option value="custom">Custom AI (Zenmux / Будь-який провайдер)</option>
+                            </select>
+                        </div>
+
                         <div className="md:col-span-2 bg-purple-900/10 p-4 rounded-xl border border-purple-900/30">
-                            <label className="block text-purple-300 text-xs font-bold uppercase mb-2 flex items-center gap-2"><Sparkles size={14}/> Google Gemini API Key (AI Generator)</label>
+                            <label className="block text-purple-300 text-xs font-bold uppercase mb-2 flex items-center gap-2"><Sparkles size={14}/> Google Gemini API Key</label>
                             <div className="relative">
                                 <input 
                                     type={showGeminiKey ? "text" : "password"} 
                                     value={geminiKey} 
                                     onChange={e => setGeminiKey(e.target.value)} 
                                     className="w-full bg-black border border-zinc-700 rounded-lg p-3 pr-10 text-white font-mono text-sm mb-1 focus:border-purple-500 outline-none" 
-                                    placeholder="Вставте ключ AIza..."
+                                    placeholder="AIza..."
                                 />
                                 <button 
+                                    type="button"
                                     onClick={() => setShowGeminiKey(!showGeminiKey)} 
                                     className="absolute right-3 top-3 text-zinc-500 hover:text-white"
                                     title={showGeminiKey ? "Приховати" : "Показати"}
@@ -835,8 +486,136 @@ const SettingsTab: React.FC = () => {
                                 </button>
                             </div>
                             <p className="text-[10px] text-zinc-400 mt-2">
-                                Необхідний для генерації описів. Отримати безкоштовно: <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline font-bold">aistudio.google.com</a>
+                                <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline font-bold">aistudio.google.com</a>
                             </p>
+                            {hasKeyGemini && (
+                              <p className="text-[10px] text-emerald-500 font-bold mt-1">Ключ збережено на сервері. Введіть новий лише щоб замінити.</p>
+                            )}
+                        </div>
+
+                        <div className="md:col-span-2 bg-emerald-900/10 p-4 rounded-xl border border-emerald-900/30">
+                            <label className="block text-emerald-300 text-xs font-bold uppercase mb-2 flex items-center gap-2"><KeyRound size={14}/> OpenAI API Key (sk-...)</label>
+                            <div className="relative">
+                                <input 
+                                    type={showOpenaiKey ? "text" : "password"} 
+                                    value={openaiKey} 
+                                    onChange={e => setOpenaiKey(e.target.value)} 
+                                    className="w-full bg-black border border-zinc-700 rounded-lg p-3 pr-10 text-white font-mono text-sm mb-1 focus:border-emerald-500 outline-none" 
+                                    placeholder="sk-..."
+                                />
+                                <button 
+                                    type="button"
+                                    onClick={() => setShowOpenaiKey(!showOpenaiKey)} 
+                                    className="absolute right-3 top-3 text-zinc-500 hover:text-white"
+                                    title={showOpenaiKey ? "Приховати" : "Показати"}
+                                >
+                                    {showOpenaiKey ? <EyeOff size={18}/> : <Eye size={18}/>}
+                                </button>
+                            </div>
+                            <p className="text-[10px] text-zinc-400 mt-2 mb-3">Офіційний ключ: <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-bold">platform.openai.com</a></p>
+                            
+                            <label className="block text-zinc-500 text-[10px] font-bold uppercase mb-1 flex items-center gap-2">Вибір офіційної моделі OpenAI</label>
+                            <select 
+                                value={['gpt-5.4-pro', 'gpt-5.4-mini', 'gpt-5.3-instant', 'gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo', 'o1-mini'].includes(openaiModel) ? openaiModel : 'custom'} 
+                                onChange={e => {
+                                    if (e.target.value !== 'custom') setOpenaiModel(e.target.value);
+                                }} 
+                                className="w-full bg-black border border-zinc-800 rounded-lg p-2 text-zinc-300 font-mono text-xs focus:border-emerald-500 outline-none mb-2"
+                            >
+                                <option value="gpt-5.4-pro">gpt-5.4-pro (Найновіша та найпотужніша 🔥)</option>
+                                <option value="gpt-5.4-mini">gpt-5.4-mini (Швидка та розумна v5.4)</option>
+                                <option value="gpt-5.3-instant">gpt-5.3-instant (Оптимізована v5.3)</option>
+                                <option value="gpt-4o">gpt-4o (Стабільна флагманська)</option>
+                                <option value="gpt-4o-mini">gpt-4o-mini (Економна)</option>
+                                <option value="o1-mini">o1-mini (Для складних задач)</option>
+                                <option value="custom">-- Власна модель (введіть нижче) --</option>
+                            </select>
+
+                            <label className="block text-zinc-600 text-[9px] font-bold uppercase mb-1">ID моделі (ID з сайту OpenAI)</label>
+                            <input 
+                                type="text" 
+                                value={openaiModel} 
+                                onChange={e => setOpenaiModel(e.target.value)} 
+                                className="w-full bg-black border border-zinc-800 rounded-lg p-2 text-zinc-300 font-mono text-xs focus:border-emerald-500 outline-none" 
+                                placeholder="Наприклад: gpt-5.3-instant"
+                            />
+                            
+                            {hasKeyOpenai && (
+                              <p className="text-[10px] text-emerald-500 font-bold mt-2">Офіційний ключ збережено на сервері.</p>
+                            )}
+                        </div>
+
+                        <div className="md:col-span-2 bg-blue-900/10 p-4 rounded-xl border border-blue-900/30 line-dashed">
+                            <label className="block text-blue-300 text-xs font-bold uppercase mb-2 flex items-center gap-2"><Globe size={14}/> Custom AI Провайдер (Zenmux, OpenRouter тощо)</label>
+                            
+                            <div className="relative mb-3">
+                                <label className="block text-zinc-500 text-[10px] font-bold uppercase mb-1">API Key провайдера</label>
+                                <input 
+                                    type={showCustomKey ? "text" : "password"} 
+                                    value={customKey} 
+                                    onChange={e => setCustomKey(e.target.value)} 
+                                    className="w-full bg-black border border-zinc-700 rounded-lg p-3 pr-10 text-white font-mono text-sm focus:border-blue-500 outline-none" 
+                                    placeholder="Ключ доступу..."
+                                />
+                                <button 
+                                    type="button"
+                                    onClick={() => setShowCustomKey(!showCustomKey)} 
+                                    className="absolute right-3 top-8 text-zinc-500 hover:text-white"
+                                    title={showCustomKey ? "Приховати" : "Показати"}
+                                >
+                                    {showCustomKey ? <EyeOff size={18}/> : <Eye size={18}/>}
+                                </button>
+                                {hasKeyCustom && (
+                                  <p className="text-[10px] text-emerald-500 font-bold mt-1">Ключ збережено на сервері.</p>
+                                )}
+                            </div>
+                            
+                            <div className="mb-3">
+                                <label className="block text-zinc-500 text-[10px] font-bold uppercase mb-1">Base URL (Посилання на сервер)</label>
+                                <input 
+                                    type="text" 
+                                    value={customBaseUrl} 
+                                    onChange={e => setCustomBaseUrl(e.target.value)} 
+                                    className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-zinc-300 font-mono text-sm focus:border-blue-500 outline-none" 
+                                    placeholder="https://api.zenmux.ai/v1"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-zinc-500 text-[10px] font-bold uppercase mb-1">Model ID (Назва моделі)</label>
+                                <input 
+                                    type="text" 
+                                    value={customModel} 
+                                    onChange={e => setCustomModel(e.target.value)} 
+                                    className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-zinc-300 font-mono text-sm focus:border-blue-500 outline-none" 
+                                    placeholder="Наприклад: kuaishou/kat-coder-pro-v1-free"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="md:col-span-2 bg-orange-900/10 p-4 rounded-xl border border-orange-900/30">
+                            <label className="block text-orange-300 text-xs font-bold uppercase mb-2 flex items-center gap-2"><KeyRound size={14}/> Groq API Key</label>
+                            <div className="relative">
+                                <input 
+                                    type={showGroqKey ? "text" : "password"} 
+                                    value={groqKey} 
+                                    onChange={e => setGroqKey(e.target.value)} 
+                                    className="w-full bg-black border border-zinc-700 rounded-lg p-3 pr-10 text-white font-mono text-sm mb-1 focus:border-orange-500 outline-none" 
+                                    placeholder="gsk_..."
+                                />
+                                <button 
+                                    type="button"
+                                    onClick={() => setShowGroqKey(!showGroqKey)} 
+                                    className="absolute right-3 top-3 text-zinc-500 hover:text-white"
+                                    title={showGroqKey ? "Приховати" : "Показати"}
+                                >
+                                    {showGroqKey ? <EyeOff size={18}/> : <Eye size={18}/>}
+                                </button>
+                            </div>
+                            <p className="text-[10px] text-zinc-400 mt-2">Модель: llama-3.3-70b-versatile. Безкоштовний рівень: <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-bold">console.groq.com</a></p>
+                            {hasKeyGroq && (
+                              <p className="text-[10px] text-emerald-500 font-bold mt-1">Ключ збережено на сервері.</p>
+                            )}
                         </div>
                    </div>
                </div>
@@ -885,136 +664,6 @@ const SettingsTab: React.FC = () => {
                    {/* EXCEL IMPORT SECTION */}
                    <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-1 mb-6 h-[600px] overflow-hidden">
                        <ExcelImportPanel suppliers={suppliers} />
-                   </div>
-
-                   {/* AI DESCRIPTION GENERATOR (NEW) */}
-                   <div className="bg-purple-900/10 p-6 rounded-xl border border-purple-900/30 mt-6 relative overflow-hidden">
-                       <div className="absolute -right-10 -top-10 text-purple-900/20"><Sparkles size={150} /></div>
-                       <div className="relative z-10">
-                           <h4 className="text-purple-400 text-lg font-bold mb-1 flex items-center gap-2"><Wand2 size={20}/> AI Генератор Описів (Gemini)</h4>
-                           <p className="text-zinc-400 text-sm max-w-2xl mb-4">
-                               Автоматично створює унікальні SEO-описи для товарів. 
-                               Використовує штучний інтелект для генерації тексту на основі параметрів шини.
-                           </p>
-                           
-                           {/* OVERWRITE TOGGLE */}
-                           <label className="flex items-center gap-2 cursor-pointer mb-4 w-fit bg-black/40 px-3 py-2 rounded-lg border border-purple-900/30">
-                               <input 
-                                   type="checkbox" 
-                                   checked={aiOverwrite} 
-                                   onChange={e => setAiOverwrite(e.target.checked)} 
-                                   className="w-4 h-4 accent-purple-500 rounded"
-                               />
-                               <span className={`text-sm font-bold ${aiOverwrite ? 'text-white' : 'text-zinc-400'}`}>
-                                   Перезаписувати існуючі описи
-                               </span>
-                           </label>
-                           
-                           {aiStatusLog.length > 0 && (
-                               <div className="bg-black/50 p-3 rounded-lg border border-purple-900/30 font-mono text-xs text-purple-200 mb-4 h-24 overflow-y-auto">
-                                   {aiStatusLog.map((log, i) => <div key={i}>{log}</div>)}
-                               </div>
-                           )}
-
-                           <div className="flex items-center gap-4">
-                               {aiGenerating ? (
-                                   <div className="flex items-center gap-4 w-full">
-                                       <div className="flex-grow h-2 bg-zinc-800 rounded-full overflow-hidden">
-                                           <div className="h-full bg-purple-500 transition-all duration-300" style={{ width: `${(aiProgress.current / (aiProgress.total || 1)) * 100}%` }}></div>
-                                       </div>
-                                       <span className="text-xs font-bold text-purple-400 whitespace-nowrap">{aiProgress.current} / {aiProgress.total}</span>
-                                       <button onClick={handleStopAi} className="p-2 bg-red-900/50 text-red-300 rounded hover:bg-red-900 border border-red-900/50" title="Зупинити"><StopCircle size={16}/></button>
-                                   </div>
-                               ) : (
-                                   <button 
-                                       onClick={generateAiDescriptions} 
-                                       className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-3 rounded-xl shadow-lg flex items-center gap-2 transition-transform active:scale-95"
-                                   >
-                                       <Sparkles size={18}/> {aiProgress.current > 0 && aiProgress.current < aiProgress.total ? 'ПРОДОВЖИТИ ГЕНЕРАЦІЮ' : 'ЗАПУСТИТИ ГЕНЕРАЦІЮ'}
-                                   </button>
-                               )}
-                           </div>
-                       </div>
-                   </div>
-
-                   {/* SITEMAP GENERATOR (NEW) */}
-                   <div className="bg-blue-900/10 p-6 rounded-xl border border-blue-900/30 mt-6">
-                       <h4 className="text-blue-400 text-lg font-bold mb-1 flex items-center gap-2"><FileCode size={20}/> Генератор Sitemap.xml</h4>
-                       <p className="text-zinc-400 text-sm max-w-2xl mb-4">
-                           Створює повну карту сайту з усіма посиланнями на товари (`?product_id=...`). 
-                           Це необхідно для того, щоб Google міг знайти та проіндексувати кожен окремий товар.
-                       </p>
-                       <button onClick={generateSitemap} className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-6 py-3 rounded-xl shadow-lg flex items-center gap-2 transition-transform active:scale-95">
-                           <FileSpreadsheet size={18}/> ЗГЕНЕРУВАТИ ТА КОПІЮВАТИ
-                       </button>
-                   </div>
-
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                       <div className="bg-black/30 p-6 rounded-xl border border-zinc-800 flex flex-col justify-between">
-                            <div>
-                                <h4 className="text-lg font-bold text-white mb-1">Відображення залишків</h4>
-                                <p className="text-zinc-400 text-sm mb-4">Якщо вимкнено — всі товари вважаються доступними (навіть 0 шт).</p>
-                            </div>
-                            <button onClick={toggleStockQty} className={`w-full flex items-center justify-center gap-3 px-6 py-3 rounded-xl font-bold transition-colors ${enableStockQty ? 'bg-[#FFC300] text-black' : 'bg-zinc-800 text-zinc-400'}`}>
-                                {enableStockQty ? <ToggleRight size={32}/> : <ToggleLeft size={32}/>} 
-                                {enableStockQty ? 'Точний облік (ВКЛ)' : 'Все в наявності (ВИКЛ)'}
-                            </button>
-                       </div>
-
-                       <div className="bg-black/30 p-6 rounded-xl border border-zinc-800 flex flex-col justify-between">
-                            <div>
-                                <h4 className="text-white text-lg font-bold mb-1 flex items-center gap-2"><Database size={18}/> Обслуговування БД</h4>
-                                <p className="text-zinc-400 text-sm mb-4">Масові операції для керування товарами.</p>
-                            </div>
-                            
-                            <div className="space-y-2">
-                                {!showResetStockConfirm ? (
-                                    <button onClick={() => setShowResetStockConfirm(true)} disabled={resettingStock} className="w-full bg-blue-900/20 text-blue-300 px-6 py-3 rounded-xl font-bold border border-blue-900/50 hover:bg-blue-900/40 flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-sm">
-                                        <RotateCcw size={16}/> Скинути статус (Все в наявності)
-                                    </button>
-                                ) : (
-                                    <div className="flex gap-2 animate-in fade-in">
-                                        <button onClick={processResetStock} className="flex-1 bg-red-600 text-white font-bold py-2 rounded-lg">Підтвердити</button>
-                                        <button onClick={() => setShowResetStockConfirm(false)} className="flex-1 bg-zinc-700 text-white font-bold py-2 rounded-lg">Скасувати</button>
-                                    </div>
-                                )}
-
-                                {!showCleanupConfirm ? (
-                                    <button onClick={() => setShowCleanupConfirm(true)} disabled={cleaningStorage} className="w-full bg-red-900/20 text-red-300 px-6 py-3 rounded-xl font-bold border border-red-900/50 hover:bg-red-900/40 flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-sm">
-                                        <Eraser size={16}/> Очистити сховище (Видалити зайве)
-                                    </button>
-                                ) : (
-                                    <div className="flex gap-2 animate-in fade-in">
-                                        <button onClick={executeStorageCleanup} className="flex-1 bg-red-600 text-white font-bold py-2 rounded-lg">Підтвердити</button>
-                                        <button onClick={() => setShowCleanupConfirm(false)} className="flex-1 bg-zinc-700 text-white font-bold py-2 rounded-lg">Скасувати</button>
-                                    </div>
-                                )}
-                                {cleanupStatus && <p className="text-xs text-zinc-400 mt-1">{cleanupStatus}</p>}
-
-                                {!showScanConfirm ? (
-                                    <button onClick={() => setShowScanConfirm(true)} disabled={isScanningImages} className="w-full bg-orange-900/20 text-orange-300 px-6 py-3 rounded-xl font-bold border border-orange-900/50 hover:bg-orange-900/40 flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-sm">
-                                        <FileSearch size={16}/> Перевірка битих фото
-                                    </button>
-                                ) : (
-                                    <div className="flex gap-2 animate-in fade-in">
-                                        <button onClick={executeBrokenLinkScan} className="flex-1 bg-orange-600 text-white font-bold py-2 rounded-lg">Запуск</button>
-                                        <button onClick={() => setShowScanConfirm(false)} className="flex-1 bg-zinc-700 text-white font-bold py-2 rounded-lg">Скасувати</button>
-                                    </div>
-                                )}
-                                {scanStatus && <p className="text-xs text-zinc-400 mt-1">{scanStatus}</p>}
-
-                                {!showSortConfirm ? (
-                                    <button onClick={() => setShowSortConfirm(true)} disabled={sortingCategories} className="w-full bg-green-900/20 text-green-300 px-6 py-3 rounded-xl font-bold border border-green-900/50 hover:bg-green-900/40 flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-sm">
-                                        <Tags size={16}/> Авто-сортування категорій
-                                    </button>
-                                ) : (
-                                    <div className="flex gap-2 animate-in fade-in">
-                                        <button onClick={executeAutoCategorization} className="flex-1 bg-green-600 text-white font-bold py-2 rounded-lg">Старт</button>
-                                        <button onClick={() => setShowSortConfirm(false)} className="flex-1 bg-zinc-700 text-white font-bold py-2 rounded-lg">Скасувати</button>
-                                    </div>
-                                )}
-                            </div>
-                       </div>
                    </div>
 
                    {/* SMART PHOTO MATCHING */}
@@ -1072,22 +721,6 @@ const SettingsTab: React.FC = () => {
                    <div className="bg-black border border-zinc-700 rounded-xl p-4 mb-4 w-full"><p className="text-xs text-zinc-500 uppercase font-bold mb-1">Код підтвердження:</p><p className="text-3xl font-mono font-black text-[#FFC300] tracking-widest">{generatedCode}</p></div>
                    <input type="text" value={inputCode} onChange={(e) => setInputCode(e.target.value)} placeholder="Введіть код" className="w-full bg-zinc-800 border border-zinc-600 rounded-xl p-3 text-center text-white font-bold text-lg mb-4 outline-none focus:border-red-500"/>
                    <button onClick={executeDelete} disabled={inputCode !== generatedCode || isDeleting} className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2">{isDeleting ? <Loader2 className="animate-spin" /> : (deleteMode === 'products_only' ? 'ВИДАЛИТИ ТОВАРИ' : 'ВИДАЛИТИ ВСЕ')}</button>
-               </div>
-           </div>
-       )}
-
-       {/* BROKEN LINK SCANNER CONFIRMATION MODAL */}
-       {showScanConfirm && (
-           <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-               <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-sm relative shadow-2xl flex flex-col items-center text-center">
-                   <button onClick={() => setShowScanConfirm(false)} className="absolute top-4 right-4 text-zinc-500 hover:text-white"><X size={24}/></button>
-                   <div className="bg-orange-900/20 p-4 rounded-full text-orange-500 mb-4 border border-orange-900/50"><Stethoscope size={40} /></div>
-                   <h3 className="text-xl font-black text-white mb-2">Запустити сканування фото?</h3>
-                   <p className="text-zinc-400 text-sm mb-6">Це перевірить <strong>всі товари</strong> в базі (незалежно від кількості) на наявність посилань, що не працюють.<br/><br/>Якщо фото не завантажується (404 Error), посилання буде <span className="text-red-400 font-bold">автоматично видалено</span>.</p>
-                   <div className="flex gap-4 w-full">
-                        <button onClick={() => setShowScanConfirm(false)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-xl border border-zinc-700">Скасувати</button>
-                        <button onClick={executeBrokenLinkScan} className="flex-1 bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-orange-900/20">Запустити</button>
-                   </div>
                </div>
            </div>
        )}

@@ -141,6 +141,17 @@ const App: React.FC = () => {
     loadSeo();
   }, []);
 
+  useEffect(() => {
+    if (currentView !== 'home') return;
+    const pending = sessionStorage.getItem('pendingScrollTo');
+    if (!pending) return;
+    sessionStorage.removeItem('pendingScrollTo');
+    const id = window.setTimeout(() => {
+      document.getElementById(pending)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+    return () => clearTimeout(id);
+  }, [currentView]);
+
   const handleAdminAuthClick = () => {
     if (auth.session) setCurrentView('admin');
     else auth.openAuthModal();

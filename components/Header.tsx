@@ -65,17 +65,22 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
 
         {/* Logo & Brand */}
-        <div className="flex items-center gap-3 md:gap-4">
+        <button
+          type="button"
+          onClick={() => handleNavClick('home')}
+          className="flex items-center gap-3 md:gap-4 text-left rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC300] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+          aria-label="На головну"
+        >
           <Logo />
-          <div className="flex flex-col cursor-pointer group" onClick={() => handleNavClick('home')}>
+          <span className="flex flex-col group">
             <span className="font-black text-2xl md:text-3xl tracking-wide text-white italic -skew-x-12 group-hover:text-[#FFC300] transition-colors">
               ФОРСАЖ
             </span>
             <span className="text-[10px] md:text-xs text-zinc-400 font-bold uppercase tracking-[0.2em] leading-none ml-1">
               Шиномонтаж
             </span>
-          </div>
-        </div>
+          </span>
+        </button>
 
         {/* Right Side */}
         <div className="flex items-center gap-6">

@@ -4,7 +4,7 @@ import { SERVICES } from '../constants';
 
 const Services: React.FC = () => {
   return (
-    <section className="py-12 bg-[#09090b]">
+    <section id="services" className="py-12 bg-[#09090b] scroll-mt-24">
       <div className="max-w-4xl mx-auto px-4">
         <h2 className="text-3xl font-black text-white mb-8 border-b-2 border-[#FFC300] inline-block pb-2">
           Послуги Шиномонтажу та Ремонту Дисків

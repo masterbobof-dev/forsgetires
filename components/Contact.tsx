@@ -42,7 +42,7 @@ const Contact: React.FC = () => {
   }, []);
 
   return (
-    <section className="py-12 bg-[#09090b] pb-24">
+    <section id="contacts" className="py-12 bg-[#09090b] pb-24 scroll-mt-24">
       <div className="max-w-4xl mx-auto px-4">
         <h2 className="text-3xl font-black text-white mb-8 border-b-2 border-[#FFC300] inline-block pb-2">
           Контакти та Адреса

@@ -1,8 +1,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabaseClient';
-import { Search, Globe, Save, RefreshCw, CheckCircle, AlertTriangle, Info, BarChart, Image as ImageIcon, Link2, Upload, Loader2, Edit2, LayoutGrid, List, CheckSquare, X } from 'lucide-react';
+import { Search, Globe, Save, RefreshCw, CheckCircle, AlertTriangle, Info, BarChart, Image as ImageIcon, Link2, Upload, Loader2, Edit2, LayoutGrid, List, CheckSquare, X, Wand2 } from 'lucide-react';
 import { TyreProduct } from '../../types';
+import { generatePlainDescription, parseJsonFromAiText, normalizeProviderId } from '../../aiSeoClient';
+import type { AIProviderId } from '../../aiTypes';
 
 const SeoTab: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -10,6 +12,8 @@ const SeoTab: React.FC = () => {
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   const [activeTab, setActiveTab] = useState<'general' | 'products'>('general');
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [aiProvider, setAiProvider] = useState<AIProviderId>('gemini');
   const [products, setProducts] = useState<TyreProduct[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [productSearch, setProductSearch] = useState('');
@@ -35,7 +39,13 @@ const SeoTab: React.FC = () => {
   useEffect(() => {
     fetchSeoSettings();
     fetchProducts();
+    fetchAiProvider();
   }, []);
+
+  const fetchAiProvider = async () => {
+    const { data } = await supabase.from('settings').select('value').eq('key', 'ai_provider').maybeSingle();
+    setAiProvider(normalizeProviderId(data?.value));
+  };
 
   const fetchProducts = async () => {
       setLoadingProducts(true);
@@ -182,6 +192,39 @@ const SeoTab: React.FC = () => {
       });
   };
 
+  const generateAiSeo = async () => {
+      setIsGeneratingAi(true);
+      try {
+          const prompt = `Ти - топовий SEO експерт. Твоє завдання створити ідеальні мета-теги для сайту автосервісу та шиномонтажу "Форсаж" у місті Синельникове.
+Обов'язково згадай: продаж шин, ремонт дисків, зварювання аргоном, 24/7.
+Зроби дуже клікабельний заголовок і привабливий опис, щоб сайт потрапив у ТОП Google.
+ПОВЕРНИ ЛИШЕ СТРОГИЙ JSON БЕЗ МАРКДАУНУ (без \`\`\`json), що містить:
+{
+  "seo_title": "...заголовок (до 60 симв)...",
+  "seo_description": "...опис (до 160 симв)...",
+  "seo_keywords": "...ключові слова через кому (7-10 слів)..."
+}`;
+          const rawResponse = await generatePlainDescription({
+              provider: aiProvider,
+              prompt
+          });
+          const parsed = parseJsonFromAiText(rawResponse);
+          
+          setSettings({
+              ...settings,
+              seo_title: String(parsed.seo_title || settings.seo_title),
+              seo_description: String(parsed.seo_description || settings.seo_description),
+              seo_keywords: String(parsed.seo_keywords || settings.seo_keywords)
+          });
+          alert("Авто-генерація за допомогою AI успішно завершена!");
+      } catch (err: any) {
+          console.error("AI Error:", err);
+          alert("Помилка AI: " + (err.message || "Невідома помилка"));
+      } finally {
+          setIsGeneratingAi(false);
+      }
+  };
+
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (!e.target.files || e.target.files.length === 0) return;
       setUploadingImage(true);
@@ -240,9 +283,13 @@ const SeoTab: React.FC = () => {
               </h3>
               <p className="text-zinc-400 text-sm mt-1">Налаштування відображення сайту в Google та соцмережах.</p>
             </div>
-            <div className="flex gap-2">
-              <button onClick={generateSmartData} className="bg-zinc-800 text-zinc-300 hover:text-white px-4 py-3 rounded-xl border border-zinc-700 hover:border-[#FFC300] flex items-center gap-2 font-bold transition-colors">
-                <RefreshCw size={18} /> Авто-Генерація
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto mt-4 md:mt-0">
+              <button disabled={isGeneratingAi} onClick={generateAiSeo} className="bg-zinc-800 text-purple-400 hover:text-white px-4 py-3 rounded-xl border border-purple-900/50 hover:border-purple-500 hover:bg-purple-900/20 flex flex-1 sm:flex-none items-center justify-center gap-2 font-bold transition-all shadow-[0_0_15px_rgba(168,85,247,0.15)] disabled:opacity-50">
+                {isGeneratingAi ? <Loader2 size={18} className="animate-spin" /> : <Wand2 size={18} />}
+                AI Оптимізація
+              </button>
+              <button onClick={generateSmartData} className="bg-zinc-800 text-zinc-300 hover:text-white px-4 py-3 rounded-xl border border-zinc-700 hover:border-zinc-500 flex flex-1 sm:flex-none items-center justify-center gap-2 font-bold transition-colors">
+                <RefreshCw size={18} /> Шаблон
               </button>
               <button onClick={handleSave} className="bg-[#FFC300] text-black font-black px-6 py-3 rounded-xl hover:bg-[#e6b000] flex items-center gap-2 shadow-lg shadow-yellow-900/20">
                 <Save size={20} /> Зберегти

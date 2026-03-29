@@ -1,14 +1,21 @@
 
 import React from 'react';
 import { ViewState } from '../types';
-import { Map, Home, ShoppingBag, DollarSign, Image as ImageIcon, Phone, Wrench, Lightbulb } from 'lucide-react';
+import { Map, Home, ShoppingBag, DollarSign, Image as ImageIcon, Phone, Wrench, Lightbulb, LucideIcon } from 'lucide-react';
 
 interface SitemapProps {
   onNavigate: (view: ViewState) => void;
 }
 
+type SitemapLink = {
+  label: string;
+  view: ViewState;
+  icon: LucideIcon;
+  hash?: string;
+};
+
 const Sitemap: React.FC<SitemapProps> = ({ onNavigate }) => {
-  const sections = [
+  const sections: { title: string; links: SitemapLink[] }[] = [
     {
       title: "Основне",
       links: [
@@ -28,14 +35,13 @@ const Sitemap: React.FC<SitemapProps> = ({ onNavigate }) => {
     }
   ];
 
-  const handleLinkClick = (view: ViewState | string) => {
-    if (view === 'tips' || view === 'services' || view === 'contacts') {
-       // Just navigate home, scrolling logic would be handled there usually, 
-       // but for this architecture we just go Home.
-       onNavigate('home');
-    } else {
-       onNavigate(view as ViewState);
+  const handleLinkClick = (link: SitemapLink) => {
+    if (link.hash) {
+      sessionStorage.setItem('pendingScrollTo', link.hash);
+      onNavigate('home');
+      return;
     }
+    onNavigate(link.view);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -60,7 +66,8 @@ const Sitemap: React.FC<SitemapProps> = ({ onNavigate }) => {
                 {section.links.map((link, lIdx) => (
                   <li key={lIdx}>
                     <button 
-                      onClick={() => handleLinkClick(link.view)}
+                      type="button"
+                      onClick={() => handleLinkClick(link)}
                       className="flex items-center gap-3 text-zinc-400 hover:text-[#FFC300] hover:translate-x-2 transition-all group w-full text-left"
                     >
                       <div className="p-2 bg-black rounded-lg group-hover:bg-[#FFC300] group-hover:text-black transition-colors border border-zinc-800 group-hover:border-[#FFC300]">

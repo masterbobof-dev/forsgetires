@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Sparkles, Loader2, Save, RefreshCw, Copy, Check, Wand2, ListPlus, Globe, Image as ImageIcon, Search, AlertCircle, ExternalLink, FileText, ChevronRight, Zap, CheckCircle } from 'lucide-react';
-import { GoogleGenAI, Type } from "@google/genai";
 import { supabase } from '../../supabaseClient';
 import { TyreProduct } from '../../types';
+import { generateSeoJson, generateSeoBulkJson, normalizeProviderId } from '../../aiSeoClient';
+import type { AIProviderId } from '../../aiTypes';
+import { fetchAdminAiKeyStatus, hasProviderKey, type AdminAiKeyStatus } from '../../aiProxyClient';
 
 const AiAssistantTab: React.FC = () => {
   const [products, setProducts] = useState<TyreProduct[]>([]);
@@ -19,6 +21,46 @@ const AiAssistantTab: React.FC = () => {
   const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
 
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+
+  const [aiKeyStatus, setAiKeyStatus] = useState<AdminAiKeyStatus | null>(null);
+  const [aiProvider, setAiProvider] = useState<AIProviderId>('gemini');
+  const [aiSettingsReady, setAiSettingsReady] = useState(false);
+
+  const hasActiveProviderKey = useCallback(() => {
+    if (!aiKeyStatus) return false;
+    return hasProviderKey(aiKeyStatus, aiProvider);
+  }, [aiProvider, aiKeyStatus]);
+
+  const loadAiSettings = useCallback(async () => {
+    const { data } = await supabase
+      .from('settings')
+      .select('key, value')
+      .eq('key', 'ai_provider')
+      .maybeSingle();
+    const providerRaw = data?.value ?? '';
+    setAiProvider(normalizeProviderId(providerRaw));
+    try {
+      const status = await fetchAdminAiKeyStatus();
+      setAiKeyStatus(status);
+    } catch {
+      setAiKeyStatus({ hasGemini: false, hasOpenai: false, hasGroq: false });
+    }
+    setAiSettingsReady(true);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      await loadAiSettings();
+      if (cancelled) return;
+    })();
+    return () => { cancelled = true; };
+  }, [loadAiSettings]);
+
+  const persistAiProvider = async (p: AIProviderId) => {
+    setAiProvider(p);
+    await supabase.from('settings').upsert({ key: 'ai_provider', value: p });
+  };
 
   useEffect(() => {
     fetchProducts();
@@ -44,17 +86,18 @@ const AiAssistantTab: React.FC = () => {
 
   const selectedProduct = products.find(p => p.id === selectedProductId);
 
-  const enhanceProduct = async (customQuery?: string) => {
+  const enhanceProduct = async () => {
     if (!selectedProduct) return;
+    if (!hasActiveProviderKey()) {
+      setError('Не знайдено API-ключ для обраного провайдера. Відкрийте «Налаштування» → «Безпека / API», додайте ключ і збережіть.');
+      return;
+    }
     setLoading(true);
     setError('');
     setEnhancementResult(null);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
-      const query = customQuery || `${selectedProduct.manufacturer} ${selectedProduct.title} tyre photo`;
-      
-      const systemInstruction = `
+      const systemPrompt = `
         Ти - SEO-копірайтер магазину "Форсаж". 
         Згенеруй стислі текстові дані для шини: ${selectedProduct.title}.
         
@@ -63,45 +106,30 @@ const AiAssistantTab: React.FC = () => {
         2. "seo_description": Опис (до 160 симв) для Google.
         3. "description": Лаконічний опис (200-300 симв) українською мовою про ключові переваги.
         4. "seo_keywords": 5 ключових слів через кому.
-        
-        ПОЛЯ НЕ МАЮТЬ БУТИ ПОРОЖНІМИ. Пиши швидко та по суті.
+        5. "manufacturer": Бренд (наприклад "Nexen", "Michelin").
+        6. "width": Ширина шини (тільки цифри, наприклад "245").
+        7. "height": Профіль (цифри, наприклад "45").
+        8. "radius": Радіус (наприклад "R19" або "R15C").
+        9. "season": Сезон ("Зимові", "Літні" або "Всесезонні"). Особлива увага: якщо в назві є ice, snow, winter, spike - Зимові.
+        10. "vehicle_type": Тип транспорту (строго одне з цих слів: "car", "suv", "cargo", "truck", "agro").
+
+        Поверни ОДИН JSON-об'єкт з цими полями. ПОЛЯ НЕ МАЮТЬ БУТИ ПОРОЖНІМИ.
       `;
 
-      const responseSchema = {
-        type: Type.OBJECT,
-        properties: {
-          description: { type: Type.STRING, description: "Detailed product description in Ukrainian" },
-          seo_title: { type: Type.STRING, description: "SEO Title (mandatory)" },
-          seo_description: { type: Type.STRING, description: "SEO Meta Description (mandatory)" },
-          seo_keywords: { type: Type.STRING, description: "SEO Keywords (mandatory)" }
-        },
-        required: ["description", "seo_title", "seo_description", "seo_keywords"]
-      };
-
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [
-          { role: 'user', parts: [{ text: `Згенеруй повні текстові дані для: ${selectedProduct.title}.` }] }
-        ],
-        config: {
-          systemInstruction: systemInstruction,
-          responseMimeType: "application/json",
-          responseSchema: responseSchema
-        }
+      const parsed = await generateSeoJson({
+        provider: aiProvider,
+        systemPrompt,
+        userPrompt: `Згенеруй повні текстові дані для: ${selectedProduct.title}.`,
       });
-
-      const text = response.text;
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        setEnhancementResult(parsed);
-      } else {
-        throw new Error("AI повернув некоректний формат. Спробуйте ще раз.");
-      }
+      setEnhancementResult(parsed);
     } catch (err: any) {
       console.error("Enhancement Error:", err);
-      setError(err.message || "Сталася помилка при покращенні.");
+      const msg = err.message || "";
+      if (msg.includes('INVALID_API_KEY')) {
+        setError("Ключ не працює, надайте інший");
+      } else {
+        setError(msg || "Сталася помилка при покращенні.");
+      }
     } finally {
       setLoading(false);
     }
@@ -110,8 +138,7 @@ const AiAssistantTab: React.FC = () => {
   const updateProduct = async (fieldUpdates: any) => {
     if (!selectedProductId) return;
     setLoading(true);
-    console.log("AI Assistant: Attempting to update product", selectedProductId, "with data:", fieldUpdates);
-    
+
     try {
       let finalUpdates = { ...fieldUpdates };
       
@@ -149,8 +176,7 @@ const AiAssistantTab: React.FC = () => {
         console.error("Supabase update error detail:", error);
         throw error;
       }
-      
-      console.log("Supabase update success response:", data);
+
       
       // Update local state immediately
       setProducts(prev => prev.map(p => p.id === selectedProductId ? { ...p, ...sanitizedUpdates } : p));
@@ -179,7 +205,13 @@ const AiAssistantTab: React.FC = () => {
       description: String(enhancementResult.description || ''),
       seo_title: String(enhancementResult.seo_title || ''),
       seo_description: String(enhancementResult.seo_description || ''),
-      seo_keywords: String(enhancementResult.seo_keywords || '')
+      seo_keywords: String(enhancementResult.seo_keywords || ''),
+      width: String(enhancementResult.width || ''),
+      height: String(enhancementResult.height || ''),
+      radius: String(enhancementResult.radius || ''),
+      manufacturer: String(enhancementResult.manufacturer || ''),
+      season: String(enhancementResult.season || ''),
+      vehicle_type: String(enhancementResult.vehicle_type || '')
     };
     
     await updateProduct(updates);
@@ -208,72 +240,82 @@ const AiAssistantTab: React.FC = () => {
 
   const startBulkEnhance = async () => {
     setShowBulkConfirm(false);
-    console.log("Bulk enhancement started. Targets count:", productsNeedingAttention.length);
+    if (!hasActiveProviderKey()) {
+      alert('Не знайдено API-ключ для обраного провайдера. Відкрийте «Налаштування» → «Безпека / API», додайте ключ і збережіть.');
+      return;
+    }
     const targets = productsNeedingAttention;
     
     setIsBulkProcessing(true);
     setBulkProgress({ current: 0, total: targets.length });
 
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+    // Разбиваем товары на группы по 50 штук
+    const CHUNK_SIZE = 50;
+    const chunks: typeof targets[] = [];
+    for (let i = 0; i < targets.length; i += CHUNK_SIZE) {
+      chunks.push(targets.slice(i, i + CHUNK_SIZE));
+    }
 
-    for (let i = 0; i < targets.length; i++) {
-      const product = targets[i];
-      setBulkProgress({ current: i + 1, total: targets.length });
-      
-      try {
-        const systemInstruction = `
-          Ти - SEO-експерт магазину "Форсаж". Згенеруй стислий JSON для шини: ${product.title}.
-          ОБОВ'ЯЗКОВО ЗАПОВНИ ВСІ ПОЛЯ (STRICT MODE):
-          1. description: Лаконічний опис (200-300 симв).
-          2. seo_title: SEO заголовок (до 60 симв).
-          3. seo_description: SEO опис (до 160 симв).
-          4. seo_keywords: 5 ключових слів через кому.
+    try {
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        
+        const systemPrompt = `
+          Ти - SEO-експерт магазину "Форсаж". Тобі надано масив об'єктів (товарів).
+          Згенеруй JSON об'єкт з властивістю "results", що містить масив об'єктів для кожного товару.
+          ОБОВ'ЯЗКОВО ЗАПОВНИ ВСІ ПОЛЯ ДЛЯ КОЖНОГО ТОВАРУ (STRICT MODE):
+          1. id: Залишити той самий id.
+          2. description: Лаконічний опис (200-300 симв).
+          3. seo_title: SEO заголовок (до 60 симв).
+          4. seo_description: SEO опис (до 160 симв).
+          5. seo_keywords: 5 ключових слів через кому.
+          6. manufacturer: Бренд (наприклад "Nexen").
+          7. width: Ширина шини (тільки цифри, наприклад "245").
+          8. height: Профіль (цифри, наприклад "45").
+          9. radius: Радіус (наприклад "R19" або "R15C").
+          10. season: Сезон ("Зимові", "Літні" або "Всесезонні").
+          11. vehicle_type: Тип (строго слово зі списку: "car", "suv", "cargo", "truck", "agro").
         `;
 
-        const responseSchema = {
-          type: Type.OBJECT,
-          properties: {
-            description: { type: Type.STRING },
-            seo_title: { type: Type.STRING },
-            seo_description: { type: Type.STRING },
-            seo_keywords: { type: Type.STRING }
-          },
-          required: ["description", "seo_title", "seo_description", "seo_keywords"]
-        };
+        const userPrompt = JSON.stringify(chunk.map(p => ({ id: p.id, title: p.title })));
 
-        const response = await ai.models.generateContent({
-          model: "gemini-3-flash-preview",
-          contents: [
-            { role: 'user', parts: [{ text: `Оброби товар: ${product.title}` }] }
-          ],
-          config: { 
-            systemInstruction: systemInstruction,
-            responseMimeType: "application/json",
-            responseSchema: responseSchema
-          }
+        const parsedBulk = await generateSeoBulkJson({
+          provider: aiProvider,
+          systemPrompt,
+          userPrompt,
         });
 
-        const text = response.text;
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          
-          const updates: any = {
-            description: parsed.description || '',
-            seo_title: parsed.seo_title || '',
-            seo_description: parsed.seo_description || '',
-            seo_keywords: parsed.seo_keywords || ''
+        // Записуємо результати в базу даних
+        for (const item of parsedBulk.results) {
+          if (!item.id) continue;
+          const updates = {
+            description: String(item.description ?? ''),
+            seo_title: String(item.seo_title ?? ''),
+            seo_description: String(item.seo_description ?? ''),
+            seo_keywords: String(item.seo_keywords ?? ''),
+            width: String(item.width ?? ''),
+            height: String(item.height ?? ''),
+            radius: String(item.radius ?? ''),
+            manufacturer: String(item.manufacturer ?? ''),
+            season: String(item.season ?? ''),
+            vehicle_type: String(item.vehicle_type ?? '')
           };
-
-          const { error: updateError } = await supabase.from('tyres').update(updates).eq('id', product.id);
-          if (updateError) throw updateError;
+          const { error: updateError } = await supabase.from('tyres').update(updates).eq('id', item.id);
+          if (updateError) console.error('Помилка оновлення', item.id, updateError);
         }
+
+        const currentCount = Math.min((i + 1) * CHUNK_SIZE, targets.length);
+        setBulkProgress({ current: currentCount, total: targets.length });
         
-        // Minimal delay for speed
-        await new Promise(r => setTimeout(r, 200));
-      } catch (err) {
-        console.error(`Error processing product ${product.id}:`, err);
+        // Guarantee to stay under 15 RPM for free limits: 1 request per ~4.5 seconds
+        await new Promise(r => setTimeout(r, 4500));
+      }
+    } catch (err: any) {
+      console.error('Bulk generate error:', err);
+      if (err.message?.includes('INVALID_API_KEY')) {
+        alert("Помилка: Ключ не працює, надайте інший. Масову генерацію зупинено.");
+      } else {
+        alert("Помилка при генерації: " + err.message);
       }
     }
 
@@ -292,6 +334,7 @@ const AiAssistantTab: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* Sidebar: Product List */}

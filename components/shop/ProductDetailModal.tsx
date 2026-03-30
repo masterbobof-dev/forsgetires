@@ -1,7 +1,8 @@
 
-import React from 'react';
-import { X, ShoppingCart, ZoomIn, ShieldCheck, Truck, CreditCard, Info, Snowflake, Sun, CloudSun, Ruler, Tag } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, ShoppingCart, ZoomIn, ShieldCheck, Truck, CreditCard, Info, Snowflake, Sun, CloudSun, Ruler, Flame, Loader2 } from 'lucide-react';
 import { TyreProduct } from '../../types';
+import { supabase } from '../../supabaseClient';
 
 interface ProductDetailModalProps {
   product: TyreProduct | null;
@@ -12,9 +13,44 @@ interface ProductDetailModalProps {
   renderSchema: (p: TyreProduct) => React.ReactNode;
   openLightbox: (p: TyreProduct) => void;
   onQuickOrder?: (p: TyreProduct) => void;
+  onSimilarClick?: (t: TyreProduct) => void;
 }
 
-const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClose, addToCart, formatPrice, getSeasonLabel, renderSchema, openLightbox, onQuickOrder }) => {
+const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClose, addToCart, formatPrice, getSeasonLabel, renderSchema, openLightbox, onQuickOrder, onSimilarClick }) => {
+  const [similar, setSimilar] = useState<TyreProduct[]>([]);
+  const [loadingSimilar, setLoadingSimilar] = useState(false);
+
+  useEffect(() => {
+    if (!product) return;
+    const fetchSimilar = async () => {
+      setLoadingSimilar(true);
+      try {
+         let query = supabase.from('tyres').select('*').neq('id', product.id).neq('in_stock', false);
+         if (product.radius) query = query.eq('radius', product.radius);
+         if (product.width) query = query.ilike('title', `%${product.width}%`);
+         if (product.height) query = query.ilike('title', `%/${product.height}%`);
+         
+         const { data } = await query.limit(4);
+         if (data) {
+           // Basic mapping to ensure it conforms to TyreProduct
+           setSimilar(data.map(d => ({...d, in_stock: true})));
+         }
+      } catch(e) {} finally { setLoadingSimilar(false); }
+    };
+    fetchSimilar();
+    
+    // Зберігаємо в "Нещодавно переглянуті"
+    try {
+      const recentRaw = localStorage.getItem('recent_tyres');
+      let recent: TyreProduct[] = recentRaw ? JSON.parse(recentRaw) : [];
+      recent = recent.filter(t => t.id !== product.id);
+      recent.unshift(product);
+      if (recent.length > 5) recent = recent.slice(0, 5);
+      localStorage.setItem('recent_tyres', JSON.stringify(recent));
+    } catch(e) {}
+
+  }, [product]);
+
   if (!product) return null;
 
   const isOutOfStock = product.in_stock === false;
@@ -123,7 +159,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                 </div>
               </div>
 
-              <div className="mt-auto pt-6 border-t border-zinc-800">
+              <div className="sticky bottom-0 bg-zinc-900 border-t border-zinc-800 pt-4 pb-4 md:pb-0 mt-auto z-40 -mx-6 px-6 md:mx-0 md:px-0">
                 <div className="flex items-center justify-between mb-6">
                     <div className="flex flex-col">
                       <span className="text-[10px] text-zinc-500 font-bold uppercase">Ціна за шт.</span>
@@ -153,6 +189,30 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                   )}
                 </div>
               </div>
+
+              {/* Similar Products Sector */}
+              <div className="mt-8 border-t border-zinc-800 pt-8 pb-8">
+                <h3 className="text-white text-lg font-black uppercase tracking-widest mb-4">Схожі шини ({product.width ? `${product.width}/${product.height} ` : ''}{product.radius})</h3>
+                {loadingSimilar ? (
+                  <div className="flex justify-center py-4"><Loader2 className="animate-spin text-zinc-500" /></div>
+                ) : similar.length === 0 ? (
+                  <p className="text-zinc-500 text-sm">Альтернатив не знайдено.</p>
+                ) : (
+                  <div className="flex gap-4 overflow-x-auto pb-4 snap-x pr-4" style={{scrollbarWidth: 'none'}}>
+                    {similar.map(t => (
+                      <div key={t.id} onClick={() => onSimilarClick && onSimilarClick(t)} className="min-w-[160px] md:min-w-[180px] bg-zinc-950 border border-zinc-800 rounded-2xl p-3 flex flex-col cursor-pointer hover:border-[#FFC300] transition-colors snap-center group">
+                        <div className="h-24 md:h-32 mb-3 bg-zinc-900 rounded-xl p-2 flex items-center justify-center overflow-hidden">
+                           {t.image_url ? <img src={t.image_url} alt={t.title} className="max-h-full object-contain group-hover:scale-110 transition-transform"/> : <Info className="opacity-20"/>}
+                        </div>
+                        <span className="text-[10px] text-[#FFC300] font-black uppercase mb-1 truncate">{t.manufacturer || 'Шина'}</span>
+                        <h4 className="text-white text-xs font-bold line-clamp-2 mb-2 flex-grow">{t.title}</h4>
+                        <span className="text-sm font-black text-white">{formatPrice(t.price)} грн</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
           </div>
       </div>
     </div>

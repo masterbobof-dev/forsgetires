@@ -18,16 +18,17 @@ interface FilterToolbarProps {
   activeSort: string;
   setActiveSort: (val: any) => void;
   filterOptions: { widths: string[], heights: string[], radii: string[], brands: string[] };
+  totalCount: number;
   onSearch: () => void;
   onReset: () => void;
 }
 
 const FilterToolbar: React.FC<FilterToolbarProps> = (props) => {
   const hasActiveFilters = props.filterWidth || props.filterHeight || props.filterRadius || props.filterBrand || props.searchQuery;
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(true);
 
   return (
-    <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800 p-3 md:p-5 rounded-2xl mb-6 mx-0 shadow-2xl space-y-3">
+    <div className="sticky top-[60px] md:top-[70px] z-40 bg-zinc-900/90 backdrop-blur-xl border border-zinc-800 p-3 md:p-5 rounded-2xl mb-6 mx-0 shadow-2xl space-y-3 transition-all mt-4 md:mt-0">
       {/* Search Row */}
       <div className="flex gap-2">
         <div className="relative flex-grow group">
@@ -56,9 +57,10 @@ const FilterToolbar: React.FC<FilterToolbarProps> = (props) => {
 
         <button
           onClick={props.onSearch}
-          className="bg-[#FFC300] hover:bg-white text-black font-black px-4 md:px-8 py-3 rounded-xl transition-all active:scale-95 uppercase text-xs md:text-sm tracking-widest shadow-lg shadow-yellow-900/20 whitespace-nowrap"
+          className="bg-zinc-800 hover:bg-zinc-700 text-white p-3 rounded-xl transition-all active:scale-95"
+          title="Шукати"
         >
-          ЗНАЙТИ
+          <Search size={18}/>
         </button>
       </div>
 
@@ -66,20 +68,48 @@ const FilterToolbar: React.FC<FilterToolbarProps> = (props) => {
       <div>
         <button
           onClick={() => setFiltersOpen(prev => !prev)}
-          className="flex items-center gap-2 text-zinc-500 hover:text-white transition-colors w-full"
+          className="flex items-center justify-between text-zinc-400 hover:text-white transition-colors w-full"
         >
-          <SlidersHorizontal size={13} />
-          <span className="text-[11px] font-black uppercase tracking-widest">Параметри підбору</span>
-          {hasActiveFilters && (
-            <span className="bg-[#FFC300] text-black text-[9px] font-black px-1.5 py-0.5 rounded-full ml-1">
-              Активні
-            </span>
-          )}
-          <ChevronDown size={14} className={`ml-auto transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal size={14} />
+            <span className="text-xs font-black uppercase tracking-widest text-zinc-300">Параметри підбору</span>
+            {hasActiveFilters && (
+               <span className="bg-[#FFC300] text-black text-[9px] font-black px-1.5 py-0.5 rounded-full ml-1 animate-in zoom-in">
+                 Активні
+               </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+             <span className="text-[10px] md:text-sm text-zinc-500 font-bold bg-zinc-800/50 px-2 py-1 rounded-lg">Знайдено: <span className="text-white">{props.totalCount}</span> шт</span>
+             <ChevronDown size={14} className={`transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
+          </div>
         </button>
 
         {filtersOpen && (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mt-3">
+          <div className="mt-4 animate-in fade-in slide-in-from-top-2 duration-300">
+            {/* Quick Sizes */}
+            <div className="flex gap-2 mb-4 overflow-x-auto pb-2 snap-x" style={{scrollbarWidth: 'none'}}>
+              {[
+                {w: '205', h: '55', r: 'R16'},
+                {w: '195', h: '65', r: 'R15'},
+                {w: '225', h: '65', r: 'R17'},
+                {w: '185', h: '65', r: 'R14'},
+              ].map(size => (
+                <button
+                  key={`${size.w}-${size.h}-${size.r}`}
+                  onClick={() => {
+                     props.setFilterWidth(size.w);
+                     props.setFilterHeight(size.h);
+                     props.setFilterRadius(size.r);
+                  }}
+                  className="shrink-0 bg-zinc-800 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-[#FFC300] hover:text-black transition-colors snap-center shadow-md active:scale-95"
+                >
+                  {size.w}/{size.h} {size.r}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
             <div className="relative">
               <select value={props.filterWidth} onChange={e => props.setFilterWidth(e.target.value)} className="w-full bg-black/40 text-white p-2.5 md:p-3 rounded-xl border border-zinc-800 text-xs md:text-sm font-bold appearance-none cursor-pointer hover:border-[#FFC300]/50 transition-colors focus:border-[#FFC300] outline-none">
                 <option value="">Ширина</option>
@@ -129,6 +159,7 @@ const FilterToolbar: React.FC<FilterToolbarProps> = (props) => {
               <X size={15}/>
               <span>Скинути</span>
             </button>
+          </div>
           </div>
         )}
       </div>

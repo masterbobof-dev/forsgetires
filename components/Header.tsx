@@ -125,7 +125,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick
                   <span className="relative">
                     <ShoppingBag size={16} className="-mt-0.5" />
                     {cartCount > 0 && (
-                      <span className="absolute -top-2 -right-2 min-w-[16px] h-4 px-0.5 bg-[#FFC300] text-black text-[9px] font-black rounded-full flex items-center justify-center animate-in zoom-in duration-200">
+                      <span key={cartCount} className="absolute -top-2 -right-2 min-w-[16px] h-4 px-0.5 bg-[#FFC300] text-black text-[9px] font-black rounded-full flex items-center justify-center animate-in zoom-in duration-200">
                         {cartCount > 99 ? '99+' : cartCount}
                       </span>
                     )}
@@ -145,7 +145,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick
             >
               <ShoppingBag size={20} />
               {cartCount > 0 && (
-                <span className="absolute top-0 right-0 min-w-[16px] h-4 px-0.5 bg-[#FFC300] text-black text-[9px] font-black rounded-full flex items-center justify-center animate-in zoom-in duration-200">
+                <span key={`mob-${cartCount}`} className="absolute top-0 right-0 min-w-[16px] h-4 px-0.5 bg-[#FFC300] text-black text-[9px] font-black rounded-full flex items-center justify-center animate-in zoom-in duration-200">
                   {cartCount > 99 ? '99+' : cartCount}
                 </span>
               )}
@@ -207,7 +207,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick
                   <span className="relative">
                     <ShoppingBag size={20} />
                     {cartCount > 0 && (
-                      <span className="absolute -top-2 -right-2 min-w-[16px] h-4 px-0.5 bg-[#FFC300] text-black text-[9px] font-black rounded-full flex items-center justify-center">
+                      <span key={`mmob-${cartCount}`} className="absolute -top-2 -right-2 min-w-[16px] h-4 px-0.5 bg-[#FFC300] text-black text-[9px] font-black rounded-full flex items-center justify-center animate-in zoom-in duration-200">
                         {cartCount > 99 ? '99+' : cartCount}
                       </span>
                     )}

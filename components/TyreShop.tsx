@@ -12,6 +12,7 @@ import CategoryNav, { CategoryType, CATEGORIES } from './shop/CategoryNav';
 import FilterToolbar from './shop/FilterToolbar';
 import ProductCard from './shop/ProductCard';
 import ServiceBanner from './shop/ServiceBanner';
+import AgroBanner from './shop/AgroBanner';
 import { logAnalyticsEvent } from './admin/analytics';
 
 const PAGE_SIZE = 60;
@@ -59,6 +60,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
   const [tyres, setTyres] = useState<TyreProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [toast, setToast] = useState<{message: string, visible: boolean}>({message: '', visible: false});
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
@@ -68,6 +70,14 @@ const TyreShop: React.FC<TyreShopProps> = ({
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [currentLightboxImages, setCurrentLightboxImages] = useState<string[]>([]);
   const [selectedProductForModal, setSelectedProductForModal] = useState<TyreProduct | null>(null);
+  const [recentlyViewed, setRecentlyViewed] = useState<TyreProduct[]>([]);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('recent_tyres');
+      if (stored) setRecentlyViewed(JSON.parse(stored));
+    } catch(e) {}
+  }, [selectedProductForModal]);
 
   const [activeCategory, setActiveCategory] = useState<CategoryType>(initialCategory);
 
@@ -254,6 +264,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
       if (showOnlyInStock) query = query.neq('in_stock', false);
 
       if (activeCategory === 'cargo') query = query.or('vehicle_type.eq.cargo,radius.ilike.%C%');
+      else if (activeCategory === 'car') query = query.eq('vehicle_type', 'car');
       else if (activeCategory === 'truck') query = query.eq('vehicle_type', 'truck');
       else if (activeCategory === 'agro') query = query.eq('vehicle_type', 'agro');
       else if (activeCategory === 'suv') query = query.eq('vehicle_type', 'suv');
@@ -261,7 +272,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
       else if (['winter','summer','all-season'].includes(activeCategory)) query = query.eq('season', activeCategory);
       else if (activeCategory.startsWith('hot')) query = query.eq('is_hot', true);
       
-      query = query.order('in_stock', { ascending: false });
+      query = query.order('is_hot', { ascending: false }).order('in_stock', { ascending: false });
       const sorts = { price_asc: 'price', price_desc: 'price', newest: 'created_at', oldest: 'created_at' };
       query = query.order((sorts as any)[activeSort] || 'created_at', { ascending: ['price_asc','oldest'].includes(activeSort) });
 
@@ -293,7 +304,9 @@ const TyreShop: React.FC<TyreShopProps> = ({
         ? cartItems.map(i => i.id === tyre.id ? { ...i, quantity: i.quantity + 1 } : i) 
         : [...cartItems, { ...tyre, quantity: 1 }];
       onCartChange(newCart);
-      setIsCartOpen(true); 
+      
+      setToast({ message: tyre.title, visible: true });
+      setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 3000);
   };
 
   const submitOrder = async () => {
@@ -445,6 +458,11 @@ const TyreShop: React.FC<TyreShopProps> = ({
 
         {onServiceClick && <ServiceBanner onServiceClick={onServiceClick} />}
 
+        {/* Agro Banner — shown only when not already in agro category */}
+        {activeCategory !== 'agro' && (
+          <AgroBanner onCategoryClick={() => setActiveCategory('agro')} />
+        )}
+
         <FilterToolbar 
           searchQuery={searchQuery} setSearchQuery={setSearchQuery}
           showOnlyInStock={showOnlyInStock} setShowOnlyInStock={setShowOnlyInStock}
@@ -454,14 +472,21 @@ const TyreShop: React.FC<TyreShopProps> = ({
           filterBrand={filterBrand} setFilterBrand={setFilterBrand}
           activeSort={activeSort} setActiveSort={setActiveSort}
           filterOptions={filterOptions}
+          totalCount={totalCount}
           onSearch={() => fetchTyres(0, true)}
           onReset={() => { setSearchQuery(''); setFilterWidth(''); setFilterHeight(''); setFilterRadius(''); setFilterBrand(''); setActiveCategory('all'); }}
         />
 
         {loading ? (
-           <div className="flex flex-col items-center justify-center py-32 animate-pulse">
-              <Loader2 className="animate-spin text-[#FFC300] mb-6" size={64} strokeWidth={1} />
-              <p className="text-zinc-500 font-black uppercase tracking-widest text-xs">Завантаження каталогу...</p>
+           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-8 px-2 animate-in fade-in duration-300">
+              {Array.from({ length: 12 }).map((_, i) => (
+                <div key={i} className="bg-zinc-900/40 rounded-2xl h-[320px] md:h-[420px] animate-pulse border border-zinc-800/50 flex flex-col p-3 md:p-4">
+                  <div className="bg-zinc-800/50 rounded-xl h-[160px] md:h-[250px] mb-4 w-full"></div>
+                  <div className="bg-zinc-800/50 h-2 w-16 mb-2 rounded-full"></div>
+                  <div className="bg-zinc-800/50 h-4 md:h-5 w-3/4 mb-auto rounded-full"></div>
+                  <div className="bg-zinc-800/50 h-8 w-2/3 mt-6 rounded-xl"></div>
+                </div>
+              ))}
            </div>
         ) : tyres.length === 0 ? (
            <div className="text-center py-32 bg-zinc-900/30 rounded-3xl border border-dashed border-zinc-800 mx-2 flex flex-col items-center gap-6">
@@ -508,6 +533,27 @@ const TyreShop: React.FC<TyreShopProps> = ({
         )}
       </div>
 
+      {recentlyViewed.length > 0 && (
+        <div className="max-w-7xl mx-auto px-4 mt-16 pb-12">
+            <h2 className="text-xl font-black text-white uppercase tracking-widest mb-6 border-b border-zinc-800 pb-4">
+              <span className="bg-[#FFC300] text-black px-2 py-0.5 mr-2 rounded">історія</span>
+              Ви нещодавно переглядали
+            </h2>
+            <div className="flex gap-4 overflow-x-auto pb-6 snap-x" style={{scrollbarWidth: 'none'}}>
+              {recentlyViewed.map(t => (
+                  <div key={t.id} onClick={() => setSelectedProductForModal(t)} className="min-w-[180px] max-w-[220px] bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex flex-col cursor-pointer hover:border-[#FFC300] transition-colors snap-center group">
+                    <div className="h-32 mb-3 bg-zinc-950 rounded-xl p-2 flex items-center justify-center overflow-hidden">
+                        {t.image_url ? <img src={t.image_url} alt={t.title} className="max-h-full object-contain group-hover:scale-110 transition-transform"/> : <div className="text-zinc-700 font-bold text-[10px] uppercase">Без фото</div>}
+                    </div>
+                    <span className="text-[10px] text-[#FFC300] font-black uppercase tracking-widest mb-1 truncate">{t.manufacturer || 'Шина'}</span>
+                    <h4 className="text-white text-xs font-bold line-clamp-2 mb-2 flex-grow">{t.title}</h4>
+                    <span className="text-base font-black text-white">{formatPrice(t.price)} грн</span>
+                  </div>
+              ))}
+            </div>
+        </div>
+      )}
+
       {cartItems.length > 0 && (
         <button onClick={() => setIsCartOpen(true)} className="fixed bottom-6 right-6 z-40 bg-[#FFC300] text-black p-4 rounded-full shadow-2xl animate-bounce hover:scale-110 transition-transform">
            <div className="relative">
@@ -535,6 +581,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
         addToCart={addToCart} formatPrice={formatPrice} getSeasonLabel={getSeasonLabel} renderSchema={renderSchema}
         openLightbox={(p) => { setCurrentLightboxImages([p.image_url].filter(Boolean) as string[]); setLightboxOpen(true); }}
         onQuickOrder={(p) => setQuickOrderProduct(p)}
+        onSimilarClick={(t) => setSelectedProductForModal(t)}
       />
 
       {lightboxOpen && (
@@ -581,6 +628,23 @@ const TyreShop: React.FC<TyreShopProps> = ({
           </div>
         </div>
       )}
+
+      {/* Floating Toast Notification */}
+      {toast.visible && (
+        <div className="fixed bottom-[100px] left-1/2 -translate-x-1/2 z-[150] w-[90%] md:w-auto bg-black/90 backdrop-blur-md text-white px-2 py-2 md:px-6 md:py-3 rounded-2xl md:rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center justify-between gap-3 animate-in slide-in-from-bottom-10 fade-in duration-300 border border-zinc-800">
+           <div className="flex items-center gap-3 w-full overflow-hidden">
+             <div className="bg-[#FFC300] p-2 rounded-xl shrink-0"><ShoppingCart size={16} className="text-black" /></div>
+             <div className="flex flex-col flex-1 min-w-0">
+               <span className="text-[10px] font-black uppercase tracking-widest text-[#FFC300]">У кошику</span>
+               <span className="text-xs font-bold truncate">{toast.message}</span>
+             </div>
+           </div>
+           <button onClick={() => { setIsCartOpen(true); setToast(p => ({...p, visible: false})); }} className="bg-white text-black px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#FFC300] transition-colors shrink-0">
+             Оформ.
+           </button>
+        </div>
+      )}
+
     </div>
   );
 };

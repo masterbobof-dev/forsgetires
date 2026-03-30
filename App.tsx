@@ -94,7 +94,7 @@ export const ConfirmDialog = ({
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewState>('home');
-  const [shopCategory, setShopCategory] = useState<ShopCategory>('all');
+  const [shopCategory, setShopCategory] = useState<ShopCategory>('car');
   const [shopInitialProduct, setShopInitialProduct] = useState<TyreProduct | null>(null);
   const [adminPanelMode, setAdminPanelMode] = useState<'service' | 'tyre'>('tyre');
 
@@ -169,7 +169,7 @@ const App: React.FC = () => {
 
   const handleChangeView = (view: ViewState) => {
     if (view === 'home' && currentView !== 'home') {
-      setShopCategory('all');
+      setShopCategory('car');
       setShopInitialProduct(null);
     }
     setCurrentView(view);

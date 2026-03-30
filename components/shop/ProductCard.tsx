@@ -31,8 +31,10 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
       onClick={onClick} 
       className={`group relative flex flex-col h-full bg-zinc-900/50 backdrop-blur-sm border rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-2xl hover:shadow-yellow-900/20 ${
         isOutOfStock 
-          ? 'opacity-60 border-zinc-800 grayscale-[0.5]' 
-          : 'border-zinc-800 hover:border-[#FFC300] cursor-pointer'
+          ? 'opacity-60 border-zinc-800 grayscale-[0.5] hover:border-zinc-700' 
+          : tyre.is_hot 
+            ? 'border-[#FFC300]/60 shadow-[0_0_15px_rgba(255,195,0,0.15)] hover:border-[#FFC300] hover:shadow-[0_0_20px_rgba(255,195,0,0.3)] cursor-pointer' 
+            : 'border-zinc-800 hover:border-[#FFC300] cursor-pointer'
       }`}
     >
        {/* Image Section */}
@@ -135,6 +137,12 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
               </span>
             )}
           </div>
+
+          {tyre.description && (
+            <p className="text-[10px] md:text-xs text-zinc-500 line-clamp-2 mb-4 leading-relaxed group-hover:text-zinc-400 transition-colors">
+              {tyre.description.length > 80 ? tyre.description.slice(0, 80) + '...' : tyre.description}
+            </p>
+          )}
 
           <div className="mt-auto pt-4 border-t border-zinc-800/50 flex items-center justify-between gap-2">
             <div className="flex flex-col">

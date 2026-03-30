@@ -1,9 +1,10 @@
 
 import React, { useRef } from 'react';
-import { Grid, Snowflake, Sun, CloudSun, Truck, Tractor, Flame, Ban, Mountain } from 'lucide-react';
+import { Grid, Snowflake, Sun, CloudSun, Truck, Tractor, Flame, Mountain, Car } from 'lucide-react';
 
 export const CATEGORIES = [
   { id: 'all', label: 'Всі шини', icon: Grid },
+  { id: 'car', label: 'Легкові', icon: Car },
   { id: 'winter', label: 'Зимові', icon: Snowflake },
   { id: 'summer', label: 'Літні', icon: Sun },
   { id: 'all-season', label: 'Всесезонні', icon: CloudSun },
@@ -13,7 +14,6 @@ export const CATEGORIES = [
   { id: 'agro', label: 'Агро / Спец', icon: Tractor },
   { id: 'hot_light', label: 'HOT Легкові', icon: Flame },
   { id: 'hot_heavy', label: 'HOT Вантажні', icon: Flame },
-  { id: 'out_of_stock', label: 'Архів', icon: Ban },
 ] as const;
 
 export type CategoryType = typeof CATEGORIES[number]['id'];

@@ -25,7 +25,11 @@ interface FilterToolbarProps {
 
 const FilterToolbar: React.FC<FilterToolbarProps> = (props) => {
   const hasActiveFilters = props.filterWidth || props.filterHeight || props.filterRadius || props.filterBrand || props.searchQuery;
-  const [filtersOpen, setFiltersOpen] = useState(true);
+  const [filtersOpen, setFiltersOpen] = React.useState(true);
+  
+  React.useEffect(() => {
+    if (window.innerWidth < 768) setFiltersOpen(false);
+  }, []);
 
   return (
     <div className="sticky top-[60px] md:top-[70px] z-40 bg-zinc-900/90 backdrop-blur-xl border border-zinc-800 p-3 md:p-5 rounded-2xl mb-6 mx-0 shadow-2xl space-y-3 transition-all mt-4 md:mt-0">

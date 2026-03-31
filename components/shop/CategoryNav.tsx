@@ -63,26 +63,25 @@ const CategoryNav: React.FC<CategoryNavProps> = ({ activeCategory, onCategoryCha
       onMouseUp={onMouseUp}
       onMouseLeave={onMouseUp}
     >
-      <div className="flex lg:grid lg:grid-cols-11 gap-2 pb-2 lg:pb-0" style={{ minWidth: 'max-content' }}>
+      <div className="grid grid-cols-4 md:grid-cols-11 gap-1.5 md:gap-2 pb-2 lg:pb-0">
         {CATEGORIES.map(cat => (
           <button
             key={cat.id}
-            onClick={(e) => {
-              if (hasDragged.current) { e.preventDefault(); return; }
+            onClick={() => {
               onCategoryChange(cat.id);
             }}
-            className={`group flex flex-col items-center justify-center gap-1.5 p-2.5 md:p-3.5 rounded-xl border transition-all duration-300 w-[72px] md:w-auto lg:w-auto flex-shrink-0 ${
+            className={`group flex flex-col items-center justify-center gap-1 p-2 md:p-3.5 rounded-xl border transition-all duration-300 w-full md:w-auto flex-shrink-0 ${
               activeCategory === cat.id
                 ? 'bg-[#FFC300] text-black border-[#FFC300] shadow-xl shadow-yellow-900/30'
                 : 'bg-zinc-900/50 border-zinc-800 text-zinc-500 hover:bg-zinc-800 hover:text-white hover:border-zinc-700'
             }`}
           >
-            <div className={`p-1.5 rounded-lg transition-all duration-300 ${
+            <div className={`p-1 md:p-1.5 rounded-lg transition-all duration-300 ${
               activeCategory === cat.id ? 'bg-black/10' : 'bg-zinc-800 group-hover:bg-zinc-700'
             }`}>
-              <cat.icon size={16} strokeWidth={activeCategory === cat.id ? 2.5 : 2} />
+              <cat.icon size={14} strokeWidth={activeCategory === cat.id ? 2.5 : 2} />
             </div>
-            <span className={`font-black text-[8px] uppercase tracking-wide text-center leading-tight ${
+            <span className={`font-black text-[7px] md:text-[8px] uppercase tracking-wide text-center leading-tight ${
               activeCategory === cat.id ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'
             }`}>
               {cat.label}

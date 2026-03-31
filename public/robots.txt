@@ -1,6 +1,4 @@
 User-agent: *
 Allow: /
-Disallow: /admin/
-Disallow: /login
 
 Sitemap: https://forsage-sinelnikove.com/sitemap.xml

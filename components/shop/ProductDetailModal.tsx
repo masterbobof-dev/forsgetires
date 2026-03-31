@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, ShoppingCart, ZoomIn, ShieldCheck, Truck, CreditCard, Info, Snowflake, Sun, CloudSun, Ruler, Flame, Loader2 } from 'lucide-react';
+import { X, ShoppingCart, ZoomIn, ShieldCheck, Truck, CreditCard, Info, Snowflake, Sun, CloudSun, Ruler, Flame, Loader2, Phone, ArrowRight } from 'lucide-react';
 import { TyreProduct } from '../../types';
 import { supabase } from '../../supabaseClient';
 
@@ -144,26 +144,34 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
               </div>
 
               {/* Trust Badges */}
-              <div className="grid grid-cols-3 gap-2 mb-8">
-                <div className="flex flex-col items-center text-center p-2">
-                  <ShieldCheck size={20} className="text-emerald-500 mb-1"/>
-                  <span className="text-[8px] text-zinc-500 font-bold uppercase">Гарантія</span>
+              <div className="grid grid-cols-3 gap-2 mb-8 bg-zinc-950/50 p-4 rounded-2xl border border-zinc-800/50">
+                <div className="flex flex-col items-center text-center group">
+                  <div className="w-10 h-10 bg-emerald-500/10 rounded-full flex items-center justify-center text-emerald-500 mb-2 group-hover:scale-110 transition-transform">
+                    <ShieldCheck size={20} />
+                  </div>
+                  <span className="text-[8px] text-zinc-400 font-black uppercase tracking-tighter">Гарантія якості</span>
                 </div>
-                <div className="flex flex-col items-center text-center p-2">
-                  <Truck size={20} className="text-blue-500 mb-1"/>
-                  <span className="text-[8px] text-zinc-500 font-bold uppercase">Доставка</span>
+                <div className="flex flex-col items-center text-center group">
+                  <div className="w-10 h-10 bg-blue-500/10 rounded-full flex items-center justify-center text-blue-500 mb-2 group-hover:scale-110 transition-transform">
+                    <Truck size={20} />
+                  </div>
+                  <span className="text-[8px] text-zinc-400 font-black uppercase tracking-tighter">Швидка доставка</span>
                 </div>
-                <div className="flex flex-col items-center text-center p-2">
-                  <CreditCard size={20} className="text-purple-500 mb-1"/>
-                  <span className="text-[8px] text-zinc-500 font-bold uppercase">Оплата</span>
+                <div className="flex flex-col items-center text-center group">
+                  <div className="w-10 h-10 bg-purple-500/10 rounded-full flex items-center justify-center text-purple-500 mb-2 group-hover:scale-110 transition-transform">
+                    <CreditCard size={20} />
+                  </div>
+                  <span className="text-[8px] text-zinc-400 font-black uppercase tracking-tighter">Зручна оплата</span>
                 </div>
               </div>
 
               <div className="sticky bottom-0 bg-zinc-900 border-t border-zinc-800 pt-4 pb-4 md:pb-0 mt-auto z-40 -mx-6 px-6 md:mx-0 md:px-0">
                 <div className="flex items-center justify-between mb-6">
                     <div className="flex flex-col">
-                      <span className="text-[10px] text-zinc-500 font-bold uppercase">Ціна за шт.</span>
-                      <span className="text-4xl font-black text-[#FFC300]">{formatPrice(product.price)} <span className="text-sm text-white font-normal uppercase">грн</span></span>
+                      <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Ціна за штаку</span>
+                      <span className="text-4xl font-black text-[#FFC300] drop-shadow-[0_0_10px_rgba(255,195,0,0.2)]">
+                        {formatPrice(product.price)} <span className="text-sm text-white font-normal uppercase">грн</span>
+                      </span>
                     </div>
                 </div>
                 <div className="flex flex-col gap-3">
@@ -182,36 +190,68 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                   {!isOutOfStock && onQuickOrder && (
                     <button 
                       onClick={() => { onQuickOrder(product); onClose(); }}
-                      className="w-full py-4 rounded-2xl font-bold text-sm text-[#FFC300] border border-[#FFC300]/30 hover:bg-[#FFC300]/10 transition-all uppercase tracking-widest"
+                      className="w-full py-4 rounded-2xl font-black text-xs text-[#FFC300] border border-[#FFC300]/30 hover:bg-[#FFC300]/10 hover:border-[#FFC300] transition-all uppercase tracking-widest flex items-center justify-center gap-2"
                     >
-                      Купити в 1 клік
+                      <Phone size={14} /> Купити в 1 клік
                     </button>
                   )}
                 </div>
               </div>
 
               {/* Similar Products Sector */}
-              <div className="mt-8 border-t border-zinc-800 pt-8 pb-8">
-                <h3 className="text-white text-lg font-black uppercase tracking-widest mb-4">Схожі шини ({product.width ? `${product.width}/${product.height} ` : ''}{product.radius})</h3>
+              <div className="mt-8 border-t border-zinc-800 pt-8">
+                <h3 className="text-white text-lg font-black uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 bg-[#FFC300] rounded-full"></div>
+                  Схожі пропозиції
+                </h3>
                 {loadingSimilar ? (
                   <div className="flex justify-center py-4"><Loader2 className="animate-spin text-zinc-500" /></div>
                 ) : similar.length === 0 ? (
-                  <p className="text-zinc-500 text-sm">Альтернатив не знайдено.</p>
+                  <p className="text-zinc-500 text-sm italic">Альтернатив поки не знайдено.</p>
                 ) : (
-                  <div className="flex gap-4 overflow-x-auto pb-4 snap-x pr-4" style={{scrollbarWidth: 'none'}}>
+                  <div className="flex gap-4 overflow-x-auto pb-6 snap-x pr-4 scrollbar-hide">
                     {similar.map(t => (
-                      <div key={t.id} onClick={() => onSimilarClick && onSimilarClick(t)} className="min-w-[160px] md:min-w-[180px] bg-zinc-950 border border-zinc-800 rounded-2xl p-3 flex flex-col cursor-pointer hover:border-[#FFC300] transition-colors snap-center group">
-                        <div className="h-24 md:h-32 mb-3 bg-zinc-900 rounded-xl p-2 flex items-center justify-center overflow-hidden">
-                           {t.image_url ? <img src={t.image_url} alt={t.title} className="max-h-full object-contain group-hover:scale-110 transition-transform"/> : <Info className="opacity-20"/>}
+                      <div key={t.id} onClick={() => onSimilarClick && onSimilarClick(t)} className="min-w-[170px] md:min-w-[190px] bg-zinc-950 border border-zinc-800 rounded-2xl p-4 flex flex-col cursor-pointer hover:border-[#FFC300] transition-all snap-center group/card hover:shadow-2xl">
+                        <div className="h-24 md:h-32 mb-3 bg-zinc-900/50 rounded-xl p-3 flex items-center justify-center overflow-hidden border border-zinc-800/50 group-hover/card:bg-black transition-colors">
+                           {t.image_url ? <img src={t.image_url} alt={t.title} className="max-h-full object-contain group-hover/card:scale-110 transition-transform duration-500"/> : <Info className="opacity-10"/>}
                         </div>
-                        <span className="text-[10px] text-[#FFC300] font-black uppercase mb-1 truncate">{t.manufacturer || 'Шина'}</span>
-                        <h4 className="text-white text-xs font-bold line-clamp-2 mb-2 flex-grow">{t.title}</h4>
-                        <span className="text-sm font-black text-white">{formatPrice(t.price)} грн</span>
+                        <div className="flex-grow">
+                          <span className="text-[10px] text-[#FFC300] font-black uppercase mb-1 block">{t.manufacturer || 'Шина'}</span>
+                          <h4 className="text-white text-xs font-bold line-clamp-2 mb-2 leading-snug">{t.title} {t.radius}</h4>
+                        </div>
+                        <div className="mt-2 pt-2 border-t border-zinc-800 flex items-center justify-between">
+                          <span className="text-sm font-black text-white">{formatPrice(t.price)}</span>
+                          <ArrowRight size={14} className="text-[#FFC300] opacity-0 group-hover/card:opacity-100 transition-all -translate-x-2 group-hover/card:translate-x-0"/>
+                        </div>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
+
+              {/* Recently Viewed - Display from localStorage */}
+              {(() => {
+                const recent = JSON.parse(localStorage.getItem('recent_tyres') || '[]').filter((t: any) => t.id !== product.id);
+                if (recent.length === 0) return null;
+                return (
+                  <div className="mt-8 border-t border-zinc-800 pt-8 pb-10">
+                    <h3 className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mb-4">Ви нещодавно переглядали</h3>
+                    <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide">
+                       {recent.slice(0, 4).map((t: any) => (
+                         <div key={t.id} onClick={() => onSimilarClick && onSimilarClick(t)} className="min-w-[140px] bg-zinc-900/50 border border-zinc-800/30 p-2.5 rounded-xl flex items-center gap-2 cursor-pointer hover:bg-zinc-800 transition-colors">
+                            <div className="w-10 h-10 bg-black rounded flex-shrink-0 flex items-center justify-center p-1">
+                               <img src={t.image_url} className="w-full h-full object-contain" alt="" />
+                            </div>
+                            <div className="min-w-0">
+                               <p className="text-[9px] text-white font-bold truncate leading-tight uppercase">{t.manufacturer}</p>
+                               <p className="text-[10px] text-[#FFC300] font-black leading-tight">{formatPrice(t.price)}</p>
+                            </div>
+                         </div>
+                       ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
           </div>
       </div>

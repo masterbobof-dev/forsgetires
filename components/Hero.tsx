@@ -247,6 +247,8 @@ const Hero: React.FC<HeroProps> = ({ onShopRedirect }) => {
           <h1 className="text-3xl md:text-6xl font-black text-[#FFC300] uppercase leading-tight mb-8 tracking-tight italic text-center md:text-left">
             {heroText.title}<br/><span className="text-white">{heroText.subtitle}</span>
           </h1>
+          {/* SEO Text for Google (Hidden or Subtle) */}
+          <p className="sr-only">Купити шини у Дніпрі, Синельниковому та Дніпропетровській області. Цілодобовий шиномонтаж, ремонт дисків та продаж гуми з доставкою по всій області.</p>
           <div className="flex flex-col md:flex-row gap-4 w-full">
             <div className="relative flex-grow">
                 <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={24} />

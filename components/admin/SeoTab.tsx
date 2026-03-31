@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabaseClient';
-import { Search, Globe, Save, RefreshCw, CheckCircle, AlertTriangle, Info, BarChart, Image as ImageIcon, Link2, Upload, Loader2, Edit2, LayoutGrid, List, CheckSquare, X, Wand2 } from 'lucide-react';
+import { Search, Globe, Save, RefreshCw, CheckCircle, AlertTriangle, Info, BarChart, Image as ImageIcon, Link2, Upload, Loader2, Edit2, LayoutGrid, List, CheckSquare, X, Wand2, FileCode } from 'lucide-react';
 import { TyreProduct } from '../../types';
 import { generatePlainDescription, parseJsonFromAiText, normalizeProviderId } from '../../aiSeoClient';
 import type { AIProviderId } from '../../aiTypes';
@@ -176,13 +176,14 @@ const SeoTab: React.FC = () => {
 
   const generateSmartData = () => {
       // Logic specific to this business
-      const city = "Синельникове";
+      const city = "Дніпро, Синельникове";
+      const region = "Дніпропетровська область";
       const brand = "Форсаж";
       const services = ["Шиномонтаж 24/7", "Купити Шини", "Ремонт Дисків", "Зварювання Аргоном"];
       
-      const newTitle = `${brand} ${city} | ${services[0]} | ${services[1]}`;
-      const newDesc = `Професійний ${services[0].toLowerCase()} у м. ${city}. 🚗 ${services[1]}, ${services[2].toLowerCase()}, ${services[3].toLowerCase()}. ☎️ Записуйтесь онлайн!`;
-      const newKeywords = `${services.map(s => s.toLowerCase()).join(', ')}, шини ${city}, автосервіс ${city}, вулканізація`;
+      const newTitle = `${brand} | ${city} | ${services[1]} | ${services[0]}`;
+      const newDesc = `Професійний ${services[0].toLowerCase()} у м. ${city} та по всій ${region}. 🚗 ${services[1]} за кращою ціною, ${services[2].toLowerCase()}, ${services[3].toLowerCase()}. ☎️ 24/7!`;
+      const newKeywords = `купити шини дніпро, купити шини синельникове, гума днепр, ${services.map(s => s.toLowerCase()).join(', ')}, ${region}`;
 
       setSettings({
           ...settings,
@@ -195,15 +196,17 @@ const SeoTab: React.FC = () => {
   const generateAiSeo = async () => {
       setIsGeneratingAi(true);
       try {
-          const prompt = `Ти - топовий SEO експерт. Твоє завдання створити ідеальні мета-теги для сайту автосервісу та шиномонтажу "Форсаж" у місті Синельникове.
-Обов'язково згадай: продаж шин, ремонт дисків, зварювання аргоном, 24/7.
-Зроби дуже клікабельний заголовок і привабливий опис, щоб сайт потрапив у ТОП Google.
+          const prompt = `Ти - топовий SEO експерт. Твоє завдання створити ідеальні мета-теги для сайту автосервісу та шиномонтажу "Форсаж". 
+Ми розширюємося на ДНІПРО та всю ДНІПРОПЕТРОВСЬКУ ОБЛАСТЬ. 
+Обов'язково вкажи ключові слова: "Купити шини Дніпро", "Шини Синельникове", "Ремонт дисків", "Зварювання аргоном", "24/7".
+Зроби дуже клікабельний заголовок і привабливий опис, щоб сайт потрапив у ТОП Google за запитами області.
 ПОВЕРНИ ЛИШЕ СТРОГИЙ JSON БЕЗ МАРКДАУНУ (без \`\`\`json), що містить:
 {
   "seo_title": "...заголовок (до 60 симв)...",
   "seo_description": "...опис (до 160 симв)...",
   "seo_keywords": "...ключові слова через кому (7-10 слів)..."
-}`;
+} \
+У заголовку та описі акцентуй на вигідній ціні та роботі 24/7.`;
           const rawResponse = await generatePlainDescription({
               provider: aiProvider,
               prompt
@@ -256,6 +259,46 @@ const SeoTab: React.FC = () => {
       setLoading(false);
   };
 
+  const generateSitemap = async () => {
+      setLoading(true);
+      try {
+          const baseUrl = settings.seo_canonical || 'https://forsage-sinelnikove.com';
+          const pages = ['', '/prices', '/gallery'];
+          
+          let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
+          
+          pages.forEach(p => {
+              xml += `  <url>\n    <loc>${baseUrl}${p}</loc>\n    <changefreq>daily</changefreq>\n    <priority>${p === '' ? '1.0' : '0.8'}</priority>\n  </url>\n`;
+          });
+
+          const { data: tyres } = await supabase.from('tyres').select('id, slug').neq('in_stock', false);
+          if (tyres) {
+              tyres.forEach(t => {
+                  if (t.slug) {
+                    xml += `  <url>\n    <loc>${baseUrl}/product/${t.slug}</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.6</priority>\n  </url>\n`;
+                  }
+              });
+          }
+
+          xml += `</urlset>`;
+          
+          // In a real localized app, we'd save this to the public folder if we had a backend.
+          // Since we're client-side, we'll offer a download or show a message.
+          const blob = new Blob([xml], { type: 'text/xml' });
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'sitemap.xml';
+          a.click();
+          
+          alert("Sitemap згенеровано! Завантажте його та покладіть у папку public вашого проекту.");
+      } catch (e) {
+          console.error(e);
+      } finally {
+          setLoading(false);
+      }
+  };
+
   return (
     <div className="animate-in fade-in space-y-8 pb-20">
       {/* Tab Switcher */}
@@ -284,6 +327,10 @@ const SeoTab: React.FC = () => {
               <p className="text-zinc-400 text-sm mt-1">Налаштування відображення сайту в Google та соцмережах.</p>
             </div>
             <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto mt-4 md:mt-0">
+              <button onClick={generateSitemap} className="bg-zinc-800 text-emerald-400 hover:text-white px-4 py-3 rounded-xl border border-emerald-900/50 hover:border-emerald-500 flex flex-1 sm:flex-none items-center justify-center gap-2 font-bold transition-all">
+                <FileCode size={18} />
+                Sitemap
+              </button>
               <button disabled={isGeneratingAi} onClick={generateAiSeo} className="bg-zinc-800 text-purple-400 hover:text-white px-4 py-3 rounded-xl border border-purple-900/50 hover:border-purple-500 hover:bg-purple-900/20 flex flex-1 sm:flex-none items-center justify-center gap-2 font-bold transition-all shadow-[0_0_15px_rgba(168,85,247,0.15)] disabled:opacity-50">
                 {isGeneratingAi ? <Loader2 size={18} className="animate-spin" /> : <Wand2 size={18} />}
                 AI Оптимізація

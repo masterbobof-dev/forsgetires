@@ -6,6 +6,8 @@ export const PHONE_NUMBER_1 = "099 167 44 24";
 export const PHONE_NUMBER_2 = "063 582 38 58";
 export const PHONE_LINK_1 = "tel:+380991674424";
 export const PHONE_LINK_2 = "tel:+380635823858";
+export const TELEGRAM_LINK = "https://t.me/forsage_sinelnikove"; // Замініть на ваш лінк
+export const VIBER_LINK = "viber://chat?number=%2B380991674424";
 
 // Formspree Email Endpoint
 export const FORMSPREE_ENDPOINT = "https://formspree.io/f/xpweykjy";

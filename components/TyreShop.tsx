@@ -2,8 +2,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { TyreProduct, CartItem } from '../types';
-import { Loader2, Phone, ArrowDown, ArrowLeft, X, ShoppingCart, Lock } from 'lucide-react';
-import { PHONE_LINK_1, PHONE_NUMBER_1, FORMSPREE_ENDPOINT } from '../constants';
+import { Loader2, Phone, ArrowDown, ArrowLeft, ArrowRight, MapPin, X, ShoppingCart, Lock } from 'lucide-react';
+import { PHONE_LINK_1, PHONE_NUMBER_1, FORMSPREE_ENDPOINT, TELEGRAM_LINK, VIBER_LINK } from '../constants';
 
 // Підкомпоненти
 import CartDrawer from './shop/CartDrawer';
@@ -13,6 +13,7 @@ import FilterToolbar from './shop/FilterToolbar';
 import ProductCard from './shop/ProductCard';
 import ServiceBanner from './shop/ServiceBanner';
 import AgroBanner from './shop/AgroBanner';
+import SeoContentBlock from './shop/SeoContentBlock';
 import { logAnalyticsEvent } from './admin/analytics';
 
 const PAGE_SIZE = 60;
@@ -71,6 +72,10 @@ const TyreShop: React.FC<TyreShopProps> = ({
   const [currentLightboxImages, setCurrentLightboxImages] = useState<string[]>([]);
   const [selectedProductForModal, setSelectedProductForModal] = useState<TyreProduct | null>(null);
   const [recentlyViewed, setRecentlyViewed] = useState<TyreProduct[]>([]);
+  const [agroFeaturedProducts, setAgroFeaturedProducts] = useState<TyreProduct[]>([]);
+  const [priorityProductId, setPriorityProductId] = useState<number | null>(null);
+  const [heroTitle, setHeroTitle] = useState('ЦІЛОДОБОВИЙ ШИНОМОНТАЖ');
+  const [heroSubtitle, setHeroSubtitle] = useState('В М. СИНЕЛЬНИКОВЕ (24/7)');
 
   useEffect(() => {
     try {
@@ -99,7 +104,9 @@ const TyreShop: React.FC<TyreShopProps> = ({
   const [enableStockQty, setEnableStockQty] = useState(false);
   const [novaPoshtaKey, setNovaPoshtaKey] = useState('');
   const [shopPhone, setShopPhone] = useState(PHONE_NUMBER_1);
+  const [shopPhone2, setShopPhone2] = useState('063 582 38 58');
   const [shopPhoneLink, setShopPhoneLink] = useState(PHONE_LINK_1);
+  const [shopPhoneLink2, setShopPhoneLink2] = useState('tel:+380635823858');
 
   const [orderName, setOrderName] = useState('');
   const [orderPhone, setOrderPhone] = useState('');
@@ -123,6 +130,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
   const [quickOrderProduct, setQuickOrderProduct] = useState<TyreProduct | null>(null);
   const [quickOrderPhone, setQuickOrderPhone] = useState('');
   const [quickOrderSending, setQuickOrderSending] = useState(false);
+  const [showContactHub, setShowContactHub] = useState(false);
 
   // --- LOGIC: HANDLE INITIAL PRODUCT & URL SYNC ---
   useEffect(() => {
@@ -189,9 +197,19 @@ const TyreShop: React.FC<TyreShopProps> = ({
   // --- LOGIC: FETCHING SETTINGS ---
   useEffect(() => {
     const fetchSettings = async () => {
-      const { data: setts } = await supabase.from('settings').select('key, value').in('key', ['enable_stock_quantity', 'contact_phone1', 'nova_poshta_key']);
+      const { data: setts } = await supabase.from('settings').select('key, value').in('key', [
+        'enable_stock_quantity', 
+        'contact_phone1', 
+        'contact_phone2', 
+        'nova_poshta_key', 
+        'agro_featured_ids',
+        'hero_title',
+        'hero_subtitle'
+      ]);
       if (setts) {
-          setts.forEach(item => {
+          for (const item of setts) {
+              if (item.key === 'hero_title') setHeroTitle(item.value);
+              if (item.key === 'hero_subtitle') setHeroSubtitle(item.value);
               if (item.key === 'enable_stock_quantity') setEnableStockQty(item.value === 'true');
               if (item.key === 'contact_phone1') { 
                   setShopPhone(item.value); 
@@ -199,8 +217,22 @@ const TyreShop: React.FC<TyreShopProps> = ({
                   const link = digits.startsWith('0') && digits.length === 10 ? `+38${digits}` : digits.startsWith('380') ? `+${digits}` : digits;
                   setShopPhoneLink(`tel:${link}`); 
               }
+              if (item.key === 'contact_phone2') { 
+                  setShopPhone2(item.value); 
+                  const digits = item.value.replace(/[^\d]/g, '');
+                  const link = digits.startsWith('0') && digits.length === 10 ? `+38${digits}` : digits.startsWith('380') ? `+${digits}` : digits;
+                  setShopPhoneLink2(`tel:${link}`); 
+              }
               if (item.key === 'nova_poshta_key') setNovaPoshtaKey(item.value);
-          });
+              if (item.key === 'agro_featured_ids' && item.value) {
+                  const ids = item.value.split(',').map(Number);
+                  const { data: aData } = await supabase.from('tyres').select('*').in('id', ids);
+                  if (aData) {
+                      const sorted = ids.map(id => aData.find(t => t.id === id)).filter(Boolean) as TyreProduct[];
+                      setAgroFeaturedProducts(sorted);
+                  }
+              }
+          }
       }
       
       const { data: tData } = await supabase.from('tyres').select('manufacturer, radius, title').neq('in_stock', false);
@@ -228,7 +260,18 @@ const TyreShop: React.FC<TyreShopProps> = ({
     setPage(0);
     setTyres([]); 
     fetchTyres(0, true);
-  }, [activeCategory, activeSort, enableStockQty, filterBrand, filterRadius, filterWidth, filterHeight, showOnlyInStock, searchQuery]);
+  }, [activeCategory, activeSort, enableStockQty, filterBrand, filterRadius, filterWidth, filterHeight, showOnlyInStock, searchQuery, priorityProductId]);
+
+  const handleAgroProductClick = (id: number) => {
+    setPriorityProductId(id);
+    setActiveCategory('agro');
+    setSearchQuery('');
+    setFilterBrand('');
+    setFilterRadius('');
+    setFilterWidth('');
+    setFilterHeight('');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const parseTyreSpecs = (tyre: TyreProduct): TyreProduct => {
     const m = tyre.title.match(/(\d{3})[\/\s](\d{2})[\s\w]*R(\d{2}(?:\.5|\.3)?[C|c]?)/);
@@ -280,6 +323,19 @@ const TyreShop: React.FC<TyreShopProps> = ({
       if (error) throw error;
       if (data) {
         let processed = data.map(parseTyreSpecs);
+        
+        // --- PRIORITY LOGIC ---
+        if (priorityProductId && pageIndex === 0 && activeCategory === 'agro') {
+            const index = processed.findIndex(p => p.id === priorityProductId);
+            if (index > 0) {
+                const [item] = processed.splice(index, 1);
+                processed.unshift(item);
+            } else if (index === -1) {
+                // If not in first page, fetch it specifically and unshift
+                const { data: pData } = await supabase.from('tyres').select('*').eq('id', priorityProductId).single();
+                if (pData) processed.unshift(parseTyreSpecs(pData));
+            }
+        }
         
         // Thorough deduplication of the new data itself
         const uniqueNew = Array.from(new Map(processed.map(item => [item.id, item])).values()) as TyreProduct[];
@@ -390,55 +446,124 @@ const TyreShop: React.FC<TyreShopProps> = ({
     <div className="min-h-screen bg-[#09090b] py-4 md:py-12 animate-in fade-in duration-500 pb-32">
       <div className="max-w-7xl mx-auto px-2 md:px-4">
         
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 md:gap-6 mb-5 md:mb-10 px-2">
-           <div className="flex flex-col gap-2 md:gap-4">
-              <nav className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-black text-zinc-600">
-                <button onClick={onBack} className="hover:text-[#FFC300] transition-colors">Головна</button>
-                <span className="text-zinc-800">/</span>
-                <span className="text-zinc-400">Магазин шин</span>
-                {activeCategory !== 'all' && (
-                  <>
-                    <span className="text-zinc-800">/</span>
-                    <span className="text-[#FFC300]">{CATEGORIES.find(c => c.id === activeCategory)?.label}</span>
-                  </>
-                )}
-              </nav>
-              <div className="flex flex-col">
-                <h1 className="text-2xl md:text-5xl font-black text-white tracking-tighter mb-1 uppercase italic">
-                  Магазин <span className="text-[#FFC300]">шин</span>
-                </h1>
-                <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest flex items-center gap-2">
-                  <span className="w-8 h-[1px] bg-[#FFC300]"></span>
-                  Знайдено {totalCount} товарів
-                </p>
-              </div>
-           </div>
-           
-           <div className="flex items-center gap-2 md:gap-4 w-full md:w-auto">
-              {isAdmin && (
-                <button
-                  onClick={onAdminClick}
-                  className="flex-1 md:flex-none bg-zinc-900/80 backdrop-blur-sm border border-[#FFC300]/30 p-2.5 md:p-4 rounded-xl md:rounded-2xl flex items-center gap-2 md:gap-4 hover:border-[#FFC300] transition-all group shadow-lg shadow-yellow-900/10"
-                >
-                  <div className="p-2 md:p-3 bg-zinc-800 rounded-lg md:rounded-xl text-[#FFC300] group-hover:scale-110 transition-transform">
-                    <Lock size={16} strokeWidth={2.5}/>
+                <header className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-6 mb-8 md:mb-12 px-2">
+            {/* Left: Info block */}
+            <div className="flex-1 space-y-5">
+               <nav className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-black text-zinc-600">
+                 <button onClick={onBack} className="hover:text-[#FFC300] transition-colors">Головна</button>
+                 <span className="text-zinc-800">/</span>
+                 <span className="text-zinc-500">Магазин та сервіс</span>
+                 {activeCategory !== 'all' && (
+                   <>
+                     <span className="text-zinc-800">/</span>
+                     <span className="text-[#FFC300]">{CATEGORIES.find(c => c.id === activeCategory)?.label}</span>
+                   </>
+                 )}
+               </nav>
+
+               <div>
+                 <h1 className="text-3xl md:text-5xl font-black text-white uppercase italic tracking-tighter leading-tight mb-2">
+                   ФОРСАЖ <span className="text-[#FFC300]">СИНЕЛЬНИКОВЕ</span>
+                 </h1>
+                 <div className="flex items-center gap-2 text-emerald-500 font-black text-[10px] uppercase tracking-widest bg-emerald-500/5 py-1 px-3 rounded-full w-fit border border-emerald-500/10">
+                   <span className="relative flex h-2 w-2">
+                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                   </span>
+                   ВІДКРИТО 24/7
+                 </div>
+               </div>
+
+               <p className="text-zinc-400 text-sm md:text-base max-w-xl leading-relaxed">
+                 Ми знаходимося в місті{' '}
+                 <span className="text-white font-black">Синельникове</span>.
+                 Надаємо послуги шиномонтажу та маємо{' '}
+                 <span className="text-[#FFC300] font-black">великий вибір шин та запчастин</span>{' '}
+                 в наявності.
+               </p>
+
+               <div className="flex flex-wrap gap-3">
+                 <a href={shopPhoneLink} className="bg-zinc-900 border border-zinc-800 p-3 md:p-4 rounded-2xl flex items-center gap-3 group hover:border-[#FFC300] transition-all flex-1 min-w-[200px]">
+                   <div className="w-10 h-10 md:w-12 md:h-12 bg-[#FFC300] rounded-xl flex items-center justify-center text-black group-hover:scale-110 transition-transform shrink-0">
+                     <Phone size={18}/>
+                   </div>
+                   <div>
+                     <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest mb-0.5">Менеджер · Vodafone</p>
+                     <span className="text-white font-black text-base md:text-lg tracking-tight">{shopPhone}</span>
+                   </div>
+                 </a>
+                 <a href={shopPhoneLink2} className="bg-zinc-900 border border-zinc-800 p-3 md:p-4 rounded-2xl flex items-center gap-3 group hover:border-[#FFC300] transition-all flex-1 min-w-[200px]">
+                   <div className="w-10 h-10 md:w-12 md:h-12 bg-zinc-800 border border-zinc-700 rounded-xl flex items-center justify-center text-[#FFC300] group-hover:scale-110 transition-transform shrink-0">
+                     <Phone size={18}/>
+                   </div>
+                   <div>
+                     <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest mb-0.5">Офіс · Kyivstar</p>
+                     <span className="text-white font-black text-base md:text-lg tracking-tight">{shopPhone2}</span>
+                   </div>
+                 </a>
+                 {isAdmin && (
+                   <button onClick={onAdminClick} className="bg-zinc-900/80 border border-[#FFC300]/30 p-3 md:p-4 rounded-2xl flex items-center gap-3 hover:border-[#FFC300] transition-all group shrink-0">
+                     <div className="p-1.5 bg-zinc-800 rounded-lg text-[#FFC300] group-hover:scale-110 transition-transform">
+                       <Lock size={14} strokeWidth={2.5}/>
+                     </div>
+                     <span className="text-white font-black text-xs uppercase">Адмін</span>
+                   </button>
+                 )}
+               </div>
+            </div>
+
+            {/* Mobile: "How to get to us" button (hidden on desktop) */}
+            <div className="lg:hidden">
+               <a 
+                 href="https://www.google.com/maps/dir/?api=1&destination=48.317541,35.513511"
+                 target="_blank" rel="noopener noreferrer"
+                 className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 p-3 rounded-2xl hover:border-[#FFC300] transition-all group w-full"
+               >
+                 <div className="w-10 h-10 bg-zinc-800 border border-zinc-700 rounded-xl flex items-center justify-center text-[#FFC300] group-hover:scale-110 transition-transform shrink-0">
+                   <MapPin size={18}/>
+                 </div>
+                 <div className="flex-1">
+                   <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest mb-0.5">Наша адреса</p>
+                   <span className="text-white font-black text-sm">Як до нас добратися →</span>
+                 </div>
+                 <div className="text-right shrink-0">
+                   <p className="text-zinc-500 text-[10px] font-bold">м. Синельникове</p>
+                   <p className="text-zinc-600 text-[10px] font-bold">вул. Квітнева 9</p>
+                 </div>
+               </a>
+            </div>
+
+            {/* Desktop: Mini Map (hidden on mobile) */}
+            <div className="hidden lg:block lg:w-5/12 xl:w-[380px] shrink-0">
+               <div className="relative group">
+                  <div className="absolute -inset-1 bg-gradient-to-r from-[#FFC300]/40 to-yellow-600/20 rounded-3xl blur opacity-30 group-hover:opacity-60 transition duration-700"></div>
+                  <div className="relative bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl">
+                    <iframe 
+                        src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2653.2206680489955!2d35.513511315682!3d48.31754097923793!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zNDjCsDE5JzAzLjEiTiAzNcKwMzAnNDguNiJF!5e0!3m2!1suk!2sua!4v1650000000000!5m2!1suk!2sua" 
+                        width="100%" 
+                        height="180" 
+                        style={{ border: 0, filter: 'grayscale(1) invert(0.85) contrast(1.1)' }} 
+                        allowFullScreen 
+                        loading="lazy" 
+                        referrerPolicy="no-referrer-when-downgrade"
+                        title="Forsage Tires location"
+                    ></iframe>
+                    <div className="bg-zinc-950/90 border-t border-zinc-800 p-2.5 flex items-center justify-between gap-2">
+                        <div className="min-w-0 flex items-center gap-2">
+                          <MapPin size={12} className="text-[#FFC300] shrink-0"/>
+                          <p className="text-zinc-400 text-[10px] font-bold truncate">м. Синельникове, вул. Квітнева 9</p>
+                        </div>
+                        <a 
+                          href="https://www.google.com/maps/dir/?api=1&destination=48.317541,35.513511" 
+                          target="_blank" rel="noopener noreferrer"
+                          className="bg-[#FFC300] px-2.5 py-1 rounded-lg text-black font-black text-[9px] uppercase tracking-widest hover:bg-white transition-colors shrink-0 flex items-center gap-1"
+                        >
+                          Маршрут <ArrowRight size={9} />
+                        </a>
+                    </div>
                   </div>
-                  <div className="text-left">
-                    <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest mb-0.5">Адмін</p>
-                    <span className="text-white font-black text-xs uppercase tracking-wider">Повернутися</span>
-                  </div>
-                </button>
-              )}
-              <div className="flex-1 md:flex-none bg-zinc-900/50 backdrop-blur-sm border border-zinc-800 p-2.5 md:p-4 rounded-xl md:rounded-2xl flex items-center gap-2 md:gap-4 hover:border-zinc-700 transition-colors group">
-                <div className="p-2 md:p-3 bg-[#FFC300] rounded-lg md:rounded-xl text-black group-hover:scale-110 transition-transform shadow-lg shadow-yellow-900/20">
-                  <Phone size={16} strokeWidth={2.5}/>
-                </div>
-                <div>
-                  <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest mb-0.5">Підбір шин</p>
-                  <a href={shopPhoneLink} className="text-white font-black text-sm md:text-lg hover:text-[#FFC300] transition-colors">{shopPhone}</a>
-                </div>
-              </div>
-           </div>
+               </div>
+            </div>
         </header>
         
         <CategoryNav 
@@ -460,7 +585,11 @@ const TyreShop: React.FC<TyreShopProps> = ({
 
         {/* Agro Banner — shown only when not already in agro category */}
         {activeCategory !== 'agro' && (
-          <AgroBanner onCategoryClick={() => setActiveCategory('agro')} />
+          <AgroBanner 
+            onCategoryClick={() => { setPriorityProductId(null); setActiveCategory('agro'); }} 
+            featuredProducts={agroFeaturedProducts}
+            onProductClick={handleAgroProductClick}
+          />
         )}
 
         <FilterToolbar 
@@ -629,6 +758,44 @@ const TyreShop: React.FC<TyreShopProps> = ({
         </div>
       )}
 
+      {/* Floating Contact Hub */}
+      <div className="fixed bottom-6 right-6 z-[160] flex flex-col items-end gap-3 pointer-events-none">
+          {/* Expanded Menu */}
+          <div className={`flex flex-col gap-3 transition-all duration-300 transform origin-bottom ${showContactHub ? 'scale-100 opacity-100 translate-y-0 pointer-events-auto' : 'scale-50 opacity-0 translate-y-10 pointer-events-none'}`}>
+              <a href={TELEGRAM_LINK} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 group">
+                  <span className="bg-black/80 backdrop-blur-md border border-zinc-800 text-white text-[10px] font-black uppercase px-3 py-1.5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity shadow-2xl">Telegram</span>
+                  <div className="w-12 h-12 bg-[#0088cc] rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-900/40 hover:scale-110 active:scale-95 transition-all">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+                  </div>
+              </a>
+              <a href={VIBER_LINK} className="flex items-center gap-3 group">
+                  <span className="bg-black/80 backdrop-blur-md border border-zinc-800 text-white text-[10px] font-black uppercase px-3 py-1.5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity shadow-2xl">Viber</span>
+                  <div className="w-12 h-12 bg-[#7360f2] rounded-2xl flex items-center justify-center text-white shadow-xl shadow-purple-900/40 hover:scale-110 active:scale-95 transition-all">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                  </div>
+              </a>
+              <a href={PHONE_LINK_1} className="flex items-center gap-3 group">
+                  <span className="bg-black/80 backdrop-blur-md border border-zinc-800 text-white text-[10px] font-black uppercase px-3 py-1.5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity shadow-2xl">Дзвінок</span>
+                  <div className="w-12 h-12 bg-[#FFC300] rounded-2xl flex items-center justify-center text-black shadow-xl shadow-yellow-900/40 hover:scale-110 active:scale-95 transition-all">
+                      <Phone size={24} strokeWidth={2.5}/>
+                  </div>
+              </a>
+          </div>
+
+          {/* Main Toggle Button */}
+          <button 
+            onClick={() => setShowContactHub(!showContactHub)}
+            className={`w-16 h-16 rounded-3xl flex items-center justify-center shadow-2xl transition-all duration-500 pointer-events-auto active:scale-90 ${showContactHub ? 'bg-zinc-800 text-white rotate-90' : 'bg-[#FFC300] text-black shadow-yellow-900/50'}`}
+          >
+            {showContactHub ? <X size={32} /> : (
+              <div className="relative">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="animate-bounce"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-600 rounded-full border-2 border-[#FFC300] animate-ping"></span>
+              </div>
+            )}
+          </button>
+      </div>
+
       {/* Floating Toast Notification */}
       {toast.visible && (
         <div className="fixed bottom-[100px] left-1/2 -translate-x-1/2 z-[150] w-[90%] md:w-auto bg-black/90 backdrop-blur-md text-white px-2 py-2 md:px-6 md:py-3 rounded-2xl md:rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center justify-between gap-3 animate-in slide-in-from-bottom-10 fade-in duration-300 border border-zinc-800">
@@ -645,6 +812,8 @@ const TyreShop: React.FC<TyreShopProps> = ({
         </div>
       )}
 
+      {/* SEO Content Block for Google Ranking */}
+      <SeoContentBlock />
     </div>
   );
 };

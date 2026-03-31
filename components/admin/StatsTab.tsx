@@ -6,7 +6,11 @@ const StatsTab: React.FC = () => {
   const [stats, setStats] = useState({ 
       totalOrders: 0, totalRevenue: 0, totalTyres: 0, totalBookings: 0,
       uniqueVisitorsToday: 0, uniqueVisitorsTotal: 0,
-      topViewed: [] as any[], topCart: [] as any[]
+      topViewed: [] as any[], topCart: [] as any[],
+      deviceType: {} as Record<string, number>,
+      topCountries: [] as any[],
+      topCities: [] as any[],
+      topBrowsers: [] as any[]
   });
   const [loading, setLoading] = useState(true);
 
@@ -39,11 +43,15 @@ const StatsTab: React.FC = () => {
       let uniqueTotal = 0;
       let topViewed = [];
       let topCart = [];
+      
+      const deviceCount: Record<string, number> = {};
+      const countryCount: Record<string, number> = {};
+      const cityCount: Record<string, number> = {};
+      const browserCount: Record<string, number> = {};
 
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      // We fetch analytics from the last 30 days to avoid huge payloads
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
@@ -53,7 +61,6 @@ const StatsTab: React.FC = () => {
         .gte('created_at', thirtyDaysAgo.toISOString());
 
       if (analytics && !error) {
-          // Process Visitors
           const sessionsToday = new Set();
           const sessionsTotal = new Set();
           
@@ -65,6 +72,15 @@ const StatsTab: React.FC = () => {
               if (new Date(ev.created_at) >= today) {
                   sessionsToday.add(ev.session_id);
               }
+
+              // Тільки для першої події сесії рахуємо пристрій/гео (спрощено)
+              const isNewSessionInIteration = sessionsTotal.size > (sessionsTotal.size - 1); 
+              // Насправді краще рахувати унікальні сесії для технічних даних
+              
+              if (ev.device_type) deviceCount[ev.device_type] = (deviceCount[ev.device_type] || 0) + 1;
+              if (ev.country) countryCount[ev.country] = (countryCount[ev.country] || 0) + 1;
+              if (ev.city) cityCount[ev.city] = (cityCount[ev.city] || 0) + 1;
+              if (ev.browser_name) browserCount[ev.browser_name] = (browserCount[ev.browser_name] || 0) + 1;
 
               if (ev.event_type === 'view_item' && ev.item_id && ev.item_name) {
                   if(!viewCounts[ev.item_id]) viewCounts[ev.item_id] = { name: ev.item_name, count: 0 };
@@ -86,7 +102,11 @@ const StatsTab: React.FC = () => {
       setStats({ 
           totalOrders: ordersCount || 0, totalTyres: tyresCount || 0, totalBookings: bookingCount || 0, totalRevenue: profit,
           uniqueVisitorsToday: uniqueToday, uniqueVisitorsTotal: uniqueTotal,
-          topViewed, topCart
+          topViewed, topCart,
+          deviceType: deviceCount,
+          topCountries: Object.entries(countryCount).sort((a, b) => b[1] - a[1]).slice(0, 5),
+          topCities: Object.entries(cityCount).sort((a, b) => b[1] - a[1]).slice(0, 5),
+          topBrowsers: Object.entries(browserCount).sort((a, b) => b[1] - a[1]).slice(0, 5)
       });
     } catch (e) { 
         console.error("Помилка завантаження статистики", e); 
@@ -105,10 +125,10 @@ const StatsTab: React.FC = () => {
                 <DollarSign className="text-[#FFC300]"/> Бізнес Показники
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800"><h3 className="text-zinc-400 text-xs font-bold uppercase">Всього замовлень</h3><p className="text-4xl font-black text-white">{stats.totalOrders}</p></div>
-                <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800"><h3 className="text-zinc-400 text-xs font-bold uppercase">Шини в базі</h3><p className="text-4xl font-black text-[#FFC300]">{stats.totalTyres}</p></div>
-                <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800"><h3 className="text-zinc-400 text-xs font-bold uppercase">Записів на СТО</h3><p className="text-4xl font-black text-white">{stats.totalBookings}</p></div>
-                <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800 relative overflow-hidden"><h3 className="text-zinc-400 text-xs font-bold uppercase">Чистий дохід</h3><p className="text-2xl font-black text-green-400">{stats.totalRevenue.toLocaleString()} грн</p><DollarSign className="absolute -bottom-4 -right-4 text-green-900/20 w-32 h-32" /></div>
+                <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800 shadow-xl"><h3 className="text-zinc-400 text-xs font-bold uppercase">Всього замовлень</h3><p className="text-4xl font-black text-white">{stats.totalOrders}</p></div>
+                <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800 shadow-xl"><h3 className="text-zinc-400 text-xs font-bold uppercase">Шини в базі</h3><p className="text-4xl font-black text-[#FFC300]">{stats.totalTyres}</p></div>
+                <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800 shadow-xl"><h3 className="text-zinc-400 text-xs font-bold uppercase">Записів на СТО</h3><p className="text-4xl font-black text-white">{stats.totalBookings}</p></div>
+                <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800 relative overflow-hidden shadow-xl"><h3 className="text-zinc-400 text-xs font-bold uppercase">Чистий дохід</h3><p className="text-2xl font-black text-green-400">{stats.totalRevenue.toLocaleString()} грн</p><DollarSign className="absolute -bottom-4 -right-4 text-green-900/20 w-32 h-32" /></div>
             </div>
         </div>
 
@@ -117,30 +137,57 @@ const StatsTab: React.FC = () => {
             <h2 className="text-xl font-black text-white uppercase tracking-widest mb-4 flex items-center gap-2">
                 <Activity className="text-blue-400"/> Веб Аналітика (30 днів)
             </h2>
+            
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                 <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800 relative overflow-hidden">
-                    <h3 className="text-zinc-400 text-xs font-bold uppercase">Унікальні Відвідування (Сьогодні)</h3>
-                    <p className="text-4xl font-black text-blue-400 mt-2">{stats.uniqueVisitorsToday}</p>
-                    <Users className="absolute -bottom-4 -right-4 text-blue-900/20 w-32 h-32" />
+                    <h3 className="text-zinc-400 text-xs font-bold uppercase">Відвідування (Сьогодні)</h3>
+                    <p className="text-4xl font-black text-blue-400 mt-1">{stats.uniqueVisitorsToday}</p>
                 </div>
                 <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800 relative overflow-hidden">
-                    <h3 className="text-zinc-400 text-xs font-bold uppercase">Унікальні Відвідування (Місяць)</h3>
-                    <p className="text-4xl font-black text-white mt-2">{stats.uniqueVisitorsTotal}</p>
+                    <h3 className="text-zinc-400 text-xs font-bold uppercase">Відвідування (Місяць)</h3>
+                    <p className="text-4xl font-black text-white mt-1">{stats.uniqueVisitorsTotal}</p>
+                </div>
+                {/* Пристрої */}
+                <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 col-span-1 md:col-span-2">
+                    <h3 className="text-zinc-400 text-[10px] font-bold uppercase mb-3 text-center">Розподіл Пристроїв</h3>
+                    <div className="flex gap-2">
+                        {Object.entries(stats.deviceType).map(([device, count]) => (
+                            <div key={device} className="flex-1 text-center p-2 bg-black/40 rounded-lg border border-zinc-800">
+                                <p className="text-[10px] text-zinc-500 font-bold uppercase">{device}</p>
+                                <p className="text-lg font-black text-white">{count}</p>
+                                <p className="text-[8px] text-zinc-600">подій</p>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
+                {/* Географія */}
+                <div className="bg-zinc-900 p-5 rounded-xl border border-zinc-800">
+                    <h3 className="text-zinc-500 text-[10px] font-black uppercase mb-4 tracking-widest">Географія клієнтів</h3>
+                    <div className="space-y-2">
+                        {stats.topCities.length === 0 ? <p className="text-zinc-700 text-xs italic">Чекаємо на перші дані...</p> : 
+                        stats.topCities.map(([city, count]: any) => (
+                            <div key={city} className="flex items-center justify-between p-2 bg-black/30 rounded-lg border border-zinc-800/50">
+                                <span className="text-zinc-300 text-xs font-bold italic">{city}</span>
+                                <span className="text-blue-400 font-black text-xs">{count}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
                 {/* Топ Переглядів */}
                 <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800">
                     <h3 className="text-zinc-400 text-xs font-bold uppercase mb-4 flex items-center gap-2">
-                        <Eye size={16}/> Найпопулярніші шини (Перегляди)
+                        <Eye size={16}/> Найпопулярніші шини
                     </h3>
                     {stats.topViewed.length === 0 ? <p className="text-zinc-600 text-sm">Даних ще немає</p> : (
                         <div className="space-y-3">
                             {stats.topViewed.map((item, idx) => (
                                 <div key={idx} className="flex items-center justify-between p-3 bg-black/50 rounded-lg">
                                     <span className="text-zinc-300 text-sm font-bold w-2/3 truncate">{item.name}</span>
-                                    <span className="text-white font-black bg-zinc-800 px-3 py-1 rounded-md">{item.count} разів</span>
+                                    <span className="text-white font-black bg-zinc-800 px-3 py-1 rounded-md">{item.count}</span>
                                 </div>
                             ))}
                         </div>
@@ -150,14 +197,14 @@ const StatsTab: React.FC = () => {
                 {/* Топ Кошик */}
                 <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800">
                     <h3 className="text-zinc-400 text-xs font-bold uppercase mb-4 flex items-center gap-2">
-                        <ShoppingCart size={16}/> Найбільше додавали в кошик
+                        <ShoppingCart size={16}/> В кошику
                     </h3>
                     {stats.topCart.length === 0 ? <p className="text-zinc-600 text-sm">Даних ще немає</p> : (
                         <div className="space-y-3">
                             {stats.topCart.map((item, idx) => (
-                                <div key={idx} className="flex items-center justify-between p-3 bg-black/50 rounded-lg">
+                                <div key={idx} className="flex items-center justify-between p-3 bg-black/50 rounded-lg border border-emerald-900/10">
                                     <span className="text-[#FFC300] text-sm font-bold w-2/3 truncate">{item.name}</span>
-                                    <span className="text-black font-black bg-[#FFC300] px-3 py-1 rounded-md">{item.count} разів</span>
+                                    <span className="text-black font-black bg-[#FFC300] px-3 py-1 rounded-md">{item.count}</span>
                                 </div>
                             ))}
                         </div>

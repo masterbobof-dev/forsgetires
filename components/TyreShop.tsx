@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { TyreProduct, CartItem } from '../types';
@@ -106,7 +105,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
   const [shopPhone, setShopPhone] = useState(PHONE_NUMBER_1);
   const [shopPhone2, setShopPhone2] = useState('063 582 38 58');
   const [shopPhoneLink, setShopPhoneLink] = useState(PHONE_LINK_1);
-  const [shopPhoneLink2, setShopPhoneLink2] = useState('tel:+380635823858');
+  const [shopPhoneLink2, setShopPhoneLinkLink2] = useState('tel:+380635823858');
 
   const [orderName, setOrderName] = useState('');
   const [orderPhone, setOrderPhone] = useState('');
@@ -171,8 +170,6 @@ const TyreShop: React.FC<TyreShopProps> = ({
     }
   }, [selectedProductForModal]);
 
-  // ... (rest of the code)
-
   const submitQuickOrder = async () => {
     if (!quickOrderPhone || quickOrderPhone.length < 9) { setOrderError("Введіть коректний номер телефону"); return; }
     if (!quickOrderProduct) return;
@@ -191,8 +188,6 @@ const TyreShop: React.FC<TyreShopProps> = ({
       setQuickOrderPhone('');
     } catch (err) { setOrderError("Помилка при відправці замовлення"); } finally { setQuickOrderSending(false); }
   };
-
-  // --- NOVA POSHTA LOGIC ---
 
   // --- LOGIC: FETCHING SETTINGS ---
   useEffect(() => {
@@ -221,7 +216,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
                   setShopPhone2(item.value); 
                   const digits = item.value.replace(/[^\d]/g, '');
                   const link = digits.startsWith('0') && digits.length === 10 ? `+38${digits}` : digits.startsWith('380') ? `+${digits}` : digits;
-                  setShopPhoneLink2(`tel:${link}`); 
+                  setShopPhoneLinkLink2(`tel:${link}`); 
               }
               if (item.key === 'nova_poshta_key') setNovaPoshtaKey(item.value);
               if (item.key === 'agro_featured_ids' && item.value) {
@@ -331,13 +326,11 @@ const TyreShop: React.FC<TyreShopProps> = ({
                 const [item] = processed.splice(index, 1);
                 processed.unshift(item);
             } else if (index === -1) {
-                // If not in first page, fetch it specifically and unshift
                 const { data: pData } = await supabase.from('tyres').select('*').eq('id', priorityProductId).single();
                 if (pData) processed.unshift(parseTyreSpecs(pData));
             }
         }
         
-        // Thorough deduplication of the new data itself
         const uniqueNew = Array.from(new Map(processed.map(item => [item.id, item])).values()) as TyreProduct[];
 
         setTyres(isRefresh ? uniqueNew : prev => {
@@ -351,7 +344,6 @@ const TyreShop: React.FC<TyreShopProps> = ({
     } catch (error) { console.error(error); } finally { setLoading(false); setLoadingMore(false); }
   };
 
-  // --- LOGIC: CART ---
   const addToCart = (tyre: TyreProduct) => { 
       if (!tyre.in_stock) return; 
       logAnalyticsEvent('add_to_cart', String(tyre.id), tyre.title);
@@ -385,7 +377,6 @@ const TyreShop: React.FC<TyreShopProps> = ({
     } catch (err) { setOrderError("Помилка при відправці замовлення"); } finally { setOrderSending(false); }
   };
 
-  // --- NOVA POSHTA LOGIC ---
   const fetchNpCities = async (term: string) => {
     if(!novaPoshtaKey) return;
     setIsNpLoadingCities(true);
@@ -412,7 +403,6 @@ const TyreShop: React.FC<TyreShopProps> = ({
     } catch (e) { console.error(e); } finally { setIsNpLoadingWarehouses(false); }
   };
 
-  // --- HELPERS ---
   const handleProductClick = (tyre: TyreProduct) => {
     if (tyre.in_stock !== false) setSelectedProductForModal(tyre);
   };
@@ -446,7 +436,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
     <div className="min-h-screen bg-[#09090b] py-4 md:py-12 animate-in fade-in duration-500 pb-32">
       <div className="max-w-7xl mx-auto px-2 md:px-4">
         
-                <header className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-6 mb-8 md:mb-12 px-2">
+        <header className="flex flex-col lg:flex-row justify-between items-stretch lg:items-end gap-6 mb-8 md:mb-12 px-2">
             {/* Left: Info block */}
             <div className="flex-1 space-y-5">
                <nav className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-black text-zinc-600">
@@ -465,13 +455,6 @@ const TyreShop: React.FC<TyreShopProps> = ({
                  <h1 className="text-3xl md:text-5xl font-black text-white uppercase italic tracking-tighter leading-tight mb-2">
                    ФОРСАЖ <span className="text-[#FFC300]">СИНЕЛЬНИКОВЕ</span>
                  </h1>
-                 <div className="flex items-center gap-2 text-emerald-500 font-black text-[10px] uppercase tracking-widest bg-emerald-500/5 py-1 px-3 rounded-full w-fit border border-emerald-500/10">
-                   <span className="relative flex h-2 w-2">
-                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                   </span>
-                   ВІДКРИТО 24/7
-                 </div>
                </div>
 
                <p className="text-zinc-400 text-sm md:text-base max-w-xl leading-relaxed">
@@ -483,26 +466,24 @@ const TyreShop: React.FC<TyreShopProps> = ({
                </p>
 
                <div className="flex flex-wrap gap-3">
-                 <a href={shopPhoneLink} className="bg-zinc-900 border border-zinc-800 p-3 md:p-4 rounded-2xl flex items-center gap-3 group hover:border-[#FFC300] transition-all flex-1 min-w-[200px]">
+                 <a href={shopPhoneLink} className="bg-zinc-900 border border-zinc-800 p-3 md:p-5 rounded-2xl flex items-center gap-3 group hover:border-[#FFC300] transition-all w-fit min-h-[80px]">
                    <div className="w-10 h-10 md:w-12 md:h-12 bg-[#FFC300] rounded-xl flex items-center justify-center text-black group-hover:scale-110 transition-transform shrink-0">
                      <Phone size={18}/>
                    </div>
                    <div>
-                     <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest mb-0.5">Менеджер · Vodafone</p>
-                     <span className="text-white font-black text-base md:text-lg tracking-tight">{shopPhone}</span>
+                     <span className="text-white font-black text-base md:text-xl tracking-tight">{shopPhone}</span>
                    </div>
                  </a>
-                 <a href={shopPhoneLink2} className="bg-zinc-900 border border-zinc-800 p-3 md:p-4 rounded-2xl flex items-center gap-3 group hover:border-[#FFC300] transition-all flex-1 min-w-[200px]">
+                 <a href={shopPhoneLink2} className="bg-zinc-900 border border-zinc-800 p-3 md:p-5 rounded-2xl flex items-center gap-3 group hover:border-[#FFC300] transition-all w-fit min-h-[80px]">
                    <div className="w-10 h-10 md:w-12 md:h-12 bg-zinc-800 border border-zinc-700 rounded-xl flex items-center justify-center text-[#FFC300] group-hover:scale-110 transition-transform shrink-0">
                      <Phone size={18}/>
                    </div>
                    <div>
-                     <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest mb-0.5">Офіс · Kyivstar</p>
-                     <span className="text-white font-black text-base md:text-lg tracking-tight">{shopPhone2}</span>
+                     <span className="text-white font-black text-base md:text-xl tracking-tight">{shopPhone2}</span>
                    </div>
                  </a>
                  {isAdmin && (
-                   <button onClick={onAdminClick} className="bg-zinc-900/80 border border-[#FFC300]/30 p-3 md:p-4 rounded-2xl flex items-center gap-3 hover:border-[#FFC300] transition-all group shrink-0">
+                   <button onClick={onAdminClick} className="bg-zinc-900/80 border border-[#FFC300]/30 p-3 md:p-5 rounded-2xl flex items-center gap-3 hover:border-[#FFC300] transition-all group shrink-0 min-h-[80px]">
                      <div className="p-1.5 bg-zinc-800 rounded-lg text-[#FFC300] group-hover:scale-110 transition-transform">
                        <Lock size={14} strokeWidth={2.5}/>
                      </div>
@@ -512,7 +493,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
                </div>
             </div>
 
-            {/* Mobile: "How to get to us" button (hidden on desktop) */}
+            {/* Mobile: Map Button */}
             <div className="lg:hidden">
                <a 
                  href="https://www.google.com/maps/dir/?api=1&destination=48.317541,35.513511"
@@ -533,22 +514,22 @@ const TyreShop: React.FC<TyreShopProps> = ({
                </a>
             </div>
 
-            {/* Desktop: Mini Map (hidden on mobile) */}
-            <div className="hidden lg:block lg:w-5/12 xl:w-[380px] shrink-0">
+            {/* Desktop: Mini Map */}
+            <div className="hidden lg:block lg:w-5/12 xl:w-[420px] shrink-0">
                <div className="relative group">
                   <div className="absolute -inset-1 bg-gradient-to-r from-[#FFC300]/40 to-yellow-600/20 rounded-3xl blur opacity-30 group-hover:opacity-60 transition duration-700"></div>
                   <div className="relative bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl">
                     <iframe 
                         src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2653.2206680489955!2d35.513511315682!3d48.31754097923793!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zNDjCsDE5JzAzLjEiTiAzNcKwMzAnNDguNiJF!5e0!3m2!1suk!2sua!4v1650000000000!5m2!1suk!2sua" 
                         width="100%" 
-                        height="180" 
+                        height="200" 
                         style={{ border: 0, filter: 'grayscale(1) invert(0.85) contrast(1.1)' }} 
                         allowFullScreen 
                         loading="lazy" 
                         referrerPolicy="no-referrer-when-downgrade"
                         title="Forsage Tires location"
                     ></iframe>
-                    <div className="bg-zinc-950/90 border-t border-zinc-800 p-2.5 flex items-center justify-between gap-2">
+                    <div className="bg-zinc-950/90 border-t border-zinc-800 p-3 flex items-center justify-between gap-2">
                         <div className="min-w-0 flex items-center gap-2">
                           <MapPin size={12} className="text-[#FFC300] shrink-0"/>
                           <p className="text-zinc-400 text-[10px] font-bold truncate">м. Синельникове, вул. Квітнева 9</p>
@@ -556,9 +537,9 @@ const TyreShop: React.FC<TyreShopProps> = ({
                         <a 
                           href="https://www.google.com/maps/dir/?api=1&destination=48.317541,35.513511" 
                           target="_blank" rel="noopener noreferrer"
-                          className="bg-[#FFC300] px-2.5 py-1 rounded-lg text-black font-black text-[9px] uppercase tracking-widest hover:bg-white transition-colors shrink-0 flex items-center gap-1"
+                          className="bg-[#FFC300] px-3 py-1.5 rounded-lg text-black font-black text-[10px] uppercase tracking-widest hover:bg-white transition-colors shrink-0 flex items-center gap-1"
                         >
-                          Маршрут <ArrowRight size={9} />
+                          Маршрут <ArrowRight size={10} />
                         </a>
                     </div>
                   </div>
@@ -583,7 +564,6 @@ const TyreShop: React.FC<TyreShopProps> = ({
 
         {onServiceClick && <ServiceBanner onServiceClick={onServiceClick} />}
 
-        {/* Agro Banner — shown only when not already in agro category */}
         {activeCategory !== 'agro' && (
           <AgroBanner 
             onCategoryClick={() => { setPriorityProductId(null); setActiveCategory('agro'); }} 
@@ -760,7 +740,6 @@ const TyreShop: React.FC<TyreShopProps> = ({
 
       {/* Floating Contact Hub */}
       <div className="fixed bottom-6 right-6 z-[160] flex flex-col items-end gap-3 pointer-events-none">
-          {/* Expanded Menu */}
           <div className={`flex flex-col gap-3 transition-all duration-300 transform origin-bottom ${showContactHub ? 'scale-100 opacity-100 translate-y-0 pointer-events-auto' : 'scale-50 opacity-0 translate-y-10 pointer-events-none'}`}>
               <a href={TELEGRAM_LINK} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 group">
                   <span className="bg-black/80 backdrop-blur-md border border-zinc-800 text-white text-[10px] font-black uppercase px-3 py-1.5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity shadow-2xl">Telegram</span>
@@ -768,13 +747,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
                   </div>
               </a>
-              <a href={VIBER_LINK} className="flex items-center gap-3 group">
-                  <span className="bg-black/80 backdrop-blur-md border border-zinc-800 text-white text-[10px] font-black uppercase px-3 py-1.5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity shadow-2xl">Viber</span>
-                  <div className="w-12 h-12 bg-[#7360f2] rounded-2xl flex items-center justify-center text-white shadow-xl shadow-purple-900/40 hover:scale-110 active:scale-95 transition-all">
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-                  </div>
-              </a>
-              <a href={PHONE_LINK_1} className="flex items-center gap-3 group">
+              <a href={shopPhoneLink} className="flex items-center gap-3 group">
                   <span className="bg-black/80 backdrop-blur-md border border-zinc-800 text-white text-[10px] font-black uppercase px-3 py-1.5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity shadow-2xl">Дзвінок</span>
                   <div className="w-12 h-12 bg-[#FFC300] rounded-2xl flex items-center justify-center text-black shadow-xl shadow-yellow-900/40 hover:scale-110 active:scale-95 transition-all">
                       <Phone size={24} strokeWidth={2.5}/>
@@ -782,7 +755,6 @@ const TyreShop: React.FC<TyreShopProps> = ({
               </a>
           </div>
 
-          {/* Main Toggle Button */}
           <button 
             onClick={() => setShowContactHub(!showContactHub)}
             className={`w-16 h-16 rounded-3xl flex items-center justify-center shadow-2xl transition-all duration-500 pointer-events-auto active:scale-90 ${showContactHub ? 'bg-zinc-800 text-white rotate-90' : 'bg-[#FFC300] text-black shadow-yellow-900/50'}`}
@@ -796,7 +768,6 @@ const TyreShop: React.FC<TyreShopProps> = ({
           </button>
       </div>
 
-      {/* Floating Toast Notification */}
       {toast.visible && (
         <div className="fixed bottom-[100px] left-1/2 -translate-x-1/2 z-[150] w-[90%] md:w-auto bg-black/90 backdrop-blur-md text-white px-2 py-2 md:px-6 md:py-3 rounded-2xl md:rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center justify-between gap-3 animate-in slide-in-from-bottom-10 fade-in duration-300 border border-zinc-800">
            <div className="flex items-center gap-3 w-full overflow-hidden">
@@ -806,14 +777,8 @@ const TyreShop: React.FC<TyreShopProps> = ({
                <span className="text-xs font-bold truncate">{toast.message}</span>
              </div>
            </div>
-           <button onClick={() => { setIsCartOpen(true); setToast(p => ({...p, visible: false})); }} className="bg-white text-black px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#FFC300] transition-colors shrink-0">
-             Оформ.
-           </button>
         </div>
       )}
-
-      {/* SEO Content Block for Google Ranking */}
-      <SeoContentBlock />
     </div>
   );
 };

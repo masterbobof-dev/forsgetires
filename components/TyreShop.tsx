@@ -45,6 +45,7 @@ interface TyreShopProps {
   cartItems: CartItem[];
   onCartChange: (items: CartItem[]) => void;
   onServiceClick?: () => void;
+  hideTireService?: boolean;
 }
 
 const TyreShop: React.FC<TyreShopProps> = ({ 
@@ -55,7 +56,8 @@ const TyreShop: React.FC<TyreShopProps> = ({
   onAdminClick,
   cartItems,
   onCartChange,
-  onServiceClick
+  onServiceClick,
+  hideTireService = false
 }) => {
   const [tyres, setTyres] = useState<TyreProduct[]>([]);
   const [loading, setLoading] = useState(true);
@@ -442,7 +444,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
                <nav className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-black text-zinc-600">
                  <button onClick={onBack} className="hover:text-[#FFC300] transition-colors">Головна</button>
                  <span className="text-zinc-800">/</span>
-                 <span className="text-zinc-500">Магазин та сервіс</span>
+                 <span className="text-zinc-500">{hideTireService ? 'Каталог товарів' : 'Магазин та сервіс'}</span>
                  {activeCategory !== 'all' && (
                    <>
                      <span className="text-zinc-800">/</span>

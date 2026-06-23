@@ -97,9 +97,25 @@ const App: React.FC = () => {
   const [shopCategory, setShopCategory] = useState<ShopCategory>('car');
   const [shopInitialProduct, setShopInitialProduct] = useState<TyreProduct | null>(null);
   const [adminPanelMode, setAdminPanelMode] = useState<'service' | 'tyre'>('tyre');
+  const [hideTireService, setHideTireService] = useState(false);
 
   // Cart state - lifted to App level for header badge
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [cartItems, setCartItems] = useState<CartItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('forsage_cart');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('forsage_cart', JSON.stringify(cartItems));
+    } catch (e) {
+      console.error('Error saving cart to localStorage:', e);
+    }
+  }, [cartItems]);
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   const auth = useAuth({
@@ -233,7 +249,7 @@ const App: React.FC = () => {
         </Suspense>
       </main>
 
-      {currentView !== 'admin' && <Footer />}
+      {currentView !== 'admin' && <Footer hideTireService={hideTireService} />}
 
       {/* AUTH MODAL */}
       {auth.showAuthModal && !auth.session && (

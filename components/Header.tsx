@@ -12,7 +12,7 @@ interface HeaderProps {
   cartCount?: number;
 }
 
-const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick, cartCount = 0 }) => {
+const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick, cartCount = 0, hideTireService = false }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [phones, setPhones] = useState({
     p1: PHONE_NUMBER_1,

@@ -52,6 +52,7 @@ const SettingsTab: React.FC = () => {
   const [managerPassword, setManagerPassword] = useState('');
   const [showManagerPassword, setShowManagerPassword] = useState(false);
   const [isUpdatingManager, setIsUpdatingManager] = useState(false);
+  const [hideTireService, setHideTireService] = useState(false);
 
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -128,6 +129,7 @@ const SettingsTab: React.FC = () => {
                 if(r.key === 'service_staff_email') setServiceEmail(r.value);
                 if(r.key === 'admin_email') setAdminEmail(r.value);
                 if(r.key === 'manager_email') setManagerEmail(r.value);
+                if(r.key === 'hide_tire_service') setHideTireService(r.value === 'true');
                 if(r.key === 'ai_openai_base_url') setOpenaiBaseUrl(r.value);
                 if(r.key === 'ai_openai_model') setOpenaiModel(r.value);
                 if(r.key === 'ai_custom_base_url') setCustomBaseUrl(r.value);
@@ -225,6 +227,8 @@ const SettingsTab: React.FC = () => {
         await supabase.from('settings').upsert({ key: 'ai_provider', value: aiProvider });
         await supabase.from('settings').upsert({ key: 'service_staff_email', value: serviceEmail });
         await supabase.from('settings').upsert({ key: 'admin_email', value: adminEmail });
+
+        await supabase.from('settings').upsert({ key: 'hide_tire_service', value: hideTireService ? 'true' : 'false' });
 
         if (managerEmail.trim() && managerPassword.trim()) {
             setIsUpdatingManager(true);

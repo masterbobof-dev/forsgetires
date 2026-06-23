@@ -2,7 +2,11 @@ import React from 'react';
 import { Phone, MapPin, Clock, ShieldCheck } from 'lucide-react';
 import { PHONE_NUMBER_1, PHONE_NUMBER_2, PHONE_LINK_1, PHONE_LINK_2 } from '../constants';
 
-const Footer: React.FC = () => {
+interface FooterProps {
+  hideTireService?: boolean;
+}
+
+const Footer: React.FC<FooterProps> = ({ hideTireService = false }) => {
   return (
     <footer className="bg-black pt-20 pb-12 border-t border-white/10 relative overflow-hidden">
       {/* Decorative background element */}
@@ -14,7 +18,9 @@ const Footer: React.FC = () => {
             <span className="font-black text-4xl tracking-tighter text-white italic -skew-x-12">
               ФОРСАЖ<span className="text-[#FFC300]">24</span>
             </span>
-            <span className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.4em] leading-none mt-1 ml-1">Шиномонтаж & Магазин</span>
+            <span className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.4em] leading-none mt-1 ml-1">
+              {hideTireService ? 'Інтернет-магазин шин' : 'Шиномонтаж & Магазин'}
+            </span>
           </div>
           <p className="text-zinc-400 text-sm leading-relaxed max-w-xs">
             Найкращий сервіс у м. Синельникове. Професійне обладнання, досвідчені майстри та великий вибір шин у наявності.
@@ -108,7 +114,7 @@ const Footer: React.FC = () => {
 
       <div className="max-w-7xl mx-auto px-4 pt-10 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6">
         <p className="text-zinc-600 text-[10px] font-black uppercase tracking-[0.4em] text-center md:text-left">
-          © {new Date().getFullYear()} Шиномонтаж ФОРСАЖ. Всі права захищено.
+          © {new Date().getFullYear()} {hideTireService ? 'Магазин шин ФОРСАЖ' : 'Шиномонтаж ФОРСАЖ'}. Всі права захищено.
         </p>
         <div className="flex gap-6 text-[10px] font-black uppercase tracking-widest text-zinc-600">
            <span className="hover:text-zinc-400 cursor-pointer transition-colors">Політика конфіденційності</span>

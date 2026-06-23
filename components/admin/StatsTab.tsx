@@ -205,9 +205,9 @@ const StatsTab: React.FC = () => {
                             <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Пристрої юзерів</p>
                             <div className="space-y-3">
                                 {Object.entries(stats.deviceType).map(([name, val]: any) => {
-                                    const totalArr = Object.values(stats.deviceType);
-                                    const total = totalArr.length > 0 ? totalArr.reduce((a, b) => a + b, 0) : 1;
-                                    const pct = Math.round((val / total) * 100);
+                                    const totalArr = Object.values(stats.deviceType) as number[];
+                                    const total = totalArr.length > 0 ? totalArr.reduce((a: number, b: number) => a + b, 0) : 1;
+                                    const pct = Math.round(((val as number) / total) * 100);
                                     return (
                                         <div key={name}>
                                             <div className="flex justify-between items-center mb-1">

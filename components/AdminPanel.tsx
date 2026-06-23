@@ -22,7 +22,7 @@ interface AdminPanelProps {
   setMode: (mode: 'service' | 'tyre') => void;
 }
 
-type AccessStatus = 'loading' | 'granted_admin' | 'granted_staff' | 'denied' | 'setup_required';
+type AccessStatus = 'loading' | 'granted_admin' | 'granted_staff' | 'granted_manager' | 'denied' | 'setup_required';
 
 // ── Reusable Confirm Dialog ────────────────────────────────────────────────
 interface ConfirmDialogProps {
@@ -120,17 +120,22 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite, mode, s
       setCurrentUserEmail(email);
 
       const { data: settings, error: settingsError } = await supabase
-        .from('settings').select('key, value').in('key', ['admin_email', 'service_staff_email']);
+        .from('settings').select('key, value').in('key', ['admin_email', 'service_staff_email', 'manager_email']);
       if (settingsError) throw settingsError;
 
       const adminEmail = settings?.find(s => s.key === 'admin_email')?.value?.trim().toLowerCase();
       const staffEmail = settings?.find(s => s.key === 'service_staff_email')?.value?.trim().toLowerCase();
+      const managerEmail = settings?.find(s => s.key === 'manager_email')?.value?.trim().toLowerCase();
 
       if (!adminEmail) {
         setAccessStatus('setup_required');
       } else if (email === adminEmail) {
         setAccessStatus('granted_admin');
         if (mode === 'service') setMode('tyre');
+      } else if (email === managerEmail) {
+        setAccessStatus('granted_manager');
+        setMode('tyre');
+        setActiveTab('orders');
       } else if (email === staffEmail) {
         setAccessStatus('granted_staff');
         setMode('service');
@@ -217,6 +222,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite, mode, s
   }
 
   // ── Main Panel ─────────────────────────────────────────────────────────
+  const isAdmin = accessStatus === 'granted_admin';
+  const isManager = accessStatus === 'granted_manager';
   const isStaff = accessStatus === 'granted_staff';
 
   const getTabLabel = (tab: string) => {
@@ -241,7 +248,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite, mode, s
   };
 
   const serviceTabs = isStaff ? ['schedule', 'clients'] : ['schedule', 'clients', 'prices', 'gallery'];
-  const tyreTabs = ['orders', 'tyres', 'ai', 'promo', 'sync', 'seo', 'articles', 'stats', 'settings'];
+  const tyreTabs = isAdmin
+    ? ['orders', 'tyres', 'ai', 'promo', 'sync', 'seo', 'articles', 'stats', 'settings']
+    : isManager
+      ? ['orders', 'tyres', 'ai', 'promo', 'seo', 'articles', 'stats']
+      : [];
   const currentTabs = mode === 'service' ? serviceTabs : tyreTabs;
 
   return (
@@ -261,7 +272,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite, mode, s
             <h1 className="text-lg md:text-xl font-bold uppercase flex items-center gap-2">
               <Lock className="text-[#FFC300] hidden sm:block" />
               <span className="truncate max-w-[150px] sm:max-w-none">
-                {isStaff ? 'Сервіс' : 'Admin'}
+                {isStaff ? 'Сервіс' : isManager ? 'Менеджер' : 'Admin'}
               </span>
             </h1>
 
@@ -274,7 +285,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite, mode, s
               </button>
             )}
 
-            {!isStaff && (
+            {(isAdmin || isManager) && (
               <div className="bg-black p-0.5 rounded-lg border border-zinc-700 flex ml-1">
                 <button
                   onClick={() => { setMode('tyre'); setIsMobileMenuOpen(false); }}
@@ -385,14 +396,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite, mode, s
         {activeTab === 'clients' && <ClientsTab />}
         {!isStaff && activeTab === 'gallery' && <GalleryTab />}
         {!isStaff && activeTab === 'prices' && <PricesTab />}
-        {!isStaff && activeTab === 'settings' && <SettingsTab />}
+        {isAdmin && activeTab === 'settings' && <SettingsTab />}
         {!isStaff && activeTab === 'tyres' && <TyresTab />}
         {!isStaff && activeTab === 'orders' && <OrdersTab />}
         {!isStaff && activeTab === 'stats' && <StatsTab />}
         {!isStaff && activeTab === 'articles' && <ArticlesTab />}
         {!isStaff && activeTab === 'seo' && <SeoTab />}
         {!isStaff && activeTab === 'promo' && <PromoTab />}
-        {!isStaff && activeTab === 'sync' && <SyncTab />}
+        {isAdmin && activeTab === 'sync' && <SyncTab />}
         {!isStaff && activeTab === 'ai' && <AiAssistantTab />}
       </main>
 

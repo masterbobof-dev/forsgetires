@@ -48,6 +48,10 @@ const SettingsTab: React.FC = () => {
   const [hasKeySerper, setHasKeySerper] = useState(false);
   const [serviceEmail, setServiceEmail] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
+  const [managerEmail, setManagerEmail] = useState('');
+  const [managerPassword, setManagerPassword] = useState('');
+  const [showManagerPassword, setShowManagerPassword] = useState(false);
+  const [isUpdatingManager, setIsUpdatingManager] = useState(false);
 
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -123,6 +127,7 @@ const SettingsTab: React.FC = () => {
                 if(r.key === 'ai_provider') setAiProvider(normalizeProviderId(r.value));
                 if(r.key === 'service_staff_email') setServiceEmail(r.value);
                 if(r.key === 'admin_email') setAdminEmail(r.value);
+                if(r.key === 'manager_email') setManagerEmail(r.value);
                 if(r.key === 'ai_openai_base_url') setOpenaiBaseUrl(r.value);
                 if(r.key === 'ai_openai_model') setOpenaiModel(r.value);
                 if(r.key === 'ai_custom_base_url') setCustomBaseUrl(r.value);
@@ -220,6 +225,22 @@ const SettingsTab: React.FC = () => {
         await supabase.from('settings').upsert({ key: 'ai_provider', value: aiProvider });
         await supabase.from('settings').upsert({ key: 'service_staff_email', value: serviceEmail });
         await supabase.from('settings').upsert({ key: 'admin_email', value: adminEmail });
+
+        if (managerEmail.trim() && managerPassword.trim()) {
+            setIsUpdatingManager(true);
+            const { error: rpcError } = await supabase.rpc('set_manager_credentials', {
+                m_email: managerEmail.trim(),
+                m_password: managerPassword.trim()
+            });
+            setIsUpdatingManager(false);
+            if (rpcError) {
+                showMsg("Помилка при створенні/оновленні менеджера: " + rpcError.message, 'error');
+                return;
+            }
+            setManagerPassword(''); // Clear password field after success
+        } else {
+            await supabase.from('settings').upsert({ key: 'manager_email', value: managerEmail.trim() });
+        }
         await supabase.from('settings').upsert({ key: 'ai_openai_base_url', value: openaiBaseUrl });
         await supabase.from('settings').upsert({ key: 'ai_openai_model', value: openaiModel });
         await supabase.from('settings').upsert({ key: 'ai_custom_base_url', value: customBaseUrl });
@@ -447,6 +468,52 @@ const SettingsTab: React.FC = () => {
                         <label className="block text-blue-200 text-xs font-bold uppercase mb-2 flex items-center gap-2"><UserCog size={16}/> Вхід для Співробітника</label>
                         <p className="text-zinc-400 text-sm mb-3">Користувач з цим email матиме доступ <strong>ТІЛЬКИ</strong> до вкладки "Сервіс" (Розклад/Клієнти).</p>
                         <input type="email" value={serviceEmail} onChange={e => setServiceEmail(e.target.value)} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-bold" placeholder="staff@forsage.com"/>
+                   </div>
+
+                    <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 space-y-4">
+                         <label className="block text-[#FFC300] text-xs font-bold uppercase mb-2 flex items-center gap-2">
+                             <UserCog size={16}/> Вхід для Менеджера
+                         </label>
+                         <p className="text-zinc-400 text-sm">
+                             Менеджер матиме доступ до товарів, замовлень, маркетингу та статистики, але <strong>НЕ зможе</strong> бачити налаштування (API ключі) та імпортувати/експортувати базу даних.
+                         </p>
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                             <div>
+                                 <label className="block text-zinc-400 text-[10px] font-bold uppercase mb-1">Email Менеджера</label>
+                                 <input 
+                                     type="email" 
+                                     value={managerEmail} 
+                                     onChange={e => setManagerEmail(e.target.value)} 
+                                     className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-bold" 
+                                     placeholder="manager@forsage.com"
+                                 />
+                             </div>
+                             <div>
+                                 <label className="block text-zinc-400 text-[10px] font-bold uppercase mb-1">Новий Пароль Менеджера (опціонально)</label>
+                                 <div className="relative">
+                                     <input 
+                                         type={showManagerPassword ? "text" : "password"} 
+                                         value={managerPassword} 
+                                         onChange={e => setManagerPassword(e.target.value)} 
+                                         className="w-full bg-black border border-zinc-700 rounded-lg p-3 pr-10 text-white font-mono text-sm focus:border-[#FFC300] outline-none" 
+                                         placeholder="Введіть новий пароль, щоб змінити..."
+                                     />
+                                     <button 
+                                         type="button"
+                                         onClick={() => setShowManagerPassword(!showManagerPassword)} 
+                                         className="absolute right-3 top-3 text-zinc-500 hover:text-white"
+                                         title={showManagerPassword ? "Приховати" : "Показати"}
+                                     >
+                                         {showManagerPassword ? <EyeOff size={18}/> : <Eye size={18}/>}
+                                     </button>
+                                 </div>
+                             </div>
+                         </div>
+                         {managerPassword.trim() && (
+                             <p className="text-[10px] text-amber-400 font-bold">
+                                 Пароль буде оновлено при збереженні всіх налаштувань.
+                             </p>
+                         )}
                    </div>
                    
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-zinc-800">

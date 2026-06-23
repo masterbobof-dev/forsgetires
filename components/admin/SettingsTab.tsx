@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
     Settings, Briefcase, Plus, PackageX, Trash2, 
     KeyRound, Save, X, AlertTriangle, Loader2, Phone, MapPin, 
-    Link2, Shield, UserCog, Truck, Crown, LayoutGrid, Smartphone,
+    Link2, Shield, UserCog, UserCheck, Truck, Crown, LayoutGrid, Smartphone,
     CheckCircle, Wand2, Upload, Sparkles, Eye, EyeOff, Globe
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';

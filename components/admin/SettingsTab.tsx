@@ -13,7 +13,7 @@ import ExcelImportPanel from './sync/ExcelImportPanel';
 import { normalizeProviderId, type AIProviderId } from '../../aiSeoClient';
 import { fetchAdminAiKeyStatus, saveAdminAiKeys } from '../../aiProxyClient';
 
-type SettingsSubTab = 'general' | 'security' | 'suppliers' | 'system';
+type SettingsSubTab = 'general' | 'security' | 'manager' | 'suppliers' | 'system';
 
 const SettingsTab: React.FC = () => {
   const [activeTab, setActiveTab] = useState<SettingsSubTab>('suppliers');
@@ -418,7 +418,8 @@ const SettingsTab: React.FC = () => {
            <h3 className="text-xl font-black text-white px-4 mb-2 flex items-center gap-2"><Settings className="text-[#FFC300]"/> Налаштування</h3>
            <div className="bg-zinc-950 rounded-2xl p-2 border border-zinc-800 space-y-1">
                <NavButton id="general" label="Контакти" icon={Smartphone} />
-               <NavButton id="security" label="Безпека / API" icon={Shield} />
+               <NavButton id="security" label="API Ключі / AI" icon={Shield} />
+               <NavButton id="manager" label="Менеджер / Доступ" icon={UserCog} />
                <NavButton id="suppliers" label="Постачальники" icon={Briefcase} />
                <NavButton id="system" label="Склад / Імпорт" icon={LayoutGrid} />
            </div>

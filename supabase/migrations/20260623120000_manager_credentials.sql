@@ -28,7 +28,7 @@ BEGIN
       updated_at = NOW()
     WHERE id = m_id;
   ELSE
-    -- Create new user in auth.users
+    -- Create new user in auth.users (confirmed_at is a generated column, so we do not insert into it)
     INSERT INTO auth.users (
       instance_id,
       id,
@@ -42,8 +42,7 @@ BEGIN
       created_at,
       updated_at,
       phone,
-      phone_confirmed_at,
-      confirmed_at
+      phone_confirmed_at
     ) VALUES (
       '00000000-0000-0000-0000-000000000000',
       extensions.gen_random_uuid(),
@@ -57,8 +56,7 @@ BEGIN
       NOW(),
       NOW(),
       NULL,
-      NULL,
-      NOW()
+      NULL
     );
   END IF;
 

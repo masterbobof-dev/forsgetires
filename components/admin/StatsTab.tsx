@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
+import SalesReport from './SalesReport';
 import { DollarSign, Users, Eye, ShoppingCart, Activity, ArrowUpRight, ArrowDownRight, Smartphone, Monitor, Globe, Navigation, Clock } from 'lucide-react';
 
 const StatsTab: React.FC = () => {
@@ -137,6 +138,8 @@ const StatsTab: React.FC = () => {
 
   return (
     <div className="space-y-8 pb-20 animate-in fade-in duration-700">
+        <SalesReport />
+
         {/* TOP KPI STRIP */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-zinc-900/80 backdrop-blur-md p-5 rounded-2xl border border-zinc-800 shadow-2xl relative group overflow-hidden">

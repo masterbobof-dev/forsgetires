@@ -167,7 +167,9 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
               return (
                 <button key={p.id} onClick={() => onOpenProduct(p)} className="snap-start shrink-0 w-[160px] md:w-[200px] text-left bg-zinc-900 border border-zinc-800 hover:border-[#FFC300] rounded-2xl overflow-hidden transition-colors">
                   <div className="aspect-square bg-white relative">
-                    {p.image_url && <img src={p.image_thumb_url || p.image_url} alt={p.title} loading="lazy" referrerPolicy="no-referrer" className="w-full h-full object-contain p-3 mix-blend-multiply" />}
+                    {p.image_url
+                      ? <img src={p.image_thumb_url || p.image_url} alt={p.title} loading="lazy" referrerPolicy="no-referrer" className="w-full h-full object-contain p-3 mix-blend-multiply" />
+                      : <span className="w-full h-full flex items-center justify-center text-zinc-300">{(() => { const I = getCategoryIcon(categories.find(c => c.id === p.category_id)?.icon || categories.find(c => c.id === categories.find(k => k.id === p.category_id)?.parent_id)?.icon); return <I size={48} />; })()}</span>}
                     {old > price && <span className="absolute top-2 left-2 bg-red-600 text-white text-[11px] font-black px-2 py-0.5 rounded-full">−{Math.round((1 - price / old) * 100)}%</span>}
                   </div>
                   <div className="p-3">

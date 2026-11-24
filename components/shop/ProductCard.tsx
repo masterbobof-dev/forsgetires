@@ -190,12 +190,6 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
             </p>
           ) : null}
 
-          {tyre.description && (
-            <p className="hidden sm:block text-[11px] md:text-xs text-zinc-500 line-clamp-2 mb-4 leading-relaxed group-hover:text-zinc-400 transition-colors">
-              {tyre.description.length > 80 ? tyre.description.slice(0, 80) + '...' : tyre.description}
-            </p>
-          )}
-
           <div className="mt-auto pt-3 sm:pt-4 border-t border-zinc-800/50 flex items-center justify-between gap-2">
             {onOrder ? (
               <span className="text-sm font-black text-zinc-300 leading-tight">Ціну<br className="sm:hidden" /> уточнюйте</span>

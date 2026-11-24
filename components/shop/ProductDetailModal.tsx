@@ -98,16 +98,84 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
   const go = (dir: number) => setPhotoIdx(i => (i + dir + photos.length) % photos.length);
   const tyreIndex = product.width ? parseTyreIndex(product.title) : null;
 
+  const availability = isOutOfStock ? 'Немає в наявності' : onOrder ? 'Під замовлення' : stockQty !== null && stockQty > 0 ? `В наявності: ${stockQty > 10 ? '>10' : stockQty} шт` : 'В наявності';
+  const availabilityCls = isOutOfStock ? 'text-red-500' : onOrder ? 'text-amber-400' : 'text-emerald-500';
+  const hasSpecs = !!(preset && product.attributes && preset.fields.some(f => formatAttr(f, product.attributes?.[f.key])));
+  const recent = getRecent().filter(t => t.id !== product.id).slice(0, 8);
+
+  /** One card style for "З цим купують" and "Аналоги": white photo, name, price, cart button. */
+  const relatedCard = (t: TyreProduct) => {
+    const reason = (t as TyreProduct & { reason?: string; cross?: boolean }).reason || ((t as { cross?: boolean }).cross ? 'cross' : '');
+    const badge = REASON_BADGE[reason];
+    const img = t.image_thumb_url || t.image_url;
+    return (
+      <div key={t.id} className="snap-start shrink-0 w-[148px] md:w-[172px] bg-zinc-950 border border-zinc-800 hover:border-[#FFC300] rounded-2xl overflow-hidden flex flex-col transition-colors">
+        <button onClick={openItem(t)} className="text-left flex-1">
+          <div className="relative aspect-square bg-white flex items-center justify-center">
+            {img ? <img src={img} alt={t.title} loading="lazy" className="w-full h-full object-contain p-2" /> : <Info className="text-zinc-300" />}
+            {badge && <span className={`absolute top-1.5 left-1.5 text-[9px] ${badge.cls} font-black uppercase px-1.5 py-0.5 rounded`}>{badge.label}</span>}
+          </div>
+          <p className="px-2.5 pt-2 text-[11px] font-bold text-white line-clamp-2 min-h-[2.6em] leading-snug">{t.title} {t.radius}</p>
+        </button>
+        <div className="px-2.5 pb-2.5 pt-1.5 flex items-center justify-between gap-1">
+          <span className="text-sm font-black text-[#FFC300]">{t.on_order ? <span className="text-[11px] text-amber-400">Під замовлення</span> : <>{formatPrice(t.price)} <span className="text-[10px] text-zinc-500 font-normal">грн</span></>}</span>
+          {!t.on_order && <button onClick={withFull(t, addToCart)} aria-label="У кошик" className="w-8 h-8 shrink-0 rounded-lg bg-[#FFC300] hover:bg-white text-black flex items-center justify-center"><ShoppingCart size={15} /></button>}
+        </div>
+      </div>
+    );
+  };
+  const row = (title: string, items: TyreProduct[]) => (
+    <section>
+      <h3 className="text-white text-sm md:text-base font-black uppercase tracking-wide mb-3 flex items-center gap-2">
+        <span className="w-1.5 h-4 bg-[#FFC300] rounded-full" />{title}
+      </h3>
+      <div className="flex gap-3 overflow-x-auto pb-2 snap-x scrollbar-hide -mx-4 px-4 scroll-pl-4 md:-mx-7 md:px-7 md:scroll-pl-7">{items.map(relatedCard)}</div>
+    </section>
+  );
+
+  const buyButtons = (
+    onOrder ? (
+      onQuickOrder && (
+        <button onClick={() => { onQuickOrder(product); onClose(); }}
+          className="flex-1 h-12 md:h-14 rounded-2xl font-black text-sm md:text-base flex items-center justify-center gap-2 uppercase tracking-wide bg-[#FFC300] text-black hover:bg-white transition-all active:scale-95">
+          <Phone size={18} /> Дізнатися ціну
+        </button>
+      )
+    ) : (<>
+      <button disabled={isOutOfStock} onClick={() => { addToCart(product); onClose(); }}
+        className={`flex-1 h-12 md:h-14 rounded-2xl font-black text-sm md:text-base flex items-center justify-center gap-2 uppercase tracking-wide transition-all active:scale-95 ${isOutOfStock ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed' : 'bg-[#FFC300] text-black hover:bg-white'}`}>
+        <ShoppingCart size={20} strokeWidth={2.5} /> {isOutOfStock ? 'Немає в наявності' : <><span className="sm:hidden">У кошик</span><span className="hidden sm:inline">Додати у кошик</span></>}
+      </button>
+      {!isOutOfStock && onQuickOrder && (
+        <button onClick={() => { onQuickOrder(product); onClose(); }} aria-label="Купити в 1 клік"
+          className="shrink-0 h-12 md:h-14 px-4 rounded-2xl font-black text-xs text-[#FFC300] border border-[#FFC300]/40 hover:bg-[#FFC300]/10 hover:border-[#FFC300] transition-all uppercase tracking-wide flex items-center justify-center gap-2">
+          <Phone size={16} /> <span className="hidden md:inline">Купити в 1 клік</span>
+        </button>
+      )}
+    </>)
+  );
+  const priceBlock = onOrder
+    ? <p className="text-sm text-zinc-300"><b className="text-white">Ціну і термін постачання</b> уточнить менеджер.</p>
+    : (
+      <div className="flex items-baseline gap-2 flex-wrap">
+        <span className="text-2xl md:text-4xl font-black text-[#FFC300] whitespace-nowrap">{formatPrice(product.price)} <span className="text-xs md:text-sm text-white font-normal uppercase">грн</span></span>
+        {hasDiscount && <span className="text-sm text-zinc-500 line-through">{formatPrice(product.old_price)} грн</span>}
+      </div>
+    );
+
   return (
     <div className="fixed inset-0 z-[170] bg-black/90 backdrop-blur-md flex items-end md:items-center justify-center p-0 md:p-4 animate-in fade-in duration-300" onClick={onClose}>
       {renderSchema(product)}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-t-3xl md:rounded-3xl w-full max-w-5xl shadow-2xl relative flex flex-col md:flex-row overflow-y-auto md:overflow-hidden overscroll-contain max-h-[94vh] md:max-h-[85vh] animate-in slide-in-from-bottom md:slide-in-from-bottom-8 md:zoom-in-95 duration-300" onClick={e => e.stopPropagation()}>
-          <button onClick={onClose} className="sticky md:absolute top-3 md:top-4 ml-auto mr-3 md:mr-0 md:right-4 -mb-12 md:mb-0 text-zinc-300 hover:text-white z-20 bg-black/60 hover:bg-black p-2 rounded-full transition-all shrink-0" aria-label="Закрити"><X size={22} /></button>
-          
-          {/* Image Section: all photos, swipe / arrows / thumbnails */}
-          <div className={`w-full md:w-1/2 ${current ? "bg-white" : "bg-zinc-950"} flex flex-col relative shrink-0 md:min-h-full`}>
+      <div className="bg-zinc-900 border border-zinc-800 rounded-t-3xl md:rounded-3xl w-full max-w-6xl shadow-2xl relative overflow-y-auto overscroll-contain max-h-[94vh] md:max-h-[92vh] animate-in slide-in-from-bottom md:slide-in-from-bottom-8 md:zoom-in-95 duration-300" onClick={e => e.stopPropagation()}>
+        <div className="sticky top-0 z-30 h-0 flex justify-end">
+          <button onClick={onClose} className="m-3 h-10 w-10 flex items-center justify-center text-zinc-300 hover:text-white bg-black/70 hover:bg-black rounded-full transition-all shrink-0" aria-label="Закрити"><X size={22} /></button>
+        </div>
+
+        {/* Top: photo + the main things (name, price, buy) */}
+        <div className="md:grid md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+          <div className={`${current ? 'bg-white' : 'bg-zinc-950'} flex flex-col md:self-start overflow-hidden`}>
             <div
-              className="relative flex items-center justify-center aspect-[4/3] md:aspect-auto md:flex-1 cursor-zoom-in group overflow-hidden"
+              className={`relative flex items-center justify-center w-full group overflow-hidden ${current ? 'aspect-[4/3] md:aspect-square md:max-h-[62vh] cursor-zoom-in' : 'h-36 md:h-72'}`}
               onClick={() => photos.length && openLightbox(photos, photoIdx)}
               onTouchStart={e => setTouchX(e.touches[0].clientX)}
               onTouchEnd={e => {
@@ -118,39 +186,29 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
               }}
             >
               {current ? (
-                <img key={current} src={current} className="w-full h-full object-contain p-4 md:p-8 transition-transform duration-500 group-hover:scale-105 animate-in fade-in duration-300" alt={product.title} referrerPolicy="no-referrer" />
+                <img key={current} src={current} className="w-full h-full object-contain p-4 md:p-6 transition-transform duration-500 group-hover:scale-105 animate-in fade-in duration-300" alt={product.title} referrerPolicy="no-referrer" />
               ) : (
-                <div className="flex flex-col items-center justify-center text-zinc-800">
-                  <Info size={64} strokeWidth={1} className="mb-4 opacity-20"/>
+                <div className="flex flex-col items-center justify-center text-zinc-700">
+                  <Info size={56} strokeWidth={1} className="mb-3 opacity-30"/>
                   <span className="font-bold uppercase tracking-widest text-xs">Фото відсутнє</span>
                 </div>
               )}
-
-              {hasDiscount && (
-                <div className="absolute top-4 left-4 md:top-6 md:left-6 bg-red-600 text-white px-3 py-1.5 rounded-xl font-black text-sm shadow-2xl">
-                  Знижка −{discountPercent}%
-                </div>
-              )}
-
+              {hasDiscount && <div className="absolute top-4 left-4 bg-red-600 text-white px-3 py-1.5 rounded-xl font-black text-sm shadow-2xl">Знижка −{discountPercent}%</div>}
               {photos.length > 1 && (
                 <>
                   <button onClick={e => { e.stopPropagation(); go(-1); }} className="hidden md:flex absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 text-white items-center justify-center hover:bg-black" aria-label="Попереднє фото"><ChevronLeft size={22} /></button>
                   <button onClick={e => { e.stopPropagation(); go(1); }} className="hidden md:flex absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 text-white items-center justify-center hover:bg-black" aria-label="Наступне фото"><ChevronRight size={22} /></button>
                   <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 md:hidden">
-                    {photos.map((_, i) => <span key={i} className={`h-1.5 rounded-full transition-all ${i === photoIdx ? 'w-5 bg-[#FFC300]' : 'w-1.5 bg-white/40'}`} />)}
+                    {photos.map((_, i) => <span key={i} className={`h-1.5 rounded-full transition-all ${i === photoIdx ? 'w-5 bg-[#FFC300]' : 'w-1.5 bg-black/30'}`} />)}
                   </div>
                 </>
               )}
-
-              <div className="absolute bottom-4 right-4 bg-black/60 backdrop-blur-md p-2.5 rounded-xl text-white/70 opacity-0 group-hover:opacity-100 transition-opacity">
-                <ZoomIn size={20}/>
-              </div>
+              <div className="absolute bottom-3 right-3 bg-black/60 p-2 rounded-xl text-white/80 opacity-0 group-hover:opacity-100 transition-opacity"><ZoomIn size={18}/></div>
             </div>
-
             {photos.length > 1 && (
-              <div className="hidden md:flex gap-2 p-3 overflow-x-auto scrollbar-hide border-t border-zinc-800">
+              <div className="hidden md:flex gap-2 p-3 overflow-x-auto scrollbar-hide border-t border-zinc-200 bg-white">
                 {photos.map((src, i) => (
-                  <button key={src} onClick={() => setPhotoIdx(i)} className={`w-16 h-16 shrink-0 rounded-lg bg-zinc-900 overflow-hidden border-2 transition-colors ${i === photoIdx ? 'border-[#FFC300]' : 'border-transparent hover:border-zinc-600'}`} aria-label={`Фото ${i + 1}`}>
+                  <button key={src} onClick={() => setPhotoIdx(i)} className={`w-14 h-14 shrink-0 rounded-lg bg-white overflow-hidden border-2 transition-colors ${i === photoIdx ? 'border-[#FFC300]' : 'border-zinc-200 hover:border-zinc-400'}`} aria-label={`Фото ${i + 1}`}>
                     <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" className="w-full h-full object-contain" />
                   </button>
                 ))}
@@ -158,265 +216,137 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
             )}
           </div>
 
-          {/* Info Section */}
-          <div className="w-full md:w-1/2 p-5 md:p-10 md:overflow-y-auto bg-zinc-900 flex flex-col pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-              <div className="mb-8">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="bg-[#FFC300] text-black px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-tighter">
-                    {product.manufacturer || 'Товар'}
-                  </span>
-                  {product.is_hot && <span className="bg-orange-600 text-white px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-tighter">Хіт</span>}
-                  {isLowStock && !isOutOfStock && (
-                    <span className="bg-red-600/20 text-red-500 border border-red-500/30 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-tighter animate-pulse">
-                      Залишилося: {product.stock_quantity} шт
-                    </span>
-                  )}
-                </div>
-                
-                <h1 className="text-2xl md:text-3xl font-black text-white leading-tight mb-4">{product.title}</h1>
+          <div className="p-4 md:p-7 md:pr-14 space-y-4 min-w-0">
+            <div className="flex flex-wrap items-center gap-2 pr-12 md:pr-0">
+              {product.manufacturer && <span className="bg-[#FFC300] text-black px-2.5 py-1 rounded-full text-[11px] font-black uppercase">{product.manufacturer}</span>}
+              {product.is_hot && <span className="bg-orange-600 text-white px-2.5 py-1 rounded-full text-[11px] font-black uppercase">Хіт</span>}
+              {isLowStock && !isOutOfStock && <span className="bg-red-600/20 text-red-500 border border-red-500/30 px-2.5 py-1 rounded-full text-[11px] font-black uppercase">Залишилося: {product.stock_quantity} шт</span>}
+            </div>
 
-                <div className="flex gap-2 mb-4">
-                  {onToggleFavorite && (
-                    <button onClick={onToggleFavorite} aria-pressed={!!isFavorite}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-colors ${isFavorite ? 'bg-red-600 border-red-600 text-white' : 'border-zinc-700 text-zinc-300 hover:border-zinc-500'}`}>
-                      <Heart size={14} fill={isFavorite ? 'currentColor' : 'none'} /> {isFavorite ? 'В обраному' : 'В обране'}
-                    </button>
-                  )}
-                  {onToggleCompare && (
-                    <button onClick={onToggleCompare} aria-pressed={!!isCompared}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-colors ${isCompared ? 'bg-[#FFC300] border-[#FFC300] text-black' : 'border-zinc-700 text-zinc-300 hover:border-zinc-500'}`}>
-                      <Scale size={14} /> {isCompared ? 'У порівнянні' : 'Порівняти'}
-                    </button>
-                  )}
-                </div>
-                
-                <div className="flex flex-wrap gap-3">
-                   {product.season && <div className="flex items-center gap-2 bg-zinc-800/50 border border-zinc-800 px-3 py-2 rounded-xl">
-                      {product.season === 'winter' ? <Snowflake size={16} className="text-blue-400"/> : product.season === 'summer' ? <Sun size={16} className="text-yellow-400"/> : <CloudSun size={16} className="text-zinc-400"/>}
-                      <span className="text-zinc-300 text-xs font-bold uppercase tracking-wide">{getSeasonLabel(product.season)}</span>
-                   </div>}
-                   {tyreIndex && (
-                     <div className="flex items-center gap-2 bg-zinc-800/50 border border-zinc-800 px-3 py-2 rounded-xl" title="Індекс навантаження та швидкості">
-                        <Gauge size={16} className="text-[#FFC300]"/>
-                        <span className="text-zinc-300 text-xs font-bold">{tyreIndex.code}: {describeTyreIndex(tyreIndex)}</span>
-                     </div>
-                   )}
-                   {product.radius && (
-                     <div className="flex items-center gap-2 bg-zinc-800/50 border border-zinc-800 px-3 py-2 rounded-xl">
-                        <Ruler size={16} className="text-[#FFC300]"/>
-                        <span className="text-zinc-300 text-xs font-bold uppercase tracking-wide">{product.radius}</span>
-                     </div>
-                   )}
-                </div>
-              </div>
+            <h1 className="text-xl md:text-2xl font-black text-white leading-tight">{product.title}</h1>
 
-              {preset && product.attributes && preset.fields.some(f => formatAttr(f, product.attributes?.[f.key])) && (
-                <div className="mb-6 rounded-2xl border border-zinc-800 overflow-hidden">
-                  <h3 className="text-zinc-500 text-[11px] font-black uppercase tracking-widest px-4 py-2.5 bg-zinc-800/40">Характеристики</h3>
-                  <dl className="divide-y divide-zinc-800">
-                    {preset.fields.map(f => {
-                      const v = formatAttr(f, product.attributes?.[f.key]);
-                      if (!v) return null;
-                      return (
-                        <div key={f.key} className="flex justify-between gap-4 px-4 py-2.5 text-sm">
-                          <dt className="text-zinc-500">{f.label}</dt>
-                          <dd className="text-white font-bold text-right">{v}</dd>
-                        </div>
-                      );
-                    })}
-                  </dl>
-                </div>
-              )}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+              <span className={`font-bold flex items-center gap-1.5 ${availabilityCls}`}><span className="w-2 h-2 rounded-full bg-current" />{availability}</span>
+              {product.catalog_number && <span className="text-zinc-500">Артикул: <span className="text-zinc-200 font-mono">{product.catalog_number}</span></span>}
+            </div>
 
-              {/* Specs Grid */}
-              <div className="grid grid-cols-2 gap-4 mb-8">
-                <div className="bg-zinc-800/30 p-4 rounded-2xl border border-zinc-800/50">
-                  <p className="text-[11px] text-zinc-500 font-bold uppercase mb-1">Артикул</p>
-                  <p className="text-white font-mono text-sm">{product.catalog_number || '—'}</p>
-                </div>
-                <div className="bg-zinc-800/30 p-4 rounded-2xl border border-zinc-800/50">
-                  <p className="text-[11px] text-zinc-500 font-bold uppercase mb-1">Наявність</p>
-                  <p className={`text-sm font-bold ${isOutOfStock ? 'text-red-500' : onOrder ? 'text-amber-400' : 'text-emerald-500'}`}>
-                    {isOutOfStock ? 'Немає в наявності' : onOrder ? 'Під замовлення' : stockQty !== null && stockQty > 0 ? `В наявності: ${stockQty > 10 ? '>10' : stockQty} шт` : 'В наявності'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mb-8">
-                <h3 className="text-zinc-500 text-[11px] font-black uppercase tracking-widest mb-3 flex items-center gap-2">
-                  <Info size={12}/> Опис товару
-                </h3>
-                <div className="text-zinc-400 text-sm leading-relaxed whitespace-pre-line bg-zinc-800/20 p-4 rounded-2xl border border-zinc-800/50">
-                  {product.description || "Детальний опис для цієї моделі уточнюйте у менеджера за телефоном."}
-                </div>
-              </div>
-
-              {/* Trust Badges */}
-              <div className="grid grid-cols-3 gap-2 mb-8 bg-zinc-950/50 p-4 rounded-2xl border border-zinc-800/50">
-                <div className="flex flex-col items-center text-center group">
-                  <div className="w-10 h-10 bg-emerald-500/10 rounded-full flex items-center justify-center text-emerald-500 mb-2 group-hover:scale-110 transition-transform">
-                    <ShieldCheck size={20} />
-                  </div>
-                  <span className="text-[10px] text-zinc-400 font-black uppercase tracking-tighter">Гарантія якості</span>
-                </div>
-                <div className="flex flex-col items-center text-center group">
-                  <div className="w-10 h-10 bg-blue-500/10 rounded-full flex items-center justify-center text-blue-500 mb-2 group-hover:scale-110 transition-transform">
-                    <Truck size={20} />
-                  </div>
-                  <span className="text-[10px] text-zinc-400 font-black uppercase tracking-tighter">Швидка доставка</span>
-                </div>
-                <div className="flex flex-col items-center text-center group">
-                  <div className="w-10 h-10 bg-purple-500/10 rounded-full flex items-center justify-center text-purple-500 mb-2 group-hover:scale-110 transition-transform">
-                    <CreditCard size={20} />
-                  </div>
-                  <span className="text-[10px] text-zinc-400 font-black uppercase tracking-tighter">Зручна оплата</span>
-                </div>
-              </div>
-
-              <div className="sticky bottom-0 bg-zinc-900/95 backdrop-blur border-t border-zinc-800 py-3 md:pt-4 md:pb-0 mt-auto z-40 -mx-5 px-5 md:mx-0 md:px-0">
-                <div className="flex items-center gap-3 md:flex-col md:items-stretch">
-                  {onOrder ? (
-                    <div className="flex-1 flex flex-col gap-2 md:gap-3">
-                      <p className="text-sm text-zinc-300"><b className="text-white">Ціну і термін постачання</b> уточнить менеджер — залиште номер телефону.</p>
-                      {onQuickOrder && (
-                        <button onClick={() => { onQuickOrder(product); onClose(); }}
-                          className="w-full py-3.5 md:py-5 rounded-2xl font-black text-sm md:text-lg flex items-center justify-center gap-2 uppercase tracking-wider bg-[#FFC300] text-black hover:bg-white transition-all active:scale-95">
-                          <Phone size={18} /> Дізнатися ціну
-                        </button>
-                      )}
-                    </div>
-                  ) : (<>
-                  <div className="flex flex-col shrink-0 md:mb-3">
-                    <span className="text-[10px] md:text-[11px] text-zinc-500 font-bold uppercase tracking-widest md:mb-1">Ціна за штуку</span>
-                    <span className="text-2xl md:text-4xl font-black text-[#FFC300] drop-shadow-[0_0_10px_rgba(255,195,0,0.2)] whitespace-nowrap">
-                      {formatPrice(product.price)} <span className="text-xs md:text-sm text-white font-normal uppercase">грн</span>
-                    </span>
-                  </div>
-                  <div className="flex flex-1 gap-2 md:flex-col md:gap-3">
-                    <button
-                      disabled={isOutOfStock}
-                      onClick={() => { addToCart(product); onClose(); }}
-                      className={`flex-1 py-3.5 md:py-5 rounded-2xl font-black text-xs sm:text-sm md:text-lg flex items-center justify-center gap-2 md:gap-3 uppercase tracking-wider md:tracking-widest transition-all active:scale-95 shadow-xl ${
-                        isOutOfStock
-                          ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
-                          : 'bg-white text-black hover:bg-[#FFC300] hover:shadow-yellow-400/20'
-                      }`}
-                    >
-                      <ShoppingCart size={20} strokeWidth={2.5} /> {isOutOfStock ? 'Немає' : <><span className="sm:hidden">У кошик</span><span className="hidden sm:inline">Додати у кошик</span></>}
-                    </button>
-                    {!isOutOfStock && onQuickOrder && (
-                      <button
-                        onClick={() => { onQuickOrder(product); onClose(); }}
-                        className="shrink-0 px-4 md:w-full md:py-4 rounded-2xl font-black text-xs text-[#FFC300] border border-[#FFC300]/30 hover:bg-[#FFC300]/10 hover:border-[#FFC300] transition-all uppercase tracking-widest flex items-center justify-center gap-2"
-                        aria-label="Купити в 1 клік"
-                      >
-                        <Phone size={16} /> <span className="hidden md:inline">Купити в 1 клік</span>
-                      </button>
-                    )}
-                  </div>
-                  </>)}
-                </div>
-              </div>
-
-              {approvals.length > 0 && (
-                <div className="mt-6 bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4">
-                  <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-2">Допуски та специфікації</h3>
-                  <div className="flex flex-wrap gap-1.5">
-                    {approvals.map(a => <span key={a} className="text-xs font-bold text-white bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1">{a}</span>)}
-                  </div>
-                </div>
-              )}
-
-              <ProductReviews productId={product.id} userId={userId} userName={userName} onRequireLogin={onRequireLogin} />
-
-              {companions.length > 0 && (
-                <div className="mt-8 border-t border-zinc-800 pt-8">
-                  <h3 className="text-white text-lg font-black uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 bg-[#FFC300] rounded-full"></div>
-                    З цим купують
-                  </h3>
-                  <div className="flex gap-3 overflow-x-auto pb-4 snap-x scrollbar-hide">
-                    {companions.map(t => (
-                      <div key={t.id} className="snap-start shrink-0 w-[150px] md:w-[170px] bg-zinc-950 border border-zinc-800 hover:border-[#FFC300] rounded-2xl overflow-hidden flex flex-col transition-colors">
-                        <button onClick={openItem(t)} className="text-left flex-1">
-                          <div className="aspect-square bg-white flex items-center justify-center">{(t.image_thumb_url || t.image_url) ? <img src={t.image_thumb_url || t.image_url} alt={t.title} loading="lazy" className="w-full h-full object-contain p-2" /> : <Info className="text-zinc-300" />}</div>
-                          <p className="px-2.5 pt-2 text-[11px] font-bold text-white line-clamp-2 min-h-[2.6em]">{t.title}</p>
-                        </button>
-                        <div className="px-2.5 pb-2.5 pt-1 flex items-center justify-between gap-1">
-                          <span className="text-sm font-black text-[#FFC300]">{formatPrice(t.price)}</span>
-                          <button onClick={withFull(t, addToCart)} aria-label="У кошик" className="w-8 h-8 rounded-lg bg-[#FFC300] hover:bg-white text-black flex items-center justify-center"><ShoppingCart size={15} /></button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Similar Products Sector */}
-              <div className="mt-8 border-t border-zinc-800 pt-8">
-                <h3 className="text-white text-lg font-black uppercase tracking-widest mb-4 flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 bg-[#FFC300] rounded-full"></div>
-                  {isTyre ? 'Схожі пропозиції' : 'Аналоги та інший об\'єм'}
-                </h3>
-                {loadingSimilar ? (
-                  <div className="flex justify-center py-4"><Loader2 className="animate-spin text-zinc-500" /></div>
-                ) : similar.length === 0 ? (
-                  <p className="text-zinc-500 text-sm italic">Альтернатив поки не знайдено.</p>
-                ) : (
-                  <div className="flex gap-4 overflow-x-auto pb-6 snap-x pr-4 scrollbar-hide">
-                    {similar.map(t => (
-                      <div key={t.id} onClick={openItem(t)} className="min-w-[170px] md:min-w-[190px] bg-zinc-950 border border-zinc-800 rounded-2xl p-4 flex flex-col cursor-pointer hover:border-[#FFC300] transition-all snap-center group/card hover:shadow-2xl">
-                        <div className="h-24 md:h-32 mb-3 bg-zinc-900/50 rounded-xl p-3 flex items-center justify-center overflow-hidden border border-zinc-800/50 group-hover/card:bg-black transition-colors">
-                           {(t.image_thumb_url || t.image_url) ? <img src={t.image_thumb_url || t.image_url} alt={t.title} className="max-h-full object-contain group-hover/card:scale-110 transition-transform duration-500"/> : <Info className="opacity-10"/>}
-                        </div>
-                        <div className="flex-grow">
-                          {(() => {
-                            const reason = (t as TyreProduct & { reason?: string; cross?: boolean }).reason || ((t as { cross?: boolean }).cross ? 'cross' : '');
-                            const badge = REASON_BADGE[reason];
-                            return badge
-                              ? <span className={`text-[10px] ${badge.cls} font-black uppercase mb-1 inline-block px-1.5 py-0.5 rounded`}>{badge.label}</span>
-                              : <span className="text-[11px] text-[#FFC300] font-black uppercase mb-1 block">{t.manufacturer || 'Товар'}</span>;
-                          })()}
-                          <h4 className="text-white text-xs font-bold line-clamp-2 mb-2 leading-snug">{t.title} {t.radius}</h4>
-                        </div>
-                        <div className="mt-2 pt-2 border-t border-zinc-800 flex items-center justify-between">
-                          <span className="text-sm font-black text-white">{formatPrice(t.price)}</span>
-                          <ArrowRight size={14} className="text-[#FFC300] opacity-0 group-hover/card:opacity-100 transition-all -translate-x-2 group-hover/card:translate-x-0"/>
-                        </div>
-                      </div>
-                    ))}
+            {(product.season || tyreIndex || product.radius) && (
+              <div className="flex flex-wrap gap-2">
+                {product.season && <div className="flex items-center gap-2 bg-zinc-800/50 border border-zinc-800 px-3 py-1.5 rounded-xl">
+                  {product.season === 'winter' ? <Snowflake size={16} className="text-blue-400"/> : product.season === 'summer' ? <Sun size={16} className="text-yellow-400"/> : <CloudSun size={16} className="text-zinc-400"/>}
+                  <span className="text-zinc-300 text-xs font-bold uppercase">{getSeasonLabel(product.season)}</span>
+                </div>}
+                {tyreIndex && (
+                  <div className="flex items-center gap-2 bg-zinc-800/50 border border-zinc-800 px-3 py-1.5 rounded-xl" title="Індекс навантаження та швидкості">
+                    <Gauge size={16} className="text-[#FFC300]"/><span className="text-zinc-300 text-xs font-bold">{tyreIndex.code}: {describeTyreIndex(tyreIndex)}</span>
                   </div>
                 )}
+                {product.radius && <div className="flex items-center gap-2 bg-zinc-800/50 border border-zinc-800 px-3 py-1.5 rounded-xl"><Ruler size={16} className="text-[#FFC300]"/><span className="text-zinc-300 text-xs font-bold uppercase">{product.radius}</span></div>}
               </div>
+            )}
 
-              {/* Recently viewed (this browser) */}
-              {(() => {
-                const recent = getRecent().filter(t => t.id !== product.id).slice(0, 8);
-                if (recent.length === 0) return null;
-                return (
-                  <div className="mt-8 border-t border-zinc-800 pt-8 pb-10">
-                    <h3 className="text-zinc-500 text-[11px] font-black uppercase tracking-widest mb-4">Ви нещодавно переглядали</h3>
-                    <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide">
-                      {recent.map(t => (
-                        <button key={t.id} onClick={async () => {
-                          const { data } = await supabase.from('tyres').select('*').eq('id', t.id).maybeSingle();
-                          if (data && onSimilarClick) onSimilarClick(data as TyreProduct);
-                        }} className="shrink-0 w-[200px] bg-zinc-900/50 border border-zinc-800/50 p-2 rounded-xl flex items-center gap-2 text-left hover:bg-zinc-800 transition-colors">
-                          <span className="w-12 h-12 bg-white rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden">
-                            {(t.image_thumb_url || t.image_url) ? <img src={t.image_thumb_url || t.image_url} className="w-full h-full object-contain" alt="" loading="lazy" /> : <Info size={16} className="text-zinc-400" />}
-                          </span>
-                          <span className="min-w-0">
-                            <span className="block text-[11px] text-white font-bold line-clamp-2 leading-tight">{t.title}</span>
-                            <span className="block text-[11px] text-[#FFC300] font-black mt-0.5">{t.on_order ? 'Під замовлення' : formatPrice(t.price)}</span>
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
+            {/* Price and buy (desktop; on phones the bar at the bottom of the window) */}
+            <div className="hidden md:block bg-zinc-950/60 border border-zinc-800 rounded-2xl p-4 space-y-3">
+              {priceBlock}
+              <div className="flex gap-2">{buyButtons}</div>
+            </div>
 
+            <div className="flex flex-wrap items-center gap-2">
+              {onToggleFavorite && (
+                <button onClick={onToggleFavorite} aria-pressed={!!isFavorite}
+                  className={`flex items-center gap-1.5 px-3 h-9 rounded-xl border text-xs font-bold transition-colors ${isFavorite ? 'bg-red-600 border-red-600 text-white' : 'border-zinc-700 text-zinc-300 hover:border-zinc-500'}`}>
+                  <Heart size={14} fill={isFavorite ? 'currentColor' : 'none'} /> {isFavorite ? 'В обраному' : 'В обране'}
+                </button>
+              )}
+              {onToggleCompare && (
+                <button onClick={onToggleCompare} aria-pressed={!!isCompared}
+                  className={`flex items-center gap-1.5 px-3 h-9 rounded-xl border text-xs font-bold transition-colors ${isCompared ? 'bg-[#FFC300] border-[#FFC300] text-black' : 'border-zinc-700 text-zinc-300 hover:border-zinc-500'}`}>
+                  <Scale size={14} /> {isCompared ? 'У порівнянні' : 'Порівняти'}
+                </button>
+              )}
+            </div>
+
+            <ul className="grid grid-cols-3 gap-2 text-[11px] text-zinc-400 font-bold">
+              <li className="flex items-center gap-1.5 bg-zinc-950/50 border border-zinc-800/60 rounded-xl px-2 py-2"><ShieldCheck size={16} className="text-emerald-500 shrink-0" /> Гарантія якості</li>
+              <li className="flex items-center gap-1.5 bg-zinc-950/50 border border-zinc-800/60 rounded-xl px-2 py-2"><Truck size={16} className="text-blue-500 shrink-0" /> Нова Пошта</li>
+              <li className="flex items-center gap-1.5 bg-zinc-950/50 border border-zinc-800/60 rounded-xl px-2 py-2"><CreditCard size={16} className="text-purple-500 shrink-0" /> Оплата при отриманні</li>
+            </ul>
+
+            {hasSpecs && preset && (
+              <div className="rounded-2xl border border-zinc-800 overflow-hidden">
+                <h3 className="text-zinc-500 text-[11px] font-black uppercase tracking-widest px-4 py-2 bg-zinc-800/40">Характеристики</h3>
+                <dl className="divide-y divide-zinc-800">
+                  {preset.fields.map(f => {
+                    const v = formatAttr(f, product.attributes?.[f.key]);
+                    if (!v) return null;
+                    return (
+                      <div key={f.key} className="flex justify-between gap-4 px-4 py-2 text-sm">
+                        <dt className="text-zinc-500">{f.label}</dt>
+                        <dd className="text-white font-bold text-right">{v}</dd>
+                      </div>
+                    );
+                  })}
+                </dl>
+              </div>
+            )}
+
+            {approvals.length > 0 && (
+              <div>
+                <h3 className="text-zinc-500 text-[11px] font-black uppercase tracking-widest mb-2">Допуски та специфікації</h3>
+                <div className="flex flex-wrap gap-1.5">
+                  {approvals.map(a => <span key={a} className="text-xs font-bold text-white bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1">{a}</span>)}
+                </div>
+              </div>
+            )}
+
+            {product.description ? (
+              <div>
+                <h3 className="text-zinc-500 text-[11px] font-black uppercase tracking-widest mb-2">Опис товару</h3>
+                <div className="text-zinc-300 text-sm leading-relaxed whitespace-pre-line">{product.description}</div>
+              </div>
+            ) : (
+              <p className="text-zinc-500 text-xs">Потрібна консультація щодо цього товару? Зателефонуйте — підкажемо й підберемо.</p>
+            )}
           </div>
+        </div>
+
+        {/* Below, across the whole window: goods to buy together, analogs, reviews */}
+        <div className="px-4 md:px-7 pt-6 pb-6 space-y-7 border-t border-zinc-800">
+          {companions.length > 0 && row('З цим купують', companions)}
+          {loadingSimilar
+            ? <div className="flex justify-center py-4"><Loader2 className="animate-spin text-zinc-500" /></div>
+            : similar.length > 0 && row(isTyre ? 'Схожі пропозиції' : 'Аналоги та інший об\'єм', similar)}
+
+          <ProductReviews productId={product.id} userId={userId} userName={userName} onRequireLogin={onRequireLogin} />
+
+          {recent.length > 0 && (
+            <section>
+              <h3 className="text-zinc-500 text-[11px] font-black uppercase tracking-widest mb-3">Ви нещодавно переглядали</h3>
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4 scroll-pl-4 md:-mx-7 md:px-7 md:scroll-pl-7">
+                {recent.map(t => (
+                  <button key={t.id} onClick={async () => {
+                    const { data } = await supabase.from('tyres').select('*').eq('id', t.id).maybeSingle();
+                    if (data && onSimilarClick) onSimilarClick(data as TyreProduct);
+                  }} className="shrink-0 w-[200px] bg-zinc-950/60 border border-zinc-800 p-2 rounded-xl flex items-center gap-2 text-left hover:border-[#FFC300] transition-colors">
+                    <span className="w-12 h-12 bg-white rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden">
+                      {(t.image_thumb_url || t.image_url) ? <img src={t.image_thumb_url || t.image_url} className="w-full h-full object-contain" alt="" loading="lazy" /> : <Info size={16} className="text-zinc-400" />}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-[11px] text-white font-bold line-clamp-2 leading-tight">{t.title}</span>
+                      <span className="block text-[11px] text-[#FFC300] font-black mt-0.5">{t.on_order ? 'Під замовлення' : formatPrice(t.price)}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+
+        {/* Phones: price and buy button always at hand */}
+        <div className="md:hidden sticky bottom-0 z-40 bg-zinc-900/95 backdrop-blur border-t border-zinc-800 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex items-center gap-3">
+          <div className="shrink-0 max-w-[45%]">{priceBlock}</div>
+          <div className="flex flex-1 gap-2">{buyButtons}</div>
+        </div>
       </div>
     </div>
   );

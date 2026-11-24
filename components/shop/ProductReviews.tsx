@@ -81,7 +81,7 @@ const ProductReviews: React.FC<Props> = ({ productId, userId, userName, onRequir
   };
 
   return (
-    <section className="mt-8 border-t border-zinc-800 pt-6" aria-label="Відгуки">
+    <section aria-label="Відгуки">
       <div className="flex items-center justify-between gap-3 mb-4">
         <h3 className="text-white text-lg font-black uppercase tracking-widest flex items-center gap-2">
           <MessageSquare size={18} className="text-[#FFC300]" /> Відгуки

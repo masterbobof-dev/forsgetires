@@ -45,6 +45,8 @@ export default async function handler(req, res) {
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
     xml += urlTag(`${SITE_URL}/`, { changefreq: 'daily', priority: '1.0' });
     xml += urlTag(`${SITE_URL}/?c=akcii`, { changefreq: 'daily', priority: '0.8' });
+    xml += urlTag(`${SITE_URL}/oferta`, { changefreq: 'yearly', priority: '0.2' });
+    xml += urlTag(`${SITE_URL}/privacy`, { changefreq: 'yearly', priority: '0.2' });
     for (const c of categories) xml += urlTag(`${SITE_URL}/?c=${c.slug}`, { changefreq: 'daily', priority: '0.9' });
     for (const p of products) xml += urlTag(`${SITE_URL}/?p=${p.id}`, { lastmod: day(p.created_at), changefreq: 'weekly', priority: '0.7' });
     xml += '</urlset>\n';

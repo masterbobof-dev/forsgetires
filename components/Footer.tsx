@@ -1,8 +1,10 @@
 import React from 'react';
 import { Phone, MapPin, Clock, ShieldCheck } from 'lucide-react';
 import { PHONE_NUMBER_1, PHONE_NUMBER_2, PHONE_LINK_1, PHONE_LINK_2 } from '../constants';
+import type { ViewState } from '../types';
 
-const Footer: React.FC = () => {
+const Footer: React.FC<{ onNavigate?: (v: ViewState) => void }> = ({ onNavigate }) => {
+  const link = (v: ViewState) => (e: React.MouseEvent) => { if (onNavigate) { e.preventDefault(); onNavigate(v); } };
   return (
     <footer className="bg-black pt-20 pb-12 border-t border-white/10 relative overflow-hidden">
       {/* Decorative background element */}
@@ -113,8 +115,8 @@ const Footer: React.FC = () => {
           © {new Date().getFullYear()} Інтернет-магазин ФОРСАЖ. Всі права захищено.
         </p>
         <div className="flex gap-6 text-[10px] font-black uppercase tracking-widest text-zinc-600">
-           <span className="hover:text-zinc-400 cursor-pointer transition-colors">Політика конфіденційності</span>
-           <span className="hover:text-zinc-400 cursor-pointer transition-colors">Публічна оферта</span>
+           <a href="/privacy" onClick={link('privacy')} className="hover:text-zinc-300 transition-colors">Політика конфіденційності</a>
+           <a href="/oferta" onClick={link('oferta')} className="hover:text-zinc-300 transition-colors">Публічна оферта</a>
         </div>
       </div>
     </footer>

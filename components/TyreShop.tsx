@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { TyreProduct, CartItem } from '../types';
-import { Loader2, Phone, ArrowDown, ArrowLeft, ArrowRight, MapPin, X, ShoppingCart, Lock } from 'lucide-react';
+import { Loader2, Phone, ArrowDown, ArrowLeft, ArrowRight, MapPin, X, ShoppingCart } from 'lucide-react';
 import { PHONE_LINK_1, PHONE_NUMBER_1, FORMSPREE_ENDPOINT, TELEGRAM_LINK, VIBER_LINK, SITE_URL } from '../constants';
 
 // Підкомпоненти
@@ -53,8 +53,9 @@ const getSeasonLabel = (s: string | undefined) => {
 interface TyreShopProps {
   initialProduct?: TyreProduct | null;
   onBack?: () => void;
-  isAdmin?: boolean;
-  onAdminClick?: () => void;
+  /** signed-in customer (not staff) — orders are linked to the account and the form is prefilled */
+  userId?: string;
+  userEmail?: string;
   cartItems: CartItem[];
   onCartChange: (items: CartItem[]) => void;
 }
@@ -62,8 +63,8 @@ interface TyreShopProps {
 const TyreShop: React.FC<TyreShopProps> = ({ 
   initialProduct, 
   onBack, 
-  isAdmin, 
-  onAdminClick,
+  userId,
+  userEmail,
   cartItems,
   onCartChange,
 }) => {
@@ -165,6 +166,18 @@ const TyreShop: React.FC<TyreShopProps> = ({
   const [isNpLoadingWarehouses, setIsNpLoadingWarehouses] = useState(false);
   const [showCityDropdown, setShowCityDropdown] = useState(false);
 
+  // Prefill checkout from the customer's profile
+  useEffect(() => {
+    if (!userId) return;
+    supabase.from('customer_profiles').select('full_name, phone, city, warehouse').eq('id', userId).maybeSingle().then(({ data }) => {
+      if (!data) return;
+      if (data.full_name) setOrderName(prev => prev || data.full_name);
+      if (data.phone) setOrderPhone(prev => prev || data.phone);
+      if (data.city) { setNpSearchCity(prev => prev || data.city); setSelectedCityName(prev => prev || data.city); }
+      if (data.warehouse) setSelectedWarehouseName(prev => prev || data.warehouse);
+    });
+  }, [userId]);
+
   const [orderSending, setOrderSending] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [orderError, setOrderError] = useState('');
@@ -223,9 +236,11 @@ const TyreShop: React.FC<TyreShopProps> = ({
     setQuickOrderSending(true); setOrderError('');
     try {
       const { error } = await supabase.from('tyre_orders').insert([{ 
-          customer_name: 'Швидке замовлення', 
+ customer_name: orderName || 'Швидке замовлення', 
           customer_phone: quickOrderPhone, 
           status: 'new', 
+          user_id: userId || null,
+          customer_email: userEmail || null,
           items: [{ id: quickOrderProduct.id, title: quickOrderProduct.title, quantity: 1, price: quickOrderProduct.price }] 
       }]);
       if (error) throw error;
@@ -508,9 +523,19 @@ const TyreShop: React.FC<TyreShopProps> = ({
           delivery_city: selectedCityName, 
           delivery_warehouse: selectedWarehouseName, 
           payment_method: paymentMethod, 
+          user_id: userId || null,
+          customer_email: userEmail || null,
           items: cartItems.map(i => ({ id: i.id, title: i.title, quantity: i.quantity, price: i.price })) 
       }]);
       if (error) throw error;
+      // remember name / phone / delivery address in the customer's profile
+      if (userId) {
+        supabase.from('customer_profiles').upsert({
+          id: userId, full_name: orderName, phone: orderPhone,
+          ...(deliveryMethod === 'newpost' && selectedCityName ? { city: selectedCityName, warehouse: selectedWarehouseName } : {}),
+          updated_at: new Date().toISOString(),
+        }).then(() => {});
+      }
       setOrderSuccess(true); 
       onCartChange([]);
     } catch (err) { setOrderError("Помилка при відправці замовлення"); } finally { setOrderSending(false); }
@@ -636,11 +661,6 @@ const TyreShop: React.FC<TyreShopProps> = ({
                 <span className="w-8 h-8 md:w-10 md:h-10 bg-zinc-800 border border-zinc-700 rounded-lg flex items-center justify-center text-[#FFC300]"><MapPin size={16} /></span>
                 <span className="text-zinc-300 font-bold text-xs md:text-sm">вул. Квітнева 9</span>
               </a>
-              {isAdmin && (
-                <button onClick={onAdminClick} className="flex items-center gap-2 bg-zinc-900/80 border border-[#FFC300]/30 px-3 py-1.5 rounded-xl hover:border-[#FFC300] transition-all">
-                  <Lock size={14} className="text-[#FFC300]" /><span className="text-white font-black text-xs uppercase">Адмін</span>
-                </button>
-              )}
             </div>
           </div>
 
@@ -871,7 +891,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
                 {quickOrderSending ? <Loader2 className="animate-spin" size={24}/> : "Замовити дзвінок"}
               </button>
               
-              <p className="text-[9px] text-zinc-600 font-bold uppercase mt-4">Натискаючи кнопку, ви погоджуєтесь на обробку персональних даних.</p>
+              <p className="text-[9px] text-zinc-600 font-bold uppercase mt-4">Натискаючи кнопку, ви погоджуєтесь з <a href="/oferta" target="_blank" className="underline">офертою</a> та <a href="/privacy" target="_blank" className="underline">обробкою персональних даних</a>.</p>
             </div>
           </div>
         </div>

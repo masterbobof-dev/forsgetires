@@ -30,7 +30,8 @@ const OrdersTab: React.FC = () => {
         customer_phone: editingOrder.customer_phone, 
         status: editingOrder.status, 
         delivery_city: editingOrder.delivery_city, 
-        delivery_warehouse: editingOrder.delivery_warehouse 
+        delivery_warehouse: editingOrder.delivery_warehouse,
+        tracking_number: (editingOrder as any).tracking_number?.trim() || null
     }).eq('id', editingOrder.id);
     setShowModal(false); 
     fetchOrders();
@@ -210,6 +211,15 @@ const OrdersTab: React.FC = () => {
                                <option value="cancelled">Скасовано</option>
                            </select>
                        </div>
+
+                       <div>
+                           <label className="block text-xs text-zinc-500 font-bold mb-1 uppercase">Номер ТТН Нової Пошти</label>
+                           <input value={(editingOrder as any).tracking_number || ''} onChange={e => setEditingOrder({...editingOrder, tracking_number: e.target.value} as any)} placeholder="20450000000000" inputMode="numeric" className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white focus:border-[#FFC300] outline-none" />
+                           <p className="text-[10px] text-zinc-500 mt-1">Покупець побачить кнопку «Відстежити посилку» у своєму кабінеті.</p>
+                       </div>
+                       {(editingOrder as any).customer_email && (
+                           <p className="text-xs text-zinc-400">Email покупця: <span className="text-white">{(editingOrder as any).customer_email}</span> (зареєстрований клієнт)</p>
+                       )}
 
                        {(editingOrder.delivery_city || editingOrder.delivery_warehouse) && (
                            <div className="p-3 bg-zinc-800 rounded-lg border border-zinc-700">

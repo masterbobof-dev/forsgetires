@@ -353,7 +353,9 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                            {(t.image_thumb_url || t.image_url) ? <img src={t.image_thumb_url || t.image_url} alt={t.title} className="max-h-full object-contain group-hover/card:scale-110 transition-transform duration-500"/> : <Info className="opacity-10"/>}
                         </div>
                         <div className="flex-grow">
-                          <span className="text-[11px] text-[#FFC300] font-black uppercase mb-1 block">{t.manufacturer || 'Товар'}</span>
+                          {(t as TyreProduct & { cross?: boolean }).cross
+                            ? <span className="text-[10px] bg-green-600 text-white font-black uppercase mb-1 inline-block px-1.5 py-0.5 rounded">Точний аналог</span>
+                            : <span className="text-[11px] text-[#FFC300] font-black uppercase mb-1 block">{t.manufacturer || 'Товар'}</span>}
                           <h4 className="text-white text-xs font-bold line-clamp-2 mb-2 leading-snug">{t.title} {t.radius}</h4>
                         </div>
                         <div className="mt-2 pt-2 border-t border-zinc-800 flex items-center justify-between">

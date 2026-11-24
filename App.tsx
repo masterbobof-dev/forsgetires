@@ -181,6 +181,7 @@ const App: React.FC = () => {
             onCartChange={setCartItems}
             userId={auth.session && !isStaff ? auth.session.user?.id : undefined}
             userEmail={auth.session?.user?.email}
+            onRequireLogin={() => auth.openAuthModal('login')}
           />
         );
     }

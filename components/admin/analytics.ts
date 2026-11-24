@@ -1,6 +1,6 @@
 import { supabase } from '../../supabaseClient';
 
-export type AnalyticsEventType = 'page_view' | 'view_item' | 'add_to_cart';
+export type AnalyticsEventType = 'page_view' | 'view_item' | 'add_to_cart' | 'add_to_wishlist' | 'search' | 'purchase';
 
 const getSessionId = () => {
     let sid = sessionStorage.getItem('analytics_session_id');

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Lock, LogOut, ShieldAlert, UserCheck, Loader2, Menu, X as CloseIcon, ChevronRight, Settings as SettingsIcon, ShoppingBag, BarChart3, Globe, Megaphone, FileText, Database, FolderTree, AlertCircle, Sparkles } from 'lucide-react';
+import { Lock, LogOut, ShieldAlert, UserCheck, Loader2, Menu, X as CloseIcon, ChevronRight, Settings as SettingsIcon, ShoppingBag, BarChart3, Globe, Megaphone, FileText, Database, FolderTree, AlertCircle, Sparkles, MessageSquare } from 'lucide-react';
 import SettingsTab from './admin/SettingsTab';
 import TyresTab from './admin/TyresTab';
 import OrdersTab from './admin/OrdersTab';
@@ -10,6 +10,7 @@ import PromoTab from './admin/PromoTab';
 import SyncTab from './admin/SyncTab';
 import AiAssistantTab from './admin/AiAssistantTab';
 import CategoriesTab from './admin/CategoriesTab';
+import ReviewsTab from './admin/ReviewsTab';
 import { supabase } from '../supabaseClient';
 
 interface AdminPanelProps {
@@ -207,7 +208,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
 
   const getTabLabel = (tab: string) => {
     const labels: Record<string, string> = {
-      categories: 'Категорії',
+      categories: 'Категорії', reviews: 'Відгуки',
       tyres: 'Товари', orders: 'Замовлення', promo: 'Маркетинг', sync: 'API / Синхр.',
       seo: 'SEO', articles: 'Статті', settings: 'Налашт.', stats: 'Стат.',
       ai: 'AI Помічник',
@@ -217,7 +218,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
 
   const getTabIcon = (tab: string) => {
     const icons: Record<string, React.ReactNode> = {
-      categories: <FolderTree size={18} />, tyres: <ShoppingBag size={18} />, orders: <FileText size={18} />,
+      categories: <FolderTree size={18} />, reviews: <MessageSquare size={18} />, tyres: <ShoppingBag size={18} />, orders: <FileText size={18} />,
       promo: <Megaphone size={18} />, sync: <Database size={18} />, seo: <Globe size={18} />,
       articles: <FileText size={18} />, settings: <SettingsIcon size={18} />, stats: <BarChart3 size={18} />,
       ai: <Sparkles size={18} />,
@@ -226,9 +227,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
   };
 
   const currentTabs = isAdmin
-    ? ['orders', 'tyres', 'categories', 'ai', 'promo', 'sync', 'seo', 'articles', 'stats', 'settings']
+    ? ['orders', 'tyres', 'categories', 'reviews', 'ai', 'promo', 'sync', 'seo', 'articles', 'stats', 'settings']
     : isManager
-      ? ['orders', 'tyres', 'categories', 'ai', 'promo', 'seo', 'articles', 'stats']
+      ? ['orders', 'tyres', 'categories', 'reviews', 'ai', 'promo', 'seo', 'articles', 'stats']
       : [];
 
   return (
@@ -355,6 +356,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
         {isAdmin && activeTab === 'settings' && <SettingsTab />}
         {activeTab === 'tyres' && <TyresTab />}
         {activeTab === 'categories' && <CategoriesTab />}
+        {activeTab === 'reviews' && <ReviewsTab />}
         {activeTab === 'orders' && <OrdersTab />}
         {activeTab === 'stats' && <StatsTab />}
         {activeTab === 'articles' && <ArticlesTab />}

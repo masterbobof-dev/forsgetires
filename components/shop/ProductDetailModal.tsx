@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, ShoppingCart, ZoomIn, ShieldCheck, Truck, CreditCard, Info, Snowflake, Sun, CloudSun, Ruler, Flame, Loader2, Phone, ArrowRight } from 'lucide-react';
+import { Heart, Scale, X, ShoppingCart, ZoomIn, ShieldCheck, Truck, CreditCard, Info, Snowflake, Sun, CloudSun, Ruler, Flame, Loader2, Phone, ArrowRight } from 'lucide-react';
 import { TyreProduct } from '../../types';
 import { supabase } from '../../supabaseClient';
 import { FilterPreset, formatAttr } from '../../productAttributes';
+import ProductReviews from './ProductReviews';
 
 interface ProductDetailModalProps {
   product: TyreProduct | null;
@@ -17,9 +18,16 @@ interface ProductDetailModalProps {
   onSimilarClick?: (t: TyreProduct) => void;
   /** characteristics definition for disks / batteries */
   preset?: FilterPreset | null;
+  isFavorite?: boolean;
+  onToggleFavorite?: () => void;
+  isCompared?: boolean;
+  onToggleCompare?: () => void;
+  userId?: string;
+  userName?: string;
+  onRequireLogin?: () => void;
 }
 
-const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClose, addToCart, formatPrice, getSeasonLabel, renderSchema, openLightbox, onQuickOrder, onSimilarClick, preset }) => {
+const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClose, addToCart, formatPrice, getSeasonLabel, renderSchema, openLightbox, onQuickOrder, onSimilarClick, preset, isFavorite, onToggleFavorite, isCompared, onToggleCompare, userId, userName, onRequireLogin }) => {
   const [similar, setSimilar] = useState<TyreProduct[]>([]);
   const [loadingSimilar, setLoadingSimilar] = useState(false);
 
@@ -109,6 +117,21 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                 </div>
                 
                 <h1 className="text-2xl md:text-3xl font-black text-white leading-tight mb-4">{product.title}</h1>
+
+                <div className="flex gap-2 mb-4">
+                  {onToggleFavorite && (
+                    <button onClick={onToggleFavorite} aria-pressed={!!isFavorite}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-colors ${isFavorite ? 'bg-red-600 border-red-600 text-white' : 'border-zinc-700 text-zinc-300 hover:border-zinc-500'}`}>
+                      <Heart size={14} fill={isFavorite ? 'currentColor' : 'none'} /> {isFavorite ? 'В обраному' : 'В обране'}
+                    </button>
+                  )}
+                  {onToggleCompare && (
+                    <button onClick={onToggleCompare} aria-pressed={!!isCompared}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-colors ${isCompared ? 'bg-[#FFC300] border-[#FFC300] text-black' : 'border-zinc-700 text-zinc-300 hover:border-zinc-500'}`}>
+                      <Scale size={14} /> {isCompared ? 'У порівнянні' : 'Порівняти'}
+                    </button>
+                  )}
+                </div>
                 
                 <div className="flex flex-wrap gap-3">
                    {product.season && <div className="flex items-center gap-2 bg-zinc-800/50 border border-zinc-800 px-3 py-2 rounded-xl">
@@ -219,6 +242,8 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                   </div>
                 </div>
               </div>
+
+              <ProductReviews productId={product.id} userId={userId} userName={userName} onRequireLogin={onRequireLogin} />
 
               {/* Similar Products Sector */}
               <div className="mt-8 border-t border-zinc-800 pt-8">

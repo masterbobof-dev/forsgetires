@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ShoppingCart, Flame, ShoppingBag, Eye, Info } from 'lucide-react';
+import { ShoppingCart, Flame, ShoppingBag, Eye, Info, Heart, Scale } from 'lucide-react';
 import { TyreProduct } from '../../types';
 
 interface ProductCardProps {
@@ -11,9 +11,13 @@ interface ProductCardProps {
   formatPrice: (p: string | undefined) => string;
   /** characteristic badges, e.g. "60 Ah", "+ праворуч", "R16" */
   chips?: string[];
+  isFavorite?: boolean;
+  onToggleFavorite?: () => void;
+  isCompared?: boolean;
+  onToggleCompare?: () => void;
 }
 
-const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, onQuickOrder, formatPrice, chips = [] }) => {
+const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, onQuickOrder, formatPrice, chips = [], isFavorite, onToggleFavorite, isCompared, onToggleCompare }) => {
   const isOutOfStock = tyre.in_stock === false;
   const priceNum = parseFloat(tyre.price || '0');
   const oldPriceNum = parseFloat(tyre.old_price || '0');
@@ -79,6 +83,28 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
             )}
           </div>
           
+          {/* Favourite / compare */}
+          <div className="absolute top-2 right-2 sm:top-3 sm:right-3 z-30 flex flex-col gap-1.5">
+            {onToggleFavorite && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
+                className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center backdrop-blur-md transition-all active:scale-90 ${isFavorite ? 'bg-red-600 text-white' : 'bg-black/50 text-zinc-300 hover:text-white hover:bg-black/70'}`}
+                aria-label={isFavorite ? 'Прибрати з обраного' : 'Додати в обране'} aria-pressed={!!isFavorite}
+              >
+                <Heart size={16} fill={isFavorite ? 'currentColor' : 'none'} className={isFavorite ? 'animate-in zoom-in duration-200' : ''} />
+              </button>
+            )}
+            {onToggleCompare && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onToggleCompare(); }}
+                className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center backdrop-blur-md transition-all active:scale-90 ${isCompared ? 'bg-[#FFC300] text-black' : 'bg-black/50 text-zinc-300 hover:text-white hover:bg-black/70'}`}
+                aria-label={isCompared ? 'Прибрати з порівняння' : 'Додати до порівняння'} aria-pressed={!!isCompared}
+              >
+                <Scale size={15} />
+              </button>
+            )}
+          </div>
+
           {isLowStock && !isOutOfStock && (
             <div className="absolute bottom-2 left-2 sm:bottom-3 sm:left-3 z-10">
               <div className="bg-black/60 backdrop-blur-md text-red-500 text-[9px] font-black px-2 py-1 rounded-lg border border-red-500/30 uppercase tracking-tighter">

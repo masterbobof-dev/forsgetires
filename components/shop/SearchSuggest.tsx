@@ -4,6 +4,7 @@ import { supabase } from '../../supabaseClient';
 import { parseSearch, searchFilters } from '../../searchQuery';
 import type { ProductCategory } from '../../categories';
 import type { TyreProduct } from '../../types';
+import NoPhoto from './NoPhoto';
 
 /**
  * Drop-down under the search field: matching categories and up to 6 products (photo, price),
@@ -68,7 +69,7 @@ const SearchSuggest: React.FC<Props> = ({ query, categories, onProduct, onCatego
         return (
           <button key={p.id} onMouseDown={pick(() => onProduct(p))} className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-zinc-800">
             <span className="w-10 h-10 shrink-0 rounded-lg bg-white flex items-center justify-center overflow-hidden">
-              {img ? <img src={img} alt="" className="w-full h-full object-contain" loading="lazy" /> : <Package size={18} className="text-zinc-400" />}
+              {img ? <img src={img} alt="" className="w-full h-full object-contain" loading="lazy" /> : <NoPhoto size={16} />}
             </span>
             <span className="flex-1 min-w-0">
               <span className="block text-xs text-white font-bold line-clamp-2">{p.title}</span>

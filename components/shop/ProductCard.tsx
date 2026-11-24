@@ -1,5 +1,6 @@
 
 import React from 'react';
+import NoPhoto from './NoPhoto';
 import { ShoppingCart, Flame, ShoppingBag, Eye, Info, Heart, Scale, PhoneCall, Clock } from 'lucide-react';
 import { TyreProduct } from '../../types';
 import { parseTyreIndex, describeTyreIndex } from '../../tyreIndex';
@@ -63,11 +64,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
               referrerPolicy="no-referrer"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-900 to-zinc-950">
-              {PlaceholderIcon
-                ? <PlaceholderIcon size={64} strokeWidth={1.25} className="text-zinc-700 group-hover:text-[#FFC300]/40 transition-colors" />
-                : <ShoppingBag size={56} strokeWidth={1.25} className="text-zinc-700" />}
-            </div>
+            <NoPhoto icon={PlaceholderIcon} size={46} />
           )}
           
           {/* Badges */}

@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import NoPhoto from './NoPhoto';
 import { Heart, Scale, X, ShoppingCart, ZoomIn, ChevronLeft, ChevronRight, Gauge, ShieldCheck, Truck, CreditCard, Info, Snowflake, Sun, CloudSun, Ruler, Flame, Loader2, Phone, ArrowRight } from 'lucide-react';
 import { TyreProduct } from '../../types';
 import { supabase } from '../../supabaseClient';
@@ -122,12 +123,12 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
     const reason = (t as TyreProduct & { reason?: string; cross?: boolean }).reason || ((t as { cross?: boolean }).cross ? 'cross' : '');
     const badge = REASON_BADGE[reason];
     const img = t.image_thumb_url || t.image_url;
-    const Icon = iconFor ? iconFor(t) : Info;
+    const Icon = iconFor ? iconFor(t) : undefined;
     return (
       <div key={t.id} className="snap-start shrink-0 w-[148px] md:w-[172px] bg-zinc-950 border border-zinc-800 hover:border-[#FFC300] rounded-2xl overflow-hidden flex flex-col transition-colors">
         <button onClick={openItem(t)} className="text-left flex-1">
-          <div className={`relative aspect-square flex items-center justify-center ${img ? 'bg-white' : 'bg-gradient-to-br from-zinc-800 to-zinc-950'}`}>
-            {img ? <img src={img} alt={t.title} loading="lazy" className="w-full h-full object-contain p-2" /> : <Icon size={52} strokeWidth={1.25} className="text-zinc-600" />}
+          <div className={`relative aspect-square flex items-center justify-center ${img ? 'bg-white' : ''}`}>
+            {img ? <img src={img} alt={t.title} loading="lazy" className="w-full h-full object-contain p-2" /> : <NoPhoto icon={Icon} size={34} />}
             {badge && <span className={`absolute top-1.5 left-1.5 text-[9px] ${badge.cls} font-black uppercase px-1.5 py-0.5 rounded`}>{badge.label}</span>}
           </div>
           <p className="px-2.5 pt-2 text-[11px] font-bold text-white line-clamp-2 min-h-[2.6em] leading-snug">{t.title} {t.radius}</p>
@@ -203,10 +204,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
               {current ? (
                 <img key={current} src={current} className="w-full h-full object-contain p-4 md:p-6 transition-transform duration-500 group-hover:scale-105 animate-in fade-in duration-300" alt={product.title} referrerPolicy="no-referrer" />
               ) : (
-                <div className="flex flex-col items-center justify-center text-zinc-600">
-                  {(() => { const I = iconFor ? iconFor(product) : Info; return <I size={84} strokeWidth={1} className="mb-3 text-zinc-600" />; })()}
-                  <span className="font-bold uppercase tracking-widest text-[11px] text-zinc-600">Фото скоро буде</span>
-                </div>
+                <NoPhoto icon={iconFor ? iconFor(product) : undefined} size={56} label="Фото скоро буде" />
               )}
               {hasDiscount && <div className="absolute top-4 left-4 bg-red-600 text-white px-3 py-1.5 rounded-xl font-black text-sm shadow-2xl">Знижка −{discountPercent}%</div>}
               {photos.length > 1 && (
@@ -344,7 +342,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                     if (data && onSimilarClick) onSimilarClick(data as TyreProduct);
                   }} className="shrink-0 w-[200px] bg-zinc-950/60 border border-zinc-800 p-2 rounded-xl flex items-center gap-2 text-left hover:border-[#FFC300] transition-colors">
                     <span className={`w-12 h-12 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden ${(t.image_thumb_url || t.image_url) ? 'bg-white' : 'bg-zinc-800'}`}>
-                      {(t.image_thumb_url || t.image_url) ? <img src={t.image_thumb_url || t.image_url} className="w-full h-full object-contain" alt="" loading="lazy" /> : (() => { const I = iconFor ? iconFor(t as TyreProduct) : Info; return <I size={22} strokeWidth={1.5} className="text-zinc-500" />; })()}
+                      {(t.image_thumb_url || t.image_url) ? <img src={t.image_thumb_url || t.image_url} className="w-full h-full object-contain" alt="" loading="lazy" /> : <NoPhoto icon={iconFor ? iconFor(t as TyreProduct) : undefined} size={20} />}
                     </span>
                     <span className="min-w-0">
                       <span className="block text-[11px] text-white font-bold line-clamp-2 leading-tight">{t.title}</span>

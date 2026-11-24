@@ -39,6 +39,37 @@ const serperKey = async () => {
   return String(data?.serper_key || '').replace(/[^\x20-\x7e]/g, '').trim();
 };
 
+// ---------- AI check: is this photo really the product? (Gemini, key in ai_api_keys.gemini_key) ----------
+class RetryLater extends Error {}
+let geminiKeyCache: string | null = null;
+const geminiKey = async () => {
+  if (geminiKeyCache !== null) return geminiKeyCache;
+  const { data } = await db.from('ai_api_keys').select('gemini_key').eq('id', 1).maybeSingle();
+  return (geminiKeyCache = String(data?.gemini_key || '').replace(/[^\x20-\x7e]/g, '').trim());
+};
+const b64 = (bytes: Uint8Array) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s); };
+
+/** true = the photo shows this product, false = another product; throws RetryLater on rate limits */
+const photoMatches = async (bytes: Uint8Array, type: string, p: any): Promise<boolean | null> => {
+  const key = await geminiKey();
+  if (!key) return null; // no AI key: accept as before
+  const prompt = `Назва товару в автомагазині: «${p.title}»${p.manufacturer ? `. Бренд: ${p.manufacturer}` : ''}.\n` +
+    'Чи зображено на фото САМЕ цей товар? Правила: якщо на упаковці чи виробі видно ІНШИЙ бренд — false; ' +
+    'якщо це інший тип товару — false; якщо це логотип, схема, банер, автомобіль, людина замість товару — false; ' +
+    'якщо бренд не видно, але тип товару і вигляд відповідають назві — true. Відповідай лише JSON {"match": true} або {"match": false}.';
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: type, data: b64(bytes) } }] }],
+      generationConfig: { temperature: 0, responseMimeType: 'application/json', thinkingConfig: { thinkingBudget: 0 } },
+    }),
+  });
+  if (res.status === 429 || res.status === 503) throw new RetryLater(`gemini ${res.status}`);
+  if (!res.ok) return null;
+  const text = (await res.json())?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  try { return JSON.parse(text).match === true; } catch { return /true/.test(text) ? true : /false/.test(text) ? false : null; }
+};
+
 // ---------- phase 1: batched search ----------
 const search = async (n: number, ids?: number[]) => {
   const key = await serperKey();
@@ -109,6 +140,7 @@ const downloadOne = async (p: any) => {
   for (const c of p.photo_candidates || []) {
     try {
       const { bytes, type } = await fetchImage(c.url);
+      if (bytes.length <= 1_500_000 && (await photoMatches(bytes, type, p)) === false) throw new Error('AI: інший товар');
       const base = `products/auto/${p.id}-${Date.now().toString(36)}`;
       let full: string, thumb: string;
       if (bytes.length <= SMALL_ENOUGH || type === 'image/webp') {
@@ -122,11 +154,14 @@ const downloadOne = async (p: any) => {
       }
       const upd = await db.from('tyres').update({
         image_url: full, image_thumb_url: thumb, gallery: [full], gallery_thumbs: [thumb],
-        image_source_url: c.link, photo_auto: true, photo_search_error: null,
+        image_source_url: c.link, photo_used_url: c.url, photo_auto: true, photo_verified: true, photo_verified_at: new Date().toISOString(), photo_search_error: null,
       }).eq('id', p.id).is('image_url', null);
       if (upd.error) throw new Error(upd.error.message);
       return { id: p.id, ok: true };
-    } catch (e) { lastErr = String(e?.message || e).slice(0, 120); }
+    } catch (e) {
+      if (e instanceof RetryLater) { await db.from('tyres').update({ photo_download_at: null }).eq('id', p.id); return { id: p.id, ok: false, error: 'retry later' }; }
+      lastErr = String(e?.message || e).slice(0, 120);
+    }
   }
   await db.from('tyres').update({ photo_search_error: `download failed: ${lastErr}` }).eq('id', p.id);
   return { id: p.id, ok: false, error: lastErr };
@@ -140,6 +175,38 @@ const download = async (n: number) => {
   return { downloaded: results.filter(r => r.ok).length, failed: results.filter(r => !r.ok).length };
 };
 
+// ---------- re-check photos found earlier; a wrong one is removed and the next candidate is tried ----------
+const verify = async (n: number) => {
+  const { data: jobs, error } = await db.rpc('claim_photo_verify', { n });
+  if (error) throw new Error(error.message);
+  let ok = 0, wrong = 0, skipped = 0;
+  const list = jobs || [];
+  for (let i = 0; i < list.length; i++) {
+    const p = list[i];
+    try {
+      const { bytes, type } = await fetchImage(p.image_thumb_url || p.image_url);
+      const m = await photoMatches(bytes, type, p);
+      if (m === null) { skipped++; continue; }
+      if (m) { ok++; await db.from('tyres').update({ photo_verified: true }).eq('id', p.id); continue; }
+      wrong++;
+      const prefix = '/storage/v1/object/public/galery/';
+      const paths = [p.image_url, p.image_thumb_url].filter((u: string) => u?.includes(prefix)).map((u: string) => u.split(prefix)[1]);
+      if (paths.length) await db.storage.from('galery').remove([...new Set(paths)]);
+      const rest = (p.photo_candidates || []).filter((c: any) => c.url !== p.photo_used_url && c.link !== p.image_source_url);
+      await db.from('tyres').update({
+        image_url: null, image_thumb_url: null, gallery: [], gallery_thumbs: [], image_source_url: null, photo_used_url: null,
+        photo_auto: false, photo_verified: false, photo_candidates: rest, photo_download_at: null,
+        photo_search_error: rest.length ? null : 'no verified image',
+      }).eq('id', p.id);
+    } catch (e) {
+      // AI limit reached: put this and the remaining products back for a later run
+      if (e instanceof RetryLater) { await db.from('tyres').update({ photo_verified_at: null }).in('id', list.slice(i).map((x: any) => x.id)); skipped += list.length - i; break; }
+      skipped++;
+    }
+  }
+  return { checked: (jobs || []).length, ok, wrong, skipped };
+};
+
 Deno.serve(async (req) => {
   const { data: st } = await db.rpc('program_sync_state');
   if (!st?.token || req.headers.get('x-sync-key') !== st.token) return json({ error: 'forbidden' }, 403);
@@ -147,6 +214,7 @@ Deno.serve(async (req) => {
   try {
     if (body.action === 'search') return json(await search(Math.min(Number(body.n) || 100, 100), body.ids));
     if (body.action === 'download') return json(await download(Math.min(Number(body.n) || 4, 8)));
+    if (body.action === 'verify') return json(await verify(Math.min(Number(body.n) || 10, 20)));
     if (body.action === 'status') return json((await db.rpc('photo_job_status')).data);
     return json({ error: 'action: search | download | status' }, 400);
   } catch (e) {

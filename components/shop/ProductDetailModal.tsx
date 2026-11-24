@@ -6,6 +6,7 @@ import { supabase } from '../../supabaseClient';
 import { FilterPreset, formatAttr } from '../../productAttributes';
 import ProductReviews from './ProductReviews';
 import { parseTyreIndex, describeTyreIndex } from '../../tyreIndex';
+import { addRecent, getRecent } from '../../recentlyViewed';
 
 interface ProductDetailModalProps {
   product: TyreProduct | null;
@@ -28,9 +29,13 @@ interface ProductDetailModalProps {
   onRequireLogin?: () => void;
   /** stock tracking is on → show "Залишилося N шт" */
   showStock?: boolean;
+  /** categories whose goods are offered as "З цим купують" (neighbour sections of the same group) */
+  companionCategoryIds?: number[];
 }
 
-const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClose, addToCart, formatPrice, getSeasonLabel, renderSchema, openLightbox, onQuickOrder, onSimilarClick, preset, isFavorite, onToggleFavorite, isCompared, onToggleCompare, userId, userName, onRequireLogin, showStock = false }) => {
+const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClose, addToCart, formatPrice, getSeasonLabel, renderSchema, openLightbox, onQuickOrder, onSimilarClick, preset, isFavorite, onToggleFavorite, isCompared, onToggleCompare, userId, userName, onRequireLogin, showStock = false, companionCategoryIds = [] }) => {
+  const [companions, setCompanions] = useState<TyreProduct[]>([]);
+  const companionKey = companionCategoryIds.join(',');
   const [similar, setSimilar] = useState<TyreProduct[]>([]);
   const [loadingSimilar, setLoadingSimilar] = useState(false);
   const [photoIdx, setPhotoIdx] = useState(0);
@@ -57,17 +62,19 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
     };
     fetchSimilar();
     
-    // Зберігаємо в "Нещодавно переглянуті"
-    try {
-      const recentRaw = localStorage.getItem('recent_tyres');
-      let recent: TyreProduct[] = recentRaw ? JSON.parse(recentRaw) : [];
-      recent = recent.filter(t => t.id !== product.id);
-      recent.unshift(product);
-      if (recent.length > 5) recent = recent.slice(0, 5);
-      localStorage.setItem('recent_tyres', JSON.stringify(recent));
-    } catch(e) {}
-
+    addRecent(product);
   }, [product]);
+
+  // "З цим купують": popular goods with photos from neighbour sections (oil → filters, etc.)
+  useEffect(() => {
+    setCompanions([]);
+    if (!product || !companionKey) return;
+    let alive = true;
+    supabase.from('tyres').select('*').in('category_id', companionKey.split(',').map(Number)).neq('in_stock', false)
+      .eq('on_order', false).eq('has_photo', true).not('hidden_on_site', 'is', true).order('stock_quantity', { ascending: false }).limit(8)
+      .then(({ data }) => { if (alive) setCompanions((data as TyreProduct[]) || []); });
+    return () => { alive = false; };
+  }, [product?.id, companionKey]);
 
   if (!product) return null;
 
@@ -307,6 +314,29 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
 
               <ProductReviews productId={product.id} userId={userId} userName={userName} onRequireLogin={onRequireLogin} />
 
+              {companions.length > 0 && (
+                <div className="mt-8 border-t border-zinc-800 pt-8">
+                  <h3 className="text-white text-lg font-black uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 bg-[#FFC300] rounded-full"></div>
+                    З цим купують
+                  </h3>
+                  <div className="flex gap-3 overflow-x-auto pb-4 snap-x scrollbar-hide">
+                    {companions.map(t => (
+                      <div key={t.id} className="snap-start shrink-0 w-[150px] md:w-[170px] bg-zinc-950 border border-zinc-800 hover:border-[#FFC300] rounded-2xl overflow-hidden flex flex-col transition-colors">
+                        <button onClick={() => onSimilarClick && onSimilarClick(t)} className="text-left flex-1">
+                          <div className="aspect-square bg-white"><img src={t.image_thumb_url || t.image_url} alt={t.title} loading="lazy" className="w-full h-full object-contain p-2" /></div>
+                          <p className="px-2.5 pt-2 text-[11px] font-bold text-white line-clamp-2 min-h-[2.6em]">{t.title}</p>
+                        </button>
+                        <div className="px-2.5 pb-2.5 pt-1 flex items-center justify-between gap-1">
+                          <span className="text-sm font-black text-[#FFC300]">{formatPrice(t.price)}</span>
+                          <button onClick={() => addToCart(t)} aria-label="У кошик" className="w-8 h-8 rounded-lg bg-[#FFC300] hover:bg-white text-black flex items-center justify-center"><ShoppingCart size={15} /></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Similar Products Sector */}
               <div className="mt-8 border-t border-zinc-800 pt-8">
                 <h3 className="text-white text-lg font-black uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -338,25 +368,28 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                 )}
               </div>
 
-              {/* Recently Viewed - Display from localStorage */}
+              {/* Recently viewed (this browser) */}
               {(() => {
-                const recent = JSON.parse(localStorage.getItem('recent_tyres') || '[]').filter((t: any) => t.id !== product.id);
+                const recent = getRecent().filter(t => t.id !== product.id).slice(0, 8);
                 if (recent.length === 0) return null;
                 return (
                   <div className="mt-8 border-t border-zinc-800 pt-8 pb-10">
                     <h3 className="text-zinc-500 text-[11px] font-black uppercase tracking-widest mb-4">Ви нещодавно переглядали</h3>
                     <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide">
-                       {recent.slice(0, 4).map((t: any) => (
-                         <div key={t.id} onClick={() => onSimilarClick && onSimilarClick(t)} className="min-w-[140px] bg-zinc-900/50 border border-zinc-800/30 p-2.5 rounded-xl flex items-center gap-2 cursor-pointer hover:bg-zinc-800 transition-colors">
-                            <div className="w-10 h-10 bg-black rounded flex-shrink-0 flex items-center justify-center p-1">
-                               <img src={t.image_url} className="w-full h-full object-contain" alt="" />
-                            </div>
-                            <div className="min-w-0">
-                               <p className="text-[10px] text-white font-bold truncate leading-tight uppercase">{t.manufacturer}</p>
-                               <p className="text-[11px] text-[#FFC300] font-black leading-tight">{formatPrice(t.price)}</p>
-                            </div>
-                         </div>
-                       ))}
+                      {recent.map(t => (
+                        <button key={t.id} onClick={async () => {
+                          const { data } = await supabase.from('tyres').select('*').eq('id', t.id).maybeSingle();
+                          if (data && onSimilarClick) onSimilarClick(data as TyreProduct);
+                        }} className="shrink-0 w-[200px] bg-zinc-900/50 border border-zinc-800/50 p-2 rounded-xl flex items-center gap-2 text-left hover:bg-zinc-800 transition-colors">
+                          <span className="w-12 h-12 bg-white rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden">
+                            {(t.image_thumb_url || t.image_url) ? <img src={t.image_thumb_url || t.image_url} className="w-full h-full object-contain" alt="" loading="lazy" /> : <Info size={16} className="text-zinc-400" />}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-[11px] text-white font-bold line-clamp-2 leading-tight">{t.title}</span>
+                            <span className="block text-[11px] text-[#FFC300] font-black mt-0.5">{t.on_order ? 'Під замовлення' : formatPrice(t.price)}</span>
+                          </span>
+                        </button>
+                      ))}
                     </div>
                   </div>
                 );

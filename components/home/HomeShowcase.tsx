@@ -9,6 +9,7 @@ import { Article, fetchArticles, articlePath, articleExcerpt } from '../../artic
 import { linkClick } from '../../navigation';
 import { Stars } from '../shop/ProductReviews';
 import SizeGuideModal from './SizeGuideModal';
+import { getRecent } from '../../recentlyViewed';
 
 interface Props {
   categories: ProductCategory[];
@@ -43,6 +44,11 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
   const [blocks, setBlocks] = useState<{ type: HomeBlockType; title?: string }[]>(DEFAULT_HOME_BLOCKS.map(type => ({ type })));
   const [banners, setBanners] = useState<SiteBanner[]>([]);
   const { promos } = useSitePromos();
+  const [recent] = useState(() => getRecent().slice(0, 10));
+  const openRecent = async (id: number) => {
+    const { data } = await supabase.from('tyres').select('*').eq('id', id).maybeSingle();
+    if (data) onOpenProduct(prepare(data as TyreProduct));
+  };
   useEffect(() => { fetchHomeBlocks().then(setBlocks); fetchBanners().then(setBanners); }, []);
 
   useEffect(() => {
@@ -160,6 +166,25 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
                 </button>
               );
             })}
+          </div>
+        </section>
+      )}
+
+      {recent.length > 0 && (
+        <section>
+          <h2 className="text-sm md:text-base font-black uppercase tracking-widest text-zinc-400 mb-3">Ви переглядали</h2>
+          <div className="flex gap-3 overflow-x-auto pb-2 -mx-3 px-3 snap-x scrollbar-hide">
+            {recent.map(p => (
+              <button key={p.id} onClick={() => openRecent(p.id)} className="snap-start shrink-0 w-[210px] flex items-center gap-2 text-left bg-zinc-900 border border-zinc-800 hover:border-[#FFC300] rounded-xl p-2 transition-colors">
+                <span className="w-12 h-12 shrink-0 bg-white rounded-lg overflow-hidden flex items-center justify-center">
+                  {(p.image_thumb_url || p.image_url) && <img src={p.image_thumb_url || p.image_url} alt="" loading="lazy" className="w-full h-full object-contain" />}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-[11px] font-bold text-white line-clamp-2 leading-tight">{p.title}</span>
+                  <span className="block text-[11px] font-black text-[#FFC300] mt-0.5">{p.on_order ? 'Під замовлення' : `${formatPrice(p.price)} грн`}</span>
+                </span>
+              </button>
+            ))}
           </div>
         </section>
       )}

@@ -22,6 +22,10 @@ export interface ProductCategory {
   vehicle_type?: string | null;
   /** 'batteries' | 'wheels' — which characteristic filters this category uses */
   filter_preset?: string | null;
+  /** goods really available (in stock, not "on order"), including subcategories — shop pages only */
+  available?: number;
+  /** of them with a photo */
+  available_with_photo?: number;
 }
 
 /** Icons the admin can choose for a category (key -> component). */
@@ -70,6 +74,29 @@ const sortCats = (a: ProductCategory, b: ProductCategory) =>
   a.sort_order - b.sort_order || a.name.localeCompare(b.name, 'uk');
 
 /**
+ * Shop pages show only categories that have goods in stock (with their subcategories),
+ * the biggest first. If the counts can't be loaded, all categories are shown.
+ */
+let countsCache: Promise<{ category_id: number; n: number; with_photo: number }[] | null> | null = null;
+const withAvailability = async (list: ProductCategory[]): Promise<ProductCategory[]> => {
+  countsCache ??= Promise.resolve(supabase.rpc('category_counts')).then(({ data, error }) => (error ? null : (data as any[]))).catch(() => null);
+  const rows = await countsCache;
+  if (!rows) return list;
+  const own = new Map(rows.map(r => [Number(r.category_id), r]));
+  const total = (c: ProductCategory, seen = new Set<number>()): [number, number] => {
+    if (seen.has(c.id)) return [0, 0];
+    seen.add(c.id);
+    let n = Number(own.get(c.id)?.n || 0), p = Number(own.get(c.id)?.with_photo || 0);
+    for (const k of list.filter(x => x.parent_id === c.id)) { const [a, b] = total(k, seen); n += a; p += b; }
+    return [n, p];
+  };
+  return list
+    .map(c => { const [n, p] = total(c); return { ...c, available: n, available_with_photo: p }; })
+    .filter(c => (c.available || 0) > 0)
+    .sort((a, b) => (b.available! - a.available!) || sortCats(a, b));
+};
+
+/**
  * Loads categories from Supabase.
  * `dbReady` is false when the table does not exist yet (fallback list is used).
  */
@@ -85,9 +112,10 @@ export const useCategories = (opts: { includeInactive?: boolean } = {}) => {
       setCategories(FALLBACK_CATEGORIES);
       setDbReady(false);
     } else {
-      const list = (data as ProductCategory[])
+      let list = (data as ProductCategory[])
         .filter(c => opts.includeInactive || c.is_active)
         .sort(sortCats);
+      if (!opts.includeInactive) list = await withAvailability(list);
       setCategories(list);
       setDbReady(true);
     }

@@ -4,7 +4,7 @@ import { useSitePromos, fetchBanners, fetchHomeBlocks, SiteBanner, HomeBlockType
 import { navigateTo } from '../../navigation';
 import { supabase } from '../../supabaseClient';
 import { TyreProduct } from '../../types';
-import { ProductCategory, getRootCategories, getCategoryIcon, buildCategoryFilter } from '../../categories';
+import { ProductCategory, getRootCategories, getCategoryIcon } from '../../categories';
 import { Article, fetchArticles, articlePath, articleExcerpt } from '../../articles';
 import { linkClick } from '../../navigation';
 import { Stars } from '../shop/ProductReviews';
@@ -35,7 +35,7 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
   const [h, setH] = useState('');
   const [r, setR] = useState('');
   const [guideOpen, setGuideOpen] = useState(false);
-  const [counts, setCounts] = useState<Record<number, number>>({});
+  const [hotIsPicked, setHotIsPicked] = useState(true);
   const [hot, setHot] = useState<TyreProduct[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
   const [reviews, setReviews] = useState<{ id: number; author_name: string; rating: number; body: string | null; tyres?: { title: string } | null }[]>([]);
@@ -46,19 +46,18 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
   useEffect(() => { fetchHomeBlocks().then(setBlocks); fetchBanners().then(setBanners); }, []);
 
   useEffect(() => {
-    if (!roots.length) return;
-    Promise.all(roots.map(async c => {
-      let q = supabase.from('tyres').select('id', { count: 'exact', head: true }).neq('in_stock', false);
-      const f = buildCategoryFilter(categories, c, dbReady);
-      if (f) q = q.or(f);
-      const { count } = await q;
-      return [c.id, count || 0] as const;
-    })).then(e => setCounts(Object.fromEntries(e)));
-  }, [categories.length, dbReady]);
-
-  useEffect(() => {
-    supabase.from('tyres').select('*').eq('is_hot', true).neq('in_stock', false).not('image_url', 'is', null).limit(12)
-      .then(({ data }) => setHot(((data as TyreProduct[]) || []).map(prepare)));
+    // hits with photos; if there are few, add goods in stock with photos (biggest stock first)
+    (async () => {
+      const { data: hits } = await supabase.from('tyres').select('*').eq('is_hot', true).neq('in_stock', false).eq('on_order', false).eq('has_photo', true).limit(12);
+      let list = (hits as TyreProduct[]) || [];
+      setHotIsPicked(list.length >= 4);
+      if (list.length < 12) {
+        const { data: more } = await supabase.from('tyres').select('*').neq('in_stock', false).eq('on_order', false).eq('has_photo', true)
+          .not('id', 'in', `(${list.map(p => p.id).join(',') || 0})`).order('stock_quantity', { ascending: false }).limit(12 - list.length);
+        list = [...list, ...((more as TyreProduct[]) || [])];
+      }
+      setHot(list.map(prepare));
+    })();
     fetchArticles(3).then(setArticles);
     supabase.from('product_reviews').select('id, author_name, rating, body, tyres(title)').eq('approved', true).order('created_at', { ascending: false }).limit(3)
       .then(({ data }) => setReviews((data as any) || []));
@@ -73,7 +72,7 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
 
   const sections: Record<HomeBlockType, React.ReactNode> = {
     banners: banners.length > 0 ? <BannerSlider banners={banners} linkTo={linkTo} /> : null,
-    size_search: <>
+    size_search: categories.some(c => c.kind === 'tyre') && <>
       {/* Quick size search */}
       <section className="bg-gradient-to-br from-zinc-900 to-zinc-950 border border-zinc-800 rounded-3xl p-4 md:p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="flex items-center justify-between gap-2 mb-3">
@@ -98,7 +97,7 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 md:gap-3">
           {roots.map((c, i) => {
             const Icon = getCategoryIcon(c.icon);
-            const n = counts[c.id];
+            const n = c.available;
             return (
               <button key={c.id} onClick={() => onPickCategory(c.id)}
                 className="group relative overflow-hidden text-left bg-zinc-900 border border-zinc-800 hover:border-[#FFC300] rounded-2xl p-4 md:p-5 min-h-[110px] md:min-h-[140px] flex flex-col justify-between transition-all hover:-translate-y-0.5 animate-in fade-in slide-in-from-bottom-4 duration-500"
@@ -114,6 +113,27 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
           })}
         </div>
       </section>
+      {/* Popular sections: the biggest subcategories */}
+      {(() => {
+        const subs = categories.filter(c => c.parent_id && (c.available || 0) > 0).sort((a, b) => (b.available! - a.available!)).slice(0, 16);
+        if (subs.length < 4) return null;
+        return (
+          <section>
+            <h2 className="text-lg md:text-2xl font-black uppercase tracking-tight mb-3 md:mb-4">Популярні розділи</h2>
+            <div className="flex flex-wrap gap-2">
+              {subs.map(c => {
+                const Icon = getCategoryIcon(c.icon || categories.find(p => p.id === c.parent_id)?.icon);
+                return (
+                  <button key={c.id} onClick={() => onPickCategory(c.id)}
+                    className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 hover:border-[#FFC300] hover:text-[#FFC300] rounded-xl px-3 py-2 text-sm font-bold text-zinc-200 transition-colors">
+                    <span className="text-[#FFC300]"><Icon size={16} /></span>{c.name}<span className="text-zinc-500 font-normal text-xs">{c.available}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })()}
 
       </>,
     hits: <>
@@ -121,8 +141,8 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
       {hot.length > 0 && (
         <section>
           <div className="flex items-center justify-between mb-3 md:mb-4">
-            <h2 className="text-lg md:text-2xl font-black uppercase tracking-tight flex items-center gap-2"><Flame className="text-orange-500" /> Хіти та акції</h2>
-            <button onClick={() => onPickCategory('hot')} className="text-sm font-bold text-[#FFC300] hover:underline flex items-center">Усі <ChevronRight size={16} /></button>
+            <h2 className="text-lg md:text-2xl font-black uppercase tracking-tight flex items-center gap-2"><Flame className="text-orange-500" /> {hotIsPicked ? 'Хіти та акції' : 'Рекомендуємо'}</h2>
+            {hotIsPicked && <button onClick={() => onPickCategory('hot')} className="text-sm font-bold text-[#FFC300] hover:underline flex items-center">Усі <ChevronRight size={16} /></button>}
           </div>
           <div className="flex gap-3 overflow-x-auto pb-2 -mx-3 px-3 snap-x scrollbar-hide fade-edges md:[mask-image:none]">
             {hot.map(p => {

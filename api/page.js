@@ -50,6 +50,13 @@ const PRODUCT_FIELDS = 'id,title,slug,price,image_url';
 async function build(pathname, query) {
   let cats = [];
   try { cats = await rest('product_categories?select=id,name,slug,parent_id,kind,description&is_active=eq.true&order=sort_order'); } catch { /* ignore */ }
+  // only categories with goods in stock (same as the site menu), biggest first
+  try {
+    const counts = await rest('rpc/category_counts');
+    const own = new Map(counts.map((r) => [Number(r.category_id), Number(r.n)]));
+    const total = (c) => (own.get(c.id) || 0) + cats.filter((k) => k.parent_id === c.id).reduce((s, k) => s + total(k), 0);
+    cats = cats.map((c) => ({ ...c, available: total(c) })).filter((c) => c.available > 0).sort((a, b) => b.available - a.available);
+  } catch { /* keep all */ }
 
   // --- articles ---
   if (pathname === '/statti' || pathname.startsWith('/statti/')) {

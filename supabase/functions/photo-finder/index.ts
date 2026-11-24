@@ -12,6 +12,7 @@
  *   { action: "staff.find",   product_id, query? }          — search one product now, candidates with AI verdicts
  *   { action: "staff.attach", product_id, urls[], mode? }   — save chosen photos (first = main) as the product gallery
  *   { action: "staff.reject", product_id }                  — no suitable photo, remove from the review queue
+ *   { action: "staff.bulk_save", items: [{product_id, urls[]}] } — quick review: attach chosen pre-stored photos
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { Image } from 'https://deno.land/x/imagescript@1.3.0/mod.ts';
@@ -185,13 +186,16 @@ const processOne = async (p: any, st: Settings) => {
   const checked: any[] = [];
   const good: { full: string; thumb: string; link: string }[] = [];
   for (const [i, c] of (p.photo_candidates || []).entries()) {
-    if (st.mode === 'auto' && good.length >= st.maxPhotos) break;
+    if (good.length >= st.maxPhotos) break; // enough photos: stop checking to save AI calls
     try {
       const { bytes, type } = await fetchImage(c.url);
       const v = bytes.length <= 1_500_000 ? await verdictFor(bytes, type, p) : null;
       const ok = passes(v, st);
-      checked.push({ ...c, ai: v, ok });
-      if (ok && st.mode === 'auto') good.push({ ...(await store(p.id, bytes, type, i)), link: c.link });
+      const enough = good.length >= st.maxPhotos;
+      // good photos are copied to our storage right away (review mode too), so approving them later is instant
+      const stored = ok && !enough ? await store(p.id, bytes, type, i) : null;
+      checked.push({ ...c, ai: v, ok, ...(stored ? { stored } : {}) });
+      if (stored) good.push({ ...stored, link: c.link });
     } catch (e) {
       if (e instanceof RetryLater) throw e;
       checked.push({ ...c, ai: null, ok: false, error: String(e?.message || e).slice(0, 80) });
@@ -202,12 +206,12 @@ const processOne = async (p: any, st: Settings) => {
     await db.from('tyres').update({ photo_candidates: checked, photo_search_error: 'no good photo' }).eq('id', p.id);
     return 'none';
   }
-  // review: keep only images that can be shown; good ones first
-  const visible = checked.filter(c => !c.error).sort((a, b) => Number(b.ok) - Number(a.ok) || b.score - a.score);
-  await db.from('tyres').update(visible.length
+  // review: products with good (already stored) photos wait for staff; good ones first
+  const visible = checked.filter(c => !c.error).sort((a, b) => Number(!!b.stored) - Number(!!a.stored) || Number(b.ok) - Number(a.ok) || b.score - a.score);
+  await db.from('tyres').update(good.length
     ? { photo_candidates: visible, photo_review: true, photo_search_error: null }
-    : { photo_candidates: [], photo_review: false, photo_search_error: 'no good photo' }).eq('id', p.id);
-  return visible.length ? 'review' : 'none';
+    : { photo_candidates: visible, photo_review: false, photo_search_error: 'no good photo' }).eq('id', p.id);
+  return good.length ? 'review' : 'none';
 };
 
 const download = async (n: number, st: Settings) => {
@@ -281,19 +285,53 @@ const staffAttach = async (body: any) => {
   if (!urls.length) throw new Error('Не вибрано жодного фото');
   const photos: { full: string; thumb: string; link: string }[] = [];
   for (const [i, url] of urls.entries()) {
-    const { bytes, type } = await fetchImage(url);
     const cand = (p.photo_candidates || []).find((c: any) => c.url === url);
+    if (cand?.stored) { photos.push({ ...cand.stored, link: cand.link }); continue; }
+    const { bytes, type } = await fetchImage(url);
     photos.push({ ...(await store(p.id, bytes, type, i)), link: cand?.link || url });
   }
   const append = body.mode === 'append';
   if (!append) await removeAutoFiles(p);
+  await removeUnusedStored(p, photos.map(x => x.full));
   const keep = append ? (p.gallery || []).map((f: string, i: number) => ({ full: f, thumb: p.gallery_thumbs?.[i] || f })) : [];
   await saveGallery(p, [...keep, ...photos], photos[0].link);
   return { product_id: p.id, photos: photos.length };
 };
 
+/** deletes pre-stored review copies that were not chosen */
+const removeUnusedStored = async (p: any, keepFull: string[]) => {
+  const prefix = '/storage/v1/object/public/galery/';
+  const drop = (p.photo_candidates || []).filter((c: any) => c.stored && !keepFull.includes(c.stored.full))
+    .flatMap((c: any) => [c.stored.full, c.stored.thumb]).filter((u: string) => u?.includes(prefix)).map((u: string) => u.split(prefix)[1]);
+  if (drop.length) await db.storage.from('galery').remove([...new Set(drop)]);
+};
+
+/** quick review: [{ product_id, urls[] }] — chosen photos are attached at once, empty list = no photo */
+const staffBulkSave = async (body: any) => {
+  const items: { product_id: number; urls: string[] }[] = (body.items || []).slice(0, 200);
+  let attached = 0, rejected = 0;
+  const { data: rows } = await db.from('tyres').select('*').in('id', items.map(i => Number(i.product_id)));
+  for (const it of items) {
+    const p = (rows || []).find((r: any) => r.id === Number(it.product_id));
+    if (!p) continue;
+    const chosen = (it.urls || []).map(u => (p.photo_candidates || []).find((c: any) => c.url === u && c.stored)).filter(Boolean);
+    await removeUnusedStored(p, chosen.map((c: any) => c.stored.full));
+    if (chosen.length) {
+      await removeAutoFiles({ ...p, gallery: (p.gallery || []).filter((g: string) => !chosen.some((c: any) => c.stored.full === g)) });
+      await saveGallery(p, chosen.map((c: any) => c.stored), chosen[0].link);
+      await db.from('tyres').update({ photo_candidates: [] }).eq('id', p.id);
+      attached++;
+    } else {
+      await db.from('tyres').update({ photo_review: false, photo_candidates: [], photo_search_error: 'rejected by staff' }).eq('id', p.id);
+      rejected++;
+    }
+  }
+  return { attached, rejected };
+};
+
 const staffReject = async (body: any) => {
   const p = await productById(Number(body.product_id));
+  await removeUnusedStored(p, []);
   await db.from('tyres').update({ photo_review: false, photo_candidates: [], photo_search_error: 'rejected by staff' }).eq('id', p.id);
   return { product_id: p.id };
 };
@@ -308,6 +346,7 @@ Deno.serve(async (req) => {
       if (body.action === 'staff.find') return json(await staffFind(body, st));
       if (body.action === 'staff.attach') return json(await staffAttach(body));
       if (body.action === 'staff.reject') return json(await staffReject(body));
+      if (body.action === 'staff.bulk_save') return json(await staffBulkSave(body));
       return json({ error: 'unknown action' }, 400);
     }
     const { data: sync } = await db.rpc('program_sync_state');

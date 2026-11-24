@@ -5,7 +5,7 @@ import { supabase } from '../../supabaseClient';
 /** AI photo search: settings, review queue (choose photos before they are attached) and manual search. */
 
 interface Verdict { match: boolean; white_background: boolean; no_extra_text: boolean; good_quality: boolean }
-interface Candidate { url: string; link: string; title?: string; w?: number; h?: number; score?: number; ai?: Verdict | null; ok?: boolean; error?: string }
+interface Candidate { url: string; link: string; title?: string; w?: number; h?: number; score?: number; ai?: Verdict | null; ok?: boolean; error?: string; stored?: { full: string; thumb: string } }
 interface Product { id: number; title: string; manufacturer?: string | null; catalog_number?: string | null; image_url?: string | null; gallery?: string[] | null; photo_candidates?: Candidate[] | null; photo_auto?: boolean }
 
 const SETTINGS = ['photo_finder_mode', 'photo_finder_max_photos', 'photo_finder_white_bg', 'photo_finder_no_text', 'photo_finder_min_size'] as const;
@@ -141,10 +141,81 @@ const ProductPhotos: React.FC<{ product: Product; maxPhotos: number; onDone: () 
   );
 };
 
+
+/**
+ * Quick review: every pre-checked photo in one grid, all ticked. Untick bad ones, press "Save" —
+ * ticked photos are attached at once (they were copied to our storage in advance), a product with
+ * no ticked photo is marked "no good photo". 60 products per page.
+ */
+const PAGE = 60;
+const QuickReview: React.FC<{ onChanged: () => void }> = ({ onChanged }) => {
+  const [items, setItems] = useState<Product[]>([]);
+  const [total, setTotal] = useState(0);
+  const [off, setOff] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data, count } = await supabase.from('tyres').select('id, title, manufacturer, photo_candidates', { count: 'exact' })
+      .eq('photo_review', true).order('id').range(0, PAGE - 1);
+    setItems((data as Product[]) || []); setTotal(count || 0); setOff(new Set()); setLoading(false);
+    window.scrollTo({ top: 0 });
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const tiles = items.flatMap(p => (p.photo_candidates || []).filter(c => c.stored).map((c, i) => ({ p, c, first: i === 0 })));
+  const toggle = (url: string) => setOff(s => { const n = new Set(s); n.has(url) ? n.delete(url) : n.add(url); return n; });
+  const keepCount = tiles.filter(t => !off.has(t.c.url)).length;
+
+  const save = async () => {
+    setSaving(true); setMsg('');
+    try {
+      const payload = items.map(p => ({ product_id: p.id, urls: (p.photo_candidates || []).filter(c => c.stored && !off.has(c.url)).map(c => c.url) }));
+      const r = await call({ action: 'staff.bulk_save', items: payload });
+      setMsg(`Збережено: ${r.attached} товарів з фото, ${r.rejected} без фото`);
+      onChanged(); await load();
+    } catch (e: any) { setMsg(`Помилка: ${e.message}`); } finally { setSaving(false); }
+  };
+
+  if (loading) return <div className="flex justify-center py-10"><Loader2 className="animate-spin text-[#FFC300]" /></div>;
+  if (!items.length) return <p className="text-zinc-500 text-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-6 text-center">Немає фото на перевірку.{msg && <><br /><span className="text-green-400">{msg}</span></>}</p>;
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-zinc-400">
+        Товари {Math.min(PAGE, items.length)} з {total}. Усі фото відмічені — <b className="text-white">натисніть на погане фото</b>, щоб зняти галочку.
+        Товар без жодної галочки отримає позначку «немає гарного фото».
+      </p>
+      {msg && <p className="text-sm text-green-400">{msg}</p>}
+      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-8 gap-2">
+        {tiles.map(({ p, c, first }) => {
+          const on = !off.has(c.url);
+          return (
+            <button key={p.id + c.url} type="button" onClick={() => toggle(c.url)} title={p.title}
+              className={`relative rounded-lg overflow-hidden border-2 text-left transition-all ${on ? 'border-green-600' : 'border-red-600 opacity-40'}`}>
+              <div className="aspect-square bg-white"><img src={c.stored!.thumb} alt="" loading="lazy" className="w-full h-full object-contain" /></div>
+              <span className={`absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center ${on ? 'bg-green-600' : 'bg-red-600'} text-white`}>{on ? <Check size={12} /> : <X size={12} />}</span>
+              <span className={`block px-1 py-0.5 text-[10px] leading-tight line-clamp-2 min-h-[2.2em] ${first ? 'text-zinc-200' : 'text-zinc-600'} bg-zinc-950`}>{first ? p.title : '↳ інший ракурс'}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="sticky bottom-20 md:bottom-4 z-10 flex flex-wrap items-center gap-3 bg-zinc-950/95 backdrop-blur border border-zinc-800 rounded-2xl p-3">
+        <button onClick={save} disabled={saving} className="bg-[#FFC300] hover:bg-white text-black font-black text-sm px-5 py-2.5 rounded-xl flex items-center gap-2 disabled:opacity-50">
+          {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Зберегти {total > items.length ? 'і далі' : ''}
+        </button>
+        <span className="text-xs text-zinc-400">Залишаю {keepCount} фото, знято {off.size}</span>
+      </div>
+    </div>
+  );
+};
+
 const PhotoFinderTab: React.FC = () => {
   const [settings, setSettings] = useState<SettingsState>(DEFAULTS);
   const [savedMsg, setSavedMsg] = useState('');
-  const [view, setView] = useState<'queue' | 'search'>('queue');
+  const [view, setView] = useState<'quick' | 'queue' | 'search'>('quick');
   const [queue, setQueue] = useState<Product[]>([]);
   const [queueCount, setQueueCount] = useState(0);
   const [stats, setStats] = useState({ withAuto: 0, without: 0 });
@@ -240,12 +311,13 @@ const PhotoFinderTab: React.FC = () => {
       </div>
 
       <div className="flex gap-2">
-        <button onClick={() => setView('queue')} className={toggleCls(view === 'queue')}>На перевірку ({queueCount})</button>
+        <button onClick={() => setView('quick')} className={toggleCls(view === 'quick')}>Швидка перевірка ({queueCount})</button>
+        <button onClick={() => setView('queue')} className={toggleCls(view === 'queue')}>По одному</button>
         <button onClick={() => setView('search')} className={toggleCls(view === 'search')}>Пошук для товару</button>
         {view === 'queue' && <button onClick={loadQueue} className="ml-auto text-zinc-400 hover:text-white text-xs flex items-center gap-1"><RefreshCw size={14} /> Оновити</button>}
       </div>
 
-      {view === 'queue' ? (
+      {view === 'quick' ? <QuickReview onChanged={loadQueue} /> : view === 'queue' ? (
         loading ? <div className="flex justify-center py-10"><Loader2 className="animate-spin text-[#FFC300]" /></div>
         : queue.length === 0 ? (
           <p className="text-zinc-500 text-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-6 text-center">

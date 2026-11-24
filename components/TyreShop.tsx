@@ -487,13 +487,8 @@ const TyreShop: React.FC<TyreShopProps> = ({
         if (!parsedRadius) parsedRadius = `R${r}`; 
         if (vehicle_type === 'car' && r.endsWith('C')) vehicle_type = 'cargo'; 
     }
-    const lt = (tyre.title + ' ' + (tyre.description || '')).toLowerCase();
-    let season = tyre.season || 'all'; 
-    if (!tyre.season) { 
-        if (['зима','winter','snow','ice'].some(x => lt.includes(x))) season = 'winter'; 
-        else if (['літо','summer'].some(x => lt.includes(x))) season = 'summer'; 
-        else if (['всесезон','all season'].some(x => lt.includes(x))) season = 'all-season'; 
-    }
+    // unknown season stays unknown (no "всесезонна" badge instead of a guess)
+    const season = tyre.season || undefined;
     let in_stock = enableStockQty ? (tyre.in_stock !== false && (tyre.stock_quantity ?? 0) > 0) : tyre.in_stock !== false;
     return { ...tyre, width, height, radius: parsedRadius, season, vehicle_type, in_stock };
   };

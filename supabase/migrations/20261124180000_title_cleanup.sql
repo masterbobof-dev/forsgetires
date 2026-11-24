@@ -1,0 +1,13 @@
+-- Data cleanup applied on 2026-11-24 (documented for history; data, not schema):
+-- * 1992 tyre titles rewritten to "<Brand> <Model> <W>/<H> R<D> <index>[ XL][ (під шип)]"
+--   (proposals built by supabase/data/normalize_titles.py → supabase/data/title_cleanup_20261124.json);
+--   radius fixed from the title for 69 tyres (ZR17 etc. had been stored as R15),
+--   manufacturer filled / unified, season set from the model name (NULL when unknown)
+-- * 54 price-list section headers imported as products ("легкові літо HIFLY", "Номенклатура") → in_stock = false
+-- * 1441 auto descriptions like "Сезон: all-season." removed
+-- * stock_quantity = 0 for all products until real stock comes from the shop program
+-- Undo: backups.titles_before_cleanup_20261124 (id, title, manufacturer, radius, season, in_stock)
+--       backups.descriptions_before_cleanup_20261124 (id, description)
+--   e.g. UPDATE public.tyres t SET title = b.title, radius = b.radius, season = b.season, manufacturer = b.manufacturer
+--        FROM backups.titles_before_cleanup_20261124 b WHERE b.id = t.id;
+SELECT 1;

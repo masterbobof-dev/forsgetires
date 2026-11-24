@@ -34,5 +34,24 @@ export const parseTyreIndex = (title: string): TyreIndex | null => {
   };
 };
 
+/**
+ * Canonical tyre title used across the shop: "<Brand> <Model> <W>/<H> R<D>[C] <LI/SI>[ XL][ (під шип)]".
+ * `nameRaw` may still contain the index / XL / "під шип" — they are moved to the end.
+ */
+export const buildTyreTitle = (brand: string, nameRaw: string, width: string, height: string, radius: string): string => {
+  let name = ` ${nameRaw} `;
+  const idx = name.match(/(?<![\w/])(\d{2,3}(?:\/\d{2,3})?[JKLMNPQRSTUHVWYZ])(?![\w])/);
+  if (idx) name = name.replace(idx[0], ' ');
+  const xl = /\bXL\b/.test(name);
+  name = name.replace(/\bXL\b/g, ' ');
+  const spike = /(під|под) шип/i.test(name);
+  name = name.replace(/\(?(під|под) шип\)?/gi, ' ');
+  // the brand must not be repeated inside the model name
+  if (brand) name = name.replace(new RegExp(`(^|\\s)${brand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=\\s|$)`, 'gi'), ' ');
+  const size = width && height ? `${width}/${height} ${radius}` : radius;
+  return [brand.trim(), name.replace(/\s+/g, ' ').trim(), size.trim(), idx ? idx[1] : '']
+    .filter(Boolean).join(' ') + (xl ? ' XL' : '') + (spike ? ' (під шип)' : '');
+};
+
 export const describeTyreIndex = (i: TyreIndex): string =>
   [i.kg ? `до ${i.kg} кг на шину` : '', i.kmh ? `до ${i.kmh} км/год` : ''].filter(Boolean).join(', ');

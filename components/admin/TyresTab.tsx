@@ -7,6 +7,7 @@ import { WHEEL_RADII, CAR_RADII, CARGO_RADII, TRUCK_RADII, AGRO_RADII } from '..
 import readXlsxFile from 'read-excel-file';
 import AiSortModal from './AiSortModal';
 import AttributeImport from './AttributeImport';
+import { buildTyreTitle } from '../../tyreIndex';
 import { invokeAiProxy } from '../../aiProxyClient';
 import { normalizeQuery } from './sync/syncUtils';
 import { useCategories, buildCategoryFilter, getRootCategories, getChildren, isTyreProduct, ProductCategory } from '../../categories';
@@ -800,13 +801,12 @@ const TyresTab: React.FC = () => {
                            ? 'all-season' 
                            : tyreForm.season;
 
-      const seasonLabel = forcedSeason === 'winter' ? 'Winter' : forcedSeason === 'summer' ? 'Summer' : 'All Season';
-      const sizeStr = (tyreForm.width && tyreForm.height) ? `${tyreForm.width}/${tyreForm.height}` : '';
-      const fullTitle = `${tyreForm.manufacturer} ${tyreForm.name} ${sizeStr} ${tyreForm.radius} ${seasonLabel}`.replace(/\s+/g, ' ').trim();
+      // Canonical title: "<Brand> <Model> <W>/<H> R<D> <index>" (season is shown separately, not in the title)
+      const fullTitle = buildTyreTitle(tyreForm.manufacturer.trim(), tyreForm.name, tyreForm.width, tyreForm.height, tyreForm.radius);
 
       const payload: any = {
         title: fullTitle,
-        description: tyreForm.description || `Сезон: ${seasonLabel}.`,
+        description: tyreForm.description || null,
         price: tyreForm.price, 
         old_price: tyreForm.old_price || null,
         base_price: tyreForm.base_price || '0', 
@@ -851,7 +851,7 @@ const TyresTab: React.FC = () => {
       if (t.manufacturer) name = name.replace(t.manufacturer, '');
       if (width && height) name = name.replace(`${width}/${height}`, '').replace(`${width} ${height}`, '');
       if (t.radius) name = name.replace(t.radius, '');
-      name = name.replace(/Winter|Summer|All Season|Зима|Літо|Всесезон/gi, '');
+      name = name.replace(/\s(Winter|Summer|All Season)\s*$/i, ' '); // old titles had the season appended at the end
       name = name.replace(/\s+/g, ' ').trim();
 
       let parsedSeason = t.season || detectSeason(t.title, t.description || '') || 'summer';

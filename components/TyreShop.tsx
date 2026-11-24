@@ -774,8 +774,9 @@ const TyreShop: React.FC<TyreShopProps> = ({
 
             <p className="text-zinc-400 text-sm md:text-base max-w-xl leading-relaxed line-clamp-2 md:line-clamp-none">
               {activeCat?.description || <>
-                <span className="text-[#FFC300] font-bold">Шини, диски, акумулятори та автотовари</span> в наявності.
-                Самовивіз у <span className="text-white font-bold">Синельниковому</span> або доставка Новою Поштою по всій Україні.
+                <span className="md:hidden"><span className="text-[#FFC300] font-bold">Шини, диски, АКБ, автотовари</span> в наявності. Самовивіз або Нова Пошта.</span>
+                <span className="hidden md:inline"><span className="text-[#FFC300] font-bold">Шини, диски, акумулятори та автотовари</span> в наявності.
+                Самовивіз у <span className="text-white font-bold">Синельниковому</span> або доставка Новою Поштою по всій Україні.</span>
               </>}
             </p>
 

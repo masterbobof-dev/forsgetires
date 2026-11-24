@@ -1,7 +1,7 @@
 
 import React from 'react';
 
-export type ViewState = 'home' | 'admin';
+export type ViewState = 'home' | 'admin' | 'account' | 'oferta' | 'privacy';
 
 export interface ServiceItem {
   id: string;

@@ -1,18 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Logo from './Logo';
 import { ViewState } from '../types';
-import { Menu, X, Phone, Lock, ShoppingBag } from 'lucide-react';
+import { Menu, X, Phone, User, ShoppingBag } from 'lucide-react';
 import { PHONE_NUMBER_1, PHONE_NUMBER_2, PHONE_LINK_1, PHONE_LINK_2 } from '../constants';
 import { supabase } from '../supabaseClient';
 
 interface HeaderProps {
   currentView: ViewState;
   onChangeView: (view: ViewState) => void;
-  onAdminClick?: () => void;
+  onAccountClick?: () => void;
+  isLoggedIn?: boolean;
   cartCount?: number;
 }
 
-const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick, cartCount = 0 }) => {
+const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountClick, isLoggedIn = false, cartCount = 0 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const headerRef = useRef<HTMLElement>(null);
 
@@ -115,11 +116,11 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-6">
             <button
-              onClick={() => onAdminClick?.()}
-              className="text-zinc-600 hover:text-[#FFC300] transition-colors p-2 rounded-full hover:bg-zinc-800/50"
-              title="Вхід для персоналу"
+              onClick={() => onAccountClick?.()}
+              className={`flex items-center gap-2 text-sm font-bold transition-colors px-3 py-2 rounded-xl hover:bg-zinc-800/60 ${currentView === 'account' ? 'text-[#FFC300]' : 'text-zinc-300 hover:text-[#FFC300]'}`}
+              aria-label={isLoggedIn ? 'Мій кабінет' : 'Увійти'}
             >
-              <Lock size={18} />
+              <User size={18} /> {isLoggedIn ? 'Кабінет' : 'Увійти'}
             </button>
 
             {navItems.map((item) => (
@@ -169,6 +170,14 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick
               )}
             </button>
 
+            <button
+              onClick={() => onAccountClick?.()}
+              className={`w-9 h-9 flex items-center justify-center transition-colors ${isLoggedIn ? 'text-[#FFC300]' : 'text-zinc-300 hover:text-[#FFC300]'}`}
+              aria-label={isLoggedIn ? 'Мій кабінет' : 'Увійти'}
+            >
+              <User size={20} />
+            </button>
+
             <a
               href={phones.link1}
               className="w-9 h-9 flex items-center justify-center bg-[#FFC300] rounded-full text-black active:scale-90 transition-transform shadow-lg shadow-yellow-900/20"
@@ -204,10 +213,10 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick
 
           <nav className="flex flex-col p-4 gap-1">
             <button
-              onClick={() => { onAdminClick?.(); setIsMenuOpen(false); }}
-              className="text-xl font-bold uppercase italic tracking-wider text-left py-3 border-b border-white/5 text-zinc-500 hover:text-[#FFC300] flex items-center gap-2 transition-colors"
+              onClick={() => { onAccountClick?.(); setIsMenuOpen(false); }}
+              className="text-xl font-black uppercase italic tracking-wider text-left py-3 border-b border-white/5 text-zinc-300 hover:text-[#FFC300] flex items-center gap-2 transition-colors"
             >
-              <Lock size={18} /> Персонал
+              <User size={20} /> {isLoggedIn ? 'Мій кабінет' : 'Увійти / Реєстрація'}
             </button>
 
             {navItems.map((item) => (

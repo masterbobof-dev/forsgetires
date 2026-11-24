@@ -160,14 +160,18 @@ const CartDrawer: React.FC<CartDrawerProps> = (props) => {
                     <span className="text-4xl font-black text-[#FFC300] tracking-tighter">{props.cartTotal} <span className="text-sm text-white font-normal">грн</span></span>
                  </div>
               </div>
-              {props.orderError && <div className="mb-6 text-red-500 text-center text-xs font-black bg-red-900/20 p-4 rounded-2xl border border-red-900/50 animate-bounce uppercase tracking-widest">{props.orderError}</div>}
+              {props.orderError && <div className="mb-6 text-red-500 text-center text-xs font-black bg-red-900/20 p-4 rounded-2xl border border-red-900/50 uppercase tracking-widest animate-in fade-in zoom-in-95">{props.orderError}</div>}
               <button 
                 onClick={props.submitOrder} 
                 disabled={props.orderSending} 
-                className="w-full bg-[#FFC300] hover:bg-white text-black font-black py-6 rounded-2xl text-xl shadow-2xl shadow-yellow-900/20 transition-all active:scale-95 flex items-center justify-center gap-4 disabled:opacity-50 uppercase tracking-widest"
+                className="w-full bg-[#FFC300] hover:bg-white text-black font-black py-4 md:py-6 rounded-2xl text-base md:text-xl shadow-2xl shadow-yellow-900/20 transition-all active:scale-95 flex items-center justify-center gap-4 disabled:opacity-50 uppercase tracking-widest"
               >
                  {props.orderSending ? <Loader2 className="animate-spin" size={28}/> : <><Truck size={28} strokeWidth={2.5}/> ОФОРМИТИ ЗАМОВЛЕННЯ</>}
               </button>
+              <p className="mt-3 text-[10px] text-zinc-500 text-center leading-snug">
+                Оформлюючи замовлення, ви погоджуєтесь з <a href="/oferta" target="_blank" className="underline hover:text-zinc-300">публічною офертою</a> та{' '}
+                <a href="/privacy" target="_blank" className="underline hover:text-zinc-300">політикою конфіденційності</a>.
+              </p>
            </div>
         )}
       </div>

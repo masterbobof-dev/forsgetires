@@ -1,92 +1,36 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, lazy, Suspense, useCallback } from 'react';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import { ViewState, TyreProduct, CartItem } from './types';
-import { X, Loader2, Mail, Key, ArrowLeft, Send, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Loader2, ShieldAlert, LogOut } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { useAuth } from './useAuth';
 import { logAnalyticsEvent } from './components/admin/analytics';
+import { CustomerAuthModal, StaffLogin } from './components/auth/AuthForms';
 
 const AdminPanel = lazy(() => import('./components/AdminPanel'));
 const TyreShop = lazy(() => import('./components/TyreShop'));
+const AccountPage = lazy(() => import('./components/AccountPage'));
+const LegalPage = lazy(() => import('./components/LegalPage'));
 
 const PageLoader = () => (
-  <div className="flex h-screen items-center justify-center">
+  <div className="flex h-[60vh] items-center justify-center">
     <Loader2 className="animate-spin text-[#FFC300]" size={48} />
   </div>
 );
 
-// Reusable field input with inline validation
-const AuthField = ({
-  type, value, onChange, onBlur, placeholder, icon, error, touched,
-}: {
-  type: string; value: string; onChange: (v: string) => void; onBlur: () => void;
-  placeholder: string; icon: React.ReactNode; error?: string; touched?: boolean;
-}) => {
-  const hasError = touched && error;
-  const isValid = touched && !error && value;
-  return (
-    <div className="w-full space-y-1">
-      <div className={`relative flex items-center border rounded-xl transition-colors duration-200 ${
-        hasError ? 'border-red-500' : isValid ? 'border-green-500' : 'border-zinc-700'
-      } bg-black`}>
-        <span className="absolute left-3 text-zinc-500">{icon}</span>
-        <input
-          type={type}
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          onBlur={onBlur}
-          placeholder={placeholder}
-          className="w-full bg-transparent p-3 pl-10 pr-10 text-white outline-none"
-        />
-        {isValid && <CheckCircle2 className="absolute right-3 text-green-500 shrink-0" size={16} />}
-        {hasError && <AlertCircle className="absolute right-3 text-red-500 shrink-0" size={16} />}
-      </div>
-      {hasError && (
-        <p className="text-red-400 text-xs pl-1 animate-in fade-in slide-in-from-top-1 duration-200">
-          {error}
-        </p>
-      )}
-    </div>
-  );
+/** URL path <-> page */
+const PATHS: Record<ViewState, string> = { home: '/', admin: '/admin', account: '/account', oferta: '/oferta', privacy: '/privacy' };
+const viewFromPath = (path: string): ViewState => {
+  const p = path.replace(/\/+$/, '') || '/';
+  const found = (Object.entries(PATHS) as [ViewState, string][]).find(([, v]) => v === p);
+  return found ? found[0] : 'home';
 };
 
-// Delete confirmation dialog
-export const ConfirmDialog = ({
-  message, onConfirm, onCancel,
-}: {
-  message: string; onConfirm: () => void; onCancel: () => void;
-}) => (
-  <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
-    <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-200">
-      <div className="flex flex-col items-center gap-4 text-center">
-        <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center">
-          <AlertCircle className="text-red-400" size={24} />
-        </div>
-        <p className="text-white font-semibold">{message}</p>
-        <p className="text-zinc-400 text-sm">Цю дію неможливо скасувати.</p>
-        <div className="flex gap-3 w-full mt-2">
-          <button
-            onClick={onCancel}
-            className="flex-1 py-2.5 rounded-xl border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors font-bold text-sm"
-          >
-            Скасувати
-          </button>
-          <button
-            onClick={onConfirm}
-            className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-sm transition-colors"
-          >
-            Видалити
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-);
-
 const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<ViewState>('home');
+  const [currentView, setCurrentView] = useState<ViewState>(() => viewFromPath(window.location.pathname));
   const [shopInitialProduct, setShopInitialProduct] = useState<TyreProduct | null>(null);
+  const [isStaff, setIsStaff] = useState<boolean | null>(null);
 
   // Cart state - lifted to App level for header badge
   const [cartItems, setCartItems] = useState<CartItem[]>(() => {
@@ -107,14 +51,37 @@ const App: React.FC = () => {
   }, [cartItems]);
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
+  /** Navigate inside the site, keeping real addresses (/account, /oferta ...) */
+  const navigate = useCallback((view: ViewState, opts: { replace?: boolean } = {}) => {
+    const path = PATHS[view];
+    if (window.location.pathname !== path) {
+      const url = path + (view === 'home' ? window.location.search : '');
+      if (opts.replace) window.history.replaceState({}, '', url);
+      else window.history.pushState({}, '', url);
+    }
+    setCurrentView(view);
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+  }, []);
+
+  useEffect(() => {
+    const onPop = () => setCurrentView(viewFromPath(window.location.pathname));
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
   const auth = useAuth({
-    onLogin: () => {
-      setCurrentView('admin');
-    },
     onLogout: () => {
-      if (currentView === 'admin') setCurrentView('home');
+      setIsStaff(false);
+      if (window.location.pathname === PATHS.account) navigate('home');
     },
   });
+
+  // Is the signed-in user a staff member (admin / manager)? Customers never see the admin panel.
+  useEffect(() => {
+    if (!auth.session) { setIsStaff(false); return; }
+    setIsStaff(null);
+    supabase.rpc('is_staff').then(({ data, error }) => setIsStaff(!error && data === true));
+  }, [auth.session?.user?.id]);
 
   // Dynamic SEO loader
   useEffect(() => {
@@ -130,9 +97,9 @@ const App: React.FC = () => {
         meta.setAttribute('content', content);
       };
 
-      // Category (?c=) and product (?p=) pages set their own title/description/canonical
+      // Category (?c=), product (?p=) and service pages set their own title/description/canonical
       const params = new URLSearchParams(window.location.search);
-      const isInnerPage = params.has('c') || params.has('p') || params.has('product');
+      const isInnerPage = params.has('c') || params.has('p') || params.has('product') || window.location.pathname !== '/';
 
       data.forEach(item => {
         if (isInnerPage && ['seo_title', 'seo_description', 'seo_canonical'].includes(item.key)) return;
@@ -151,67 +118,84 @@ const App: React.FC = () => {
     loadSeo();
   }, []);
 
+  // Service pages must not be indexed by Google
   useEffect(() => {
-    if (currentView !== 'home') return;
-    const pending = sessionStorage.getItem('pendingScrollTo');
-    if (!pending) return;
-    sessionStorage.removeItem('pendingScrollTo');
-    const id = window.setTimeout(() => {
-      document.getElementById(pending)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 50);
-    return () => clearTimeout(id);
+    let meta = document.querySelector('meta[name="robots"]');
+    if (!meta) { meta = document.createElement('meta'); meta.setAttribute('name', 'robots'); document.head.appendChild(meta); }
+    meta.setAttribute('content', currentView === 'admin' || currentView === 'account' ? 'noindex, nofollow' : 'index, follow');
   }, [currentView]);
 
-  const handleAdminAuthClick = () => {
-    if (auth.session) setCurrentView('admin');
-    else auth.openAuthModal();
-  };
-
-  const handleBackToHome = () => {
-    setCurrentView('home');
-    window.scrollTo({ top: 0, behavior: 'instant' });
-  };
-
   useEffect(() => {
-    logAnalyticsEvent('page_view', undefined, undefined, `/${currentView === 'home' ? '' : currentView}`);
+    if (currentView === 'admin') return;
+    logAnalyticsEvent('page_view', undefined, undefined, PATHS[currentView]);
   }, [currentView]);
 
-  const handleChangeView = (view: ViewState) => {
-    if (view === 'home' && currentView !== 'home') {
-      setShopInitialProduct(null);
-    }
-    setCurrentView(view);
-    window.scrollTo({ top: 0, behavior: 'instant' });
+  // The staff sign-in page has no registration
+  useEffect(() => {
+    if (currentView === 'admin' && auth.authMode === 'register') auth.setAuthMode('login');
+  }, [currentView, auth.authMode]);
+
+  const goHome = () => {
+    setShopInitialProduct(null);
+    navigate('home');
+  };
+
+  const handleAccountClick = () => {
+    if (auth.session && !isStaff) navigate('account');
+    else if (auth.session && isStaff) navigate('admin');
+    else auth.openAuthModal('login');
   };
 
   const renderContent = () => {
     switch (currentView) {
       case 'admin':
-        return auth.session
-          ? <AdminPanel onLogout={auth.logout} onBackToSite={handleBackToHome} />
-          : <PageLoader />;
+        if (!auth.sessionLoaded) return <PageLoader />;
+        if (!auth.session) return <StaffLogin auth={auth} onBack={goHome} />;
+        if (isStaff === null) return <PageLoader />;
+        if (!isStaff) {
+          return (
+            <div className="min-h-screen flex flex-col items-center justify-center p-4 text-center gap-4">
+              <ShieldAlert size={48} className="text-red-500" />
+              <h1 className="text-2xl font-black uppercase">Доступ лише для персоналу</h1>
+              <p className="text-zinc-400 max-w-sm">Ви увійшли як покупець ({auth.session.user?.email}).</p>
+              <div className="flex gap-2">
+                <button onClick={goHome} className="bg-zinc-800 text-white font-bold px-5 py-3 rounded-xl">На сайт</button>
+                <button onClick={auth.logout} className="bg-red-600 text-white font-bold px-5 py-3 rounded-xl flex items-center gap-2"><LogOut size={16} /> Вийти</button>
+              </div>
+            </div>
+          );
+        }
+        return <AdminPanel onLogout={() => { auth.logout(); goHome(); }} onBackToSite={goHome} />;
+      case 'account':
+        return <AccountPage auth={auth} onBack={goHome} />;
+      case 'oferta':
+      case 'privacy':
+        return <LegalPage doc={currentView} onBack={goHome} />;
       case 'home':
       default:
         return (
           <TyreShop
-            onBack={handleBackToHome}
+            onBack={goHome}
             initialProduct={shopInitialProduct}
-            isAdmin={!!auth.session}
-            onAdminClick={() => setCurrentView('admin')}
             cartItems={cartItems}
             onCartChange={setCartItems}
+            userId={auth.session && !isStaff ? auth.session.user?.id : undefined}
+            userEmail={auth.session?.user?.email}
           />
         );
     }
   };
 
+  const isAdminView = currentView === 'admin';
+
   return (
     <div className="min-h-screen flex flex-col bg-[#09090b] text-white selection:bg-[#FFC300] selection:text-black">
-      {currentView !== 'admin' && (
+      {!isAdminView && (
         <Header
           currentView={currentView}
-          onChangeView={handleChangeView}
-          onAdminClick={handleAdminAuthClick}
+          onChangeView={(v) => (v === 'home' ? goHome() : navigate(v))}
+          onAccountClick={handleAccountClick}
+          isLoggedIn={!!auth.session && !isStaff}
           cartCount={cartCount}
         />
       )}
@@ -222,99 +206,11 @@ const App: React.FC = () => {
         </Suspense>
       </main>
 
-      {currentView !== 'admin' && <Footer />}
+      {!isAdminView && <Footer onNavigate={navigate} />}
 
-      {/* AUTH MODAL */}
-      {auth.showAuthModal && !auth.session && (
-        <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-2xl w-full max-w-sm relative shadow-2xl flex flex-col gap-4">
-            <button onClick={auth.closeAuthModal} className="absolute top-4 right-4 text-zinc-500 hover:text-white" aria-label="Закрити">
-              <X size={24} />
-            </button>
-
-            {auth.authMode === 'forgot' ? (
-              <div className="flex flex-col items-center gap-4 animate-in slide-in-from-right">
-                <h3 className="text-xl font-bold text-white uppercase italic mt-2">Відновлення паролю</h3>
-                <AuthField
-                  type="email" value={auth.email} onChange={auth.setEmail}
-                  onBlur={() => auth.touchField('email')}
-                  placeholder="Email" icon={<Mail size={18} />}
-                  error={auth.fieldErrors.email} touched={auth.touched.email}
-                />
-                <button
-                  onClick={auth.handlePasswordReset}
-                  disabled={auth.verifying}
-                  className="w-full bg-[#FFC300] hover:bg-[#e6b000] text-black font-black py-3 rounded-xl transition-transform active:scale-95 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {auth.verifying ? <Loader2 className="animate-spin" /> : <><Send size={18} /> ВІДПРАВИТИ</>}
-                </button>
-                <button onClick={() => { auth.setAuthMode('login'); auth.resetForm(); }} className="text-zinc-500 hover:text-white text-sm font-bold flex items-center gap-2">
-                  <ArrowLeft size={16} /> Назад
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-4 animate-in slide-in-from-left">
-                <h3 className="text-xl font-bold text-white uppercase italic">
-                  {auth.authMode === 'register' ? 'Реєстрація' : 'Вхід'}
-                </h3>
-
-                <div className="w-full space-y-3">
-                  <AuthField
-                    type="email" value={auth.email} onChange={auth.setEmail}
-                    onBlur={() => auth.touchField('email')}
-                    placeholder="Email" icon={<Mail size={18} />}
-                    error={auth.fieldErrors.email} touched={auth.touched.email}
-                  />
-                  <AuthField
-                    type="password" value={auth.password} onChange={auth.setPassword}
-                    onBlur={() => auth.touchField('password')}
-                    placeholder="Пароль" icon={<Key size={18} />}
-                    error={auth.fieldErrors.password} touched={auth.touched.password}
-                  />
-                </div>
-
-                <button
-                  onClick={auth.handleAuthAction}
-                  disabled={auth.verifying}
-                  className={`w-full font-black py-3 rounded-xl transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed ${
-                    auth.authMode === 'register' ? 'bg-white text-black' 
-                    : 'bg-[#FFC300] text-black'
-                  }`}
-                >
-                  {auth.verifying
-                    ? <Loader2 className="animate-spin mx-auto" />
-                    : auth.authMode === 'register' ? 'СТВОРИТИ АКАУНТ' : 'УВІЙТИ'}
-                </button>
-
-                <div className="flex flex-col gap-2 items-center mt-1">
-                  <button
-                    onClick={() => { auth.setAuthMode(auth.authMode === 'login' ? 'register' : 'login'); auth.resetForm(); }}
-                    className="text-zinc-400 hover:text-white text-xs font-bold transition-colors"
-                  >
-                    {auth.authMode === 'login' ? 'Немає акаунту? Реєстрація' : 'Вже є акаунт? Увійти'}
-                  </button>
-                  {auth.authMode === 'login' && (
-                    <button onClick={() => { auth.setAuthMode('forgot'); auth.resetForm(); }} className="text-zinc-500 hover:text-zinc-300 text-[10px] uppercase tracking-widest font-bold">
-                      Забули пароль?
-                    </button>
-                  )}
-                </div>
-
-                {(auth.authError || auth.authSuccess) && (
-                  <div className={`text-center p-3 rounded-xl text-xs font-bold animate-in fade-in zoom-in w-full ${
-                    auth.authError ? 'bg-red-900/20 text-red-400 border border-red-900/50' : 'bg-green-900/20 text-green-400 border border-green-900/50'
-                  }`}>
-                    {auth.authError || auth.authSuccess}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {!isAdminView && <CustomerAuthModal auth={auth} />}
     </div>
   );
 };
 
 export default App;
-

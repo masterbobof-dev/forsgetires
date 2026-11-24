@@ -150,7 +150,7 @@ const downloadOne = async (p: any) => {
   for (const c of p.photo_candidates || []) {
     try {
       const { bytes, type } = await fetchImage(c.url);
-      if (bytes.length <= 1_500_000 && (await photoMatches(bytes, type, p)) === false) throw new Error('AI: не підходить');
+      if (bytes.length > 1_500_000 || (await photoMatches(bytes, type, p)) !== true) throw new Error('AI: не підходить');
       const base = `products/auto/${p.id}-${Date.now().toString(36)}`;
       let full: string, thumb: string;
       if (bytes.length <= SMALL_ENOUGH || type === 'image/webp') {
@@ -173,7 +173,7 @@ const downloadOne = async (p: any) => {
       lastErr = String(e?.message || e).slice(0, 120);
     }
   }
-  await db.from('tyres').update({ photo_search_error: `download failed: ${lastErr}` }).eq('id', p.id);
+  await db.from('tyres').update({ photo_search_error: `no good photo: ${lastErr}` }).eq('id', p.id);
   return { id: p.id, ok: false, error: lastErr };
 };
 
@@ -182,7 +182,7 @@ const download = async (n: number) => {
   if (error) throw new Error(error.message);
   const results = [];
   for (const p of jobs || []) results.push(await downloadOne(p)); // one at a time: keeps memory low
-  return { downloaded: results.filter(r => r.ok).length, failed: results.filter(r => !r.ok).length };
+  return { downloaded: results.filter(r => r.ok).length, failed: results.filter(r => !r.ok).length, retry: results.filter(r => r.error === 'retry later').length };
 };
 
 // ---------- re-check photos found earlier; a wrong one is removed and the next candidate is tried ----------
@@ -214,7 +214,7 @@ const verify = async (n: number) => {
       skipped++;
     }
   }
-  return { checked: (jobs || []).length, ok, wrong, skipped };
+  return { checked: list.length, ok, wrong, skipped };
 };
 
 // ---------- remove every auto-found photo file (products/auto/*) ----------
@@ -241,7 +241,7 @@ Deno.serve(async (req) => {
     if (body.action === 'verify') return json(await verify(Math.min(Number(body.n) || 10, 20)));
     if (body.action === 'purge') return json(await purge());
     if (body.action === 'status') return json((await db.rpc('photo_job_status')).data);
-    return json({ error: 'action: search | download | status' }, 400);
+    return json({ error: 'action: search | download | verify | purge | status' }, 400);
   } catch (e) {
     return json({ error: String(e?.message || e) }, 500);
   }

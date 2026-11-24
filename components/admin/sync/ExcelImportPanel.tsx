@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
+import { productPath } from '../../../productUrl';
 import readXlsxFile from 'read-excel-file';
 import { 
     Upload, FileSpreadsheet, Save, Loader2, RefreshCw, AlertTriangle, 
@@ -675,7 +676,7 @@ const ExcelImportPanel: React.FC<ExcelImportPanelProps> = ({ suppliers }) => {
                     <button 
                         onClick={async () => {
                             try {
-                                const { data: allTyres, error } = await supabase.from('tyres').select('id, created_at');
+                                const { data: allTyres, error } = await supabase.from('tyres').select('id, title, slug, created_at');
                                 if (error) throw error;
                                 if (!allTyres) return;
 
@@ -688,7 +689,7 @@ const ExcelImportPanel: React.FC<ExcelImportPanelProps> = ({ suppliers }) => {
                                 // Products
                                 allTyres.forEach(t => {
                                     const lastMod = t.created_at ? new Date(t.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
-                                    xml += `  <url>\n    <loc>${baseUrl}/?p=${t.id}</loc>\n    <lastmod>${lastMod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.8</priority>\n  </url>\n`;
+                                    xml += `  <url>\n    <loc>${baseUrl}${productPath(t as any)}</loc>\n    <lastmod>${lastMod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.8</priority>\n  </url>\n`;
                                 });
 
                                 xml += `</urlset>`;

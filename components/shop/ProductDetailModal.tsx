@@ -26,6 +26,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
       setLoadingSimilar(true);
       try {
          let query = supabase.from('tyres').select('*').neq('id', product.id).neq('in_stock', false);
+         if (product.category_id) query = query.eq('category_id', product.category_id);
          if (product.radius) query = query.eq('radius', product.radius);
          if (product.width) query = query.ilike('title', `%${product.width}%`);
          if (product.height) query = query.ilike('title', `%/${product.height}%`);
@@ -94,7 +95,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
               <div className="mb-8">
                 <div className="flex items-center gap-2 mb-3">
                   <span className="bg-[#FFC300] text-black px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter">
-                    {product.manufacturer || 'Шина'}
+                    {product.manufacturer || 'Товар'}
                   </span>
                   {product.is_hot && <span className="bg-orange-600 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter">HOT</span>}
                   {isLowStock && !isOutOfStock && (
@@ -107,10 +108,10 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                 <h1 className="text-2xl md:text-3xl font-black text-white leading-tight mb-4">{product.title}</h1>
                 
                 <div className="flex flex-wrap gap-3">
-                   <div className="flex items-center gap-2 bg-zinc-800/50 border border-zinc-800 px-3 py-2 rounded-xl">
+                   {product.season && <div className="flex items-center gap-2 bg-zinc-800/50 border border-zinc-800 px-3 py-2 rounded-xl">
                       {product.season === 'winter' ? <Snowflake size={16} className="text-blue-400"/> : product.season === 'summer' ? <Sun size={16} className="text-yellow-400"/> : <CloudSun size={16} className="text-zinc-400"/>}
                       <span className="text-zinc-300 text-xs font-bold uppercase tracking-wide">{getSeasonLabel(product.season)}</span>
-                   </div>
+                   </div>}
                    {product.radius && (
                      <div className="flex items-center gap-2 bg-zinc-800/50 border border-zinc-800 px-3 py-2 rounded-xl">
                         <Ruler size={16} className="text-[#FFC300]"/>
@@ -216,7 +217,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                            {t.image_url ? <img src={t.image_url} alt={t.title} className="max-h-full object-contain group-hover/card:scale-110 transition-transform duration-500"/> : <Info className="opacity-10"/>}
                         </div>
                         <div className="flex-grow">
-                          <span className="text-[10px] text-[#FFC300] font-black uppercase mb-1 block">{t.manufacturer || 'Шина'}</span>
+                          <span className="text-[10px] text-[#FFC300] font-black uppercase mb-1 block">{t.manufacturer || 'Товар'}</span>
                           <h4 className="text-white text-xs font-bold line-clamp-2 mb-2 leading-snug">{t.title} {t.radius}</h4>
                         </div>
                         <div className="mt-2 pt-2 border-t border-zinc-800 flex items-center justify-between">

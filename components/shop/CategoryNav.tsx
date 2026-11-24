@@ -1,94 +1,94 @@
+import React from 'react';
+import { Grid, Flame, ChevronRight } from 'lucide-react';
+import {
+  ProductCategory, getRootCategories, getChildren, getRootOf, getCategoryIcon,
+} from '../../categories';
 
-import React, { useRef } from 'react';
-import { Grid, Snowflake, Sun, CloudSun, Truck, Tractor, Flame, Mountain, Car } from 'lucide-react';
-
-export const CATEGORIES = [
-  { id: 'all', label: 'Всі шини', icon: Grid },
-  { id: 'car', label: 'Легкові', icon: Car },
-  { id: 'winter', label: 'Зимові', icon: Snowflake },
-  { id: 'summer', label: 'Літні', icon: Sun },
-  { id: 'all-season', label: 'Всесезонні', icon: CloudSun },
-  { id: 'cargo', label: 'Буси (C)', icon: Truck },
-  { id: 'suv', label: 'SUV / 4x4', icon: Mountain },
-  { id: 'truck', label: 'Вантажні (TIR)', icon: Truck },
-  { id: 'agro', label: 'Агро / Спец', icon: Tractor },
-  { id: 'hot_light', label: 'HOT Легкові', icon: Flame },
-  { id: 'hot_heavy', label: 'HOT Вантажні', icon: Flame },
-] as const;
-
-export type CategoryType = typeof CATEGORIES[number]['id'];
+/** 'all' = всі товари, 'hot' = акції, otherwise a category id. */
+export type CategorySelection = 'all' | 'hot' | number;
 
 interface CategoryNavProps {
-  activeCategory: CategoryType;
-  onCategoryChange: (cat: CategoryType) => void;
+  categories: ProductCategory[];
+  active: CategorySelection;
+  onChange: (sel: CategorySelection) => void;
 }
 
-const CategoryNav: React.FC<CategoryNavProps> = ({ activeCategory, onCategoryChange }) => {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const isDragging = useRef(false);
-  const startX = useRef(0);
-  const scrollLeft = useRef(0);
-  const hasDragged = useRef(false);
+const Chip: React.FC<{
+  active: boolean;
+  onClick: () => void;
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
+  label: string;
+  accent?: 'hot';
+}> = ({ active, onClick, icon: Icon, label, accent }) => (
+  <button
+    onClick={onClick}
+    className={`group flex items-center gap-2 px-3 py-2.5 md:px-4 md:py-3 rounded-xl border transition-all duration-200 shrink-0 ${
+      active
+        ? accent === 'hot'
+          ? 'bg-red-600 text-white border-red-600 shadow-xl shadow-red-900/30'
+          : 'bg-[#FFC300] text-black border-[#FFC300] shadow-xl shadow-yellow-900/30'
+        : 'bg-zinc-900/50 border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-white hover:border-zinc-700'
+    }`}
+  >
+    <Icon size={16} strokeWidth={active ? 2.5 : 2} />
+    <span className="font-black text-[11px] md:text-xs uppercase tracking-wide whitespace-nowrap">{label}</span>
+  </button>
+);
 
-  const onMouseDown = (e: React.MouseEvent) => {
-    if (!scrollRef.current) return;
-    isDragging.current = true;
-    hasDragged.current = false;
-    startX.current = e.pageX - scrollRef.current.offsetLeft;
-    scrollLeft.current = scrollRef.current.scrollLeft;
-    scrollRef.current.style.cursor = 'grabbing';
-  };
-
-  const onMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging.current || !scrollRef.current) return;
-    e.preventDefault();
-    const x = e.pageX - scrollRef.current.offsetLeft;
-    const walk = x - startX.current;
-    if (Math.abs(walk) > 5) hasDragged.current = true;
-    scrollRef.current.scrollLeft = scrollLeft.current - walk;
-  };
-
-  const onMouseUp = () => {
-    isDragging.current = false;
-    if (scrollRef.current) scrollRef.current.style.cursor = 'grab';
-  };
+const CategoryNav: React.FC<CategoryNavProps> = ({ categories, active, onChange }) => {
+  const roots = getRootCategories(categories);
+  const activeCat = typeof active === 'number' ? categories.find(c => c.id === active) : undefined;
+  const activeRoot = activeCat ? getRootOf(categories, activeCat) : undefined;
+  const subcats = activeRoot ? getChildren(categories, activeRoot.id) : [];
 
   return (
-    <div
-      ref={scrollRef}
-      className="mb-6 md:mb-10 -mx-2 px-2 overflow-x-auto scrollbar-hide select-none"
-      style={{ WebkitOverflowScrolling: 'touch', cursor: 'grab' }}
-      onMouseDown={onMouseDown}
-      onMouseMove={onMouseMove}
-      onMouseUp={onMouseUp}
-      onMouseLeave={onMouseUp}
-    >
-      <div className="grid grid-cols-4 md:grid-cols-11 gap-1.5 md:gap-2 pb-2 lg:pb-0">
-        {CATEGORIES.map(cat => (
-          <button
+    <div className="mb-6 md:mb-8 space-y-2">
+      <div className="flex gap-2 overflow-x-auto pb-1 -mx-2 px-2 scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <Chip active={active === 'all'} onClick={() => onChange('all')} icon={Grid} label="Всі товари" />
+        {roots.map(cat => (
+          <Chip
             key={cat.id}
-            onClick={() => {
-              onCategoryChange(cat.id);
-            }}
-            className={`group flex flex-col items-center justify-center gap-1 p-2 md:p-3.5 rounded-xl border transition-all duration-300 w-full md:w-auto flex-shrink-0 ${
-              activeCategory === cat.id
-                ? 'bg-[#FFC300] text-black border-[#FFC300] shadow-xl shadow-yellow-900/30'
-                : 'bg-zinc-900/50 border-zinc-800 text-zinc-500 hover:bg-zinc-800 hover:text-white hover:border-zinc-700'
+            active={activeRoot?.id === cat.id}
+            onClick={() => onChange(cat.id)}
+            icon={getCategoryIcon(cat.icon)}
+            label={cat.name}
+          />
+        ))}
+        <Chip active={active === 'hot'} onClick={() => onChange('hot')} icon={Flame} label="Акції" accent="hot" />
+      </div>
+
+      {activeRoot && subcats.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-2 px-2 scrollbar-hide animate-in fade-in slide-in-from-top-1 duration-200">
+          <ChevronRight size={14} className="text-zinc-600 shrink-0" />
+          <button
+            onClick={() => onChange(activeRoot.id)}
+            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wide whitespace-nowrap border transition-colors ${
+              active === activeRoot.id
+                ? 'bg-white text-black border-white'
+                : 'bg-black/40 text-zinc-400 border-zinc-800 hover:text-white hover:border-zinc-600'
             }`}
           >
-            <div className={`p-1 md:p-1.5 rounded-lg transition-all duration-300 ${
-              activeCategory === cat.id ? 'bg-black/10' : 'bg-zinc-800 group-hover:bg-zinc-700'
-            }`}>
-              <cat.icon size={14} strokeWidth={activeCategory === cat.id ? 2.5 : 2} />
-            </div>
-            <span className={`font-black text-[7px] md:text-[8px] uppercase tracking-wide text-center leading-tight ${
-              activeCategory === cat.id ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'
-            }`}>
-              {cat.label}
-            </span>
+            Усі: {activeRoot.name}
           </button>
-        ))}
-      </div>
+          {subcats.map(sub => {
+            const SubIcon = getCategoryIcon(sub.icon);
+            return (
+              <button
+                key={sub.id}
+                onClick={() => onChange(sub.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wide whitespace-nowrap border transition-colors ${
+                  active === sub.id
+                    ? 'bg-white text-black border-white'
+                    : 'bg-black/40 text-zinc-400 border-zinc-800 hover:text-white hover:border-zinc-600'
+                }`}
+              >
+                <SubIcon size={12} />
+                {sub.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

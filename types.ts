@@ -1,7 +1,7 @@
 
 import React from 'react';
 
-export type ViewState = 'home' | 'service' | 'prices' | 'gallery' | 'admin';
+export type ViewState = 'home' | 'admin';
 
 export interface ServiceItem {
   id: string;
@@ -47,6 +47,10 @@ export interface TyreProduct {
   season?: string;
   axis?: string; // Added Axis (Position) for Truck tires
   vehicle_type?: 'car' | 'cargo' | 'suv' | 'truck' | 'agro'; // Added truck (TIR) and agro (Special)
+
+  // Shop categories (table product_categories)
+  category_id?: number | null;
+  attributes?: Record<string, string>;
   
   // SEO fields
   seo_title?: string;

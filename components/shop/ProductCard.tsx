@@ -24,7 +24,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
   // Low stock logic
   const isLowStock = tyre.stock_quantity !== undefined && tyre.stock_quantity > 0 && tyre.stock_quantity <= 4;
 
-  const altText = `Шина ${tyre.manufacturer || ''} ${tyre.title} ${tyre.width ? tyre.width + '/' + tyre.height : ''} ${tyre.radius || ''} купити в Синельниковому`;
+  const altText = `${tyre.manufacturer || ''} ${tyre.title} ${tyre.width ? tyre.width + '/' + tyre.height : ''} ${tyre.radius || ''} купити в Синельниковому`;
 
   return (
     <article 
@@ -112,7 +112,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
        <div className="p-4 flex flex-col flex-grow">
           <div className="flex justify-between items-start mb-1">
             <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider truncate max-w-[70%]">
-              {tyre.manufacturer || 'Шина'}
+              {tyre.manufacturer || 'Товар'}
             </span>
             {tyre.season && (
               <span className="text-[9px] text-zinc-400 border border-zinc-800 px-1.5 py-0.5 rounded uppercase font-medium">

@@ -8,6 +8,7 @@ import readXlsxFile from 'read-excel-file';
 import AiSortModal from './AiSortModal';
 import { invokeAiProxy } from '../../aiProxyClient';
 import { normalizeQuery } from './sync/syncUtils';
+import { useCategories, buildCategoryFilter, getRootCategories, getChildren, isTyreProduct, ProductCategory } from '../../categories';
 
 const PAGE_SIZE = 50;
 
@@ -52,6 +53,13 @@ const TyresTab: React.FC = () => {
   const [tyreCategoryTab, setTyreCategoryTab] = useState<'all' | 'car' | 'cargo' | 'truck' | 'agro' | 'suv' | 'hot' | 'out_of_stock' | 'no_photo'>('all');
   const [tyreSort, setTyreSort] = useState<'newest' | 'oldest' | 'price_asc' | 'price_desc' | 'with_photo' | 'no_photo'>('newest');
   const [filterSupplierId, setFilterSupplierId] = useState<string>('all');
+  const [filterCategoryId, setFilterCategoryId] = useState<string>('all');
+  const { categories, dbReady } = useCategories({ includeInactive: true });
+  // Flat list "Шини", "— Легкові", ... for <select>
+  const categoryOptions: { cat: ProductCategory; label: string }[] = getRootCategories(categories).flatMap(root => [
+      { cat: root, label: root.name },
+      ...getChildren(categories, root.id).map(child => ({ cat: child, label: `— ${child.name}` })),
+  ]);
   const [showOnlyInStock, setShowOnlyInStock] = useState(false);
 
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -83,6 +91,7 @@ const TyresTab: React.FC = () => {
   const [showAiModal, setShowAiModal] = useState(false);
   const [editingTyreId, setEditingTyreId] = useState<number | null>(null);
   const [tyreForm, setTyreForm] = useState({ 
+      category_id: '',
       manufacturer: '', 
       name: '', 
       width: '', 
@@ -189,7 +198,7 @@ const TyresTab: React.FC = () => {
       setHasMoreTyres(true);
       fetchTyres(0, true); 
       fetchCategoryCounts();
-  }, [tyreCategoryTab, tyreSort, filterSupplierId, enableStockQty, showOnlyInStock]);
+  }, [tyreCategoryTab, tyreSort, filterSupplierId, filterCategoryId, categories, enableStockQty, showOnlyInStock]);
 
   const fetchSettings = async () => {
     try {
@@ -289,6 +298,11 @@ const TyresTab: React.FC = () => {
        }
 
        if (filterSupplierId !== 'all') query = query.eq('supplier_id', parseInt(filterSupplierId));
+       if (filterCategoryId !== 'all') {
+           const cat = categories.find(c => String(c.id) === filterCategoryId);
+           const catFilter = cat ? buildCategoryFilter(categories, cat, dbReady) : null;
+           if (catFilter) query = query.or(catFilter);
+       }
 
        query = query.order('in_stock', { ascending: false });
 
@@ -387,6 +401,24 @@ const TyresTab: React.FC = () => {
   // --- BULK CATEGORY UPDATE (FIXED LOGIC) ---
   const handleBulkCategoryUpdate = async (category: string) => {
       if (!category || selectedTyreIds.size === 0) return;
+      if (category.startsWith('cat:')) {
+          const cat = categories.find(c => String(c.id) === category.slice(4));
+          if (!cat) return;
+          setIsApplyingBulk(true);
+          try {
+              const ids = Array.from(selectedTyreIds);
+              const updates: any = { category_id: cat.id };
+              if (cat.vehicle_type) updates.vehicle_type = cat.vehicle_type;
+              const { error } = await supabase.from('tyres').update(updates).in('id', ids);
+              if (error) throw error;
+              setSuccessMessage(`${ids.length} товарів перенесено в «${cat.name}».`);
+              setBulkCategory('');
+              setSelectedTyreIds(new Set());
+              fetchTyres(0, true);
+              setTimeout(() => setSuccessMessage(''), 3000);
+          } catch (e: any) { showError(e.message); } finally { setIsApplyingBulk(false); }
+          return;
+      }
       setIsApplyingBulk(true);
       try {
           const ids = Array.from(selectedTyreIds);
@@ -691,6 +723,9 @@ const TyresTab: React.FC = () => {
       setTyreForm(prev => ({ ...prev, old_price: base.toString(), price: newPrice.toString() }));
   };
 
+  const formCategoryForUi = categories.find(c => String(c.id) === tyreForm.category_id);
+  const isTyreForm = !formCategoryForUi || formCategoryForUi.kind === 'tyre';
+
   const handleSaveTyre = async () => {
     setUploading(true);
     try {
@@ -703,6 +738,47 @@ const TyresTab: React.FC = () => {
       
       const finalGallery = Array.from(new Set([...existingGallery, ...newUrls]));
       
+      const formCategory = categories.find(c => String(c.id) === tyreForm.category_id);
+      const isTyre = !formCategory || formCategory.kind === 'tyre';
+
+      if (!isTyre) {
+        const name = tyreForm.name.trim();
+        const brand = tyreForm.manufacturer.trim();
+        const genericTitle = brand && !name.toLowerCase().startsWith(brand.toLowerCase()) ? `${brand} ${name}` : name;
+        const genericPayload: any = {
+          title: genericTitle.replace(/\s+/g, ' ').trim(),
+          description: tyreForm.description || null,
+          price: tyreForm.price,
+          old_price: tyreForm.old_price || null,
+          base_price: tyreForm.base_price || '0',
+          manufacturer: brand || null,
+          catalog_number: tyreForm.catalog_number,
+          product_number: tyreForm.product_number,
+          radius: null,
+          season: null,
+          axis: null,
+          category_id: formCategory!.id,
+          seo_title: tyreForm.seo_title || null,
+          seo_description: tyreForm.seo_description || null,
+          seo_keywords: tyreForm.seo_keywords || null,
+          slug: tyreForm.slug || null,
+          image_url: finalGallery[0] || null,
+          gallery: finalGallery,
+          is_hot: tyreForm.is_hot,
+          supplier_id: tyreForm.supplier_id ? parseInt(tyreForm.supplier_id) : null,
+          stock_quantity: tyreForm.stock_quantity ? parseInt(tyreForm.stock_quantity) : 0,
+          in_stock: true
+        };
+        if (!genericPayload.title) throw new Error('Вкажіть назву товару');
+        const { error } = editingTyreId
+          ? await supabase.from('tyres').update(genericPayload).eq('id', editingTyreId)
+          : await supabase.from('tyres').insert([genericPayload]);
+        if (error) throw error;
+        fetchTyres(0, true);
+        setShowAddTyreModal(false);
+        return;
+      }
+
       // FORCE ALL-SEASON IF TRUCK OR AGRO
       const forcedSeason = (tyreForm.vehicle_type === 'truck' || tyreForm.vehicle_type === 'agro') 
                            ? 'all-season' 
@@ -736,12 +812,12 @@ const TyresTab: React.FC = () => {
         stock_quantity: tyreForm.stock_quantity ? parseInt(tyreForm.stock_quantity) : 0,
         in_stock: true
       };
+      if (dbReady) payload.category_id = formCategory ? formCategory.id : null;
 
-      if (editingTyreId) {
-          await supabase.from('tyres').update(payload).eq('id', editingTyreId);
-      } else {
-          await supabase.from('tyres').insert([payload]);
-      }
+      const { error } = editingTyreId
+          ? await supabase.from('tyres').update(payload).eq('id', editingTyreId)
+          : await supabase.from('tyres').insert([payload]);
+      if (error) throw error;
       
       fetchTyres(0, true); 
       setShowAddTyreModal(false);
@@ -768,7 +844,13 @@ const TyresTab: React.FC = () => {
           parsedSeason = 'all-season';
       }
 
+      if (!isTyreProduct(t, categories)) {
+          const brand = t.manufacturer || '';
+          name = brand && t.title.toLowerCase().startsWith(brand.toLowerCase()) ? t.title.slice(brand.length).trim() : t.title;
+      }
+
       setTyreForm({ 
+        category_id: t.category_id ? String(t.category_id) : '',
         manufacturer: t.manufacturer || '', 
         name: name, 
         width, height,
@@ -900,6 +982,14 @@ const TyresTab: React.FC = () => {
                     </div>
 
                     <div className="relative">
+                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"><FolderOpen size={14}/></div>
+                        <select value={filterCategoryId} onChange={(e) => setFilterCategoryId(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-2 py-2.5 outline-none focus:border-[#FFC300] text-[11px] font-bold appearance-none cursor-pointer text-white">
+                            <option value="all">Всі категорії</option>
+                            {categoryOptions.map(({ cat, label }) => <option key={cat.id} value={cat.id}>{label}</option>)}
+                        </select>
+                    </div>
+
+                    <div className="relative">
                         <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"><ArrowUpDown size={14}/></div>
                         <select value={tyreSort} onChange={(e) => setTyreSort(e.target.value as any)} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-2 py-2.5 outline-none focus:border-[#FFC300] text-[11px] font-bold appearance-none cursor-pointer text-white">
                             <option value="newest">Нові</option>
@@ -955,18 +1045,20 @@ const TyresTab: React.FC = () => {
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
-                            <div className="hidden lg:block border-r border-zinc-700 pr-2">
+                            <div className="border-r border-zinc-700 pr-2">
                                 <select 
                                     value={bulkCategory}
                                     onChange={(e) => handleBulkCategoryUpdate(e.target.value)}
-                                    className="bg-black border border-zinc-700 rounded-lg p-2 text-white text-[10px] font-bold w-36 outline-none focus:border-[#FFC300]"
+                                    className="bg-black border border-zinc-700 rounded-lg p-2 text-white text-[10px] font-bold w-40 outline-none focus:border-[#FFC300]"
                                 >
-                                    <option value="">Категорія...</option>
+                                    <option value="">Перенести в категорію...</option>
+                                    {dbReady ? categoryOptions.map(({ cat, label }) => <option key={cat.id} value={`cat:${cat.id}`}>{label}</option>) : <>
                                     <option value="car">Легкова</option>
                                     <option value="suv">SUV</option>
                                     <option value="cargo">Вантажна C</option>
                                     <option value="truck">TIR</option>
                                     <option value="agro">Агро</option>
+                                    </>}
                                 </select>
                             </div>
 
@@ -1045,7 +1137,7 @@ const TyresTab: React.FC = () => {
                                     <div className="cursor-pointer" onClick={() => openEditTyreModal(tyre)}>
                                         <div className="flex justify-between items-start gap-2 mb-0.5">
                                             <div className="flex items-center gap-1 min-w-0">
-                                                <span className="text-[9px] text-zinc-500 font-black uppercase truncate tracking-wider">{tyre.manufacturer || 'Шина'}</span>
+                                                <span className="text-[9px] text-zinc-500 font-black uppercase truncate tracking-wider">{tyre.manufacturer || 'Товар'}</span>
                                                 {isProductReady(tyre) && <CheckCircle size={10} className="text-green-500 flex-shrink-0" />}
                                             </div>
                                             <button onClick={(e) => { e.stopPropagation(); toggleSelection(tyre.id); }} className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${isSelected ? 'bg-[#FFC300] border-[#FFC300] text-black scale-110 shadow-lg shadow-yellow-900/20' : 'border-zinc-700 bg-black/40'}`}>
@@ -1309,14 +1401,37 @@ const TyresTab: React.FC = () => {
             >
                 <div className="bg-zinc-900 border-0 sm:border sm:border-zinc-700 p-4 sm:p-6 rounded-none sm:rounded-2xl w-full max-w-4xl h-full sm:h-[90vh] flex flex-col shadow-2xl relative" onClick={e => e.stopPropagation()}>
                     <div className="flex justify-between items-center mb-4 sm:mb-6">
-                        <h3 className="text-xl sm:text-2xl font-black text-white">{editingTyreId ? 'Редагування' : 'Нова шина'}</h3>
+                        <h3 className="text-xl sm:text-2xl font-black text-white">{editingTyreId ? 'Редагування' : 'Новий товар'}</h3>
                         <button onClick={() => setShowAddTyreModal(false)} className="p-2 text-zinc-500 hover:text-white bg-zinc-800 rounded-full"><X size={24}/></button>
                     </div>
                     <div className="flex-grow overflow-y-auto pr-1 custom-scrollbar">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                             <div className="space-y-4">
+                                {dbReady && (
+                                    <div>
+                                        <label className="block text-[#FFC300] text-xs font-bold uppercase mb-1">Категорія</label>
+                                        <select
+                                            value={tyreForm.category_id}
+                                            onChange={e => {
+                                                const cat = categories.find(c => String(c.id) === e.target.value);
+                                                const next: any = { ...tyreForm, category_id: e.target.value };
+                                                if (cat?.vehicle_type) {
+                                                    next.vehicle_type = cat.vehicle_type;
+                                                    next.radius = getRadiiOptions(cat.vehicle_type as any)[0];
+                                                    if (cat.vehicle_type === 'truck' || cat.vehicle_type === 'agro') next.season = 'all-season';
+                                                }
+                                                setTyreForm(next);
+                                            }}
+                                            className="w-full bg-black border border-[#FFC300]/50 rounded-lg p-3 text-white font-bold"
+                                        >
+                                            <option value="">Шини (без категорії)</option>
+                                            {categoryOptions.map(({ cat, label }) => <option key={cat.id} value={cat.id}>{label}</option>)}
+                                        </select>
+                                    </div>
+                                )}
                                 <div><label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Виробник (Бренд)</label><input list="brands" value={tyreForm.manufacturer} onChange={e => setTyreForm({...tyreForm, manufacturer: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-bold" placeholder="Напр. Michelin"/><datalist id="brands">{KNOWN_BRANDS.map(b => <option key={b} value={b}/>)}</datalist></div>
-                                <div><label className="block text-[#FFC300] text-xs font-bold uppercase mb-1">Назва (Модель)</label><input type="text" value={tyreForm.name} onChange={e => setTyreForm({...tyreForm, name: e.target.value})} className="w-full bg-black border border-[#FFC300]/50 rounded-lg p-3 text-white font-bold" placeholder="Напр. Alpin 6"/></div>
+                                <div><label className="block text-[#FFC300] text-xs font-bold uppercase mb-1">{isTyreForm ? 'Назва (Модель)' : 'Назва товару'}</label><input type="text" value={tyreForm.name} onChange={e => setTyreForm({...tyreForm, name: e.target.value})} className="w-full bg-black border border-[#FFC300]/50 rounded-lg p-3 text-white font-bold" placeholder={isTyreForm ? 'Напр. Alpin 6' : 'Напр. Акумулятор 6СТ-60 Аз'}/></div>
+                                {isTyreForm && <>
                                 <div className="grid grid-cols-3 gap-2">
                                     <div><label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Ширина</label><input type="text" value={tyreForm.width} onChange={e => setTyreForm({...tyreForm, width: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white text-center" placeholder="205"/></div>
                                     <div><label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Висота</label><input type="text" value={tyreForm.height} onChange={e => setTyreForm({...tyreForm, height: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white text-center" placeholder="55"/></div>
@@ -1376,6 +1491,7 @@ const TyresTab: React.FC = () => {
                                     </div>
                                     {(tyreForm.vehicle_type === 'truck' || tyreForm.vehicle_type === 'agro') && <p className="text-center text-[10px] text-zinc-500 mt-2">Для TIR та Спецтехніки тільки "Всесезон"</p>}
                                 </div>
+                                </>}
                                 
                                 <div><label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Постачальник</label><select value={tyreForm.supplier_id} onChange={e => setTyreForm({...tyreForm, supplier_id: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white"><option value="">Не обрано</option>{suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
                                 <div className="border-2 border-dashed border-zinc-700 rounded-xl p-4 text-center">

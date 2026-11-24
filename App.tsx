@@ -1,22 +1,14 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import Header from './components/Header';
-import Hero from './components/Hero';
-import Services from './components/Services';
-import Tips from './components/Tips';
-import Contact from './components/Contact';
 import Footer from './components/Footer';
 import { ViewState, TyreProduct, CartItem } from './types';
-import { X, Loader2, Mail, Key, Briefcase, ArrowLeft, Send, Wrench, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, Loader2, Mail, Key, ArrowLeft, Send, CheckCircle2, AlertCircle } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { useAuth } from './useAuth';
 import { logAnalyticsEvent } from './components/admin/analytics';
 
 const AdminPanel = lazy(() => import('./components/AdminPanel'));
-const Gallery = lazy(() => import('./components/Gallery'));
-const Prices = lazy(() => import('./components/Prices'));
 const TyreShop = lazy(() => import('./components/TyreShop'));
-
-type ShopCategory = 'all' | 'car' | 'cargo' | 'suv' | 'truck' | 'agro';
 
 const PageLoader = () => (
   <div className="flex h-screen items-center justify-center">
@@ -94,10 +86,7 @@ export const ConfirmDialog = ({
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewState>('home');
-  const [shopCategory, setShopCategory] = useState<ShopCategory>('car');
   const [shopInitialProduct, setShopInitialProduct] = useState<TyreProduct | null>(null);
-  const [adminPanelMode, setAdminPanelMode] = useState<'service' | 'tyre'>('tyre');
-  const [hideTireService, setHideTireService] = useState(false);
 
   // Cart state - lifted to App level for header badge
   const [cartItems, setCartItems] = useState<CartItem[]>(() => {
@@ -119,8 +108,7 @@ const App: React.FC = () => {
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   const auth = useAuth({
-    onLogin: (tab) => {
-      setAdminPanelMode(tab === 'service' ? 'service' : 'tyre');
+    onLogin: () => {
       setCurrentView('admin');
     },
     onLogout: () => {
@@ -185,7 +173,6 @@ const App: React.FC = () => {
 
   const handleChangeView = (view: ViewState) => {
     if (view === 'home' && currentView !== 'home') {
-      setShopCategory('car');
       setShopInitialProduct(null);
     }
     setCurrentView(view);
@@ -196,32 +183,13 @@ const App: React.FC = () => {
     switch (currentView) {
       case 'admin':
         return auth.session
-          ? <AdminPanel onLogout={auth.logout} onBackToSite={handleBackToHome} mode={adminPanelMode} setMode={setAdminPanelMode} />
+          ? <AdminPanel onLogout={auth.logout} onBackToSite={handleBackToHome} />
           : <PageLoader />;
-      case 'prices':
-        return <Prices />;
-      case 'gallery':
-        return <Gallery />;
-      case 'service':
-        return (
-          <>
-            <Hero onShopRedirect={(category, tyre) => {
-              setShopCategory((category as ShopCategory) || 'all');
-              setShopInitialProduct(tyre || null);
-              setCurrentView('home');
-              window.scrollTo({ top: 0, behavior: 'instant' });
-            }} />
-            <Services />
-            <Tips />
-            <Contact />
-          </>
-        );
       case 'home':
       default:
         return (
           <TyreShop
             onBack={handleBackToHome}
-            initialCategory={shopCategory}
             initialProduct={shopInitialProduct}
             isAdmin={!!auth.session}
             onAdminClick={() => setCurrentView('admin')}
@@ -249,7 +217,7 @@ const App: React.FC = () => {
         </Suspense>
       </main>
 
-      {currentView !== 'admin' && <Footer hideTireService={hideTireService} />}
+      {currentView !== 'admin' && <Footer />}
 
       {/* AUTH MODAL */}
       {auth.showAuthModal && !auth.session && (
@@ -281,15 +249,6 @@ const App: React.FC = () => {
               </div>
             ) : (
               <div className="flex flex-col items-center gap-4 animate-in slide-in-from-left">
-                <div className="flex w-full bg-black p-1 rounded-xl border border-zinc-800 mb-2">
-                  <button onClick={() => auth.setAuthTab('admin')} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold uppercase transition-all ${auth.authTab === 'admin' ? 'bg-[#FFC300] text-black shadow-lg' : 'text-zinc-500 hover:text-white'}`}>
-                    <Briefcase size={14} /> Магазин шин
-                  </button>
-                  <button onClick={() => auth.setAuthTab('service')} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold uppercase transition-all ${auth.authTab === 'service' ? 'bg-blue-600 text-white shadow-lg' : 'text-zinc-500 hover:text-white'}`}>
-                    <Wrench size={14} /> Сервіс
-                  </button>
-                </div>
-
                 <h3 className="text-xl font-bold text-white uppercase italic">
                   {auth.authMode === 'register' ? 'Реєстрація' : 'Вхід'}
                 </h3>
@@ -314,7 +273,6 @@ const App: React.FC = () => {
                   disabled={auth.verifying}
                   className={`w-full font-black py-3 rounded-xl transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed ${
                     auth.authMode === 'register' ? 'bg-white text-black' 
-                    : auth.authTab === 'service' ? 'bg-blue-600 text-white' 
                     : 'bg-[#FFC300] text-black'
                   }`}
                 >

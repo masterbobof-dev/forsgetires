@@ -15,6 +15,10 @@ interface FilterToolbarProps {
   setFilterRadius: (val: string) => void;
   filterBrand: string;
   setFilterBrand: (val: string) => void;
+  filterSeason: string;
+  setFilterSeason: (val: string) => void;
+  /** Show tyre size / season filters (only inside tyre categories). */
+  showTyreFilters: boolean;
   activeSort: string;
   setActiveSort: (val: any) => void;
   filterOptions: { widths: string[], heights: string[], radii: string[], brands: string[] };
@@ -24,7 +28,7 @@ interface FilterToolbarProps {
 }
 
 const FilterToolbar: React.FC<FilterToolbarProps> = (props) => {
-  const hasActiveFilters = props.filterWidth || props.filterHeight || props.filterRadius || props.filterBrand || props.searchQuery;
+  const hasActiveFilters = props.filterWidth || props.filterHeight || props.filterRadius || props.filterBrand || props.filterSeason || props.searchQuery;
   const [filtersOpen, setFiltersOpen] = React.useState(true);
   
   React.useEffect(() => {
@@ -92,7 +96,7 @@ const FilterToolbar: React.FC<FilterToolbarProps> = (props) => {
         {filtersOpen && (
           <div className="mt-4 animate-in fade-in slide-in-from-top-2 duration-300">
             {/* Quick Sizes */}
-            <div className="flex gap-2 mb-4 overflow-x-auto pb-2 snap-x" style={{scrollbarWidth: 'none'}}>
+            {props.showTyreFilters && <div className="flex gap-2 mb-4 overflow-x-auto pb-2 snap-x" style={{scrollbarWidth: 'none'}}>
               {[
                 {w: '205', h: '55', r: 'R16'},
                 {w: '195', h: '65', r: 'R15'},
@@ -111,9 +115,10 @@ const FilterToolbar: React.FC<FilterToolbarProps> = (props) => {
                   {size.w}/{size.h} {size.r}
                 </button>
               ))}
-            </div>
+            </div>}
 
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+            <div className={`grid grid-cols-2 gap-2 ${props.showTyreFilters ? 'md:grid-cols-4 lg:grid-cols-7' : 'md:grid-cols-3'}`}>
+            {props.showTyreFilters && <>
             <div className="relative">
               <select value={props.filterWidth} onChange={e => props.setFilterWidth(e.target.value)} className="w-full bg-black/40 text-white p-2.5 md:p-3 rounded-xl border border-zinc-800 text-xs md:text-sm font-bold appearance-none cursor-pointer hover:border-[#FFC300]/50 transition-colors focus:border-[#FFC300] outline-none">
                 <option value="">Ширина</option>
@@ -134,6 +139,16 @@ const FilterToolbar: React.FC<FilterToolbarProps> = (props) => {
                 {props.filterOptions.radii.map(v => <option key={v} value={v}>{v}</option>)}
               </select>
             </div>
+
+            <div className="relative">
+              <select value={props.filterSeason} onChange={e => props.setFilterSeason(e.target.value)} className="w-full bg-black/40 text-white p-2.5 md:p-3 rounded-xl border border-zinc-800 text-xs md:text-sm font-bold appearance-none cursor-pointer hover:border-[#FFC300]/50 transition-colors focus:border-[#FFC300] outline-none">
+                <option value="">Сезон</option>
+                <option value="winter">Зимові</option>
+                <option value="summer">Літні</option>
+                <option value="all-season">Всесезонні</option>
+              </select>
+            </div>
+            </>}
 
             <div className="relative">
               <select value={props.filterBrand} onChange={e => props.setFilterBrand(e.target.value)} className="w-full bg-black/40 text-white p-2.5 md:p-3 rounded-xl border border-zinc-800 text-xs md:text-sm font-bold appearance-none cursor-pointer hover:border-[#FFC300]/50 transition-colors focus:border-[#FFC300] outline-none">

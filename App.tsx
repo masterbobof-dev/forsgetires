@@ -13,6 +13,8 @@ const AdminPanel = lazy(() => import('./components/AdminPanel'));
 const TyreShop = lazy(() => import('./components/TyreShop'));
 const AccountPage = lazy(() => import('./components/AccountPage'));
 const LegalPage = lazy(() => import('./components/LegalPage'));
+const InfoPages = lazy(() => import('./components/InfoPages'));
+const ArticlesPage = lazy(() => import('./components/ArticlesPage'));
 
 const PageLoader = () => (
   <div className="flex h-[60vh] items-center justify-center">
@@ -21,9 +23,13 @@ const PageLoader = () => (
 );
 
 /** URL path <-> page */
-const PATHS: Record<ViewState, string> = { home: '/', admin: '/admin', account: '/account', oferta: '/oferta', privacy: '/privacy' };
+const PATHS: Record<ViewState, string> = {
+  home: '/', admin: '/admin', account: '/account', oferta: '/oferta', privacy: '/privacy', articles: '/statti',
+  delivery: '/dostavka-i-oplata', warranty: '/garantiya-i-povernennya', about: '/pro-nas', contacts: '/kontakty', faq: '/faq',
+};
 const viewFromPath = (path: string): ViewState => {
   const p = path.replace(/\/+$/, '') || '/';
+  if (p.startsWith('/statti/')) return 'articles';
   const found = (Object.entries(PATHS) as [ViewState, string][]).find(([, v]) => v === p);
   return found ? found[0] : 'home';
 };
@@ -175,6 +181,14 @@ const App: React.FC = () => {
       case 'oferta':
       case 'privacy':
         return <LegalPage doc={currentView} onBack={goHome} />;
+      case 'articles':
+        return <ArticlesPage onBack={goHome} />;
+      case 'delivery':
+      case 'warranty':
+      case 'about':
+      case 'contacts':
+      case 'faq':
+        return <InfoPages page={currentView} onBack={goHome} />;
       case 'home':
       default:
         return (

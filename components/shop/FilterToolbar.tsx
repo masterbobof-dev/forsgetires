@@ -120,6 +120,9 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ state, set, setAttr, o
               </select>
             </div>
           </div>
+          <button type="button" onClick={() => window.dispatchEvent(new Event('forsage:size-guide'))} className="-mt-1 text-xs font-bold text-[#FFC300] hover:underline self-start">
+            Як дізнатися свій розмір?
+          </button>
           <div>
             <span className={labelCls}>Сезон</span>
             <ChipGroup

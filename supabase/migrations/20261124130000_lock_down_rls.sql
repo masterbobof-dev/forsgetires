@@ -38,19 +38,31 @@ REVOKE ALL ON FUNCTION public.is_admin() FROM public;
 GRANT EXECUTE ON FUNCTION public.is_staff() TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.is_admin() TO anon, authenticated;
 
--- Видаляємо всі старі (надто широкі) політики на цих таблицях
+-- Старі (надто широкі) політики не видаляємо, а вимикаємо: USING/WITH CHECK = false.
+-- (Політики storage.objects не можна перейменувати — вони лише вимикаються.)
 DO $$
 DECLARE r record;
 BEGIN
   FOR r IN
-    SELECT schemaname, tablename, policyname FROM pg_policies
-    WHERE (schemaname = 'public' AND tablename IN
+    SELECT schemaname, tablename, policyname, cmd FROM pg_policies
+    WHERE policyname NOT LIKE 'old\_off\_%'
+      AND policyname NOT IN ('galery_read','galery_insert','galery_update','galery_delete')
+      AND ((schemaname = 'public' AND tablename IN
             ('tyres','settings','tyre_orders','bookings','articles','gallery',
              'pricing','suppliers','analytics_events','product_categories'))
        OR (schemaname = 'storage' AND tablename = 'objects'
-           AND (coalesce(qual,'') LIKE '%galery%' OR coalesce(with_check,'') LIKE '%galery%'))
+           AND (coalesce(qual,'') LIKE '%galery%' OR coalesce(with_check,'') LIKE '%galery%')))
   LOOP
-    EXECUTE format('DROP POLICY %I ON %I.%I', r.policyname, r.schemaname, r.tablename);
+    IF r.cmd = 'INSERT' THEN
+      EXECUTE format('ALTER POLICY %I ON %I.%I WITH CHECK (false)', r.policyname, r.schemaname, r.tablename);
+    ELSIF r.cmd IN ('SELECT','DELETE') THEN
+      EXECUTE format('ALTER POLICY %I ON %I.%I USING (false)', r.policyname, r.schemaname, r.tablename);
+    ELSE
+      EXECUTE format('ALTER POLICY %I ON %I.%I USING (false) WITH CHECK (false)', r.policyname, r.schemaname, r.tablename);
+    END IF;
+    IF r.schemaname = 'public' THEN
+      EXECUTE format('ALTER POLICY %I ON public.%I RENAME TO %I', r.policyname, r.tablename, left('old_off_' || r.policyname, 63));
+    END IF;
   END LOOP;
 END $$;
 

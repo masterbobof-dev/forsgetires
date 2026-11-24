@@ -7,6 +7,7 @@ import { supabase } from './supabaseClient';
 import { useAuth } from './useAuth';
 import { logAnalyticsEvent } from './components/admin/analytics';
 import { CustomerAuthModal, StaffLogin } from './components/auth/AuthForms';
+import { initExternalAnalytics } from './externalAnalytics';
 
 const AdminPanel = lazy(() => import('./components/AdminPanel'));
 const TyreShop = lazy(() => import('./components/TyreShop'));
@@ -82,6 +83,9 @@ const App: React.FC = () => {
     setIsStaff(null);
     supabase.rpc('is_staff').then(({ data, error }) => setIsStaff(!error && data === true));
   }, [auth.session?.user?.id]);
+
+  // Google Analytics / Meta Pixel (only if their IDs are set in settings)
+  useEffect(() => { if (viewFromPath(window.location.pathname) !== 'admin') initExternalAnalytics(); }, []);
 
   // Dynamic SEO loader
   useEffect(() => {

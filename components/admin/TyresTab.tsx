@@ -6,6 +6,7 @@ import { TyreProduct, Supplier } from '../../types';
 import { WHEEL_RADII, CAR_RADII, CARGO_RADII, TRUCK_RADII, AGRO_RADII } from '../../constants';
 import readXlsxFile from 'read-excel-file';
 import AiSortModal from './AiSortModal';
+import AttributeImport from './AttributeImport';
 import { invokeAiProxy } from '../../aiProxyClient';
 import { normalizeQuery } from './sync/syncUtils';
 import { useCategories, buildCategoryFilter, getRootCategories, getChildren, isTyreProduct, ProductCategory } from '../../categories';
@@ -90,6 +91,7 @@ const TyresTab: React.FC = () => {
 
   const [showAddTyreModal, setShowAddTyreModal] = useState(false);
   const [showAiModal, setShowAiModal] = useState(false);
+  const [showAttrImport, setShowAttrImport] = useState(false);
   const [editingTyreId, setEditingTyreId] = useState<number | null>(null);
   const [tyreForm, setTyreForm] = useState({ 
       category_id: '',
@@ -980,6 +982,7 @@ const TyresTab: React.FC = () => {
                 </div>
 
                 <div className="hidden md:flex gap-2">
+                    <button onClick={() => setShowAttrImport(true)} className="bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-emerald-600 transition-all shadow-lg active:scale-95"><FileSpreadsheet size={18}/> <span>Імпорт Excel</span></button>
                     <button onClick={() => setShowAiModal(true)} className="bg-purple-600 text-white font-bold px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-purple-500 transition-all shadow-lg active:scale-95"><Sparkles size={18}/> <span>AI Сортування</span></button>
                     <button onClick={() => {setEditingTyreId(null); setShowAddTyreModal(true);}} className="bg-[#FFC300] text-black font-black px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-[#e6b000] transition-all shadow-lg active:scale-95"><Plus size={18}/> <span>Додати</span></button>
                 </div>
@@ -1673,6 +1676,8 @@ const TyresTab: React.FC = () => {
                </div>
             </div>
         )}
+
+        {showAttrImport && <AttributeImport onClose={() => setShowAttrImport(false)} onDone={() => fetchTyres(0, true)} />}
 
         {/* AI Modal */}
         {showAiModal && (

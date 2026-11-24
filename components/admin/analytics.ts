@@ -1,3 +1,4 @@
+import { trackExternal } from '../../externalAnalytics';
 import { supabase } from '../../supabaseClient';
 
 export type AnalyticsEventType = 'page_view' | 'view_item' | 'add_to_cart' | 'add_to_wishlist' | 'search' | 'purchase';
@@ -58,8 +59,10 @@ export const logAnalyticsEvent = async (
     eventType: AnalyticsEventType, 
     itemId?: string, 
     itemName?: string, 
-    pathName?: string
+    pathName?: string,
+    value?: number
 ) => {
+    trackExternal(eventType, { id: itemId, name: itemName, value, query: eventType === 'search' ? itemName : undefined });
     try {
         const device = getDeviceInfo();
         const geo = await getGeoInfo();

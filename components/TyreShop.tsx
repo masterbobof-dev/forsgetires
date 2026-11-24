@@ -148,6 +148,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
   // search runs 350 ms after the customer stops typing
   const [debouncedSearch, setDebouncedSearch] = useState('');
   useEffect(() => { const t = setTimeout(() => setDebouncedSearch(searchQuery), 350); return () => clearTimeout(t); }, [searchQuery]);
+  useEffect(() => { if (debouncedSearch.trim().length >= 3) logAnalyticsEvent('search', undefined, debouncedSearch.trim()); }, [debouncedSearch]);
   const [showOnlyInStock, setShowOnlyInStock] = useState(false);
 
   const [filterWidth, setFilterWidth] = useState('');
@@ -297,6 +298,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
           items: [{ id: quickOrderProduct.id, title: quickOrderProduct.title, quantity: 1, price: quickOrderProduct.price }] 
       }]);
       if (error) throw error;
+      logAnalyticsEvent('purchase', String(quickOrderProduct.id), quickOrderProduct.title, undefined, safeParsePrice(quickOrderProduct.price));
       setOrderSuccess(true);
       setQuickOrderProduct(null);
       setQuickOrderPhone('');
@@ -582,6 +584,8 @@ const TyreShop: React.FC<TyreShopProps> = ({
           items: cartItems.map(i => ({ id: i.id, title: i.title, quantity: i.quantity, price: i.price })) 
       }]);
       if (error) throw error;
+      logAnalyticsEvent('purchase', cartItems.map(i => i.id).join(','), `${cartItems.length} товар(и)`, undefined,
+        cartItems.reduce((sum, i) => sum + safeParsePrice(i.price) * i.quantity, 0));
       // remember name / phone / delivery address in the customer's profile
       if (userId) {
         supabase.from('customer_profiles').upsert({

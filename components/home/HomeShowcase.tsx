@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import NoPhoto from '../shop/NoPhoto';
 import { Search, Truck, Store, Wallet, ShieldCheck, Flame, ChevronRight, ChevronLeft, BookOpen, HelpCircle, Percent } from 'lucide-react';
 import { useSitePromos, fetchBanners, fetchHomeBlocks, SiteBanner, HomeBlockType, DEFAULT_HOME_BLOCKS } from '../../sitePromos';
 import { navigateTo } from '../../navigation';
@@ -169,7 +170,7 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
                   <div className="aspect-square bg-white relative">
                     {p.image_url
                       ? <img src={p.image_thumb_url || p.image_url} alt={p.title} loading="lazy" referrerPolicy="no-referrer" className="w-full h-full object-contain p-3 mix-blend-multiply" />
-                      : <span className="w-full h-full flex items-center justify-center text-zinc-300">{(() => { const I = getCategoryIcon(categories.find(c => c.id === p.category_id)?.icon || categories.find(c => c.id === categories.find(k => k.id === p.category_id)?.parent_id)?.icon); return <I size={48} />; })()}</span>}
+                      : <NoPhoto icon={getCategoryIcon(categories.find(c => c.id === p.category_id)?.icon || categories.find(c => c.id === categories.find(k => k.id === p.category_id)?.parent_id)?.icon)} size={40} />}
                     {old > price && <span className="absolute top-2 left-2 bg-red-600 text-white text-[11px] font-black px-2 py-0.5 rounded-full">−{Math.round((1 - price / old) * 100)}%</span>}
                   </div>
                   <div className="p-3">
@@ -192,7 +193,7 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
                 <span className={`w-12 h-12 shrink-0 rounded-lg overflow-hidden flex items-center justify-center ${(p.image_thumb_url || p.image_url) ? 'bg-white' : 'bg-zinc-800'}`}>
                   {(p.image_thumb_url || p.image_url)
                     ? <img src={p.image_thumb_url || p.image_url} alt="" loading="lazy" className="w-full h-full object-contain" />
-                    : (() => { const c = categories.find(x => x.id === p.category_id); const I = getCategoryIcon(c?.icon || categories.find(x => x.id === c?.parent_id)?.icon); return <I size={22} className="text-zinc-500" />; })()}
+                    : (() => { const c = categories.find(x => x.id === p.category_id); return <NoPhoto icon={getCategoryIcon(c?.icon || categories.find(x => x.id === c?.parent_id)?.icon)} size={20} />; })()}
                 </span>
                 <span className="min-w-0">
                   <span className="block text-[11px] font-bold text-white line-clamp-2 leading-tight">{p.title}</span>

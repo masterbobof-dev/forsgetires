@@ -130,7 +130,12 @@ const App: React.FC = () => {
         meta.setAttribute('content', content);
       };
 
+      // Category (?c=) and product (?p=) pages set their own title/description/canonical
+      const params = new URLSearchParams(window.location.search);
+      const isInnerPage = params.has('c') || params.has('p') || params.has('product');
+
       data.forEach(item => {
+        if (isInnerPage && ['seo_title', 'seo_description', 'seo_canonical'].includes(item.key)) return;
         if (item.key === 'seo_title' && item.value) { document.title = item.value; updateMeta('og:title', item.value, 'property'); updateMeta('twitter:title', item.value); }
         if (item.key === 'seo_description' && item.value) { updateMeta('description', item.value); updateMeta('og:description', item.value, 'property'); updateMeta('twitter:description', item.value); }
         if (item.key === 'seo_keywords' && item.value) { updateMeta('keywords', item.value); }

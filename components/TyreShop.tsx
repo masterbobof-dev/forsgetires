@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { TyreProduct, CartItem } from '../types';
 import { Loader2, Phone, ArrowDown, ArrowLeft, ArrowRight, MapPin, X, ShoppingCart, Lock } from 'lucide-react';
-import { PHONE_LINK_1, PHONE_NUMBER_1, FORMSPREE_ENDPOINT, TELEGRAM_LINK, VIBER_LINK } from '../constants';
+import { PHONE_LINK_1, PHONE_NUMBER_1, FORMSPREE_ENDPOINT, TELEGRAM_LINK, VIBER_LINK, SITE_URL } from '../constants';
 
 // Підкомпоненти
 import CartDrawer from './shop/CartDrawer';
@@ -27,6 +27,19 @@ const formatPrice = (priceStr: string | undefined) => {
   if (!priceStr) return '0';
   const num = safeParsePrice(priceStr);
   return num ? Math.round(num).toString() : priceStr;
+};
+
+const setHeadTag = (selector: string, create: () => HTMLElement, attr: string, value: string) => {
+  let el = document.head.querySelector(selector) as HTMLElement | null;
+  if (!el) { el = create(); document.head.appendChild(el); }
+  el.setAttribute(attr, value);
+};
+const setCanonical = (url: string) => {
+  setHeadTag('link[rel="canonical"]', () => { const l = document.createElement('link'); l.setAttribute('rel', 'canonical'); return l; }, 'href', url);
+  setHeadTag('meta[property="og:url"]', () => { const m = document.createElement('meta'); m.setAttribute('property', 'og:url'); return m; }, 'content', url);
+};
+const setMetaDescription = (text: string) => {
+  setHeadTag('meta[name="description"]', () => { const m = document.createElement('meta'); m.setAttribute('name', 'description'); return m; }, 'content', text);
 };
 
 const getSeasonLabel = (s: string | undefined) => {
@@ -163,25 +176,28 @@ const TyreShop: React.FC<TyreShopProps> = ({
       // SEO: Dynamic Title
       document.title = `${selectedProductForModal.title} — купити в Україні | Forsage`;
       
-      // SEO: Meta Description
-      let metaDesc = document.querySelector('meta[name="description"]');
-      if (!metaDesc) {
-        metaDesc = document.createElement('meta');
-        metaDesc.setAttribute('name', 'description');
-        document.head.appendChild(metaDesc);
-      }
-      metaDesc.setAttribute('content', `Купити ${selectedProductForModal.title}. Ціна: ${formatPrice(selectedProductForModal.price)} грн. В наявності. Безкоштовний підбір та доставка по Україні.`);
+      // SEO: Meta Description + canonical link of the product page
+      setMetaDescription(selectedProductForModal.seo_description || `Купити ${selectedProductForModal.title}. Ціна: ${formatPrice(selectedProductForModal.price)} грн. В наявності. Доставка по Україні.`);
+      setCanonical(`${SITE_URL}/?p=${selectedProductForModal.id}`);
 
       // Sync URL
       url.searchParams.set('p', String(selectedProductForModal.id));
       window.history.replaceState({}, '', url.toString());
       logAnalyticsEvent('view_item', String(selectedProductForModal.id), selectedProductForModal.title);
     } else {
-      document.title = activeCat ? `${activeCat.name} — купити в інтернет-магазині Forsage` : "Forsage — інтернет-магазин шин, дисків та автотоварів";
+      // Only touch SEO tags on category pages; the home page keeps the values from admin SEO settings
+      if (activeCat) {
+        document.title = `${activeCat.name} — купити в інтернет-магазині Форсаж | Синельникове`;
+        setMetaDescription(activeCat.description || `${activeCat.name} в наявності в інтернет-магазині Форсаж. Самовивіз у Синельниковому, доставка Новою Поштою по всій Україні.`);
+        setCanonical(`${SITE_URL}/?c=${activeCat.slug}`);
+      } else if (activeCategory === 'hot') {
+        document.title = 'Акції та знижки — інтернет-магазин Форсаж';
+        setCanonical(`${SITE_URL}/?c=akcii`);
+      }
       url.searchParams.delete('p');
       window.history.replaceState({}, '', url.toString());
     }
-  }, [selectedProductForModal, activeCat]);
+  }, [selectedProductForModal, activeCat, activeCategory]);
 
   const submitQuickOrder = async () => {
     if (!quickOrderPhone || quickOrderPhone.length < 9) { setOrderError("Введіть коректний номер телефону"); return; }
@@ -438,7 +454,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
       },
       "offers": {
         "@type": "Offer",
-        "url": `https://www.forsage-tires.com/?p=${product.id}`,
+        "url": `${SITE_URL}/?p=${product.id}`,
         "priceCurrency": "UAH",
         "price": safeParsePrice(product.price),
         "priceValidUntil": "2026-12-31",

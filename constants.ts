@@ -2,6 +2,9 @@
 import { Wrench, Disc, RefreshCw, Layers, Flame, Droplets, PaintBucket, CircleDot, Sparkles } from 'lucide-react';
 import { ServiceItem } from './types';
 
+/** Main public address of the shop (used for canonical links, sitemap, structured data). */
+export const SITE_URL = 'https://www.forsage-tires.com';
+
 export const PHONE_NUMBER_1 = "099 167 44 24";
 export const PHONE_NUMBER_2 = "063 582 38 58";
 export const PHONE_LINK_1 = "tel:+380991674424";

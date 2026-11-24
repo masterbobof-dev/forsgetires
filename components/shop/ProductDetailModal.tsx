@@ -36,9 +36,11 @@ interface ProductDetailModalProps {
   onRequireLogin?: () => void;
   /** stock tracking is on → show "Залишилося N шт" */
   showStock?: boolean;
+  /** icon of a product's category, shown instead of a missing photo */
+  iconFor?: (p: TyreProduct) => React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 }
 
-const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClose, addToCart, formatPrice, getSeasonLabel, renderSchema, openLightbox, onQuickOrder, onSimilarClick, preset, isFavorite, onToggleFavorite, isCompared, onToggleCompare, userId, userName, onRequireLogin, showStock = false }) => {
+const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClose, addToCart, formatPrice, getSeasonLabel, renderSchema, openLightbox, onQuickOrder, onSimilarClick, preset, isFavorite, onToggleFavorite, isCompared, onToggleCompare, userId, userName, onRequireLogin, showStock = false, iconFor }) => {
   const [companions, setCompanions] = useState<TyreProduct[]>([]);
   const [approvals, setApprovals] = useState<string[]>([]);
   const [similar, setSimilar] = useState<TyreProduct[]>([]);
@@ -68,7 +70,19 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
         } else {
           // other goods: analogs (same viscosity / same car) and rule-based "З цим купують" — see product_related() in the DB
           const { data } = await supabase.rpc('product_related', { p_id: product.id });
-          if (alive && data) { setSimilar((data.analogs as TyreProduct[]) || []); setCompanions((data.companions as TyreProduct[]) || []); setApprovals((data.approvals as string[]) || []); }
+          if (alive && data) {
+            let analogs = (data.analogs as TyreProduct[]) || [], comps = (data.companions as TyreProduct[]) || [];
+            // goods without a photo get their category icon: the list has no category, ask for it in one request
+            const noPhoto = [...analogs, ...comps].filter(t => !t.image_url && !t.image_thumb_url).map(t => t.id);
+            if (noPhoto.length) {
+              const { data: cats } = await supabase.from('tyres').select('id, category_id').in('id', noPhoto);
+              const byId = new Map(((cats as { id: number; category_id: number }[]) || []).map(c => [c.id, c.category_id]));
+              const add = (t: TyreProduct) => (byId.has(t.id) ? { ...t, category_id: byId.get(t.id) } : t);
+              analogs = analogs.map(add); comps = comps.map(add);
+            }
+            if (!alive) return;
+            setSimilar(analogs); setCompanions(comps); setApprovals((data.approvals as string[]) || []);
+          }
         }
       } catch { /* blocks stay empty */ } finally { if (alive) setLoadingSimilar(false); }
     })();
@@ -108,11 +122,12 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
     const reason = (t as TyreProduct & { reason?: string; cross?: boolean }).reason || ((t as { cross?: boolean }).cross ? 'cross' : '');
     const badge = REASON_BADGE[reason];
     const img = t.image_thumb_url || t.image_url;
+    const Icon = iconFor ? iconFor(t) : Info;
     return (
       <div key={t.id} className="snap-start shrink-0 w-[148px] md:w-[172px] bg-zinc-950 border border-zinc-800 hover:border-[#FFC300] rounded-2xl overflow-hidden flex flex-col transition-colors">
         <button onClick={openItem(t)} className="text-left flex-1">
-          <div className="relative aspect-square bg-white flex items-center justify-center">
-            {img ? <img src={img} alt={t.title} loading="lazy" className="w-full h-full object-contain p-2" /> : <Info className="text-zinc-300" />}
+          <div className={`relative aspect-square flex items-center justify-center ${img ? 'bg-white' : 'bg-gradient-to-br from-zinc-800 to-zinc-950'}`}>
+            {img ? <img src={img} alt={t.title} loading="lazy" className="w-full h-full object-contain p-2" /> : <Icon size={52} strokeWidth={1.25} className="text-zinc-600" />}
             {badge && <span className={`absolute top-1.5 left-1.5 text-[9px] ${badge.cls} font-black uppercase px-1.5 py-0.5 rounded`}>{badge.label}</span>}
           </div>
           <p className="px-2.5 pt-2 text-[11px] font-bold text-white line-clamp-2 min-h-[2.6em] leading-snug">{t.title} {t.radius}</p>
@@ -175,7 +190,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
         <div className="md:grid md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
           <div className={`${current ? 'bg-white' : 'bg-zinc-950'} flex flex-col md:self-start overflow-hidden`}>
             <div
-              className={`relative flex items-center justify-center w-full group overflow-hidden ${current ? 'aspect-[4/3] md:aspect-square md:max-h-[62vh] cursor-zoom-in' : 'h-36 md:h-72'}`}
+              className={`relative flex items-center justify-center w-full group overflow-hidden ${current ? 'aspect-[4/3] md:aspect-square md:max-h-[62vh] cursor-zoom-in' : 'h-40 md:h-72 bg-gradient-to-br from-zinc-800 to-zinc-950'}`}
               onClick={() => photos.length && openLightbox(photos, photoIdx)}
               onTouchStart={e => setTouchX(e.touches[0].clientX)}
               onTouchEnd={e => {
@@ -188,9 +203,9 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
               {current ? (
                 <img key={current} src={current} className="w-full h-full object-contain p-4 md:p-6 transition-transform duration-500 group-hover:scale-105 animate-in fade-in duration-300" alt={product.title} referrerPolicy="no-referrer" />
               ) : (
-                <div className="flex flex-col items-center justify-center text-zinc-700">
-                  <Info size={56} strokeWidth={1} className="mb-3 opacity-30"/>
-                  <span className="font-bold uppercase tracking-widest text-xs">Фото відсутнє</span>
+                <div className="flex flex-col items-center justify-center text-zinc-600">
+                  {(() => { const I = iconFor ? iconFor(product) : Info; return <I size={84} strokeWidth={1} className="mb-3 text-zinc-600" />; })()}
+                  <span className="font-bold uppercase tracking-widest text-[11px] text-zinc-600">Фото скоро буде</span>
                 </div>
               )}
               {hasDiscount && <div className="absolute top-4 left-4 bg-red-600 text-white px-3 py-1.5 rounded-xl font-black text-sm shadow-2xl">Знижка −{discountPercent}%</div>}
@@ -328,8 +343,8 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                     const { data } = await supabase.from('tyres').select('*').eq('id', t.id).maybeSingle();
                     if (data && onSimilarClick) onSimilarClick(data as TyreProduct);
                   }} className="shrink-0 w-[200px] bg-zinc-950/60 border border-zinc-800 p-2 rounded-xl flex items-center gap-2 text-left hover:border-[#FFC300] transition-colors">
-                    <span className="w-12 h-12 bg-white rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden">
-                      {(t.image_thumb_url || t.image_url) ? <img src={t.image_thumb_url || t.image_url} className="w-full h-full object-contain" alt="" loading="lazy" /> : <Info size={16} className="text-zinc-400" />}
+                    <span className={`w-12 h-12 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden ${(t.image_thumb_url || t.image_url) ? 'bg-white' : 'bg-zinc-800'}`}>
+                      {(t.image_thumb_url || t.image_url) ? <img src={t.image_thumb_url || t.image_url} className="w-full h-full object-contain" alt="" loading="lazy" /> : (() => { const I = iconFor ? iconFor(t as TyreProduct) : Info; return <I size={22} strokeWidth={1.5} className="text-zinc-500" />; })()}
                     </span>
                     <span className="min-w-0">
                       <span className="block text-[11px] text-white font-bold line-clamp-2 leading-tight">{t.title}</span>

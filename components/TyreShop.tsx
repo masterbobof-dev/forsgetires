@@ -871,19 +871,6 @@ const TyreShop: React.FC<TyreShopProps> = ({
           </aside>
 
           <div ref={listTopRef} onTouchStart={onListTouchStart} onTouchEnd={onListTouchEnd} className="min-w-0">
-            {(activeCat || activeCategory === 'hot') && (() => {
-              const parent = activeCat?.parent_id ? categories.find(c => c.id === activeCat.parent_id) : undefined;
-              const crumb = (label: string, cat: CategorySelection, href: string) => (
-                <a href={href} onClick={e => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); changeCategory(cat); }} className="hover:text-[#FFC300] transition-colors">{label}</a>
-              );
-              return (
-                <nav aria-label="Навігація" className="flex flex-wrap items-center gap-1 text-[11px] md:text-xs text-zinc-500 mb-1 px-1">
-                  {crumb('Головна', 'all', '/')}
-                  {parent && <><ChevronRight size={12} />{crumb(parent.name, parent.id, catPath(parent.slug))}</>}
-                  <ChevronRight size={12} /><span className="text-zinc-300 font-bold">{activeCat ? activeCat.name : 'Хіти та акції'}</span>
-                </nav>
-              );
-            })()}
             <SearchBar
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}

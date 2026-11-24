@@ -28,6 +28,25 @@ serve(async (req) => {
     }
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Only logged-in staff (admin / manager email from settings) may spend the AI keys
+    const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+    const { data: userData } = await supabaseAdmin.auth.getUser(token);
+    const email = userData?.user?.email?.trim().toLowerCase();
+    if (!email) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const { data: staffRows } = await supabaseAdmin
+      .from('settings').select('value').in('key', ['admin_email', 'manager_email']);
+    const isStaff = (staffRows || []).some((r: any) => String(r.value || '').trim().toLowerCase() === email);
+    if (!isStaff) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const body = await req.json();
     const { mode, query } = body;
 

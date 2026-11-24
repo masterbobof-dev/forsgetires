@@ -115,12 +115,6 @@ const TyreShop: React.FC<TyreShopProps> = ({
   const [compareProducts, setCompareProducts] = useState<TyreProduct[]>([]);
   const [compareLoading, setCompareLoading] = useState(false);
   const activeCat = typeof activeCategory === 'number' ? categories.find(c => c.id === activeCategory) : undefined;
-  /** Neighbour sections of a product's category (same parent group) that have goods in stock. */
-  const companionCategories = (p: TyreProduct) => {
-    const own = categories.find(c => c.id === p.category_id);
-    if (!own?.parent_id || own.kind === 'tyre') return [];
-    return categories.filter(c => c.parent_id === own.parent_id && c.id !== own.id && (c.available || 0) > 0).map(c => c.id).slice(0, 20);
-  };
   const categorySlug = (cat: CategorySelection) => cat === 'all' ? '' : cat === 'hot' ? 'akcii' : cat === 'fav' ? 'obrane' : (categories.find(c => c.id === cat)?.slug || '');
   const agroCategory = categories.find(c => c.vehicle_type === 'agro');
   const showTyreFilters = !!activeCat && activeCat.kind === 'tyre';
@@ -1078,7 +1072,6 @@ const TyreShop: React.FC<TyreShopProps> = ({
         showStock={enableStockQty}
         onQuickOrder={(p) => setQuickOrderProduct(p)}
         onSimilarClick={(t) => openProduct(t, { replace: true })}
-        companionCategoryIds={selectedProductForModal ? companionCategories(selectedProductForModal) : []}
       />
 
       {lightboxOpen && (

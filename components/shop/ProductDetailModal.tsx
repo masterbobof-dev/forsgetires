@@ -29,52 +29,50 @@ interface ProductDetailModalProps {
   onRequireLogin?: () => void;
   /** stock tracking is on → show "Залишилося N шт" */
   showStock?: boolean;
-  /** categories whose goods are offered as "З цим купують" (neighbour sections of the same group) */
-  companionCategoryIds?: number[];
 }
 
-const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClose, addToCart, formatPrice, getSeasonLabel, renderSchema, openLightbox, onQuickOrder, onSimilarClick, preset, isFavorite, onToggleFavorite, isCompared, onToggleCompare, userId, userName, onRequireLogin, showStock = false, companionCategoryIds = [] }) => {
+const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClose, addToCart, formatPrice, getSeasonLabel, renderSchema, openLightbox, onQuickOrder, onSimilarClick, preset, isFavorite, onToggleFavorite, isCompared, onToggleCompare, userId, userName, onRequireLogin, showStock = false }) => {
   const [companions, setCompanions] = useState<TyreProduct[]>([]);
-  const companionKey = companionCategoryIds.join(',');
   const [similar, setSimilar] = useState<TyreProduct[]>([]);
   const [loadingSimilar, setLoadingSimilar] = useState(false);
   const [photoIdx, setPhotoIdx] = useState(0);
   const [touchX, setTouchX] = useState<number | null>(null);
   useEffect(() => { setPhotoIdx(0); }, [product?.id]);
 
+  const isTyre = !!(product && (product.width || product.radius || product.season));
+
   useEffect(() => {
     if (!product) return;
-    const fetchSimilar = async () => {
-      setLoadingSimilar(true);
-      try {
-         let query = supabase.from('tyres').select('*').neq('id', product.id).neq('in_stock', false);
-         if (product.category_id) query = query.eq('category_id', product.category_id);
-         if (product.radius) query = query.eq('radius', product.radius);
-         if (product.width) query = query.ilike('title', `%${product.width}%`);
-         if (product.height) query = query.ilike('title', `%/${product.height}%`);
-         
-         const { data } = await query.limit(4);
-         if (data) {
-           // Basic mapping to ensure it conforms to TyreProduct
-           setSimilar(data.map(d => ({...d, in_stock: true})));
-         }
-      } catch(e) {} finally { setLoadingSimilar(false); }
-    };
-    fetchSimilar();
-    
     addRecent(product);
-  }, [product]);
-
-  // "З цим купують": popular goods with photos from neighbour sections (oil → filters, etc.)
-  useEffect(() => {
-    setCompanions([]);
-    if (!product || !companionKey) return;
     let alive = true;
-    supabase.from('tyres').select('*').in('category_id', companionKey.split(',').map(Number)).neq('in_stock', false)
-      .eq('on_order', false).eq('has_photo', true).not('hidden_on_site', 'is', true).order('stock_quantity', { ascending: false }).limit(8)
-      .then(({ data }) => { if (alive) setCompanions((data as TyreProduct[]) || []); });
+    setLoadingSimilar(true); setSimilar([]); setCompanions([]);
+    (async () => {
+      try {
+        if (isTyre) {
+          // tyres: same size
+          let query = supabase.from('tyres').select('*').neq('id', product.id).neq('in_stock', false);
+          if (product.category_id) query = query.eq('category_id', product.category_id);
+          if (product.radius) query = query.eq('radius', product.radius);
+          if (product.width) query = query.ilike('title', `%${product.width}%`);
+          if (product.height) query = query.ilike('title', `%/${product.height}%`);
+          const { data } = await query.limit(4);
+          if (alive) setSimilar((data as TyreProduct[]) || []);
+        } else {
+          // other goods: analogs (same viscosity / same car) and rule-based "З цим купують" — see product_related() in the DB
+          const { data } = await supabase.rpc('product_related', { p_id: product.id });
+          if (alive && data) { setSimilar((data.analogs as TyreProduct[]) || []); setCompanions((data.companions as TyreProduct[]) || []); }
+        }
+      } catch { /* blocks stay empty */ } finally { if (alive) setLoadingSimilar(false); }
+    })();
     return () => { alive = false; };
-  }, [product?.id, companionKey]);
+  }, [product?.id]);
+
+  /** Lists hold only light fields — load the full product before opening it / adding to the cart. */
+  const withFull = (t: TyreProduct, fn: (full: TyreProduct) => void) => async () => {
+    const { data } = await supabase.from('tyres').select('*').eq('id', t.id).maybeSingle();
+    fn((data as TyreProduct) || t);
+  };
+  const openItem = (t: TyreProduct) => withFull(t, full => onSimilarClick && onSimilarClick(full));
 
   if (!product) return null;
 
@@ -323,13 +321,13 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                   <div className="flex gap-3 overflow-x-auto pb-4 snap-x scrollbar-hide">
                     {companions.map(t => (
                       <div key={t.id} className="snap-start shrink-0 w-[150px] md:w-[170px] bg-zinc-950 border border-zinc-800 hover:border-[#FFC300] rounded-2xl overflow-hidden flex flex-col transition-colors">
-                        <button onClick={() => onSimilarClick && onSimilarClick(t)} className="text-left flex-1">
-                          <div className="aspect-square bg-white"><img src={t.image_thumb_url || t.image_url} alt={t.title} loading="lazy" className="w-full h-full object-contain p-2" /></div>
+                        <button onClick={openItem(t)} className="text-left flex-1">
+                          <div className="aspect-square bg-white flex items-center justify-center">{(t.image_thumb_url || t.image_url) ? <img src={t.image_thumb_url || t.image_url} alt={t.title} loading="lazy" className="w-full h-full object-contain p-2" /> : <Info className="text-zinc-300" />}</div>
                           <p className="px-2.5 pt-2 text-[11px] font-bold text-white line-clamp-2 min-h-[2.6em]">{t.title}</p>
                         </button>
                         <div className="px-2.5 pb-2.5 pt-1 flex items-center justify-between gap-1">
                           <span className="text-sm font-black text-[#FFC300]">{formatPrice(t.price)}</span>
-                          <button onClick={() => addToCart(t)} aria-label="У кошик" className="w-8 h-8 rounded-lg bg-[#FFC300] hover:bg-white text-black flex items-center justify-center"><ShoppingCart size={15} /></button>
+                          <button onClick={withFull(t, addToCart)} aria-label="У кошик" className="w-8 h-8 rounded-lg bg-[#FFC300] hover:bg-white text-black flex items-center justify-center"><ShoppingCart size={15} /></button>
                         </div>
                       </div>
                     ))}
@@ -341,7 +339,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
               <div className="mt-8 border-t border-zinc-800 pt-8">
                 <h3 className="text-white text-lg font-black uppercase tracking-widest mb-4 flex items-center gap-2">
                   <div className="w-1.5 h-1.5 bg-[#FFC300] rounded-full"></div>
-                  Схожі пропозиції
+                  {isTyre ? 'Схожі пропозиції' : 'Аналоги та інший об\'єм'}
                 </h3>
                 {loadingSimilar ? (
                   <div className="flex justify-center py-4"><Loader2 className="animate-spin text-zinc-500" /></div>
@@ -350,9 +348,9 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                 ) : (
                   <div className="flex gap-4 overflow-x-auto pb-6 snap-x pr-4 scrollbar-hide">
                     {similar.map(t => (
-                      <div key={t.id} onClick={() => onSimilarClick && onSimilarClick(t)} className="min-w-[170px] md:min-w-[190px] bg-zinc-950 border border-zinc-800 rounded-2xl p-4 flex flex-col cursor-pointer hover:border-[#FFC300] transition-all snap-center group/card hover:shadow-2xl">
+                      <div key={t.id} onClick={openItem(t)} className="min-w-[170px] md:min-w-[190px] bg-zinc-950 border border-zinc-800 rounded-2xl p-4 flex flex-col cursor-pointer hover:border-[#FFC300] transition-all snap-center group/card hover:shadow-2xl">
                         <div className="h-24 md:h-32 mb-3 bg-zinc-900/50 rounded-xl p-3 flex items-center justify-center overflow-hidden border border-zinc-800/50 group-hover/card:bg-black transition-colors">
-                           {t.image_url ? <img src={t.image_url} alt={t.title} className="max-h-full object-contain group-hover/card:scale-110 transition-transform duration-500"/> : <Info className="opacity-10"/>}
+                           {(t.image_thumb_url || t.image_url) ? <img src={t.image_thumb_url || t.image_url} alt={t.title} className="max-h-full object-contain group-hover/card:scale-110 transition-transform duration-500"/> : <Info className="opacity-10"/>}
                         </div>
                         <div className="flex-grow">
                           <span className="text-[11px] text-[#FFC300] font-black uppercase mb-1 block">{t.manufacturer || 'Товар'}</span>

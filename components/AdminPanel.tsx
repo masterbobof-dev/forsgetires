@@ -88,7 +88,9 @@ const useConfirm = () => {
 
 // ── Main Component ─────────────────────────────────────────────────────────
 const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
-  const [activeTab, setActiveTab] = useState<string>('orders');
+  // the open section is remembered while the browser tab is open (coming back from the site opens the same one)
+  const [activeTab, setActiveTabState] = useState<string>(() => { try { return sessionStorage.getItem('admin_tab') || 'orders'; } catch { return 'orders'; } });
+  const setActiveTab = (t: string) => { setActiveTabState(t); try { sessionStorage.setItem('admin_tab', t); } catch { /* private mode */ } window.scrollTo({ top: 0 }); };
   const [accessStatus, setAccessStatus] = useState<AccessStatus>('loading');
   const [currentUserEmail, setCurrentUserEmail] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -239,72 +241,49 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
       {/* Confirm dialog */}
       {confirmDialog}
 
-      <header className="bg-zinc-900 border-b border-zinc-800 p-2 md:p-4 sticky top-0 z-50 shadow-md print:hidden">
-        <div className="max-w-7xl mx-auto flex justify-between items-center gap-4">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsMobileMenuOpen(true)}
-              className="md:hidden p-2 bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors"
-            >
-              <Menu size={24} />
+      <header className="bg-zinc-900 border-b border-zinc-800 sticky top-0 z-50 shadow-md print:hidden">
+        {/* Row 1: who is logged in, back to the site, log out */}
+        <div className="max-w-7xl mx-auto flex items-center gap-2 md:gap-3 px-2 md:px-4 h-14">
+          <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden p-2 bg-zinc-800 rounded-lg text-zinc-300 hover:text-white" aria-label="Меню">
+            <Menu size={22} />
+          </button>
+          <h1 className="text-base md:text-lg font-black uppercase flex items-center gap-2 shrink-0">
+            <Lock size={18} className="text-[#FFC300]" /> {isManager ? 'Менеджер' : 'Адмін'}
+          </h1>
+          {/* phones: the open section */}
+          <span className="md:hidden flex items-center gap-1.5 min-w-0 bg-black/50 px-3 py-1.5 rounded-full border border-zinc-800">
+            <span className="text-[#FFC300] shrink-0">{getTabIcon(activeTab)}</span>
+            <span className="text-[11px] font-black uppercase truncate">{getTabLabel(activeTab)}</span>
+          </span>
+          <span className="flex-1" />
+          {currentUserEmail && <span className="hidden lg:block text-xs text-zinc-500 truncate max-w-[220px]">{currentUserEmail}</span>}
+          {onBackToSite && (
+            <button onClick={onBackToSite} className="flex items-center gap-1.5 h-9 px-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-bold border border-zinc-700 shrink-0" title="Перейти на сайт (вхід збережеться)">
+              <ChevronRight size={14} className="rotate-180" /> <span className="hidden sm:inline">На сайт</span>
             </button>
-            <h1 className="text-lg md:text-xl font-bold uppercase flex items-center gap-2">
-              <Lock className="text-[#FFC300] hidden sm:block" />
-              <span className="truncate max-w-[150px] sm:max-w-none">
-                {isManager ? 'Менеджер' : 'Admin'}
-              </span>
-            </h1>
-
-            {onBackToSite && (
-              <button
-                onClick={onBackToSite}
-                className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-lg text-xs font-bold transition-all border border-zinc-700"
-              >
-                <ChevronRight size={14} className="rotate-180" /> На сайт
-              </button>
-            )}
-
-          </div>
-
-          {/* Desktop Nav */}
-          <div className="hidden md:flex items-center gap-2">
-            <div className="flex bg-black rounded-lg p-1 overflow-x-auto scrollbar-hide max-w-[400px] lg:max-w-none gap-0.5">
-              {currentTabs.map(t => (
-                <button
-                  key={t}
-                  onClick={() => setActiveTab(t)}
-                  className={`px-3 py-1.5 rounded font-bold text-xs uppercase whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                    activeTab === t ? 'bg-[#FFC300] text-black shadow-lg' : 'text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  {getTabIcon(t)}
-                  {getTabLabel(t)}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={handleLogout}
-              className="flex-shrink-0 px-3 py-1.5 text-zinc-500 hover:text-red-400 ml-2 flex items-center gap-2 whitespace-nowrap border-l border-zinc-800 transition-colors text-xs"
-            >
-              <LogOut size={14} /> Вихід
-            </button>
-          </div>
-
-          {/* Mobile: active tab + logout */}
-          <div className="md:hidden flex items-center gap-2">
-            <div className="flex items-center gap-2 bg-black/50 px-3 py-1.5 rounded-full border border-zinc-800">
-              <span className="text-[#FFC300]">{getTabIcon(activeTab)}</span>
-              <span className="text-[10px] font-black uppercase tracking-widest">{getTabLabel(activeTab)}</span>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="p-2 bg-red-900/10 text-red-500 rounded-lg border border-red-900/20 hover:bg-red-900/20 transition-colors"
-              title="Вийти"
-            >
-              <LogOut size={18} />
-            </button>
-          </div>
+          )}
+          <button onClick={handleLogout} className="flex items-center gap-1.5 h-9 px-3 text-red-400 hover:bg-red-900/20 rounded-lg text-xs font-bold border border-red-900/30 shrink-0" title="Вийти з акаунту">
+            <LogOut size={14} /> <span className="hidden sm:inline">Вийти</span>
+          </button>
         </div>
+
+        {/* Row 2 (computer): every section is visible, wraps to a second line instead of being cut off */}
+        <nav className="hidden md:block border-t border-zinc-800/70">
+          <div className="max-w-7xl mx-auto px-4 py-2 flex flex-wrap gap-1">
+            {currentTabs.map(t => (
+              <button
+                key={t}
+                onClick={() => setActiveTab(t)}
+                className={`h-9 px-3 rounded-lg font-bold text-xs uppercase whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+                  activeTab === t ? 'bg-[#FFC300] text-black' : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                }`}
+              >
+                {getTabIcon(t)}
+                {getTabLabel(t)}
+              </button>
+            ))}
+          </div>
+        </nav>
       </header>
 
       {/* Mobile Sidebar */}
@@ -341,7 +320,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
               ))}
             </div>
 
-            <div className="p-4 border-t border-zinc-800">
+            <div className="p-4 border-t border-zinc-800 space-y-2">
+              {onBackToSite && (
+                <button onClick={() => { setIsMobileMenuOpen(false); onBackToSite(); }} className="w-full flex items-center gap-3 p-4 rounded-xl bg-zinc-800 text-zinc-200 font-bold">
+                  <ChevronRight size={20} className="rotate-180" /> <span>На сайт</span>
+                </button>
+              )}
               <button
                 onClick={handleLogout}
                 className="w-full flex items-center gap-3 p-4 rounded-xl bg-red-900/10 text-red-500 font-bold hover:bg-red-900/20 transition-colors"
@@ -370,27 +354,21 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
         {activeTab === 'seoai' && <SeoAiTab />}
       </main>
 
-      {/* Mobile Bottom Tab Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 border-t border-zinc-800 shadow-2xl print:hidden">
-        <div className="admin-tab-scroll flex">
-          {currentTabs.map(t => (
-            <button
-              key={t}
-              onClick={() => { setActiveTab(t); setIsMobileMenuOpen(false); }}
-              className={`flex flex-col items-center justify-center gap-1 px-3 py-2.5 flex-shrink-0 min-w-[60px] transition-all ${
-                activeTab === t
-                  ? 'text-[#FFC300] border-t-2 border-[#FFC300] -mt-0.5 bg-zinc-800/50'
-                  : 'text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              <span className={`transition-transform ${activeTab === t ? 'scale-110' : ''}`}>
-                {getTabIcon(t)}
-              </span>
-              <span className="text-[8px] font-black uppercase tracking-wide whitespace-nowrap">
-                {getTabLabel(t)}
-              </span>
+      {/* Phones: the main sections at the bottom, the rest in "Ще" */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 border-t border-zinc-800 shadow-2xl print:hidden pb-[env(safe-area-inset-bottom)]">
+        <div className="grid grid-cols-5">
+          {currentTabs.filter(t => ['orders', 'tyres', 'photos', 'categories'].includes(t)).map(t => (
+            <button key={t} onClick={() => setActiveTab(t)}
+              className={`flex flex-col items-center justify-center gap-1 py-2.5 ${activeTab === t ? 'text-[#FFC300]' : 'text-zinc-500'}`}>
+              {getTabIcon(t)}
+              <span className="text-[10px] font-bold whitespace-nowrap">{getTabLabel(t)}</span>
             </button>
           ))}
+          <button onClick={() => setIsMobileMenuOpen(true)}
+            className={`flex flex-col items-center justify-center gap-1 py-2.5 ${!['orders', 'tyres', 'photos', 'categories'].includes(activeTab) ? 'text-[#FFC300]' : 'text-zinc-500'}`}>
+            <Menu size={18} />
+            <span className="text-[10px] font-bold">Ще</span>
+          </button>
         </div>
       </nav>
     </div>

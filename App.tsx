@@ -165,11 +165,24 @@ const App: React.FC = () => {
     navigate('home');
   };
 
+  // "Увійти / Кабінет / Адмінка" in the header: staff always go to the admin panel, customers to their cabinet.
+  // While the "is this staff?" check is still running, the click waits for it instead of guessing.
+  const pendingAccountClick = useRef(false);
   const handleAccountClick = () => {
-    if (auth.session && !isStaff) navigate('account');
-    else if (auth.session && isStaff) navigate('admin');
-    else auth.openAuthModal('login');
+    if (!auth.session) { auth.openAuthModal('login'); return; }
+    if (isStaff === null) { pendingAccountClick.current = true; return; }
+    navigate(isStaff ? 'admin' : 'account');
   };
+  useEffect(() => {
+    if (isStaff === null || !pendingAccountClick.current) return;
+    pendingAccountClick.current = false;
+    if (auth.session) navigate(isStaff ? 'admin' : 'account');
+  }, [isStaff]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // staff have no customer cabinet: /account opens the admin panel for them
+  useEffect(() => {
+    if (currentView === 'account' && auth.session && isStaff === true) navigate('admin', { replace: true });
+  }, [currentView, isStaff, auth.session]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const renderContent = () => {
     switch (currentView) {
@@ -192,6 +205,7 @@ const App: React.FC = () => {
         }
         return <AdminPanel onLogout={() => { auth.logout(); goHome(); }} onBackToSite={goHome} />;
       case 'account':
+        if (auth.session && isStaff !== false) return <PageLoader />; // checking / staff → goes to the admin panel
         return <AccountPage auth={auth} onBack={goHome} />;
       case 'oferta':
       case 'privacy':
@@ -231,7 +245,8 @@ const App: React.FC = () => {
           currentView={currentView}
           onChangeView={(v) => (v === 'home' ? goHome() : navigate(v))}
           onAccountClick={handleAccountClick}
-          isLoggedIn={!!auth.session && !isStaff}
+          isLoggedIn={!!auth.session && isStaff === false}
+          isStaff={!!auth.session && isStaff === true}
           cartCount={cartCount}
         />
       )}

@@ -36,6 +36,7 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
   const [h, setH] = useState('');
   const [r, setR] = useState('');
   const [guideOpen, setGuideOpen] = useState(false);
+  const [showAllSections, setShowAllSections] = useState(false);
   const [hotIsPicked, setHotIsPicked] = useState(true);
   const [hot, setHot] = useState<TyreProduct[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
@@ -119,24 +120,34 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
           })}
         </div>
       </section>
-      {/* Popular sections: the biggest subcategories */}
+      {/* Popular sections: the biggest subcategories — even tiles, 8 at first */}
       {(() => {
-        const subs = categories.filter(c => c.parent_id && (c.available || 0) > 0).sort((a, b) => (b.available! - a.available!)).slice(0, 16);
-        if (subs.length < 4) return null;
+        const all = categories.filter(c => c.parent_id && (c.available || 0) > 0).sort((a, b) => (b.available! - a.available!)).slice(0, 16);
+        if (all.length < 4) return null;
+        const subs = showAllSections ? all : all.slice(0, 8);
         return (
           <section>
             <h2 className="text-lg md:text-2xl font-black uppercase tracking-tight mb-3 md:mb-4">Популярні розділи</h2>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
               {subs.map(c => {
                 const Icon = getCategoryIcon(c.icon || categories.find(p => p.id === c.parent_id)?.icon);
                 return (
                   <button key={c.id} onClick={() => onPickCategory(c.id)}
-                    className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 hover:border-[#FFC300] hover:text-[#FFC300] rounded-xl px-3 py-2 text-sm font-bold text-zinc-200 transition-colors">
-                    <span className="text-[#FFC300]"><Icon size={16} /></span>{c.name}<span className="text-zinc-500 font-normal text-xs">{c.available}</span>
+                    className="group h-16 md:h-[72px] flex items-center gap-2.5 bg-zinc-900 border border-zinc-800 hover:border-[#FFC300] rounded-2xl px-2.5 md:px-3 text-left transition-colors">
+                    <span className="w-10 h-10 shrink-0 rounded-xl bg-[#FFC300]/10 text-[#FFC300] flex items-center justify-center group-hover:bg-[#FFC300] group-hover:text-black transition-colors"><Icon size={20} /></span>
+                    <span className="min-w-0">
+                      <span className="block text-[13px] md:text-sm font-bold text-white leading-tight line-clamp-2">{c.name}</span>
+                      <span className="block text-[11px] text-zinc-500 mt-0.5">{c.available} товарів</span>
+                    </span>
                   </button>
                 );
               })}
             </div>
+            {all.length > 8 && (
+              <button onClick={() => setShowAllSections(v => !v)} className="mt-3 w-full md:w-auto md:px-6 h-11 rounded-xl border border-zinc-800 bg-zinc-900 hover:border-[#FFC300] text-sm font-bold text-zinc-300 flex items-center justify-center gap-1 mx-auto">
+                {showAllSections ? 'Згорнути' : `Усі розділи (${all.length})`} <ChevronRight size={16} className={showAllSections ? '-rotate-90' : 'rotate-90'} />
+              </button>
+            )}
           </section>
         );
       })()}

@@ -5,6 +5,7 @@ import { CITIES, cityFromPath, cityPath, cityTexts } from '../api/_cities.js';
 import { useCategories, getCategoryIcon } from '../categories';
 import { linkClick, navigateTo } from '../navigation';
 import { productPath } from '../productUrl';
+import { catPath } from '../api/_paths.js';
 import { PHONE_NUMBER_1, PHONE_LINK_1 } from '../constants';
 import type { TyreProduct } from '../types';
 
@@ -64,7 +65,7 @@ const LocalCityPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             {popular.map(c => {
               const Icon = getCategoryIcon(c.icon || categories.find(p => p.id === c.parent_id)?.icon);
               return (
-                <a key={c.id} href={`/?c=${c.slug}`} onClick={linkClick(`/?c=${c.slug}`)}
+                <a key={c.id} href={catPath(c.slug)} onClick={linkClick(catPath(c.slug))}
                   className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 hover:border-[#FFC300] rounded-xl px-3 py-2 text-sm font-bold text-zinc-200">
                   <span className="text-[#FFC300]"><Icon size={16} /></span>{c.name}<span className="text-zinc-500 font-normal text-xs">{c.available}</span>
                 </a>

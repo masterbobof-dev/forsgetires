@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { formatUaPhone, isValidUaPhone } from '../phone';
 import { supabase } from '../supabaseClient';
 import { TyreProduct, CartItem } from '../types';
-import { Loader2, Phone, ArrowDown, ArrowLeft, ArrowRight, MapPin, X, ShoppingCart, Scale, Heart, MessageCircle, Send } from 'lucide-react';
+import { Loader2, Phone, ArrowDown, ArrowLeft, ArrowRight, MapPin, X, ShoppingCart, Scale, Heart, MessageCircle, Send, ChevronRight } from 'lucide-react';
 import { PHONE_LINK_1, PHONE_NUMBER_1, FORMSPREE_ENDPOINT, TELEGRAM_LINK, VIBER_LINK, SITE_URL } from '../constants';
 
 // Підкомпоненти
@@ -15,6 +15,7 @@ import { useCategories, buildCategoryFilter, getCategoryPath, getRootOf, getRoot
 import { getPresetForCategory, getPresetForProduct, getCardChips, sortAttrValues } from '../productAttributes';
 import { productPath, productIdFromLocation } from '../productUrl';
 import { parseSearch, searchFilters } from '../searchQuery';
+import { catPath, catSlugFrom } from '../api/_paths.js';
 import { useStoredIds, FAVORITES_KEY, COMPARE_KEY, COMPARE_MAX } from '../shopLists';
 import CompareModal from './shop/CompareModal';
 import HomeShowcase from './home/HomeShowcase';
@@ -114,6 +115,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
   const [compareProducts, setCompareProducts] = useState<TyreProduct[]>([]);
   const [compareLoading, setCompareLoading] = useState(false);
   const activeCat = typeof activeCategory === 'number' ? categories.find(c => c.id === activeCategory) : undefined;
+  const categorySlug = (cat: CategorySelection) => cat === 'all' ? '' : cat === 'hot' ? 'akcii' : cat === 'fav' ? 'obrane' : (categories.find(c => c.id === cat)?.slug || '');
   const agroCategory = categories.find(c => c.vehicle_type === 'agro');
   const showTyreFilters = !!activeCat && activeCat.kind === 'tyre';
   const preset = getPresetForCategory(categories, activeCat);
@@ -130,10 +132,10 @@ const TyreShop: React.FC<TyreShopProps> = ({
     'hot',
   ], [categories]);
 
-  // --- LOGIC: CATEGORY <-> URL (?c=slug) ---
+  // --- LOGIC: CATEGORY <-> URL (/katalog/<slug>; old ?c=slug still understood) ---
   useEffect(() => {
     if (categoriesLoading) return;
-    const slug = new URLSearchParams(window.location.search).get('c');
+    const slug = catSlugFrom(window.location.pathname, window.location.search);
     if (slug === 'akcii') setActiveCategory('hot');
     else if (slug === 'obrane') setActiveCategory('fav');
     else if (slug) {
@@ -144,10 +146,15 @@ const TyreShop: React.FC<TyreShopProps> = ({
 
   useEffect(() => {
     if (categoriesLoading || window.location.pathname.startsWith('/p/')) return;
-    const url = new URL(window.location.href);
-    if (activeCategory === 'all') url.searchParams.delete('c');
-    else url.searchParams.set('c', activeCategory === 'hot' ? 'akcii' : activeCategory === 'fav' ? 'obrane' : (activeCat?.slug || ''));
-    window.history.replaceState(window.history.state, '', url.toString());
+    const path = window.location.pathname;
+    if (path !== '/' && !path.startsWith('/katalog/')) return;
+    const params = new URLSearchParams(window.location.search);
+    params.delete('c');
+    const slug = categorySlug(activeCategory);
+    if (activeCategory !== 'all' && !slug) return;
+    const q = params.toString();
+    const next = (slug ? catPath(slug) : '/') + (q ? `?${q}` : '');
+    if (next !== path + window.location.search) window.history.replaceState(window.history.state, '', next);
   }, [activeCategory, categoriesLoading]);
 
   const [activeSort, setActiveSort] = useState<SortValue>('recommended');
@@ -222,9 +229,10 @@ const TyreShop: React.FC<TyreShopProps> = ({
     if (window.history.state?.forsageProduct) { window.history.back(); return; } // popstate closes the window
     setSelectedProductForModal(null);
     const params = new URLSearchParams(window.location.search);
-    params.delete('p'); params.delete('product');
+    params.delete('p'); params.delete('product'); params.delete('c');
     const q = params.toString();
-    window.history.replaceState({}, '', `/${q ? `?${q}` : ''}`);
+    const slug = categorySlug(activeCategory);
+    window.history.replaceState({}, '', `${slug ? catPath(slug) : '/'}${q ? `?${q}` : ''}`);
   };
 
   /** Show a product by id (from the address): use the loaded list or ask the database. */
@@ -261,10 +269,10 @@ const TyreShop: React.FC<TyreShopProps> = ({
       const id = productIdFromLocation();
       if (id) { showProductById(id); return; }
       setSelectedProductForModal(null);
-      // category links from the header menu (/?c=slug)
-      const slug = new URLSearchParams(window.location.search).get('c');
+      // category links from the header menu (/katalog/<slug>)
+      const slug = catSlugFrom(window.location.pathname, window.location.search);
       const next: CategorySelection = !slug ? 'all' : slug === 'akcii' ? 'hot' : slug === 'obrane' ? 'fav' : (categories.find(c => c.slug === slug)?.id ?? activeCategory);
-      if (window.location.pathname === '/' && next !== activeCategory) changeCategory(next);
+      if ((window.location.pathname === '/' || window.location.pathname.startsWith('/katalog/')) && next !== activeCategory) changeCategory(next);
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
@@ -285,10 +293,10 @@ const TyreShop: React.FC<TyreShopProps> = ({
       if (activeCat) {
         document.title = activeCat.seo_title || `${activeCat.name} — купити в інтернет-магазині Форсаж | Синельникове`;
         setMetaDescription(activeCat.seo_description || activeCat.description?.slice(0, 300) || `${activeCat.name} в наявності в інтернет-магазині Форсаж. Самовивіз у Синельниковому, доставка Новою Поштою по всій Україні.`);
-        setCanonical(`${SITE_URL}/?c=${activeCat.slug}`);
+        setCanonical(SITE_URL + catPath(activeCat.slug));
       } else if (activeCategory === 'hot') {
         document.title = 'Акції та знижки — інтернет-магазин Форсаж';
-        setCanonical(`${SITE_URL}/?c=akcii`);
+        setCanonical(SITE_URL + catPath('akcii'));
       }
       if (url.searchParams.has('p') && !productIdFromLocation()) { url.searchParams.delete('p'); window.history.replaceState({}, '', url.toString()); }
     }
@@ -863,6 +871,19 @@ const TyreShop: React.FC<TyreShopProps> = ({
           </aside>
 
           <div ref={listTopRef} onTouchStart={onListTouchStart} onTouchEnd={onListTouchEnd} className="min-w-0">
+            {(activeCat || activeCategory === 'hot') && (() => {
+              const parent = activeCat?.parent_id ? categories.find(c => c.id === activeCat.parent_id) : undefined;
+              const crumb = (label: string, cat: CategorySelection, href: string) => (
+                <a href={href} onClick={e => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); changeCategory(cat); }} className="hover:text-[#FFC300] transition-colors">{label}</a>
+              );
+              return (
+                <nav aria-label="Навігація" className="flex flex-wrap items-center gap-1 text-[11px] md:text-xs text-zinc-500 mb-1 px-1">
+                  {crumb('Головна', 'all', '/')}
+                  {parent && <><ChevronRight size={12} />{crumb(parent.name, parent.id, catPath(parent.slug))}</>}
+                  <ChevronRight size={12} /><span className="text-zinc-300 font-bold">{activeCat ? activeCat.name : 'Хіти та акції'}</span>
+                </nav>
+              );
+            })()}
             <SearchBar
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}

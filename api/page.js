@@ -4,6 +4,7 @@
 import { SITE_URL, SHOP_NAME, rest, escapeXml as esc, productPath, parsePrice, slugify } from './_shop.js';
 import { loadAppHtml, setHead, addJsonLd, setRootContent } from './_html.js';
 import { CITIES, cityFromPath, cityPath, cityTexts } from './_cities.js';
+import { catPath, catSlugFrom } from './_paths.js';
 
 const CITY = 'Синельникове';
 const DELIVERY = `Самовивіз у м. ${CITY} (вул. Квітнева, 9) або доставка Новою Поштою по всій Україні.`;
@@ -42,7 +43,7 @@ const paragraphs = (t) => String(t || '').replace(/\r/g, '').split(/\n{2,}/).map
   .map((p) => (p.length < 80 && !/[.!?:]$/.test(p) && !p.includes('\n') ? `<h2>${esc(p)}</h2>` : `<p>${esc(p).replace(/\n/g, '<br>')}</p>`)).join('\n');
 const link = (href, text) => `<a href="${esc(href)}">${esc(text)}</a>`;
 const productList = (items) => `<ul>${items.map((p) => `<li>${link(productPath(p), p.title)} — ${parsePrice(p.price)} грн</li>`).join('')}</ul>`;
-const navBlock = (cats) => `<nav><ul>${cats.filter((c) => !c.parent_id).map((c) => `<li>${link(`/?c=${c.slug}`, c.name)}</li>`).join('')}<li>${link('/?c=akcii', 'Хіти та акції')}</li></ul><ul>${Object.entries(INFO).map(([h, i]) => `<li>${link(h, i.title)}</li>`).join('')}<li>${link('/statti', 'Корисні статті')}</li></ul><ul>${CITIES.map((c) => `<li>${link(cityPath(c), `Автозапчастини в ${c.in}`)}</li>`).join('')}</ul></nav>`;
+const navBlock = (cats) => `<nav><ul>${cats.filter((c) => !c.parent_id).map((c) => `<li>${link(catPath(c.slug), c.name)}</li>`).join('')}<li>${link(catPath('akcii'), 'Хіти та акції')}</li></ul><ul>${Object.entries(INFO).map(([h, i]) => `<li>${link(h, i.title)}</li>`).join('')}<li>${link('/statti', 'Корисні статті')}</li></ul><ul>${CITIES.map((c) => `<li>${link(cityPath(c), `Автозапчастини в ${c.in}`)}</li>`).join('')}</ul></nav>`;
 
 const subtreeIds = (cats, id) => { const out = [id]; for (const c of cats) if (c.parent_id === id) out.push(...subtreeIds(cats, c.id)); return out; };
 
@@ -94,7 +95,7 @@ async function build(pathname, query) {
         address: { '@type': 'PostalAddress', streetAddress: 'вул. Квітнева, 9', addressLocality: 'Синельникове', addressRegion: 'Дніпропетровська область', postalCode: '52500', addressCountry: 'UA' },
         geo: { '@type': 'GeoCoordinates', latitude: 48.317541, longitude: 35.513511 }, areaServed: { '@type': 'City', name: city.name } },
       content: `<h1>${esc(t.h1)}</h1><p>${esc(t.intro)}</p>`
-        + `<h2>Що є в наявності</h2><ul>${subs.map((c) => `<li>${link(`/?c=${c.slug}`, c.name)}</li>`).join('')}</ul>`
+        + `<h2>Що є в наявності</h2><ul>${subs.map((c) => `<li>${link(catPath(c.slug), c.name)}</li>`).join('')}</ul>`
         + (hits.length ? `<h2>Популярні товари</h2>${productList(hits)}` : '')
         + `<h2>Питання та відповіді</h2>${t.faq.map((f) => `<h3>${esc(f.q)}</h3><p>${esc(f.a)}</p>`).join('')}`
         + `<h2>Доставляємо також</h2><ul>${CITIES.filter((c) => c.slug !== city.slug).map((c) => `<li>${link(cityPath(c), `Автозапчастини в ${c.in}`)}</li>`).join('')}</ul>`
@@ -120,14 +121,14 @@ async function build(pathname, query) {
     };
   }
 
-  // --- category (?c=slug) ---
-  const slug = String(query.c || '');
+  // --- category (/katalog/<slug>, old ?c=slug) ---
+  const slug = pathname.startsWith('/katalog/') ? catSlugFrom(pathname) : String(query.c || '');
   if (slug === 'akcii') {
     const items = await rest(`tyres?select=${PRODUCT_FIELDS}&is_hot=eq.true&in_stock=not.is.false&order=created_at.desc&limit=60`);
     return {
       title: `Хіти продажу та акції — шини, диски, акумулятори | ${SHOP_NAME}`,
       description: `Товари зі знижкою та хіти продажу. ${DELIVERY}`,
-      url: `${SITE_URL}/?c=akcii`,
+      url: SITE_URL + catPath('akcii'),
       content: `<h1>Хіти та акції</h1>${productList(items)}${navBlock(cats)}`,
     };
   }
@@ -143,9 +144,10 @@ async function build(pathname, query) {
     return {
       title: cat.seo_title || `${name} — купити в ${CITY}, ціни | ${SHOP_NAME}`,
       description: (cat.seo_description || cat.description || `${name} в інтернет-магазині «${SHOP_NAME}». ${DELIVERY}`).slice(0, 300),
-      url: `${SITE_URL}/?c=${cat.slug}`,
+      url: SITE_URL + catPath(cat.slug),
+      crumbs: [...(parent ? [{ name: parent.name, url: SITE_URL + catPath(parent.slug) }] : []), { name: cat.name, url: SITE_URL + catPath(cat.slug) }],
       ld: items.length ? { '@context': 'https://schema.org', '@type': 'ItemList', name, itemListElement: items.slice(0, 30).map((p, i) => ({ '@type': 'ListItem', position: i + 1, url: SITE_URL + productPath(p), name: p.title })) } : null,
-      content: `<h1>${esc(name)}</h1>${kids.length ? `<ul>${kids.map((k) => `<li>${link(`/?c=${k.slug}`, k.name)}</li>`).join('')}</ul>` : ''}${items.length ? productList(items) : '<p>Товари цієї категорії скоро з\'являться в каталозі.</p>'}${cat.description ? String(cat.description).split(/\n+/).filter(Boolean).map((t) => `<p>${esc(t)}</p>`).join('') : ''}${navBlock(cats)}`,
+      content: `<nav>${link('/', 'Головна')}${parent ? ` › ${link(catPath(parent.slug), parent.name)}` : ''} › ${esc(cat.name)}</nav><h1>${esc(name)}</h1>${kids.length ? `<ul>${kids.map((k) => `<li>${link(catPath(k.slug), k.name)}</li>`).join('')}</ul>` : ''}${items.length ? productList(items) : '<p>Товари цієї категорії скоро з\'являться в каталозі.</p>'}${cat.description ? String(cat.description).split(/\n+/).filter(Boolean).map((t) => `<p>${esc(t)}</p>`).join('') : ''}${navBlock(cats)}`,
     };
   }
 
@@ -175,6 +177,9 @@ export default async function handler(req, res) {
     if (!page.keepHead) html = setHead(html, page);
     if (page.noindex) html = html.replace(/<meta name="robots"[^>]*>/, '<meta name="robots" content="noindex, follow" />');
     if (page.ld) html = addJsonLd(html, page.ld);
+    if (page.crumbs) {
+      html = addJsonLd(html, { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ name: 'Головна', url: `${SITE_URL}/` }, ...page.crumbs].map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.name, item: c.url })) });
+    }
     if (page.content) html = setRootContent(html, page.content);
   } catch (e) {
     console.error('page render failed', e);

@@ -50,11 +50,11 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
       }`}
     >
        {/* Image Section */}
-       <div className="aspect-square sm:aspect-[4/5] bg-zinc-950 relative overflow-hidden">
+       <div className={`aspect-square relative overflow-hidden ${tyre.image_url ? 'bg-white' : 'bg-zinc-950'}`}>
           {tyre.image_url ? (
             <img 
               src={tyre.image_thumb_url || tyre.image_url} 
-              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+              className="w-full h-full object-contain p-3 sm:p-4 mix-blend-multiply transition-transform duration-700 group-hover:scale-105" 
               alt={altText}
               loading="lazy"
               decoding="async"

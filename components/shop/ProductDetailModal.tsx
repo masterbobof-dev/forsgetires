@@ -92,7 +92,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
           <button onClick={onClose} className="sticky md:absolute top-3 md:top-4 ml-auto mr-3 md:mr-0 md:right-4 -mb-12 md:mb-0 text-zinc-300 hover:text-white z-20 bg-black/60 hover:bg-black p-2 rounded-full transition-all shrink-0" aria-label="Закрити"><X size={22} /></button>
           
           {/* Image Section: all photos, swipe / arrows / thumbnails */}
-          <div className="w-full md:w-1/2 bg-zinc-950 flex flex-col relative shrink-0 md:min-h-full">
+          <div className={`w-full md:w-1/2 ${current ? "bg-white" : "bg-zinc-950"} flex flex-col relative shrink-0 md:min-h-full`}>
             <div
               className="relative flex items-center justify-center aspect-[4/3] md:aspect-auto md:flex-1 cursor-zoom-in group overflow-hidden"
               onClick={() => photos.length && openLightbox(photos, photoIdx)}

@@ -77,6 +77,15 @@ async function build(pathname, query) {
   // --- info pages ---
   if (INFO[pathname]) {
     const i = INFO[pathname];
+    // text edited in the shop program (site_pages) replaces the built-in summary
+    const slug = { '/dostavka-i-oplata': 'delivery', '/garantiya-i-povernennya': 'warranty', '/pro-nas': 'about', '/kontakty': 'contacts', '/faq': 'faq' }[pathname];
+    const custom = (await rest(`site_pages?slug=eq.${slug}&select=title,content`).catch(() => []))[0];
+    if (custom) {
+      return {
+        title: `${custom.title} — інтернет-магазин ${SHOP_NAME}`, description: excerpt(custom.content), url: SITE_URL + pathname,
+        content: `<h1>${esc(custom.title)}</h1>${paragraphs(custom.content)}${navBlock(cats)}`,
+      };
+    }
     return {
       title: `${i.title} — інтернет-магазин ${SHOP_NAME}`, description: i.description, url: SITE_URL + pathname,
       content: `<h1>${esc(i.title)}</h1><p>${esc(i.description)}</p>${i.body.map((b) => `<p>${esc(b)}</p>`).join('')}${navBlock(cats)}`,

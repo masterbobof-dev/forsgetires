@@ -19,6 +19,7 @@ import { useStoredIds, FAVORITES_KEY, COMPARE_KEY, COMPARE_MAX } from '../shopLi
 import CompareModal from './shop/CompareModal';
 import HomeShowcase from './home/HomeShowcase';
 import SizeGuideModal from './home/SizeGuideModal';
+import { useSitePromos, applyPromo } from '../sitePromos';
 import AgroBanner from './shop/AgroBanner';
 import SeoContentBlock from './shop/SeoContentBlock';
 import { logAnalyticsEvent } from './admin/analytics';
@@ -82,6 +83,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
   const [tyres, setTyres] = useState<TyreProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const { promos, ready: promosReady } = useSitePromos();
   const [toast, setToast] = useState<{message: string, visible: boolean}>({message: '', visible: false});
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(0);
@@ -396,11 +398,11 @@ const TyreShop: React.FC<TyreShopProps> = ({
   // --- LOGIC: TYRE DATA ---
   const attrFiltersKey = JSON.stringify(attrFilters);
   useEffect(() => {
-    if (categoriesLoading) return;
+    if (categoriesLoading || !promosReady) return;
     setPage(0);
     setTyres([]); 
     fetchTyres(0, true);
-  }, [categoriesLoading, activeCategory, activeSort, enableStockQty, filterBrand, filterRadius, filterWidth, filterHeight, filterSeason, showOnlyInStock, debouncedSearch, priorityProductId, attrFiltersKey]);
+  }, [categoriesLoading, activeCategory, activeSort, enableStockQty, filterBrand, filterRadius, filterWidth, filterHeight, filterSeason, showOnlyInStock, debouncedSearch, priorityProductId, attrFiltersKey, promosReady]);
 
   const resetFilters = () => {
     setSearchQuery(''); setFilterWidth(''); setFilterHeight(''); setFilterRadius(''); setFilterBrand(''); setFilterSeason(''); setAttrFilters({}); setShowOnlyInStock(false);
@@ -488,7 +490,8 @@ const TyreShop: React.FC<TyreShopProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const parseTyreSpecs = (tyre: TyreProduct): TyreProduct => {
+  const parseTyreSpecs = (tyre: TyreProduct): TyreProduct => applyPromo(parseTyreSpecsRaw(tyre), promos, categories);
+  const parseTyreSpecsRaw = (tyre: TyreProduct): TyreProduct => {
     if (!isTyreProduct(tyre, categories)) {
       const in_stock = enableStockQty ? (tyre.in_stock !== false && (tyre.stock_quantity ?? 0) > 0) : tyre.in_stock !== false;
       return { ...tyre, season: undefined, width: undefined, height: undefined, in_stock };

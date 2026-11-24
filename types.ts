@@ -58,6 +58,13 @@ export interface TyreProduct {
   seo_keywords?: string;
   slug?: string;
 
+  // Shop program link & site-only fields
+  program_product_id?: string | null;
+  image_thumb_url?: string | null;
+  gallery_thumbs?: string[] | null;
+  /** set on the site when a promo (site_promos) applies */
+  promo_badge?: string | null;
+
   // Cart Logic
   quantity?: number;
 }

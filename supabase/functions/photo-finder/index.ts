@@ -87,17 +87,22 @@ const geminiKey = async () => {
 };
 const b64 = (bytes: Uint8Array) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s); };
 
-type Verdict = { match: boolean; white_background: boolean; no_extra_text: boolean; good_quality: boolean };
+type Verdict = { match: boolean; details_match: boolean; brand_on_photo: string; title_brand: string; brand_same: boolean; white_background: boolean; no_extra_text: boolean; good_quality: boolean };
+const normBrand = (t: string) => String(t || '').toLowerCase().replace(/[^0-9a-zа-яіїєґ]/gi, '');
 const verdictFor = async (bytes: Uint8Array, type: string, p: any): Promise<Verdict | null> => {
   const key = await geminiKey();
   if (!key) return null;
-  const prompt = `Назва товару в автомагазині: «${p.title}»${p.manufacturer ? `. Бренд: ${p.manufacturer}` : ''}.\n` +
-    'Оціни фото для картки товару в інтернет-магазині. Поверни JSON з полями:\n' +
-    '"match": на фото САМЕ цей товар (інший ракурс чи комплектація цього ж товару — true; якщо видно ІНШИЙ бренд або інший тип товару — false; логотип, схема, автомобіль, людина — false; бренд не видно, але тип і вигляд відповідають — true);\n' +
+  const prompt = `Назва товару в автомагазині: «${p.title}»${p.manufacturer ? `. Бренд: ${p.manufacturer}` : ''}${p.catalog_number ? `. Артикул: ${p.catalog_number}` : ''}.\n` +
+    'Оціни фото для картки САМЕ ЦЬОГО товару. Будь суворим: краще відхилити сумнівне фото, ніж показати покупцю чужий товар. Поверни JSON з полями:\n' +
+    '"match": на фото той самий тип товару (рулетка = рулетка, відрізний круг = відрізний круг); логотип, схема, автомобіль, людина, набір різних товарів — false;\n' +
+    '"details_match": усі видимі характеристики НЕ суперечать назві — призначення/матеріал (по металу ≠ по бетону ≠ по дереву), розмір, діаметр, товщина, довжина, обʼєм, вʼязкість, кількість у наборі, колір; якщо на фото чи упаковці видно хоч одну розбіжність — false; якщо назва містить розміри чи призначення, а на фото це неможливо перевірити і товар легко сплутати — false;\n' +
+    '"title_brand": бренд/виробник, названий у НАЗВІ товару (наприклад «Рулетка 5м Sigma» → "Sigma", «Круг Гетьман 125» → "Гетьман"), або "" якщо в назві бренду немає;\n' +
+    '"brand_on_photo": назва бренду, яку видно на самому товарі чи упаковці (латиницею як написано), або "" якщо бренду не видно;\n' +
+    '"brand_same": true лише якщо title_brand порожній, АБО бренд на фото — це той самий бренд, що й title_brand (з урахуванням транслітерації: Гетьман = Hetman); інший бренд (Intertool замість Sigma) — false;\n' +
     '"white_background": фон чисто білий або майже білий, без інтер\'єру, столу, полиці, руки;\n' +
     '"no_extra_text": на зображенні НЕМАЄ доданого тексту — водяних знаків, цін, назв магазинів, адрес сайтів, рекламних написів, рамок, колажів (текст і етикетка на самій упаковці товару — дозволено);\n' +
     '"good_quality": фото чітке, не розмите, товар видно повністю і він займає більшу частину кадру.\n' +
-    'Відповідай лише JSON, наприклад {"match": true, "white_background": true, "no_extra_text": true, "good_quality": true}.';
+    'Відповідай лише JSON, наприклад {"match": true, "details_match": true, "title_brand": "Sigma", "brand_on_photo": "Sigma", "brand_same": true, "white_background": true, "no_extra_text": true, "good_quality": true}.';
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -109,10 +114,24 @@ const verdictFor = async (bytes: Uint8Array, type: string, p: any): Promise<Verd
   if (!res.ok) return null;
   try {
     const r = JSON.parse((await res.json())?.candidates?.[0]?.content?.parts?.[0]?.text || '');
-    return { match: r.match === true, white_background: r.white_background === true, no_extra_text: r.no_extra_text === true, good_quality: r.good_quality === true };
+    return { match: r.match === true, details_match: r.details_match === true, brand_on_photo: String(r.brand_on_photo || '').trim(), title_brand: String(r.title_brand || '').trim(), brand_same: r.brand_same === true,
+      white_background: r.white_background === true, no_extra_text: r.no_extra_text === true, good_quality: r.good_quality === true };
   } catch { return null; }
 };
-const passes = (v: Verdict | null, st: Settings) => !!v && v.match && v.good_quality && (!st.whiteBg || v.white_background) && (!st.noText || v.no_extra_text);
+/** product brand: the manufacturer field, or a known brand word in the title */
+const brandOf = (p: any, v?: Verdict) => String(p.manufacturer || v?.title_brand || '').trim();
+/** brand rule: a DIFFERENT brand on the photo = reject; brand not visible = the image page must name our brand */
+const brandOk = (v: Verdict, p: any, c: any) => {
+  const b = normBrand(brandOf(p, v));
+  if (!b) return true;
+  const seen = normBrand(v.brand_on_photo);
+  if (seen && (seen.includes(b) || b.includes(seen))) return true;
+  if (seen && /[a-z]/.test(seen) === /[a-z]/.test(b) && !v.brand_same) return false; // same alphabet, different brand
+  if (seen) return normBrand(`${c?.title || ''} ${c?.link || ''}`).includes(b) && v.brand_same; // Гетьман vs Hetman: other alphabet — the AI decides
+  return normBrand(`${c?.title || ''} ${c?.link || ''}`).includes(b);
+};
+const passes = (v: Verdict | null, st: Settings, p?: any, c?: any) => !!v && v.match && v.details_match && v.good_quality && (!p || brandOk(v, p, c))
+  && (!st.whiteBg || v.white_background) && (!st.noText || v.no_extra_text);
 
 // ---------- images ----------
 const fetchImage = async (url: string) => {
@@ -190,7 +209,7 @@ const processOne = async (p: any, st: Settings) => {
     try {
       const { bytes, type } = await fetchImage(c.url);
       const v = bytes.length <= 1_500_000 ? await verdictFor(bytes, type, p) : null;
-      const ok = passes(v, st);
+      const ok = passes(v, st, p, c);
       const enough = good.length >= st.maxPhotos;
       // good photos are copied to our storage right away (review mode too), so approving them later is instant
       const stored = ok && !enough ? await store(p.id, bytes, type, i) : null;
@@ -268,7 +287,7 @@ const staffFind = async (body: any, st: Settings) => {
     try {
       const { bytes, type } = await fetchImage(c.url);
       const v = bytes.length <= 1_500_000 ? await verdictFor(bytes, type, p) : null;
-      checked.push({ ...c, ai: v, ok: passes(v, st) });
+      checked.push({ ...c, ai: v, ok: passes(v, st, p, c) });
     } catch (e) {
       if (e instanceof RetryLater) { checked.push({ ...c, ai: null, ok: false, error: 'ШІ перевантажений, спробуйте за хвилину' }); continue; }
       /* the image can't be downloaded: skip it */

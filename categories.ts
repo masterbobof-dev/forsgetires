@@ -16,6 +16,8 @@ export interface ProductCategory {
   parent_id: number | null;
   icon?: string | null;
   description?: string | null;
+  seo_title?: string | null;
+  seo_description?: string | null;
   sort_order: number;
   is_active: boolean;
   kind: CategoryKind;

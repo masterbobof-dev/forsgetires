@@ -12,6 +12,7 @@ import AiAssistantTab from './admin/AiAssistantTab';
 import CategoriesTab from './admin/CategoriesTab';
 import ReviewsTab from './admin/ReviewsTab';
 import PhotoFinderTab from './admin/PhotoFinderTab';
+import SeoAiTab from './admin/SeoAiTab';
 import { supabase } from '../supabaseClient';
 
 interface AdminPanelProps {
@@ -212,7 +213,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
       categories: 'Категорії', reviews: 'Відгуки',
       tyres: 'Товари', orders: 'Замовлення', promo: 'Маркетинг', sync: 'API / Синхр.',
       seo: 'SEO', articles: 'Статті', settings: 'Налашт.', stats: 'Стат.',
-      ai: 'AI Помічник', photos: 'Фото ШІ',
+      ai: 'AI Помічник', photos: 'Фото ШІ', seoai: 'SEO ШІ',
     };
     return labels[tab] ?? tab;
   };
@@ -222,15 +223,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
       categories: <FolderTree size={18} />, reviews: <MessageSquare size={18} />, tyres: <ShoppingBag size={18} />, orders: <FileText size={18} />,
       promo: <Megaphone size={18} />, sync: <Database size={18} />, seo: <Globe size={18} />,
       articles: <FileText size={18} />, settings: <SettingsIcon size={18} />, stats: <BarChart3 size={18} />,
-      ai: <Sparkles size={18} />, photos: <ImageIcon size={18} />,
+      ai: <Sparkles size={18} />, photos: <ImageIcon size={18} />, seoai: <Sparkles size={18} />,
     };
     return icons[tab] ?? null;
   };
 
   const currentTabs = isAdmin
-    ? ['orders', 'tyres', 'photos', 'categories', 'reviews', 'ai', 'promo', 'sync', 'seo', 'articles', 'stats', 'settings']
+    ? ['orders', 'tyres', 'photos', 'categories', 'reviews', 'ai', 'promo', 'sync', 'seo', 'seoai', 'articles', 'stats', 'settings']
     : isManager
-      ? ['orders', 'tyres', 'photos', 'categories', 'reviews', 'ai', 'promo', 'seo', 'articles', 'stats']
+      ? ['orders', 'tyres', 'photos', 'categories', 'reviews', 'ai', 'promo', 'seo', 'seoai', 'articles', 'stats']
       : [];
 
   return (
@@ -366,6 +367,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
         {isAdmin && activeTab === 'sync' && <SyncTab />}
         {activeTab === 'ai' && <AiAssistantTab />}
         {activeTab === 'photos' && <PhotoFinderTab />}
+        {activeTab === 'seoai' && <SeoAiTab />}
       </main>
 
       {/* Mobile Bottom Tab Bar */}

@@ -50,7 +50,7 @@ const PRODUCT_FIELDS = 'id,title,slug,price,image_url';
 
 async function build(pathname, query) {
   let cats = [];
-  try { cats = await rest('product_categories?select=id,name,slug,parent_id,kind,description&is_active=eq.true&order=sort_order'); } catch { /* ignore */ }
+  try { cats = await rest('product_categories?select=id,name,slug,parent_id,kind,description,seo_title,seo_description&is_active=eq.true&order=sort_order'); } catch { /* ignore */ }
   // only categories with goods in stock (same as the site menu), biggest first
   try {
     const counts = await rest('rpc/category_counts');
@@ -141,11 +141,11 @@ async function build(pathname, query) {
     const name = parent ? `${parent.name} — ${cat.name}` : cat.name;
     const kids = cats.filter((c) => c.parent_id === cat.id);
     return {
-      title: `${name} — купити в ${CITY}, ціни | ${SHOP_NAME}`,
-      description: (cat.description || `${name} в інтернет-магазині «${SHOP_NAME}». ${DELIVERY}`).slice(0, 300),
+      title: cat.seo_title || `${name} — купити в ${CITY}, ціни | ${SHOP_NAME}`,
+      description: (cat.seo_description || cat.description || `${name} в інтернет-магазині «${SHOP_NAME}». ${DELIVERY}`).slice(0, 300),
       url: `${SITE_URL}/?c=${cat.slug}`,
       ld: items.length ? { '@context': 'https://schema.org', '@type': 'ItemList', name, itemListElement: items.slice(0, 30).map((p, i) => ({ '@type': 'ListItem', position: i + 1, url: SITE_URL + productPath(p), name: p.title })) } : null,
-      content: `<h1>${esc(name)}</h1>${cat.description ? `<p>${esc(cat.description)}</p>` : ''}${kids.length ? `<ul>${kids.map((k) => `<li>${link(`/?c=${k.slug}`, k.name)}</li>`).join('')}</ul>` : ''}${items.length ? productList(items) : '<p>Товари цієї категорії скоро з\'являться в каталозі.</p>'}${navBlock(cats)}`,
+      content: `<h1>${esc(name)}</h1>${kids.length ? `<ul>${kids.map((k) => `<li>${link(`/?c=${k.slug}`, k.name)}</li>`).join('')}</ul>` : ''}${items.length ? productList(items) : '<p>Товари цієї категорії скоро з\'являться в каталозі.</p>'}${cat.description ? String(cat.description).split(/\n+/).filter(Boolean).map((t) => `<p>${esc(t)}</p>`).join('') : ''}${navBlock(cats)}`,
     };
   }
 

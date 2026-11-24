@@ -41,11 +41,11 @@ const CartDrawer: React.FC<CartDrawerProps> = (props) => {
   if (!props.isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[120] animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-[175] animate-in fade-in duration-300">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={props.onClose}></div>
       <div className="absolute top-0 right-0 h-full w-full max-w-md bg-zinc-900 border-l border-zinc-800 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
         
-        <div className="p-6 border-b border-zinc-800 flex justify-between items-center bg-black/40 backdrop-blur-md sticky top-0 z-10">
+        <div className="p-4 md:p-6 border-b border-zinc-800 flex justify-between items-center bg-black/40 backdrop-blur-md sticky top-0 z-10">
            <div className="flex flex-col">
               <h2 className="text-2xl font-black text-white flex items-center gap-3">
                 <ShoppingBag className="text-[#FFC300]" size={28}/> 

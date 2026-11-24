@@ -216,7 +216,7 @@ const App: React.FC = () => {
         />
       )}
 
-      <main className="flex-grow flex flex-col animate-in fade-in duration-500">
+      <main className="flex-grow flex flex-col">
         <Suspense fallback={<PageLoader />}>
           {renderContent()}
         </Suspense>

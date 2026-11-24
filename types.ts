@@ -50,7 +50,7 @@ export interface TyreProduct {
 
   // Shop categories (table product_categories)
   category_id?: number | null;
-  attributes?: Record<string, string>;
+  attributes?: Record<string, string> | null;
   
   // SEO fields
   seo_title?: string;

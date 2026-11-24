@@ -9,6 +9,7 @@ import {
   useCategories, ProductCategory, CATEGORY_ICONS, getCategoryIcon, getRootCategories,
   getChildren, getCategoryTree, slugify,
 } from '../../categories';
+import { PRESET_OPTIONS } from '../../productAttributes';
 import migrationSql from '../../supabase/migrations/20261124120000_product_categories.sql?raw';
 
 type FormState = {
@@ -19,10 +20,11 @@ type FormState = {
   description: string;
   is_active: boolean;
   kind: 'tyre' | 'generic';
+  filter_preset: string;
 };
 
 const EMPTY_FORM: FormState = {
-  name: '', slug: '', parent_id: '', icon: 'package', description: '', is_active: true, kind: 'generic',
+  name: '', slug: '', parent_id: '', icon: 'package', description: '', is_active: true, kind: 'generic', filter_preset: '',
 };
 
 const CategoriesTab: React.FC = () => {
@@ -69,6 +71,7 @@ const CategoriesTab: React.FC = () => {
       description: cat.description || '',
       is_active: cat.is_active,
       kind: cat.kind,
+      filter_preset: cat.filter_preset || '',
     });
     setShowForm(true);
   };
@@ -93,6 +96,7 @@ const CategoriesTab: React.FC = () => {
       description: form.description.trim() || null,
       is_active: form.is_active,
       kind: form.kind,
+      filter_preset: form.kind === 'tyre' ? null : (form.filter_preset || null),
       ...(editing ? {} : { sort_order: (Math.max(0, ...siblings.map(s => s.sort_order)) + 10) }),
     };
     const { error } = editing
@@ -205,6 +209,7 @@ const CategoriesTab: React.FC = () => {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-bold text-white truncate">{cat.name}</span>
               {cat.kind === 'tyre' && <span className="text-[9px] font-black uppercase bg-blue-900/40 text-blue-300 px-1.5 py-0.5 rounded">шини</span>}
+              {cat.filter_preset && <span className="text-[9px] font-black uppercase bg-emerald-900/40 text-emerald-300 px-1.5 py-0.5 rounded">фільтри: {cat.filter_preset === 'batteries' ? 'акумулятори' : 'диски'}</span>}
               {!cat.is_active && <span className="text-[9px] font-black uppercase bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded">прихована</span>}
             </div>
             <span className="text-[11px] text-zinc-500">
@@ -302,6 +307,16 @@ const CategoriesTab: React.FC = () => {
                 <span className="block text-[11px] text-zinc-500">Покупці побачать фільтри «ширина / висота / радіус / сезон», а в адмінці — поля шини.</span>
               </span>
             </label>
+
+            {form.kind !== 'tyre' && (
+              <div>
+                <label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Характеристики та фільтри</label>
+                <select value={form.filter_preset} onChange={e => setForm({ ...form, filter_preset: e.target.value })} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white">
+                  {PRESET_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+                <p className="text-[11px] text-zinc-500 mt-1">Підкатегорії успадковують цей набір від головної категорії.</p>
+              </div>
+            )}
 
             <label className="flex items-center gap-3 cursor-pointer">
               <input type="checkbox" checked={form.is_active} onChange={e => setForm({ ...form, is_active: e.target.checked })} className="accent-[#FFC300]" />

@@ -43,3 +43,73 @@ input[type='date']::-webkit-calendar-picker-indicator {
   -webkit-user-select: none;
   user-select: none;
 }
+
+/* ===================================================================
+   Enter animations (subset of tailwindcss-animate).
+   The site uses classes like "animate-in fade-in slide-in-from-left-4"
+   but Tailwind from the CDN does not include that plugin.
+   =================================================================== */
+@keyframes tw-enter {
+  from {
+    opacity: var(--tw-enter-opacity, 1);
+    transform: translate3d(var(--tw-enter-translate-x, 0), var(--tw-enter-translate-y, 0), 0)
+      scale3d(var(--tw-enter-scale, 1), var(--tw-enter-scale, 1), var(--tw-enter-scale, 1));
+  }
+}
+.animate-in {
+  animation-name: tw-enter;
+  animation-duration: 200ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  /* "backwards": hold the start state during a delay, but leave NO transform after the
+     animation — a leftover transform would break position:fixed children (modals, buttons) */
+  animation-fill-mode: backwards;
+}
+.animate-in.duration-150 { animation-duration: 150ms; }
+.animate-in.duration-200 { animation-duration: 200ms; }
+.animate-in.duration-300 { animation-duration: 300ms; }
+.animate-in.duration-500 { animation-duration: 500ms; }
+.animate-in.duration-700 { animation-duration: 700ms; }
+.animate-in.duration-1000 { animation-duration: 1000ms; }
+
+.fade-in, .fade-in-0 { --tw-enter-opacity: 0; }
+.zoom-in { --tw-enter-scale: 0; }
+.zoom-in-50 { --tw-enter-scale: .5; }
+.zoom-in-90 { --tw-enter-scale: .9; }
+.zoom-in-95 { --tw-enter-scale: .95; }
+
+.slide-in-from-top { --tw-enter-translate-y: -100%; }
+.slide-in-from-bottom { --tw-enter-translate-y: 100%; }
+.slide-in-from-left { --tw-enter-translate-x: -100%; }
+.slide-in-from-right { --tw-enter-translate-x: 100%; }
+.slide-in-from-top-1 { --tw-enter-translate-y: -0.25rem; }
+.slide-in-from-top-2 { --tw-enter-translate-y: -0.5rem; }
+.slide-in-from-top-4 { --tw-enter-translate-y: -1rem; }
+.slide-in-from-bottom-1 { --tw-enter-translate-y: 0.25rem; }
+.slide-in-from-bottom-2 { --tw-enter-translate-y: 0.5rem; }
+.slide-in-from-bottom-4 { --tw-enter-translate-y: 1rem; }
+.slide-in-from-bottom-8 { --tw-enter-translate-y: 2rem; }
+.slide-in-from-bottom-10 { --tw-enter-translate-y: 2.5rem; }
+.slide-in-from-left-4 { --tw-enter-translate-x: -1rem; }
+.slide-in-from-left-8 { --tw-enter-translate-x: -2.5rem; }
+.slide-in-from-right-4 { --tw-enter-translate-x: 1rem; }
+.slide-in-from-right-8 { --tw-enter-translate-x: 2.5rem; }
+
+@media (min-width: 768px) {
+  .md\:slide-in-from-right { --tw-enter-translate-x: 100%; --tw-enter-translate-y: 0; }
+  .md\:slide-in-from-bottom-8 { --tw-enter-translate-y: 2rem; }
+  .md\:zoom-in-95 { --tw-enter-scale: .95; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-in { animation: none !important; }
+  * { scroll-behavior: auto !important; }
+}
+
+/* Horizontal chip rows: fade at the edges to hint that they scroll */
+.fade-edges {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 24px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 24px), transparent 100%);
+}
+
+/* No grey flash on tap (phones) */
+button, a { -webkit-tap-highlight-color: transparent; }

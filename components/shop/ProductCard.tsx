@@ -9,9 +9,11 @@ interface ProductCardProps {
   onAddToCart: (e: React.MouseEvent) => void;
   onQuickOrder?: (tyre: TyreProduct) => void;
   formatPrice: (p: string | undefined) => string;
+  /** characteristic badges, e.g. "60 Ah", "+ праворуч", "R16" */
+  chips?: string[];
 }
 
-const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, onQuickOrder, formatPrice }) => {
+const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, onQuickOrder, formatPrice, chips = [] }) => {
   const isOutOfStock = tyre.in_stock === false;
   const priceNum = parseFloat(tyre.price || '0');
   const oldPriceNum = parseFloat(tyre.old_price || '0');
@@ -29,7 +31,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
   return (
     <article 
       onClick={onClick} 
-      className={`group relative flex flex-col h-full bg-zinc-900/50 backdrop-blur-sm border rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-2xl hover:shadow-yellow-900/20 ${
+      className={`group relative flex flex-col h-full bg-zinc-900/50 border rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-yellow-900/20 active:scale-[0.98] ${
         isOutOfStock 
           ? 'opacity-60 border-zinc-800 grayscale-[0.5] hover:border-zinc-700' 
           : tyre.is_hot 
@@ -38,7 +40,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
       }`}
     >
        {/* Image Section */}
-       <div className="aspect-[4/5] bg-zinc-950 relative overflow-hidden">
+       <div className="aspect-square sm:aspect-[4/5] bg-zinc-950 relative overflow-hidden">
           {tyre.image_url ? (
             <img 
               src={tyre.image_url} 
@@ -49,42 +51,42 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
             />
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center text-zinc-800">
-              <ShoppingBag size={48} strokeWidth={1} className="opacity-20 mb-2"/>
+              <ShoppingBag size={36} strokeWidth={1} className="opacity-20 mb-2"/>
               <span className="text-[10px] font-bold uppercase tracking-widest">Немає фото</span>
             </div>
           )}
           
           {/* Badges */}
-          <div className="absolute top-3 left-3 z-10 flex flex-col gap-1.5">
+          <div className="absolute top-2 left-2 sm:top-3 sm:left-3 z-10 flex flex-wrap sm:flex-col gap-1 sm:gap-1.5 max-w-[calc(100%-1rem)]">
             {isNew && (
-              <div className="bg-emerald-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-lg uppercase">
+              <div className="bg-emerald-600 text-white text-[9px] sm:text-[10px] font-black px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full shadow-lg uppercase">
                 NEW
               </div>
             )}
             {tyre.is_hot && (
-              <div className="bg-orange-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-lg uppercase flex items-center gap-1 animate-pulse">
+              <div className="bg-orange-600 text-white text-[9px] sm:text-[10px] font-black px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full shadow-lg uppercase flex items-center gap-1 animate-pulse">
                 <Flame size={12} fill="currentColor"/> 
                 <span>HOT</span>
               </div>
             )}
             {hasDiscount && (
-              <div className="bg-red-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-lg uppercase flex items-center gap-1">
+              <div className="bg-red-600 text-white text-[9px] sm:text-[10px] font-black px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full shadow-lg uppercase flex items-center gap-1">
                 SALE -{discountPercent}%
               </div>
             )}
           </div>
           
           {isLowStock && !isOutOfStock && (
-            <div className="absolute bottom-3 left-3 z-10">
+            <div className="absolute bottom-2 left-2 sm:bottom-3 sm:left-3 z-10">
               <div className="bg-black/60 backdrop-blur-md text-red-500 text-[9px] font-black px-2 py-1 rounded-lg border border-red-500/30 uppercase tracking-tighter">
                 Залишилося: {tyre.stock_quantity} шт
               </div>
             </div>
           )}
 
-          {/* Quick View Overlay (Desktop) */}
+          {/* Quick View Overlay (only devices with a mouse) */}
           {!isOutOfStock && (
-            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-2">
+            <div className="absolute inset-0 hidden [@media(hover:hover)]:flex bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 items-center justify-center gap-2">
                <div className="bg-white text-black p-3 rounded-full transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300 shadow-xl">
                   <Eye size={20} />
                </div>
@@ -109,7 +111,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
        </div>
 
        {/* Content Section */}
-       <div className="p-4 flex flex-col flex-grow">
+       <div className="p-3 sm:p-4 flex flex-col flex-grow">
           <div className="flex justify-between items-start mb-1">
             <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider truncate max-w-[70%]">
               {tyre.manufacturer || 'Товар'}
@@ -121,11 +123,16 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
             )}
           </div>
 
-          <h3 className="text-sm md:text-base font-bold text-white mb-3 leading-tight line-clamp-2 min-h-[2.5em] group-hover:text-[#FFC300] transition-colors">
+          <h3 className="text-[13px] sm:text-sm md:text-base font-bold text-white mb-2 sm:mb-3 leading-tight line-clamp-2 min-h-[2.5em] group-hover:text-[#FFC300] transition-colors">
             {tyre.title}
           </h3>
           
-          <div className="flex flex-wrap gap-1.5 mb-4">
+          <div className="flex flex-wrap gap-1 sm:gap-1.5 mb-3 sm:mb-4">
+            {chips.map(chip => (
+              <span key={chip} className="bg-zinc-800/60 text-zinc-200 text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded border border-zinc-700/60 whitespace-nowrap">
+                {chip}
+              </span>
+            ))}
             {tyre.width && (
               <span className="bg-zinc-800/50 text-zinc-300 text-[10px] font-bold px-2 py-0.5 rounded border border-zinc-800">
                 {tyre.width}/{tyre.height}
@@ -139,12 +146,12 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
           </div>
 
           {tyre.description && (
-            <p className="text-[10px] md:text-xs text-zinc-500 line-clamp-2 mb-4 leading-relaxed group-hover:text-zinc-400 transition-colors">
+            <p className="hidden sm:block text-[10px] md:text-xs text-zinc-500 line-clamp-2 mb-4 leading-relaxed group-hover:text-zinc-400 transition-colors">
               {tyre.description.length > 80 ? tyre.description.slice(0, 80) + '...' : tyre.description}
             </p>
           )}
 
-          <div className="mt-auto pt-4 border-t border-zinc-800/50 flex items-center justify-between gap-2">
+          <div className="mt-auto pt-3 sm:pt-4 border-t border-zinc-800/50 flex items-center justify-between gap-2">
             <div className="flex flex-col">
               {hasDiscount && (
                 <span className="text-zinc-500 text-[10px] line-through decoration-red-500/50">
@@ -152,7 +159,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
                 </span>
               )}
               <div className="flex items-baseline gap-1">
-                <span className="text-xl font-black text-[#FFC300]">
+                <span className="text-lg sm:text-xl font-black text-[#FFC300]">
                   {formatPrice(tyre.price)}
                 </span>
                 <span className="text-[10px] font-bold text-zinc-500 uppercase">грн</span>
@@ -162,7 +169,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
             <button 
               onClick={onAddToCart} 
               disabled={isOutOfStock} 
-              className={`p-3 rounded-xl transition-all active:scale-90 shadow-lg ${
+              className={`p-2.5 sm:p-3 rounded-xl transition-all active:scale-90 shadow-lg shrink-0 ${
                 isOutOfStock 
                   ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed' 
                   : 'bg-[#FFC300] text-black hover:bg-white hover:shadow-yellow-400/20'

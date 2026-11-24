@@ -149,7 +149,7 @@ const ProductPhotos: React.FC<{ product: Product; maxPhotos: number; onDone: () 
  * no ticked photo is marked "no good photo". 60 products per page.
  */
 const PAGE = 60;
-const QuickReview: React.FC<{ onChanged: () => void }> = ({ onChanged }) => {
+const QuickReview: React.FC<{ onChanged: () => void; waiting: number }> = ({ onChanged, waiting }) => {
   const [items, setItems] = useState<Product[]>([]);
   const [total, setTotal] = useState(0);
   const [off, setOff] = useState<Set<string>>(new Set());
@@ -165,6 +165,12 @@ const QuickReview: React.FC<{ onChanged: () => void }> = ({ onChanged }) => {
     window.scrollTo({ top: 0 });
   }, []);
   useEffect(() => { load(); }, [load]);
+  // the background search found new photos: show them at once if the list is empty, otherwise just update the counter
+  useEffect(() => {
+    if (saving || loading) return;
+    if (!items.length && waiting > 0) load();
+    else if (items.length && waiting > total) setTotal(waiting);
+  }, [waiting]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tiles = items.flatMap(p => (p.photo_candidates || []).filter(c => c.stored).map((c, i) => ({ p, c, first: i === 0 })));
   const toggle = (url: string) => setOff(s => { const n = new Set(s); n.has(url) ? n.delete(url) : n.add(url); return n; });
@@ -289,7 +295,7 @@ const LaunchPanel: React.FC<{ onProgress: () => void }> = ({ onProgress }) => {
         </div>
       )}
       {msg && <p className="text-sm text-zinc-300">{msg}</p>}
-      <p className="text-xs text-zinc-500">Кожен товар — 1 запит Serper. Швидкість приблизно 50–80 товарів на хвилину.</p>
+      <p className="text-xs text-zinc-500">Кожен товар — 1 запит Serper. Швидкість приблизно 30 товарів на хвилину; нові фото з'являються нижче самі. Не для кожного товару в інтернеті є гарне фото — такі потрапляють у «Без гарного фото».</p>
     </div>
   );
 };
@@ -401,7 +407,7 @@ const PhotoFinderTab: React.FC = () => {
         {view === 'queue' && <button onClick={loadQueue} className="ml-auto text-zinc-400 hover:text-white text-xs flex items-center gap-1"><RefreshCw size={14} /> Оновити</button>}
       </div>
 
-      {view === 'quick' ? <QuickReview onChanged={loadQueue} /> : view === 'queue' ? (
+      {view === 'quick' ? <QuickReview onChanged={loadQueue} waiting={queueCount} /> : view === 'queue' ? (
         loading ? <div className="flex justify-center py-10"><Loader2 className="animate-spin text-[#FFC300]" /></div>
         : queue.length === 0 ? (
           <p className="text-zinc-500 text-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-6 text-center">

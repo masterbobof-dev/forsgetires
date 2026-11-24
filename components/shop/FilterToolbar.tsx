@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import SearchSuggest, { SuggestHandlers } from './SearchSuggest';
 import { Search, X, SlidersHorizontal, Eye, EyeOff, ArrowUpDown, Check } from 'lucide-react';
 import { FilterPreset } from '../../productAttributes';
 
@@ -203,10 +204,13 @@ interface SearchBarProps {
   activeFilters: number;
   totalCount: number;
   onOpenFilters: () => void;
+  suggest?: SuggestHandlers;
 }
 
 /** Compact bar: search + "Фільтри" (mobile/tablet) + sort. Sticky under the site header. */
-export const SearchBar: React.FC<SearchBarProps> = ({ searchQuery, setSearchQuery, onSearch, activeSort, setActiveSort, activeFilters, totalCount, onOpenFilters }) => (
+export const SearchBar: React.FC<SearchBarProps> = ({ searchQuery, setSearchQuery, onSearch, activeSort, setActiveSort, activeFilters, totalCount, onOpenFilters, suggest }) => {
+  const [focused, setFocused] = useState(false);
+  return (
   <div className="sticky z-30 -mx-2 px-2 py-2 md:py-3 bg-[#09090b]/85 backdrop-blur-xl lg:static lg:mx-0 lg:px-0 lg:bg-transparent lg:backdrop-blur-none" style={{ top: 'var(--header-h, 64px)' }}>
     <div className="flex gap-2">
       <div className="relative flex-grow group">
@@ -217,13 +221,22 @@ export const SearchBar: React.FC<SearchBarProps> = ({ searchQuery, setSearchQuer
           placeholder="Пошук: модель, бренд, артикул..."
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && onSearch()}
+          onKeyDown={e => { if (e.key === 'Enter') { onSearch(); setFocused(false); (e.target as HTMLInputElement).blur(); } if (e.key === 'Escape') setFocused(false); }}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          autoComplete="off"
           className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-9 py-2.5 md:py-3 text-white text-sm outline-none focus:border-[#FFC300] focus:ring-2 focus:ring-[#FFC300]/10 transition-all placeholder:text-zinc-600"
         />
         {searchQuery && (
           <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-500 hover:text-white" aria-label="Очистити пошук">
             <X size={16} />
           </button>
+        )}
+        {focused && suggest && (
+          <SearchSuggest query={searchQuery} {...suggest}
+            onProduct={p => { setFocused(false); suggest.onProduct(p); }}
+            onCategory={c => { setFocused(false); suggest.onCategory(c); }}
+            onAll={() => { setFocused(false); onSearch(); }} />
         )}
       </div>
 
@@ -263,7 +276,8 @@ export const SearchBar: React.FC<SearchBarProps> = ({ searchQuery, setSearchQuer
       Знайдено: <span className="text-zinc-300">{totalCount}</span> шт
     </p>
   </div>
-);
+  );
+};
 
 /** Bottom sheet (phone) / side panel (tablet) with the filter panel. */
 export const FilterSheet: React.FC<{ open: boolean; onClose: () => void; totalCount: number; children: React.ReactNode }> = ({ open, onClose, totalCount, children }) => {

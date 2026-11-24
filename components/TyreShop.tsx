@@ -17,6 +17,8 @@ import { productPath, productIdFromLocation } from '../productUrl';
 import { parseSearch, searchFilters } from '../searchQuery';
 import { useStoredIds, FAVORITES_KEY, COMPARE_KEY, COMPARE_MAX } from '../shopLists';
 import CompareModal from './shop/CompareModal';
+import HomeShowcase from './home/HomeShowcase';
+import SizeGuideModal from './home/SizeGuideModal';
 import AgroBanner from './shop/AgroBanner';
 import SeoContentBlock from './shop/SeoContentBlock';
 import { logAnalyticsEvent } from './admin/analytics';
@@ -255,8 +257,12 @@ const TyreShop: React.FC<TyreShopProps> = ({
   useEffect(() => {
     const onPop = () => {
       const id = productIdFromLocation();
-      if (id) showProductById(id);
-      else setSelectedProductForModal(null);
+      if (id) { showProductById(id); return; }
+      setSelectedProductForModal(null);
+      // category links from the header menu (/?c=slug)
+      const slug = new URLSearchParams(window.location.search).get('c');
+      const next: CategorySelection = !slug ? 'all' : slug === 'akcii' ? 'hot' : slug === 'obrane' ? 'fav' : (categories.find(c => c.slug === slug)?.id ?? activeCategory);
+      if (window.location.pathname === '/' && next !== activeCategory) changeCategory(next);
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
@@ -460,6 +466,14 @@ const TyreShop: React.FC<TyreShopProps> = ({
     const open = () => setIsCartOpen(true);
     window.addEventListener('forsage:open-cart', open);
     return () => window.removeEventListener('forsage:open-cart', open);
+  }, []);
+
+  // "How to find your size" explainer, opened from the tyre filters
+  const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
+  useEffect(() => {
+    const open = () => setSizeGuideOpen(true);
+    window.addEventListener('forsage:size-guide', open);
+    return () => window.removeEventListener('forsage:size-guide', open);
   }, []);
 
   const handleAgroProductClick = (id: number) => {
@@ -787,6 +801,24 @@ const TyreShop: React.FC<TyreShopProps> = ({
 
         <CategoryNav categories={categories} active={activeCategory} onChange={changeCategory} favoritesCount={favorites.ids.length} />
 
+        {activeCategory === 'all' && !debouncedSearch.trim() && activeFilterCount === 0 && (
+          <HomeShowcase
+            categories={categories}
+            dbReady={dbReady}
+            sizeOptions={filterOptions}
+            onPickCategory={(id) => { changeCategory(id); setTimeout(() => listTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }}
+            onSizeSearch={(w, h, r) => {
+              const tyreRoot = categories.find(c => c.kind === 'tyre' && !c.parent_id);
+              if (tyreRoot) changeCategory(tyreRoot.id);
+              setFilterWidth(w); setFilterHeight(h); setFilterRadius(r);
+              setTimeout(() => listTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+            }}
+            onOpenProduct={(p) => openProduct(p)}
+            formatPrice={formatPrice}
+            prepare={parseTyreSpecs}
+          />
+        )}
+
         {activeCategory === 'all' && agroCategory && (
           <AgroBanner
             onCategoryClick={() => changeCategory(agroCategory.id)}
@@ -1078,6 +1110,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
            </div>
         </div>
       )}
+      <SizeGuideModal open={sizeGuideOpen} onClose={() => setSizeGuideOpen(false)} />
     </div>
   );
 };

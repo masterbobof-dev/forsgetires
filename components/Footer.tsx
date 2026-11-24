@@ -36,22 +36,20 @@ const Footer: React.FC<{ onNavigate?: (v: ViewState) => void }> = ({ onNavigate 
             Покупцям
           </h4>
           <ul className="flex flex-col gap-3 text-zinc-400 text-sm font-medium">
-            <li className="hover:text-white transition-colors flex items-center gap-2">
-              <div className="w-1 h-1 bg-[#FFC300] rounded-full"></div>
-              Доставка Новою Поштою по Україні
-            </li>
-            <li className="hover:text-white transition-colors flex items-center gap-2">
-              <div className="w-1 h-1 bg-[#FFC300] rounded-full"></div>
-              Самовивіз у м. Синельникове
-            </li>
-            <li className="hover:text-white transition-colors flex items-center gap-2">
-              <div className="w-1 h-1 bg-[#FFC300] rounded-full"></div>
-              Оплата при отриманні або передоплата
-            </li>
-            <li className="hover:text-white transition-colors flex items-center gap-2">
-              <div className="w-1 h-1 bg-[#FFC300] rounded-full"></div>
-              Гарантія на всі товари
-            </li>
+            {([
+              ['delivery', '/dostavka-i-oplata', 'Доставка і оплата'],
+              ['warranty', '/garantiya-i-povernennya', 'Гарантія і повернення'],
+              ['faq', '/faq', 'Часті питання'],
+              ['articles', '/statti', 'Корисні статті'],
+              ['about', '/pro-nas', 'Про магазин'],
+              ['contacts', '/kontakty', 'Контакти'],
+            ] as [ViewState, string, string][]).map(([v, href, label]) => (
+              <li key={v}>
+                <a href={href} onClick={link(v)} className="hover:text-white transition-colors flex items-center gap-2">
+                  <span className="w-1 h-1 bg-[#FFC300] rounded-full"></span>{label}
+                </a>
+              </li>
+            ))}
           </ul>
         </div>
 
@@ -102,7 +100,7 @@ const Footer: React.FC<{ onNavigate?: (v: ViewState) => void }> = ({ onNavigate 
                 <MapPin size={20} />
               </div>
               <div className="flex flex-col">
-                <span className="font-black text-white text-lg">м. Синельникове</span>
+                <a href="/kontakty" onClick={link('contacts')} className="font-black text-white text-lg hover:text-[#FFC300]">м. Синельникове</a>
                 <span className="text-[11px] uppercase tracking-[0.2em] font-black text-zinc-500">Дніпропетровська обл.</span>
               </div>
             </div>

@@ -63,7 +63,7 @@ export const fetchBanners = async (): Promise<SiteBanner[]> => {
 
 /** Home page blocks order (settings.home_blocks, edited in the program). */
 export type HomeBlockType = 'banners' | 'size_search' | 'categories' | 'hits' | 'promos' | 'benefits' | 'reviews' | 'articles';
-export const DEFAULT_HOME_BLOCKS: HomeBlockType[] = ['banners', 'size_search', 'categories', 'hits', 'promos', 'benefits', 'reviews', 'articles'];
+export const DEFAULT_HOME_BLOCKS: HomeBlockType[] = ['banners', 'hits', 'size_search', 'categories', 'promos', 'benefits', 'reviews', 'articles'];
 export const fetchHomeBlocks = async (): Promise<{ type: HomeBlockType; title?: string }[]> => {
   const { data } = await supabase.from('settings').select('value').eq('key', 'home_blocks').maybeSingle();
   try {

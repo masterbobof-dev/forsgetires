@@ -1,30 +1,13 @@
 // Product page /p/<id>-<slug>: serves the normal website, but with the product's own
 // <title>, description, canonical link, social preview (og:*) and Product structured
 // data already in the HTML — for Google and for link previews in Viber/Telegram/Facebook.
-import fs from 'node:fs';
-import path from 'node:path';
 import { SITE_URL, SHOP_NAME, rest, escapeXml as esc, productPath, parsePrice, stripHtml, SEASON_UA } from './_shop.js';
-
-let cachedHtml = null;
-const loadIndexHtml = async (req) => {
-  if (cachedHtml) return cachedHtml;
-  for (const p of [path.join(process.cwd(), 'dist', 'index.html'), path.join(process.cwd(), 'index.html')]) {
-    try {
-      const html = fs.readFileSync(p, 'utf8');
-      if (html.includes('/assets/')) { cachedHtml = html; return html; }
-    } catch { /* try next */ }
-  }
-  const res = await fetch(`https://${req.headers.host}/index.html`);
-  cachedHtml = await res.text();
-  return cachedHtml;
-};
-
-const setTag = (html, re, tag) => (re.test(html) ? html.replace(re, tag) : html.replace('</head>', `    ${tag}\n  </head>`));
+import { loadAppHtml, setTag, setRootContent } from './_html.js';
 
 export default async function handler(req, res) {
   const raw = String(req.query.slug || '');
   const id = (raw.match(/^(\d+)/) || [])[1];
-  let html = await loadIndexHtml(req);
+  let html = await loadAppHtml(req);
 
   let product = null;
   if (id) {
@@ -87,6 +70,7 @@ export default async function handler(req, res) {
     }
   } catch { /* no reviews table yet */ }
   html = html.replace('</head>', `    <script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>\n  </head>`);
+  html = setRootContent(html, `<h1>${esc(product.title)}</h1><p>Ціна: ${price} грн${product.in_stock === false ? ' (немає в наявності)' : ''}</p><p>${esc(description)}</p><p><a href="/">Каталог товарів</a></p>`);
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=86400');

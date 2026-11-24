@@ -76,21 +76,47 @@ const CategoryNav: React.FC<CategoryNavProps> = ({ categories, active, onChange,
           className={`w-full flex items-center gap-2.5 px-3 py-3 rounded-xl border font-black text-xs uppercase tracking-wide transition-colors ${current.hot ? 'bg-red-600 border-red-600 text-white' : 'bg-[#FFC300] border-[#FFC300] text-black'}`}>
           <CurIcon size={17} strokeWidth={2.5} />
           <span className="flex-1 text-left truncate">{current.label}</span>
-          <span className="text-[10px] font-bold opacity-70 normal-case">{open ? 'згорнути' : `усі розділи (${items.length})`}</span>
+          <span className="text-[10px] font-bold opacity-70 normal-case">{open ? 'згорнути' : `усі розділи (${categories.length})`}</span>
           <ChevronDown size={18} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
         {open && (
-          <div className="grid grid-cols-3 min-[480px]:grid-cols-4 gap-2 mt-2 animate-in fade-in slide-in-from-top-2 duration-200">
-            {items.map(i => {
-              const Icon = i.icon;
+          <div className="mt-2 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="grid grid-cols-3 gap-2">
+              {items.filter(i => i.id === 'all' || i.hot).map(i => {
+                const Icon = i.icon;
+                return (
+                  <button key={i.id} onClick={() => { onChange(i.sel); setOpen(false); }}
+                    className={`flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl border font-black text-[10px] uppercase ${i.on ? (i.hot ? 'bg-red-600 border-red-600 text-white' : 'bg-[#FFC300] border-[#FFC300] text-black') : i.hot ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-zinc-900 border-zinc-800 text-zinc-200'}`}>
+                    <Icon size={15} /> <span className="truncate">{i.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {roots.map(r => {
+              const RIcon = getCategoryIcon(r.icon);
+              const kids = getChildren(categories, r.id);
               return (
-                <button key={i.id} onClick={() => { onChange(i.sel); setOpen(false); }}
-                  className={`flex flex-col items-center justify-center gap-1.5 min-h-[72px] px-1.5 py-2 rounded-xl border text-center transition-colors ${
-                    i.on ? (i.hot ? 'bg-red-600 border-red-600 text-white' : 'bg-[#FFC300] border-[#FFC300] text-black')
-                      : i.hot ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-zinc-900 border-zinc-800 text-zinc-200 active:bg-zinc-800'}`}>
-                  <span className={i.on ? '' : i.hot ? '' : 'text-[#FFC300]'}><Icon size={20} /></span>
-                  <span className="font-black text-[10px] uppercase leading-tight break-words hyphens-auto w-full">{i.label}</span>
-                </button>
+                <div key={r.id}>
+                  <button onClick={() => { onChange(r.id); setOpen(false); }}
+                    className={`w-full flex items-center gap-2 px-1 py-1.5 font-black text-sm uppercase ${active === r.id ? 'text-[#FFC300]' : 'text-white'}`}>
+                    <span className="text-[#FFC300]"><RIcon size={17} /></span> <span className="flex-1 text-left">{r.name}</span>
+                    <span className="text-[10px] font-bold text-zinc-500 normal-case">усі ›</span>
+                  </button>
+                  {kids.length > 0 && (
+                    <div className="grid grid-cols-3 gap-1.5 mt-1">
+                      {kids.map(k => {
+                        const KIcon = getCategoryIcon(k.icon || r.icon);
+                        return (
+                          <button key={k.id} onClick={() => { onChange(k.id); setOpen(false); }}
+                            className={`flex flex-col items-center justify-center gap-1 min-h-[58px] px-1 py-1.5 rounded-xl border text-center ${active === k.id ? 'bg-[#FFC300] border-[#FFC300] text-black' : 'bg-zinc-900 border-zinc-800 text-zinc-200'}`}>
+                            <span className={active === k.id ? '' : 'text-[#FFC300]'}><KIcon size={15} /></span>
+                            <span className="font-bold text-[10px] leading-tight break-words w-full">{k.name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>

@@ -129,7 +129,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
           aria-label="На головну"
         >
           <Logo />
-          <span className="hidden min-[380px]:flex flex-col group min-w-0 overflow-hidden pr-1">
+          <span className="hidden md:flex flex-col group min-w-0 overflow-hidden pr-1">
             <span className="font-black text-lg sm:text-2xl md:text-3xl tracking-wide text-white italic -skew-x-12 group-hover:text-[#FFC300] transition-colors">
               ФОРСАЖ
             </span>

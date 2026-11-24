@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { catPath } from '../api/_paths.js';
 import Logo from './Logo';
 import { ViewState } from '../types';
 import { Menu, X, Phone, User, ShoppingBag, ChevronDown, Flame, LayoutGrid } from 'lucide-react';
@@ -35,7 +36,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
   const goCategory = (slug: string) => (e: React.MouseEvent) => {
     setCatalogOpen(false);
     setIsMenuOpen(false);
-    linkClick(`/?c=${slug}`)(e);
+    linkClick(catPath(slug))(e);
   };
   const headerRef = useRef<HTMLElement>(null);
 
@@ -168,20 +169,20 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
                       const kids = getChildren(categories, c.id);
                       return (
                         <div key={c.id}>
-                          <a href={`/?c=${c.slug}`} onClick={goCategory(c.slug)} className="flex items-center gap-2 font-black text-white hover:text-[#FFC300] transition-colors">
+                          <a href={catPath(c.slug)} onClick={goCategory(c.slug)} className="flex items-center gap-2 font-black text-white hover:text-[#FFC300] transition-colors">
                             <span className="text-[#FFC300]"><Icon size={18} /></span>{c.name}
                           </a>
                           {kids.length > 0 && (
                             <div className="mt-1 ml-7 flex flex-col gap-0.5">
                               {kids.slice(0, 6).map(k => (
-                                <a key={k.id} href={`/?c=${k.slug}`} onClick={goCategory(k.slug)} className="text-sm text-zinc-400 hover:text-white transition-colors">{k.name}</a>
+                                <a key={k.id} href={catPath(k.slug)} onClick={goCategory(k.slug)} className="text-sm text-zinc-400 hover:text-white transition-colors">{k.name}</a>
                               ))}
                             </div>
                           )}
                         </div>
                       );
                     })}
-                    <a href="/?c=akcii" onClick={goCategory('akcii')} className="flex items-center gap-2 font-black text-orange-400 hover:text-orange-300"><Flame size={18} /> Хіти та акції</a>
+                    <a href={catPath('akcii')} onClick={goCategory('akcii')} className="flex items-center gap-2 font-black text-orange-400 hover:text-orange-300"><Flame size={18} /> Хіти та акції</a>
                   </div>
                   <div className="border-l border-zinc-800 pl-4 flex flex-col gap-2">
                     <span className="text-[11px] font-black uppercase tracking-widest text-zinc-500">Покупцям</span>
@@ -305,7 +306,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
                 {roots.map(c => {
                   const Icon = getCategoryIcon(c.icon);
                   return (
-                    <a key={c.id} href={`/?c=${c.slug}`} onClick={goCategory(c.slug)} className="flex items-center gap-2 bg-black/40 rounded-xl px-3 py-2.5 text-sm font-bold text-zinc-200 hover:text-[#FFC300]">
+                    <a key={c.id} href={catPath(c.slug)} onClick={goCategory(c.slug)} className="flex items-center gap-2 bg-black/40 rounded-xl px-3 py-2.5 text-sm font-bold text-zinc-200 hover:text-[#FFC300]">
                       <span className="text-[#FFC300]"><Icon size={16} /></span>{c.name}
                     </a>
                   );

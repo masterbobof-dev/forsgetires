@@ -33,6 +33,7 @@ const PATHS: Record<ViewState, string> = {
 const viewFromPath = (path: string): ViewState => {
   const p = path.replace(/\/+$/, '') || '/';
   if (p.startsWith('/statti/')) return 'articles';
+  if (p.startsWith('/katalog/')) return 'home';
   if (cityFromPath(p)) return 'city';
   const found = (Object.entries(PATHS) as [ViewState, string][]).find(([, v]) => v === p);
   return found ? found[0] : 'home';

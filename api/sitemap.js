@@ -17,8 +17,8 @@ export default async function handler(req, res) {
 
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
     xml += urlTag(`${SITE_URL}/`, { changefreq: 'daily', priority: '1.0' });
-    xml += urlTag(`${SITE_URL}/?c=akcii`, { changefreq: 'daily', priority: '0.8' });
-    for (const c of categories) xml += urlTag(`${SITE_URL}/?c=${c.slug}`, { changefreq: 'daily', priority: '0.9' });
+    xml += urlTag(`${SITE_URL}/katalog/akcii`, { changefreq: 'daily', priority: '0.8' });
+    for (const c of categories) xml += urlTag(`${SITE_URL}/katalog/${c.slug}`, { changefreq: 'daily', priority: '0.9' });
     for (const p of ['/dostavka-i-oplata', '/garantiya-i-povernennya', '/faq', '/kontakty', '/pro-nas']) xml += urlTag(SITE_URL + p, { changefreq: 'monthly', priority: '0.5' });
     for (const c of CITIES) xml += urlTag(SITE_URL + cityPath(c), { changefreq: 'weekly', priority: c.home ? '0.9' : '0.7' });
     xml += urlTag(`${SITE_URL}/statti`, { changefreq: 'weekly', priority: '0.6' });

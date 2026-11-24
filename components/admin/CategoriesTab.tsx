@@ -331,7 +331,7 @@ const CategoriesTab: React.FC = () => {
             <div>
               <label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Адреса в посиланні (необов'язково)</label>
               <input value={form.slug} onChange={e => setForm({ ...form, slug: e.target.value })} placeholder={slugify(form.name || 'nazva')} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-mono text-sm" />
-              <p className="text-[11px] text-zinc-500 mt-1">Сайт покаже категорію за посиланням ?c={form.slug ? slugify(form.slug) : slugify(form.name || 'nazva')}</p>
+              <p className="text-[11px] text-zinc-500 mt-1">Адреса категорії на сайті: /katalog/{form.slug ? slugify(form.slug) : slugify(form.name || 'nazva')}</p>
             </div>
 
             <button onClick={save} disabled={saving} className="w-full bg-[#FFC300] hover:bg-[#e6b000] text-black font-black py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-60">

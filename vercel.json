@@ -33,6 +33,10 @@
       "destination": "/api/page?path=/"
     },
     {
+      "source": "/katalog/:slug",
+      "destination": "/api/page?path=/katalog/:slug"
+    },
+    {
       "source": "/statti",
       "destination": "/api/page?path=/statti"
     },
@@ -51,6 +55,20 @@
     {
       "source": "/((?!api/|assets/).*)",
       "destination": "/app.html"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "query",
+          "key": "c",
+          "value": "(?<c>[a-z0-9-]+)"
+        }
+      ],
+      "destination": "/katalog/:c",
+      "permanent": true
     }
   ]
 }

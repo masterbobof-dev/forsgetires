@@ -3,6 +3,7 @@
 // so Google sees real content without running JavaScript.
 import { SITE_URL, SHOP_NAME, rest, escapeXml as esc, productPath, parsePrice, slugify } from './_shop.js';
 import { loadAppHtml, setHead, addJsonLd, setRootContent } from './_html.js';
+import { CITIES, cityFromPath, cityPath, cityTexts } from './_cities.js';
 
 const CITY = 'Синельникове';
 const DELIVERY = `Самовивіз у м. ${CITY} (вул. Квітнева, 9) або доставка Новою Поштою по всій Україні.`;
@@ -41,7 +42,7 @@ const paragraphs = (t) => String(t || '').replace(/\r/g, '').split(/\n{2,}/).map
   .map((p) => (p.length < 80 && !/[.!?:]$/.test(p) && !p.includes('\n') ? `<h2>${esc(p)}</h2>` : `<p>${esc(p).replace(/\n/g, '<br>')}</p>`)).join('\n');
 const link = (href, text) => `<a href="${esc(href)}">${esc(text)}</a>`;
 const productList = (items) => `<ul>${items.map((p) => `<li>${link(productPath(p), p.title)} — ${parsePrice(p.price)} грн</li>`).join('')}</ul>`;
-const navBlock = (cats) => `<nav><ul>${cats.filter((c) => !c.parent_id).map((c) => `<li>${link(`/?c=${c.slug}`, c.name)}</li>`).join('')}<li>${link('/?c=akcii', 'Хіти та акції')}</li></ul><ul>${Object.entries(INFO).map(([h, i]) => `<li>${link(h, i.title)}</li>`).join('')}<li>${link('/statti', 'Корисні статті')}</li></ul></nav>`;
+const navBlock = (cats) => `<nav><ul>${cats.filter((c) => !c.parent_id).map((c) => `<li>${link(`/?c=${c.slug}`, c.name)}</li>`).join('')}<li>${link('/?c=akcii', 'Хіти та акції')}</li></ul><ul>${Object.entries(INFO).map(([h, i]) => `<li>${link(h, i.title)}</li>`).join('')}<li>${link('/statti', 'Корисні статті')}</li></ul><ul>${CITIES.map((c) => `<li>${link(cityPath(c), `Автозапчастини в ${c.in}`)}</li>`).join('')}</ul></nav>`;
 
 const subtreeIds = (cats, id) => { const out = [id]; for (const c of cats) if (c.parent_id === id) out.push(...subtreeIds(cats, c.id)); return out; };
 
@@ -78,6 +79,26 @@ async function build(pathname, query) {
       description: 'Поради про вибір, зберігання та обслуговування шин, дисків і акумуляторів від магазину «Форсаж».',
       url: `${SITE_URL}/statti`,
       content: `<h1>Корисно знати</h1><ul>${list.map((a) => `<li>${link(articleSlugPath(a), String(a.title).trim())} — ${esc(excerpt(a.content, 140))}</li>`).join('')}</ul>${navBlock(cats)}`,
+    };
+  }
+
+  // --- local pages "Автозапчастини в <місті>" ---
+  const city = cityFromPath(pathname);
+  if (city) {
+    const t = cityTexts(city);
+    const hits = await rest(`tyres?select=${PRODUCT_FIELDS}&in_stock=not.is.false&on_order=is.false&has_photo=is.true&order=stock_quantity.desc&limit=24`).catch(() => []);
+    const subs = cats.filter((c) => c.parent_id).slice(0, 30);
+    return {
+      title: t.title, description: t.description, url: SITE_URL + cityPath(city),
+      ld: { '@context': 'https://schema.org', '@type': 'AutoPartsStore', name: SHOP_NAME, url: SITE_URL + cityPath(city), telephone: '+380991674424',
+        address: { '@type': 'PostalAddress', streetAddress: 'вул. Квітнева, 9', addressLocality: 'Синельникове', addressRegion: 'Дніпропетровська область', postalCode: '52500', addressCountry: 'UA' },
+        geo: { '@type': 'GeoCoordinates', latitude: 48.317541, longitude: 35.513511 }, areaServed: { '@type': 'City', name: city.name } },
+      content: `<h1>${esc(t.h1)}</h1><p>${esc(t.intro)}</p>`
+        + `<h2>Що є в наявності</h2><ul>${subs.map((c) => `<li>${link(`/?c=${c.slug}`, c.name)}</li>`).join('')}</ul>`
+        + (hits.length ? `<h2>Популярні товари</h2>${productList(hits)}` : '')
+        + `<h2>Питання та відповіді</h2>${t.faq.map((f) => `<h3>${esc(f.q)}</h3><p>${esc(f.a)}</p>`).join('')}`
+        + `<h2>Доставляємо також</h2><ul>${CITIES.filter((c) => c.slug !== city.slug).map((c) => `<li>${link(cityPath(c), `Автозапчастини в ${c.in}`)}</li>`).join('')}</ul>`
+        + navBlock(cats),
     };
   }
 

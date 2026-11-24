@@ -2,6 +2,8 @@ import React from 'react';
 import { Phone, MapPin, Clock, ShieldCheck } from 'lucide-react';
 import { PHONE_NUMBER_1, PHONE_NUMBER_2, PHONE_LINK_1, PHONE_LINK_2 } from '../constants';
 import type { ViewState } from '../types';
+import { CITIES, cityPath } from '../api/_cities.js';
+import { linkClick } from '../navigation';
 
 const Footer: React.FC<{ onNavigate?: (v: ViewState) => void }> = ({ onNavigate }) => {
   const link = (v: ViewState) => (e: React.MouseEvent) => { if (onNavigate) { e.preventDefault(); onNavigate(v); } };
@@ -108,6 +110,12 @@ const Footer: React.FC<{ onNavigate?: (v: ViewState) => void }> = ({ onNavigate 
         </div>
       </div>
 
+      <div className="max-w-7xl mx-auto px-4 pb-8 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-zinc-500">
+        <span className="font-black uppercase tracking-widest text-zinc-400">Автозапчастини:</span>
+        {CITIES.map(c => (
+          <a key={c.slug} href={cityPath(c)} onClick={linkClick(cityPath(c))} className="hover:text-white transition-colors">{c.name}</a>
+        ))}
+      </div>
       <div className="max-w-7xl mx-auto px-4 pt-10 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6">
         <p className="text-zinc-500 text-[11px] font-black uppercase tracking-[0.4em] text-center md:text-left">
           © {new Date().getFullYear()} Інтернет-магазин ФОРСАЖ. Всі права захищено.

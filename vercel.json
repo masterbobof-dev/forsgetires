@@ -1,18 +1,56 @@
 {
   "functions": {
-    "api/product.js": { "includeFiles": "dist/app.html" },
-    "api/page.js": { "includeFiles": "dist/app.html" }
+    "api/product.js": {
+      "includeFiles": "dist/app.html"
+    },
+    "api/page.js": {
+      "includeFiles": "dist/app.html"
+    }
   },
   "rewrites": [
-    { "source": "/sitemap.xml", "destination": "/api/sitemap" },
-    { "source": "/feeds/google.xml", "destination": "/api/feed?type=google" },
-    { "source": "/feeds/prom.xml", "destination": "/api/feed?type=prom" },
-    { "source": "/feeds/hotline.xml", "destination": "/api/feed?type=hotline" },
-    { "source": "/p/:slug", "destination": "/api/product?slug=:slug" },
-    { "source": "/", "destination": "/api/page?path=/" },
-    { "source": "/statti", "destination": "/api/page?path=/statti" },
-    { "source": "/statti/:slug", "destination": "/api/page?path=/statti/:slug" },
-    { "source": "/:info(dostavka-i-oplata|garantiya-i-povernennya|pro-nas|kontakty|faq)", "destination": "/api/page?path=/:info" },
-    { "source": "/((?!api/|assets/).*)", "destination": "/app.html" }
+    {
+      "source": "/sitemap.xml",
+      "destination": "/api/sitemap"
+    },
+    {
+      "source": "/feeds/google.xml",
+      "destination": "/api/feed?type=google"
+    },
+    {
+      "source": "/feeds/prom.xml",
+      "destination": "/api/feed?type=prom"
+    },
+    {
+      "source": "/feeds/hotline.xml",
+      "destination": "/api/feed?type=hotline"
+    },
+    {
+      "source": "/p/:slug",
+      "destination": "/api/product?slug=:slug"
+    },
+    {
+      "source": "/",
+      "destination": "/api/page?path=/"
+    },
+    {
+      "source": "/statti",
+      "destination": "/api/page?path=/statti"
+    },
+    {
+      "source": "/statti/:slug",
+      "destination": "/api/page?path=/statti/:slug"
+    },
+    {
+      "source": "/:info(dostavka-i-oplata|garantiya-i-povernennya|pro-nas|kontakty|faq)",
+      "destination": "/api/page?path=/:info"
+    },
+    {
+      "source": "/:city(avtozapchastyny-synelnykove|avtozapchastyny-dnipro|avtozapchastyny-pavlohrad|avtozapchastyny-samar|avtozapchastyny-vasylkivka|avtozapchastyny-mezhova)",
+      "destination": "/api/page?path=/:city"
+    },
+    {
+      "source": "/((?!api/|assets/).*)",
+      "destination": "/app.html"
+    }
   ]
 }

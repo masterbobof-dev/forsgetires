@@ -248,6 +248,37 @@ const download = async (n: number, st: Settings) => {
   return out;
 };
 
+/** re-checks photos that were attached automatically with the current (strict) rules; wrong ones are removed */
+const recheck = async (n: number, st: Settings) => {
+  const { data: rows, error } = await db.from('tyres').select('*').eq('photo_auto', true).not('image_url', 'is', null).is('photo_rechecked_at', null).limit(n);
+  if (error) throw new Error(error.message);
+  const out: Record<string, number> = { left: 0 };
+  for (const p of rows || []) {
+    try {
+      const { bytes, type } = await fetchImage(p.image_url);
+      const v = await verdictFor(bytes, type, p);
+      if (!v) { out.skipped = (out.skipped || 0) + 1; await db.from('tyres').update({ photo_rechecked_at: new Date().toISOString() }).eq('id', p.id); continue; }
+      if (passes(v, st, p, { title: '', link: p.image_source_url || '' })) {
+        await db.from('tyres').update({ photo_rechecked_at: new Date().toISOString() }).eq('id', p.id);
+        out.kept = (out.kept || 0) + 1;
+      } else {
+        await removeAutoFiles(p);
+        await db.from('tyres').update({ image_url: null, image_thumb_url: null, gallery: [], gallery_thumbs: [], image_source_url: null,
+          photo_auto: false, photo_verified: false, photo_review: false, photo_candidates: [], photo_search_error: 'removed by recheck',
+          photo_search_at: new Date().toISOString(), photo_rechecked_at: new Date().toISOString() }).eq('id', p.id);
+        out.removed = (out.removed || 0) + 1;
+      }
+    } catch (e) {
+      if (e instanceof RetryLater) { out.retry = (out.retry || 0) + 1; continue; }
+      await db.from('tyres').update({ photo_rechecked_at: new Date().toISOString() }).eq('id', p.id);
+      out.error = (out.error || 0) + 1;
+    }
+  }
+  const { count } = await db.from('tyres').select('id', { count: 'exact', head: true }).eq('photo_auto', true).not('image_url', 'is', null).is('photo_rechecked_at', null);
+  out.left = count || 0;
+  return out;
+};
+
 const purge = async () => {
   let removed = 0;
   for (let round = 0; round < 50; round++) {
@@ -373,6 +404,7 @@ Deno.serve(async (req) => {
     if (body.action === 'search') return json(await search(Math.min(Number(body.n) || 100, 100), st));
     if (body.action === 'download') return json(await download(Math.min(Number(body.n) || 3, 6), st));
     if (body.action === 'purge') return json(await purge());
+    if (body.action === 'recheck') return json(await recheck(Math.min(Number(body.n) || 4, 8), st));
     if (body.action === 'status') return json((await db.rpc('photo_job_status')).data);
     return json({ error: 'action: search | download | purge | status | staff.*' }, 400);
   } catch (e) {

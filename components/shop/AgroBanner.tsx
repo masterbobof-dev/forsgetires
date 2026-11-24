@@ -12,7 +12,7 @@ interface AgroBannerProps {
 const AgroBanner: React.FC<AgroBannerProps> = ({ onCategoryClick, featuredProducts = [], onProductClick }) => {
   return (
     <div
-      className="group relative overflow-hidden rounded-2xl mb-6 border border-emerald-800/50 hover:border-emerald-600/70 transition-all duration-300 shadow-lg hover:shadow-[0_4px_30px_rgba(16,185,129,0.15)]"
+      className="group relative overflow-hidden rounded-2xl mb-4 md:mb-6 border border-emerald-800/50 hover:border-emerald-600/70 transition-all duration-300 shadow-lg hover:shadow-[0_4px_30px_rgba(16,185,129,0.15)]"
     >
       {/* Background gradient */}
       <div className="absolute inset-0 bg-gradient-to-r from-zinc-950 via-zinc-900 to-emerald-950/60" onClick={onCategoryClick}></div>
@@ -29,12 +29,12 @@ const AgroBanner: React.FC<AgroBannerProps> = ({ onCategoryClick, featuredProduc
       </div>
 
       {/* Content */}
-      <div className="relative z-10 flex flex-col lg:flex-row items-center justify-between gap-6 px-4 md:px-8 py-5 md:py-6">
+      <div className="relative z-10 flex flex-col lg:flex-row items-center justify-between gap-3 md:gap-6 px-3 md:px-8 py-3 md:py-6">
         
         {/* Top Section: Icon, Text and Mobile CTA */}
         <div className="flex items-center justify-between w-full lg:w-auto">
-          <div className="flex items-center gap-4 md:gap-6 cursor-pointer flex-grow" onClick={onCategoryClick}>
-            <div className="bg-emerald-500/20 border border-emerald-500/30 p-3 md:p-4 rounded-2xl group-hover:bg-emerald-500/30 transition-colors shadow-inner">
+          <div className="flex items-center gap-3 md:gap-6 cursor-pointer flex-grow" onClick={onCategoryClick}>
+            <div className="bg-emerald-500/20 border border-emerald-500/30 p-2.5 md:p-4 rounded-xl md:rounded-2xl group-hover:bg-emerald-500/30 transition-colors shadow-inner">
               <Tractor size={28} className="text-emerald-400" strokeWidth={2.5} />
             </div>
             <div>
@@ -42,10 +42,10 @@ const AgroBanner: React.FC<AgroBannerProps> = ({ onCategoryClick, featuredProduc
                 <span className="bg-emerald-500 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-widest animate-pulse">В наявності</span>
                 <span className="text-yellow-400/60 text-[10px] font-bold uppercase tracking-widest hidden md:block">• Прямі поставки</span>
               </div>
-              <p className="text-white font-black text-xl md:text-2xl uppercase tracking-tighter leading-tight">
+              <p className="text-white font-black text-lg md:text-2xl uppercase tracking-tighter leading-tight">
                 Агро та Спецшини
               </p>
-              <p className="text-emerald-400/80 text-xs md:text-sm font-bold uppercase tracking-widest mt-1">
+              <p className="text-emerald-400/80 text-[10px] md:text-sm font-bold uppercase tracking-widest mt-0.5 md:mt-1">
                 Трактори • Комбайни • Спецтехніка
               </p>
             </div>

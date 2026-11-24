@@ -8,9 +8,10 @@ import { PHONE_LINK_1, PHONE_NUMBER_1, FORMSPREE_ENDPOINT, TELEGRAM_LINK, VIBER_
 import CartDrawer from './shop/CartDrawer';
 import ProductDetailModal from './shop/ProductDetailModal';
 import CategoryNav, { CategorySelection } from './shop/CategoryNav';
-import FilterToolbar from './shop/FilterToolbar';
+import { FilterPanel, SearchBar, FilterSheet, FilterState, SortValue, countActiveFilters } from './shop/FilterToolbar';
 import ProductCard from './shop/ProductCard';
-import { useCategories, buildCategoryFilter, getCategoryPath, getRootOf, isTyreProduct } from '../categories';
+import { useCategories, buildCategoryFilter, getCategoryPath, getRootOf, getRootCategories, getChildren, isTyreProduct } from '../categories';
+import { getPresetForCategory, getPresetForProduct, getCardChips, sortAttrValues } from '../productAttributes';
 import AgroBanner from './shop/AgroBanner';
 import SeoContentBlock from './shop/SeoContentBlock';
 import { logAnalyticsEvent } from './admin/analytics';
@@ -95,6 +96,19 @@ const TyreShop: React.FC<TyreShopProps> = ({
   const activeCat = typeof activeCategory === 'number' ? categories.find(c => c.id === activeCategory) : undefined;
   const agroCategory = categories.find(c => c.vehicle_type === 'agro');
   const showTyreFilters = !!activeCat && activeCat.kind === 'tyre';
+  const preset = getPresetForCategory(categories, activeCat);
+  const [attrFilters, setAttrFilters] = useState<Record<string, string>>({});
+  const [attrValues, setAttrValues] = useState<Record<string, string[]>>({});
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  // direction of the slide animation when switching categories (-1 = from left, 1 = from right)
+  const [slideDir, setSlideDir] = useState<0 | -1 | 1>(0);
+
+  // Order of categories for swipe navigation and slide direction: all, Шини, Легкові, ..., Диски, ..., Акції
+  const categoryOrder = useMemo<CategorySelection[]>(() => [
+    'all',
+    ...getRootCategories(categories).flatMap(r => [r.id, ...getChildren(categories, r.id).map(c => c.id)]),
+    'hot',
+  ], [categories]);
 
   // --- LOGIC: CATEGORY <-> URL (?c=slug) ---
   useEffect(() => {
@@ -115,8 +129,11 @@ const TyreShop: React.FC<TyreShopProps> = ({
     window.history.replaceState({}, '', url.toString());
   }, [activeCategory, categoriesLoading]);
 
-  const [activeSort, setActiveSort] = useState<'newest' | 'oldest' | 'price_asc' | 'price_desc' | 'with_photo' | 'no_photo'>('newest');
+  const [activeSort, setActiveSort] = useState<SortValue>('newest');
   const [searchQuery, setSearchQuery] = useState('');
+  // search runs 350 ms after the customer stops typing
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => { const t = setTimeout(() => setDebouncedSearch(searchQuery), 350); return () => clearTimeout(t); }, [searchQuery]);
   const [showOnlyInStock, setShowOnlyInStock] = useState(false);
 
   const [filterWidth, setFilterWidth] = useState('');
@@ -255,37 +272,122 @@ const TyreShop: React.FC<TyreShopProps> = ({
           }
       }
       
-      const { data: tData } = await supabase.from('tyres').select('manufacturer, radius, title').neq('in_stock', false);
-      if (tData) {
-          const brands = new Set<string>(), radii = new Set<string>(), widths = new Set<string>(), heights = new Set<string>();
-          tData.forEach(item => {
-              if (item.manufacturer) { let b = item.manufacturer.trim(); brands.add(b); }
-              if (item.radius) radii.add(item.radius.trim());
-              const m = item.title.match(/(\d{3})[\/\s](\d{2})/);
-              if (m) { widths.add(m[1]); heights.add(m[2]); }
-          });
-          setFilterOptions({ 
-              brands: Array.from(brands).sort(), 
-              radii: Array.from(radii).sort((a, b) => parseFloat(a.replace(/[^\d.]/g, '')) - parseFloat(b.replace(/[^\d.]/g, ''))), 
-              widths: Array.from(widths).sort(), 
-              heights: Array.from(heights).sort() 
-          });
-      }
     };
     fetchSettings();
   }, []);
 
+  // --- LOGIC: FILTER OPTIONS (brands, sizes, characteristics) OF THE CURRENT CATEGORY ---
+  useEffect(() => {
+    if (categoriesLoading) return;
+    let cancelled = false;
+    (async () => {
+      let q = supabase.from('tyres').select(dbReady ? 'manufacturer, radius, title, attributes' : 'manufacturer, radius, title').neq('in_stock', false);
+      if (activeCategory === 'hot') q = q.eq('is_hot', true);
+      else if (activeCat) {
+        const f = buildCategoryFilter(categories, activeCat, dbReady);
+        if (f) q = q.or(f);
+      }
+      const { data } = await q.limit(5000);
+      if (cancelled || !data) return;
+      const brands = new Set<string>(), radii = new Set<string>(), widths = new Set<string>(), heights = new Set<string>();
+      const attrs: Record<string, Set<string>> = {};
+      (data as any[]).forEach(item => {
+        if (item.manufacturer?.trim()) brands.add(item.manufacturer.trim());
+        if (item.radius) radii.add(item.radius.trim());
+        const m = (item.title || '').match(/(\d{3})[\/\s](\d{2})/);
+        if (m) { widths.add(m[1]); heights.add(m[2]); }
+        if (item.attributes && typeof item.attributes === 'object') {
+          for (const [k, v] of Object.entries(item.attributes)) {
+            if (v === null || v === undefined || String(v).trim() === '') continue;
+            (attrs[k] ||= new Set()).add(String(v).trim());
+          }
+        }
+      });
+      setFilterOptions({
+        brands: Array.from(brands).sort((a, b) => a.localeCompare(b)),
+        radii: Array.from(radii).sort((a, b) => parseFloat(a.replace(/[^\d.]/g, '')) - parseFloat(b.replace(/[^\d.]/g, ''))),
+        widths: Array.from(widths).sort(),
+        heights: Array.from(heights).sort(),
+      });
+      setAttrValues(Object.fromEntries(Object.entries(attrs).map(([k, set]) => [k, sortAttrValues(Array.from(set))])));
+    })();
+    return () => { cancelled = true; };
+  }, [categoriesLoading, activeCategory, dbReady]);
+
   // --- LOGIC: TYRE DATA ---
+  const attrFiltersKey = JSON.stringify(attrFilters);
   useEffect(() => {
     if (categoriesLoading) return;
     setPage(0);
     setTyres([]); 
     fetchTyres(0, true);
-  }, [categoriesLoading, activeCategory, activeSort, enableStockQty, filterBrand, filterRadius, filterWidth, filterHeight, filterSeason, showOnlyInStock, searchQuery, priorityProductId]);
+  }, [categoriesLoading, activeCategory, activeSort, enableStockQty, filterBrand, filterRadius, filterWidth, filterHeight, filterSeason, showOnlyInStock, debouncedSearch, priorityProductId, attrFiltersKey]);
 
   const resetFilters = () => {
-    setSearchQuery(''); setFilterWidth(''); setFilterHeight(''); setFilterRadius(''); setFilterBrand(''); setFilterSeason('');
+    setSearchQuery(''); setFilterWidth(''); setFilterHeight(''); setFilterRadius(''); setFilterBrand(''); setFilterSeason(''); setAttrFilters({}); setShowOnlyInStock(false);
   };
+
+  const filterState: FilterState = { searchQuery, showOnlyInStock, filterWidth, filterHeight, filterRadius, filterBrand, filterSeason, attrFilters };
+  const setFilter = <K extends keyof FilterState>(key: K, value: FilterState[K]) => {
+    const setters: Record<string, (v: any) => void> = {
+      searchQuery: setSearchQuery, showOnlyInStock: setShowOnlyInStock, filterWidth: setFilterWidth, filterHeight: setFilterHeight,
+      filterRadius: setFilterRadius, filterBrand: setFilterBrand, filterSeason: setFilterSeason, attrFilters: setAttrFilters,
+    };
+    setters[key](value);
+  };
+  const setAttr = (key: string, value: string) => setAttrFilters(prev => {
+    const next = { ...prev };
+    if (value) next[key] = value; else delete next[key];
+    return next;
+  });
+  const activeFilterCount = countActiveFilters(filterState);
+
+  /** Switch category with filters cleanup + slide animation direction. */
+  const changeCategory = (cat: CategorySelection) => {
+    if (cat === activeCategory) return;
+    const next = typeof cat === 'number' ? categories.find(c => c.id === cat) : undefined;
+    if (cat === 'all') {
+      resetFilters();
+    } else if (!next || next.kind !== 'tyre') {
+      // tyre-only filters make no sense outside tyre categories
+      setFilterWidth(''); setFilterHeight(''); setFilterRadius(''); setFilterSeason('');
+    }
+    const rootChanged = !next || !activeCat || getRootOf(categories, next).id !== getRootOf(categories, activeCat).id;
+    if (rootChanged) { setFilterBrand(''); setAttrFilters({}); }
+    const from = categoryOrder.indexOf(activeCategory), to = categoryOrder.indexOf(cat);
+    setSlideDir(to > from ? 1 : -1);
+    setPriorityProductId(null);
+    setActiveCategory(cat);
+  };
+
+  // Horizontal swipe over the product list switches to the next / previous category
+  const touchStart = useRef<{ x: number; y: number; t: number } | null>(null);
+  const onListTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchStart.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+  };
+  const onListTouchEnd = (e: React.TouchEvent) => {
+    const start = touchStart.current;
+    touchStart.current = null;
+    if (!start) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x, dy = t.clientY - start.y;
+    if (Math.abs(dx) < 80 || Math.abs(dx) < Math.abs(dy) * 2 || Date.now() - start.t > 700) return;
+    const idx = categoryOrder.indexOf(activeCategory);
+    const nextIdx = idx + (dx < 0 ? 1 : -1);
+    if (nextIdx >= 0 && nextIdx < categoryOrder.length) {
+      changeCategory(categoryOrder[nextIdx]);
+      window.scrollTo({ top: Math.min(window.scrollY, listTopRef.current ? listTopRef.current.getBoundingClientRect().top + window.scrollY - 140 : 0), behavior: 'smooth' });
+    }
+  };
+  const listTopRef = useRef<HTMLDivElement>(null);
+
+  // Header cart icon opens the cart drawer
+  useEffect(() => {
+    const open = () => setIsCartOpen(true);
+    window.addEventListener('forsage:open-cart', open);
+    return () => window.removeEventListener('forsage:open-cart', open);
+  }, []);
 
   const handleAgroProductClick = (id: number) => {
     setPriorityProductId(id);
@@ -329,7 +431,11 @@ const TyreShop: React.FC<TyreShopProps> = ({
       const from = pageIndex * PAGE_SIZE, to = from + PAGE_SIZE - 1;
       let query = supabase.from('tyres').select('*', { count: 'exact' });
       
-      if (searchQuery.trim()) query = query.or(`title.ilike.%${searchQuery.trim()}%,catalog_number.ilike.%${searchQuery.trim()}%,manufacturer.ilike.%${searchQuery.trim()}%`);
+      const term = debouncedSearch.trim().replace(/[%,()]/g, ' ').trim();
+      if (term) query = query.or(`title.ilike.%${term}%,catalog_number.ilike.%${term}%,manufacturer.ilike.%${term}%`);
+      for (const [key, value] of Object.entries(attrFilters)) {
+        if (value) query = query.eq(`attributes->>${key}`, value);
+      }
       if (filterBrand) query = query.eq('manufacturer', filterBrand);
       if (filterRadius) query = query.eq('radius', filterRadius);
       if (filterWidth) query = query.ilike('title', `%${filterWidth}%`);
@@ -465,225 +571,210 @@ const TyreShop: React.FC<TyreShopProps> = ({
     return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />;
   };
 
+  const filterPanel = (
+    <FilterPanel
+      state={filterState}
+      set={setFilter}
+      setAttr={setAttr}
+      options={filterOptions}
+      attrValues={attrValues}
+      showTyreFilters={showTyreFilters}
+      preset={preset}
+      onReset={resetFilters}
+    />
+  );
+
+  const slideClass = slideDir === 1 ? 'slide-in-from-right-8' : slideDir === -1 ? 'slide-in-from-left-8' : 'slide-in-from-bottom-4';
+
   return (
-    <div className="min-h-screen bg-[#09090b] py-4 md:py-12 animate-in fade-in duration-500 pb-32">
-      <div className="max-w-7xl mx-auto px-2 md:px-4">
-        
-        <header className="flex flex-col lg:flex-row justify-between items-stretch lg:items-end gap-6 mb-8 md:mb-12 px-2">
-            {/* Left: Info block */}
-            <div className="flex-1 space-y-5">
-               <nav className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-black text-zinc-600">
-                 <button onClick={onBack} className="hover:text-[#FFC300] transition-colors">Головна</button>
-                 <span className="text-zinc-800">/</span>
-                 <button onClick={() => setActiveCategory('all')} className="text-zinc-500 hover:text-[#FFC300] transition-colors">Каталог товарів</button>
-                 {activeCategory === 'hot' && (
-                   <>
-                     <span className="text-zinc-800">/</span>
-                     <span className="text-[#FFC300]">Акції</span>
-                   </>
-                 )}
-                 {activeCat && getCategoryPath(categories, activeCat).map((c, i, arr) => (
-                   <React.Fragment key={c.id}>
-                     <span className="text-zinc-800">/</span>
-                     {i === arr.length - 1
-                       ? <span className="text-[#FFC300]">{c.name}</span>
-                       : <button onClick={() => setActiveCategory(c.id)} className="text-zinc-500 hover:text-[#FFC300] transition-colors">{c.name}</button>}
-                   </React.Fragment>
-                 ))}
-               </nav>
+    <div className="min-h-screen bg-[#09090b] pt-3 md:pt-8 pb-32">
+      <div className="max-w-7xl mx-auto px-3 md:px-4">
 
-               <div>
-                 <h1 className="text-3xl md:text-5xl font-black text-white uppercase italic tracking-tighter leading-tight mb-2">
-                   ФОРСАЖ <span className="text-[#FFC300]">СИНЕЛЬНИКОВЕ</span>
-                 </h1>
-               </div>
+        {/* ── Intro: compact on phones, with mini map on large screens ── */}
+        <header className="flex flex-col lg:flex-row justify-between items-stretch lg:items-end gap-4 lg:gap-6 mb-5 md:mb-8">
+          <div className="flex-1 space-y-3 md:space-y-5 animate-in fade-in slide-in-from-left-4 duration-500">
+            <nav className="flex items-center flex-wrap gap-x-2 gap-y-1 text-[10px] uppercase tracking-widest font-black text-zinc-600" aria-label="Навігація">
+              <button onClick={onBack} className="hover:text-[#FFC300] transition-colors">Головна</button>
+              <span className="text-zinc-800">/</span>
+              <button onClick={() => changeCategory('all')} className="text-zinc-500 hover:text-[#FFC300] transition-colors">Каталог</button>
+              {activeCategory === 'hot' && (<><span className="text-zinc-800">/</span><span className="text-[#FFC300]">Акції</span></>)}
+              {activeCat && getCategoryPath(categories, activeCat).map((c, i, arr) => (
+                <React.Fragment key={c.id}>
+                  <span className="text-zinc-800">/</span>
+                  {i === arr.length - 1
+                    ? <span className="text-[#FFC300]">{c.name}</span>
+                    : <button onClick={() => changeCategory(c.id)} className="text-zinc-500 hover:text-[#FFC300] transition-colors">{c.name}</button>}
+                </React.Fragment>
+              ))}
+            </nav>
 
-               <p className="text-zinc-400 text-sm md:text-base max-w-xl leading-relaxed">
-                 Інтернет-магазин у місті{' '}
-                 <span className="text-white font-black">Синельникове</span>:{' '}
-                 <span className="text-[#FFC300] font-black">шини, диски, акумулятори та автотовари</span>{' '}
-                 в наявності. Самовивіз або доставка Новою Поштою по всій Україні.
-               </p>
+            <h1 key={`h1-${String(activeCategory)}`} className="text-[28px] leading-[1.05] sm:text-4xl md:text-5xl font-black text-white uppercase italic tracking-tighter animate-in fade-in slide-in-from-bottom-2 duration-300">
+              {activeCat ? activeCat.name : activeCategory === 'hot' ? 'Акції' : <>Форсаж <span className="text-[#FFC300]">Синельникове</span></>}
+            </h1>
 
-               <div className="flex flex-wrap gap-3">
-                 <a href={shopPhoneLink} className="bg-zinc-900 border border-zinc-800 p-3 md:p-5 rounded-2xl flex items-center gap-3 group hover:border-[#FFC300] transition-all w-fit min-h-[80px]">
-                   <div className="w-10 h-10 md:w-12 md:h-12 bg-[#FFC300] rounded-xl flex items-center justify-center text-black group-hover:scale-110 transition-transform shrink-0">
-                     <Phone size={18}/>
-                   </div>
-                   <div>
-                     <span className="text-white font-black text-base md:text-xl tracking-tight">{shopPhone}</span>
-                   </div>
-                 </a>
-                 <a href={shopPhoneLink2} className="bg-zinc-900 border border-zinc-800 p-3 md:p-5 rounded-2xl flex items-center gap-3 group hover:border-[#FFC300] transition-all w-fit min-h-[80px]">
-                   <div className="w-10 h-10 md:w-12 md:h-12 bg-zinc-800 border border-zinc-700 rounded-xl flex items-center justify-center text-[#FFC300] group-hover:scale-110 transition-transform shrink-0">
-                     <Phone size={18}/>
-                   </div>
-                   <div>
-                     <span className="text-white font-black text-base md:text-xl tracking-tight">{shopPhone2}</span>
-                   </div>
-                 </a>
-                 {isAdmin && (
-                   <button onClick={onAdminClick} className="bg-zinc-900/80 border border-[#FFC300]/30 p-3 md:p-5 rounded-2xl flex items-center gap-3 hover:border-[#FFC300] transition-all group shrink-0 min-h-[80px]">
-                     <div className="p-1.5 bg-zinc-800 rounded-lg text-[#FFC300] group-hover:scale-110 transition-transform">
-                       <Lock size={14} strokeWidth={2.5}/>
-                     </div>
-                     <span className="text-white font-black text-xs uppercase">Адмін</span>
-                   </button>
-                 )}
-               </div>
+            <p className="text-zinc-400 text-sm md:text-base max-w-xl leading-relaxed line-clamp-2 md:line-clamp-none">
+              {activeCat?.description || <>
+                <span className="text-[#FFC300] font-bold">Шини, диски, акумулятори та автотовари</span> в наявності.
+                Самовивіз у <span className="text-white font-bold">Синельниковому</span> або доставка Новою Поштою по всій Україні.
+              </>}
+            </p>
+
+            <div className="flex flex-wrap gap-2">
+              <a href={shopPhoneLink} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 pl-1.5 pr-3 py-1.5 md:pl-2 md:pr-4 md:py-2 rounded-xl hover:border-[#FFC300] transition-all group active:scale-95">
+                <span className="w-8 h-8 md:w-10 md:h-10 bg-[#FFC300] rounded-lg flex items-center justify-center text-black group-hover:scale-110 transition-transform"><Phone size={16} /></span>
+                <span className="text-white font-black text-sm md:text-lg tracking-tight">{shopPhone}</span>
+              </a>
+              <a href={shopPhoneLink2} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 pl-1.5 pr-3 py-1.5 md:pl-2 md:pr-4 md:py-2 rounded-xl hover:border-[#FFC300] transition-all group active:scale-95">
+                <span className="w-8 h-8 md:w-10 md:h-10 bg-zinc-800 border border-zinc-700 rounded-lg flex items-center justify-center text-[#FFC300] group-hover:scale-110 transition-transform"><Phone size={16} /></span>
+                <span className="text-white font-black text-sm md:text-lg tracking-tight">{shopPhone2}</span>
+              </a>
+              <a
+                href="https://www.google.com/maps/dir/?api=1&destination=48.317541,35.513511"
+                target="_blank" rel="noopener noreferrer"
+                className="lg:hidden flex items-center gap-2 bg-zinc-900 border border-zinc-800 pl-1.5 pr-3 py-1.5 md:pl-2 md:pr-4 md:py-2 rounded-xl hover:border-[#FFC300] transition-all active:scale-95"
+              >
+                <span className="w-8 h-8 md:w-10 md:h-10 bg-zinc-800 border border-zinc-700 rounded-lg flex items-center justify-center text-[#FFC300]"><MapPin size={16} /></span>
+                <span className="text-zinc-300 font-bold text-xs md:text-sm">вул. Квітнева 9</span>
+              </a>
+              {isAdmin && (
+                <button onClick={onAdminClick} className="flex items-center gap-2 bg-zinc-900/80 border border-[#FFC300]/30 px-3 py-1.5 rounded-xl hover:border-[#FFC300] transition-all">
+                  <Lock size={14} className="text-[#FFC300]" /><span className="text-white font-black text-xs uppercase">Адмін</span>
+                </button>
+              )}
             </div>
+          </div>
 
-            {/* Mobile: Map Button */}
-            <div className="lg:hidden">
-               <a 
-                 href="https://www.google.com/maps/dir/?api=1&destination=48.317541,35.513511"
-                 target="_blank" rel="noopener noreferrer"
-                 className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 p-3 rounded-2xl hover:border-[#FFC300] transition-all group w-full"
-               >
-                 <div className="w-10 h-10 bg-zinc-800 border border-zinc-700 rounded-xl flex items-center justify-center text-[#FFC300] group-hover:scale-110 transition-transform shrink-0">
-                   <MapPin size={18}/>
-                 </div>
-                 <div className="flex-1">
-                   <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest mb-0.5">Наша адреса</p>
-                   <span className="text-white font-black text-sm">Як до нас добратися →</span>
-                 </div>
-                 <div className="text-right shrink-0">
-                   <p className="text-zinc-500 text-[10px] font-bold">м. Синельникове</p>
-                   <p className="text-zinc-600 text-[10px] font-bold">вул. Квітнева 9</p>
-                 </div>
-               </a>
-            </div>
-
-            {/* Desktop: Mini Map */}
-            <div className="hidden lg:block lg:w-5/12 xl:w-[420px] shrink-0">
-               <div className="relative group">
-                  <div className="absolute -inset-1 bg-gradient-to-r from-[#FFC300]/40 to-yellow-600/20 rounded-3xl blur opacity-30 group-hover:opacity-60 transition duration-700"></div>
-                  <div className="relative bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl">
-                    <iframe 
-                        src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2653.2206680489955!2d35.513511315682!3d48.31754097923793!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zNDjCsDE5JzAzLjEiTiAzNcKwMzAnNDguNiJF!5e0!3m2!1suk!2sua!4v1650000000000!5m2!1suk!2sua" 
-                        width="100%" 
-                        height="200" 
-                        style={{ border: 0, filter: 'grayscale(1) invert(0.85) contrast(1.1)' }} 
-                        allowFullScreen 
-                        loading="lazy" 
-                        referrerPolicy="no-referrer-when-downgrade"
-                        title="Forsage location"
-                    ></iframe>
-                    <div className="bg-zinc-950/90 border-t border-zinc-800 p-3 flex items-center justify-between gap-2">
-                        <div className="min-w-0 flex items-center gap-2">
-                          <MapPin size={12} className="text-[#FFC300] shrink-0"/>
-                          <p className="text-zinc-400 text-[10px] font-bold truncate">м. Синельникове, вул. Квітнева 9</p>
-                        </div>
-                        <a 
-                          href="https://www.google.com/maps/dir/?api=1&destination=48.317541,35.513511" 
-                          target="_blank" rel="noopener noreferrer"
-                          className="bg-[#FFC300] px-3 py-1.5 rounded-lg text-black font-black text-[10px] uppercase tracking-widest hover:bg-white transition-colors shrink-0 flex items-center gap-1"
-                        >
-                          Маршрут <ArrowRight size={10} />
-                        </a>
-                    </div>
+          {/* Desktop: Mini Map */}
+          <div className="hidden lg:block lg:w-5/12 xl:w-[420px] shrink-0 animate-in fade-in slide-in-from-right-4 duration-500">
+            <div className="relative group">
+              <div className="absolute -inset-1 bg-gradient-to-r from-[#FFC300]/40 to-yellow-600/20 rounded-3xl blur opacity-30 group-hover:opacity-60 transition duration-700"></div>
+              <div className="relative bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl">
+                <iframe
+                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2653.2206680489955!2d35.513511315682!3d48.31754097923793!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zNDjCsDE5JzAzLjEiTiAzNcKwMzAnNDguNiJF!5e0!3m2!1suk!2sua!4v1650000000000!5m2!1suk!2sua"
+                  width="100%" height="180"
+                  style={{ border: 0, filter: 'grayscale(1) invert(0.85) contrast(1.1)' }}
+                  allowFullScreen loading="lazy" referrerPolicy="no-referrer-when-downgrade"
+                  title="Forsage location"
+                ></iframe>
+                <div className="bg-zinc-950/90 border-t border-zinc-800 p-3 flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex items-center gap-2">
+                    <MapPin size={12} className="text-[#FFC300] shrink-0" />
+                    <p className="text-zinc-400 text-[10px] font-bold truncate">м. Синельникове, вул. Квітнева 9</p>
                   </div>
-               </div>
+                  <a
+                    href="https://www.google.com/maps/dir/?api=1&destination=48.317541,35.513511"
+                    target="_blank" rel="noopener noreferrer"
+                    className="bg-[#FFC300] px-3 py-1.5 rounded-lg text-black font-black text-[10px] uppercase tracking-widest hover:bg-white transition-colors shrink-0 flex items-center gap-1"
+                  >
+                    Маршрут <ArrowRight size={10} />
+                  </a>
+                </div>
+              </div>
             </div>
+          </div>
         </header>
-        
-        <CategoryNav 
-          categories={categories}
-          active={activeCategory} 
-          onChange={(cat) => {
-            const next = typeof cat === 'number' ? categories.find(c => c.id === cat) : undefined;
-            if (cat === 'all') {
-              resetFilters();
-              setShowOnlyInStock(false);
-            } else if (!next || next.kind !== 'tyre') {
-              // tyre-only filters make no sense outside tyre categories
-              setFilterWidth(''); setFilterHeight(''); setFilterRadius(''); setFilterSeason('');
-            }
-            if (next && activeCat && getRootOf(categories, next).id !== getRootOf(categories, activeCat).id) setFilterBrand('');
-            setPriorityProductId(null);
-            setActiveCategory(cat);
-          }} 
-        />
+
+        <CategoryNav categories={categories} active={activeCategory} onChange={changeCategory} />
 
         {activeCategory === 'all' && agroCategory && (
-          <AgroBanner 
-            onCategoryClick={() => { setPriorityProductId(null); setActiveCategory(agroCategory.id); }} 
+          <AgroBanner
+            onCategoryClick={() => changeCategory(agroCategory.id)}
             featuredProducts={agroFeaturedProducts}
             onProductClick={handleAgroProductClick}
           />
         )}
 
-        <FilterToolbar 
-          searchQuery={searchQuery} setSearchQuery={setSearchQuery}
-          showOnlyInStock={showOnlyInStock} setShowOnlyInStock={setShowOnlyInStock}
-          filterWidth={filterWidth} setFilterWidth={setFilterWidth}
-          filterHeight={filterHeight} setFilterHeight={setFilterHeight}
-          filterRadius={filterRadius} setFilterRadius={setFilterRadius}
-          filterBrand={filterBrand} setFilterBrand={setFilterBrand}
-          filterSeason={filterSeason} setFilterSeason={setFilterSeason}
-          showTyreFilters={showTyreFilters}
-          activeSort={activeSort} setActiveSort={setActiveSort}
-          filterOptions={filterOptions}
-          totalCount={totalCount}
-          onSearch={() => fetchTyres(0, true)}
-          onReset={() => { resetFilters(); setActiveCategory('all'); }}
-        />
-
-        {loading ? (
-           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-8 px-2 animate-in fade-in duration-300">
-              {Array.from({ length: 12 }).map((_, i) => (
-                <div key={i} className="bg-zinc-900/40 rounded-2xl h-[320px] md:h-[420px] animate-pulse border border-zinc-800/50 flex flex-col p-3 md:p-4">
-                  <div className="bg-zinc-800/50 rounded-xl h-[160px] md:h-[250px] mb-4 w-full"></div>
-                  <div className="bg-zinc-800/50 h-2 w-16 mb-2 rounded-full"></div>
-                  <div className="bg-zinc-800/50 h-4 md:h-5 w-3/4 mb-auto rounded-full"></div>
-                  <div className="bg-zinc-800/50 h-8 w-2/3 mt-6 rounded-xl"></div>
-                </div>
-              ))}
-           </div>
-        ) : tyres.length === 0 ? (
-           <div className="text-center py-32 bg-zinc-900/30 rounded-3xl border border-dashed border-zinc-800 mx-2 flex flex-col items-center gap-6">
-              <div className="p-6 bg-zinc-800/50 rounded-full text-zinc-600">
-                <ShoppingCart size={48} strokeWidth={1}/>
+        {/* ── Catalogue: filters sidebar (desktop) + products ── */}
+        <div className="lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-6 xl:gap-8">
+          <aside className="hidden lg:block" aria-label="Фільтри">
+            <div className="sticky pb-6 max-h-[calc(100vh-var(--header-h,72px)-24px)] overflow-y-auto overscroll-contain pr-1 scrollbar-hide" style={{ top: 'calc(var(--header-h, 72px) + 16px)' }}>
+              <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4">
+                <h2 className="text-xs font-black uppercase tracking-widest text-zinc-300 mb-4 flex items-center gap-2">
+                  <span className="w-1.5 h-4 bg-[#FFC300] rounded-full" /> Фільтри
+                </h2>
+                {filterPanel}
               </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-black text-white uppercase tracking-tight">Нічого не знайдено</h3>
-                <p className="text-zinc-500 text-sm max-w-xs mx-auto">Спробуйте змінити параметри фільтрації або скинути їх</p>
-              </div>
-              <button onClick={() => { resetFilters(); setActiveCategory('all'); }} className="bg-white text-black font-black px-8 py-3 rounded-xl hover:bg-[#FFC300] transition-all">Скинути все</button>
-           </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-8 px-2">
-             {tyres.map((tyre, idx) => (
-                <div key={tyre.id} className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: `${Math.min(idx * 50, 500)}ms` }}>
-                  <ProductCard 
-                    tyre={tyre} 
-                    onClick={() => handleProductClick(tyre)} 
-                    onAddToCart={(e) => { e.stopPropagation(); addToCart(tyre); }} 
-                    onQuickOrder={(p) => setQuickOrderProduct(p)}
-                    formatPrice={formatPrice}
-                  />
-                </div>
-             ))}
-          </div>
-        )}
+            </div>
+          </aside>
 
-        {hasMore && (
-          <div className="mt-20 text-center">
-            <button 
-              onClick={() => fetchTyres(page+1)} 
-              disabled={loadingMore} 
-              className="group relative bg-zinc-900 hover:bg-zinc-800 text-white font-black py-5 px-12 rounded-2xl border border-zinc-800 transition-all shadow-xl hover:shadow-yellow-900/5 flex items-center justify-center gap-4 mx-auto overflow-hidden"
-            >
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-              {loadingMore ? <Loader2 className="animate-spin" size={24}/> : <ArrowDown size={24} className="group-hover:translate-y-1 transition-transform"/>} 
-              <span className="uppercase tracking-widest text-sm">Показати ще товари</span>
-            </button>
-            <p className="mt-4 text-zinc-600 text-[10px] font-bold uppercase tracking-widest">
-              Показано {tyres.length} з {totalCount}
+          <div ref={listTopRef} onTouchStart={onListTouchStart} onTouchEnd={onListTouchEnd} className="min-w-0">
+            <SearchBar
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              onSearch={() => setDebouncedSearch(searchQuery)}
+              activeSort={activeSort}
+              setActiveSort={setActiveSort}
+              activeFilters={activeFilterCount}
+              totalCount={totalCount}
+              onOpenFilters={() => setFiltersOpen(true)}
+            />
+
+            {loading ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-5 mt-2">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="bg-zinc-900/40 rounded-2xl animate-pulse border border-zinc-800/50 flex flex-col p-3">
+                    <div className="bg-zinc-800/50 rounded-xl aspect-square mb-3 w-full"></div>
+                    <div className="bg-zinc-800/50 h-2 w-16 mb-2 rounded-full"></div>
+                    <div className="bg-zinc-800/50 h-4 w-3/4 mb-4 rounded-full"></div>
+                    <div className="bg-zinc-800/50 h-8 w-2/3 rounded-xl"></div>
+                  </div>
+                ))}
+              </div>
+            ) : tyres.length === 0 ? (
+              <div key={`empty-${String(activeCategory)}`} className={`mt-2 text-center py-16 md:py-24 bg-zinc-900/30 rounded-3xl border border-dashed border-zinc-800 flex flex-col items-center gap-5 px-4 animate-in fade-in ${slideClass} duration-300`}>
+                <div className="p-5 bg-zinc-800/50 rounded-full text-zinc-600"><ShoppingCart size={40} strokeWidth={1} /></div>
+                <div className="space-y-2">
+                  <h3 className="text-lg md:text-xl font-black text-white uppercase tracking-tight">Нічого не знайдено</h3>
+                  <p className="text-zinc-500 text-sm max-w-xs mx-auto">
+                    {activeFilterCount || searchQuery ? 'Спробуйте змінити або скинути фільтри' : 'У цій категорії поки немає товарів. Зателефонуйте — підберемо під замовлення!'}
+                  </p>
+                </div>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {(activeFilterCount > 0 || searchQuery) && <button onClick={resetFilters} className="bg-white text-black font-black px-6 py-3 rounded-xl hover:bg-[#FFC300] transition-all">Скинути фільтри</button>}
+                  <a href={shopPhoneLink} className="bg-zinc-800 text-white font-black px-6 py-3 rounded-xl hover:bg-zinc-700 transition-all flex items-center gap-2"><Phone size={16} /> {shopPhone}</a>
+                </div>
+              </div>
+            ) : (
+              <div key={`grid-${String(activeCategory)}`} className={`grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-5 mt-2 animate-in fade-in ${slideClass} duration-300`}>
+                {tyres.map((tyre, idx) => (
+                  <div key={tyre.id} className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: `${Math.min((idx % PAGE_SIZE) * 40, 400)}ms` }}>
+                    <ProductCard
+                      tyre={tyre}
+                      chips={getCardChips(getPresetForProduct(categories, tyre), tyre.attributes)}
+                      onClick={() => handleProductClick(tyre)}
+                      onAddToCart={(e) => { e.stopPropagation(); addToCart(tyre); }}
+                      onQuickOrder={(p) => setQuickOrderProduct(p)}
+                      formatPrice={formatPrice}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {hasMore && !loading && tyres.length > 0 && (
+              <div className="mt-10 md:mt-16 text-center">
+                <button
+                  onClick={() => fetchTyres(page + 1)}
+                  disabled={loadingMore}
+                  className="group relative bg-zinc-900 hover:bg-zinc-800 text-white font-black py-4 px-10 rounded-2xl border border-zinc-800 transition-all shadow-xl flex items-center justify-center gap-3 mx-auto overflow-hidden active:scale-95"
+                >
+                  {loadingMore ? <Loader2 className="animate-spin" size={20} /> : <ArrowDown size={20} className="group-hover:translate-y-1 transition-transform" />}
+                  <span className="uppercase tracking-widest text-xs md:text-sm">Показати ще</span>
+                </button>
+                <p className="mt-3 text-zinc-600 text-[10px] font-bold uppercase tracking-widest">Показано {tyres.length} з {totalCount}</p>
+              </div>
+            )}
+
+            <p className="lg:hidden mt-6 text-center text-[10px] font-bold uppercase tracking-widest text-zinc-700">
+              ← Проведіть пальцем, щоб змінити категорію →
             </p>
           </div>
-        )}
+        </div>
       </div>
+
+      <FilterSheet open={filtersOpen} onClose={() => setFiltersOpen(false)} totalCount={totalCount}>
+        {filterPanel}
+      </FilterSheet>
 
       {recentlyViewed.length > 0 && (
         <div className="max-w-7xl mx-auto px-4 mt-16 pb-12">
@@ -707,11 +798,15 @@ const TyreShop: React.FC<TyreShopProps> = ({
       )}
 
       {cartItems.length > 0 && (
-        <button onClick={() => setIsCartOpen(true)} className="fixed bottom-6 right-6 z-40 bg-[#FFC300] text-black p-4 rounded-full shadow-2xl animate-bounce hover:scale-110 transition-transform">
-           <div className="relative">
-             <ShoppingCart size={28} />
-             <div className="absolute -top-2 -right-2 bg-red-600 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-zinc-900">{cartItems.reduce((a,b)=>a+b.quantity,0)}</div>
-           </div>
+        <button
+          onClick={() => setIsCartOpen(true)}
+          key={`cart-${cartItems.length}`}
+          className="fixed right-4 md:right-6 z-[155] bg-white text-black w-14 h-14 rounded-2xl shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-transform animate-in zoom-in-50 duration-300"
+          style={{ bottom: 'calc(env(safe-area-inset-bottom) + 88px)' }}
+          aria-label="Відкрити кошик"
+        >
+          <ShoppingCart size={24} />
+          <span className="absolute -top-2 -right-2 bg-red-600 text-white text-[10px] font-bold min-w-[20px] h-5 px-1 flex items-center justify-center rounded-full border-2 border-zinc-900">{cartItems.reduce((a,b)=>a+b.quantity,0)}</span>
         </button>
       )}
 
@@ -730,6 +825,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
 
       <ProductDetailModal 
         product={selectedProductForModal} onClose={() => setSelectedProductForModal(null)} 
+        preset={selectedProductForModal ? getPresetForProduct(categories, selectedProductForModal) : null}
         addToCart={addToCart} formatPrice={formatPrice} getSeasonLabel={getSeasonLabel} renderSchema={renderSchema}
         openLightbox={(p) => { setCurrentLightboxImages([p.image_url].filter(Boolean) as string[]); setLightboxOpen(true); }}
         onQuickOrder={(p) => setQuickOrderProduct(p)}
@@ -782,7 +878,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
       )}
 
       {/* Floating Contact Hub */}
-      <div className="fixed bottom-6 right-6 z-[160] flex flex-col items-end gap-3 pointer-events-none">
+      <div className="fixed right-4 md:right-6 z-[160] flex flex-col items-end gap-3 pointer-events-none" style={{ bottom: "calc(env(safe-area-inset-bottom) + 16px)" }}>
           <div className={`flex flex-col gap-3 transition-all duration-300 transform origin-bottom ${showContactHub ? 'scale-100 opacity-100 translate-y-0 pointer-events-auto' : 'scale-50 opacity-0 translate-y-10 pointer-events-none'}`}>
               <a href={TELEGRAM_LINK} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 group">
                   <span className="bg-black/80 backdrop-blur-md border border-zinc-800 text-white text-[10px] font-black uppercase px-3 py-1.5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity shadow-2xl">Telegram</span>
@@ -800,7 +896,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
 
           <button 
             onClick={() => setShowContactHub(!showContactHub)}
-            className={`w-16 h-16 rounded-3xl flex items-center justify-center shadow-2xl transition-all duration-500 pointer-events-auto active:scale-90 ${showContactHub ? 'bg-zinc-800 text-white rotate-90' : 'bg-[#FFC300] text-black shadow-yellow-900/50'}`}
+            className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-2xl transition-all duration-500 pointer-events-auto active:scale-90 ${showContactHub ? 'bg-zinc-800 text-white rotate-90' : 'bg-[#FFC300] text-black shadow-yellow-900/50'}`}
           >
             {showContactHub ? <X size={32} /> : (
               <div className="relative">

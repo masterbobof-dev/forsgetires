@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Logo from './Logo';
 import { ViewState } from '../types';
 import { Menu, X, Phone, Lock, ShoppingBag } from 'lucide-react';
@@ -14,6 +14,24 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick, cartCount = 0 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const headerRef = useRef<HTMLElement>(null);
+
+  // Expose the header height as a CSS variable so sticky bars sit right under it
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const update = () => document.documentElement.style.setProperty('--header-h', `${el.offsetHeight}px`);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const openCart = () => {
+    if (currentView !== 'home') onChangeView('home');
+    // let the shop mount first when coming from another page
+    setTimeout(() => window.dispatchEvent(new Event('forsage:open-cart')), currentView !== 'home' ? 300 : 0);
+  };
   const [phones, setPhones] = useState({
     p1: PHONE_NUMBER_1,
     p2: PHONE_NUMBER_2,
@@ -58,22 +76,22 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-black/90 backdrop-blur-md border-b border-white/10 shadow-lg">
-      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+    <header ref={headerRef} className="sticky top-0 z-50 w-full bg-black/90 backdrop-blur-md border-b border-white/10 shadow-lg">
+      <div className="max-w-7xl mx-auto px-3 md:px-4 py-2 md:py-3 flex items-center justify-between gap-2">
 
         {/* Logo & Brand */}
         <button
           type="button"
           onClick={() => handleNavClick('home')}
-          className="flex items-center gap-3 md:gap-4 text-left rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC300] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+          className="flex items-center gap-2 md:gap-4 text-left rounded-lg min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC300] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
           aria-label="На головну"
         >
           <Logo />
           <span className="flex flex-col group">
-            <span className="font-black text-2xl md:text-3xl tracking-wide text-white italic -skew-x-12 group-hover:text-[#FFC300] transition-colors">
+            <span className="font-black text-xl sm:text-2xl md:text-3xl tracking-wide text-white italic -skew-x-12 group-hover:text-[#FFC300] transition-colors">
               ФОРСАЖ
             </span>
-            <span className="text-[10px] md:text-xs text-zinc-400 font-bold uppercase tracking-[0.2em] leading-none ml-1">
+            <span className="text-[8px] sm:text-[10px] md:text-xs text-zinc-400 font-bold uppercase tracking-[0.15em] sm:tracking-[0.2em] leading-none ml-1 whitespace-nowrap">
               Інтернет-магазин
             </span>
           </span>
@@ -117,28 +135,31 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick
                   <span className="absolute -bottom-[18px] left-0 right-0 h-[2px] bg-[#FFC300] rounded-full animate-in fade-in duration-300" />
                 )}
 
-                {/* Cart badge on Шини */}
-                {item.view === 'home' ? (
-                  <span className="relative">
-                    <ShoppingBag size={16} className="-mt-0.5" />
-                    {cartCount > 0 && (
-                      <span key={cartCount} className="absolute -top-2 -right-2 min-w-[16px] h-4 px-0.5 bg-[#FFC300] text-black text-[9px] font-black rounded-full flex items-center justify-center animate-in zoom-in duration-200">
-                        {cartCount > 99 ? '99+' : cartCount}
-                      </span>
-                    )}
-                  </span>
-                ) : null}
                 {item.label}
               </button>
             ))}
+
+            <button
+              onClick={openCart}
+              className="relative flex items-center gap-2 bg-[#FFC300] hover:bg-white text-black font-black text-xs uppercase tracking-wide px-3 py-2 rounded-xl transition-colors active:scale-95"
+              aria-label="Кошик"
+            >
+              <ShoppingBag size={16} /> Кошик
+              {cartCount > 0 && (
+                <span key={cartCount} className="min-w-[18px] h-[18px] px-1 bg-black text-[#FFC300] text-[10px] font-black rounded-full flex items-center justify-center animate-in zoom-in duration-200">
+                  {cartCount > 99 ? '99+' : cartCount}
+                </span>
+              )}
+            </button>
           </nav>
 
           {/* Mobile Controls */}
           <div className="flex items-center gap-2 md:hidden">
             {/* Cart badge — mobile */}
             <button
-              onClick={() => handleNavClick('home')}
+              onClick={openCart}
               className="relative w-9 h-9 flex items-center justify-center text-zinc-300 hover:text-[#FFC300] transition-colors"
+              aria-label="Кошик"
             >
               <ShoppingBag size={20} />
               {cartCount > 0 && (
@@ -156,14 +177,14 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick
             </a>
 
             <button
-              className="flex items-center gap-2 bg-zinc-900 border border-zinc-700 hover:border-[#FFC300] text-white px-3 py-2 rounded-xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all group"
+              className="flex items-center gap-2 bg-zinc-900 border border-zinc-700 hover:border-[#FFC300] text-white p-2 sm:px-3 sm:py-2 rounded-xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all group"
               onClick={() => setIsMenuOpen(prev => !prev)}
               aria-label="Відкрити меню"
             >
               <span className="text-[#FFC300] group-hover:text-white transition-colors">
                 {isMenuOpen ? <X size={20} /> : <Menu size={20} />}
               </span>
-              <span>Меню</span>
+              <span className="hidden sm:inline">Меню</span>
             </button>
           </div>
         </div>

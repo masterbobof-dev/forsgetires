@@ -19,6 +19,8 @@ export interface ProductCategory {
   is_active: boolean;
   kind: CategoryKind;
   vehicle_type?: string | null;
+  /** 'batteries' | 'wheels' — which characteristic filters this category uses */
+  filter_preset?: string | null;
 }
 
 /** Icons the admin can choose for a category (key -> component). */

@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { X, ShoppingCart, ZoomIn, ShieldCheck, Truck, CreditCard, Info, Snowflake, Sun, CloudSun, Ruler, Flame, Loader2, Phone, ArrowRight } from 'lucide-react';
 import { TyreProduct } from '../../types';
 import { supabase } from '../../supabaseClient';
+import { FilterPreset, formatAttr } from '../../productAttributes';
 
 interface ProductDetailModalProps {
   product: TyreProduct | null;
@@ -14,9 +15,11 @@ interface ProductDetailModalProps {
   openLightbox: (p: TyreProduct) => void;
   onQuickOrder?: (p: TyreProduct) => void;
   onSimilarClick?: (t: TyreProduct) => void;
+  /** characteristics definition for disks / batteries */
+  preset?: FilterPreset | null;
 }
 
-const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClose, addToCart, formatPrice, getSeasonLabel, renderSchema, openLightbox, onQuickOrder, onSimilarClick }) => {
+const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClose, addToCart, formatPrice, getSeasonLabel, renderSchema, openLightbox, onQuickOrder, onSimilarClick, preset }) => {
   const [similar, setSimilar] = useState<TyreProduct[]>([]);
   const [loadingSimilar, setLoadingSimilar] = useState(false);
 
@@ -63,13 +66,13 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
   const isLowStock = product.stock_quantity !== undefined && product.stock_quantity > 0 && product.stock_quantity <= 4;
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center p-2 md:p-4 animate-in fade-in duration-300" onClick={onClose}>
+    <div className="fixed inset-0 z-[170] bg-black/90 backdrop-blur-md flex items-end md:items-center justify-center p-0 md:p-4 animate-in fade-in duration-300" onClick={onClose}>
       {renderSchema(product)}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-5xl shadow-2xl relative flex flex-col md:flex-row overflow-hidden max-h-[95vh] md:max-h-[85vh]" onClick={e => e.stopPropagation()}>
-          <button onClick={onClose} className="absolute top-4 right-4 text-zinc-400 hover:text-white z-20 bg-black/50 hover:bg-black p-2 rounded-full transition-all"><X size={24} /></button>
+      <div className="bg-zinc-900 border border-zinc-800 rounded-t-3xl md:rounded-3xl w-full max-w-5xl shadow-2xl relative flex flex-col md:flex-row overflow-y-auto md:overflow-hidden overscroll-contain max-h-[94vh] md:max-h-[85vh] animate-in slide-in-from-bottom md:slide-in-from-bottom-8 md:zoom-in-95 duration-300" onClick={e => e.stopPropagation()}>
+          <button onClick={onClose} className="sticky md:absolute top-3 md:top-4 ml-auto mr-3 md:mr-0 md:right-4 -mb-12 md:mb-0 text-zinc-300 hover:text-white z-20 bg-black/60 hover:bg-black p-2 rounded-full transition-all shrink-0" aria-label="Закрити"><X size={22} /></button>
           
           {/* Image Section */}
-          <div className="w-full md:w-1/2 bg-zinc-950 flex items-center justify-center relative min-h-[350px] md:min-h-full cursor-zoom-in group" onClick={() => openLightbox(product)}>
+          <div className="w-full md:w-1/2 bg-zinc-950 flex items-center justify-center relative aspect-[4/3] md:aspect-auto md:min-h-full cursor-zoom-in group shrink-0" onClick={() => openLightbox(product)}>
               {product.image_url ? (
                   <img src={product.image_url} className="w-full h-full object-contain p-4 md:p-8 transition-transform duration-500 group-hover:scale-105" alt={product.title} referrerPolicy="no-referrer" />
               ) : (
@@ -91,7 +94,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
           </div>
 
           {/* Info Section */}
-          <div className="w-full md:w-1/2 p-6 md:p-10 overflow-y-auto bg-zinc-900 flex flex-col">
+          <div className="w-full md:w-1/2 p-5 md:p-10 md:overflow-y-auto bg-zinc-900 flex flex-col pb-[max(1.25rem,env(safe-area-inset-bottom))]">
               <div className="mb-8">
                 <div className="flex items-center gap-2 mb-3">
                   <span className="bg-[#FFC300] text-black px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter">
@@ -120,6 +123,24 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                    )}
                 </div>
               </div>
+
+              {preset && product.attributes && preset.fields.some(f => formatAttr(f, product.attributes?.[f.key])) && (
+                <div className="mb-6 rounded-2xl border border-zinc-800 overflow-hidden">
+                  <h3 className="text-zinc-500 text-[10px] font-black uppercase tracking-widest px-4 py-2.5 bg-zinc-800/40">Характеристики</h3>
+                  <dl className="divide-y divide-zinc-800">
+                    {preset.fields.map(f => {
+                      const v = formatAttr(f, product.attributes?.[f.key]);
+                      if (!v) return null;
+                      return (
+                        <div key={f.key} className="flex justify-between gap-4 px-4 py-2.5 text-sm">
+                          <dt className="text-zinc-500">{f.label}</dt>
+                          <dd className="text-white font-bold text-right">{v}</dd>
+                        </div>
+                      );
+                    })}
+                  </dl>
+                </div>
+              )}
 
               {/* Specs Grid */}
               <div className="grid grid-cols-2 gap-4 mb-8">
@@ -166,36 +187,36 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                 </div>
               </div>
 
-              <div className="sticky bottom-0 bg-zinc-900 border-t border-zinc-800 pt-4 pb-4 md:pb-0 mt-auto z-40 -mx-6 px-6 md:mx-0 md:px-0">
-                <div className="flex items-center justify-between mb-6">
-                    <div className="flex flex-col">
-                      <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-1">Ціна за штаку</span>
-                      <span className="text-4xl font-black text-[#FFC300] drop-shadow-[0_0_10px_rgba(255,195,0,0.2)]">
-                        {formatPrice(product.price)} <span className="text-sm text-white font-normal uppercase">грн</span>
-                      </span>
-                    </div>
-                </div>
-                <div className="flex flex-col gap-3">
-                  <button 
-                    disabled={isOutOfStock}
-                    onClick={() => { addToCart(product); onClose(); }} 
-                    className={`w-full py-5 rounded-2xl font-black text-lg flex items-center justify-center gap-3 uppercase tracking-widest transition-all active:scale-95 shadow-xl ${
-                      isOutOfStock 
-                        ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed' 
-                        : 'bg-white text-black hover:bg-[#FFC300] hover:shadow-yellow-400/20'
-                    }`}
-                  >
-                    <ShoppingCart size={24} strokeWidth={2.5} /> {isOutOfStock ? 'Немає' : 'Додати у кошик'}
-                  </button>
-                  
-                  {!isOutOfStock && onQuickOrder && (
-                    <button 
-                      onClick={() => { onQuickOrder(product); onClose(); }}
-                      className="w-full py-4 rounded-2xl font-black text-xs text-[#FFC300] border border-[#FFC300]/30 hover:bg-[#FFC300]/10 hover:border-[#FFC300] transition-all uppercase tracking-widest flex items-center justify-center gap-2"
+              <div className="sticky bottom-0 bg-zinc-900/95 backdrop-blur border-t border-zinc-800 py-3 md:pt-4 md:pb-0 mt-auto z-40 -mx-5 px-5 md:mx-0 md:px-0">
+                <div className="flex items-center gap-3 md:flex-col md:items-stretch">
+                  <div className="flex flex-col shrink-0 md:mb-3">
+                    <span className="text-[9px] md:text-[10px] text-zinc-500 font-bold uppercase tracking-widest md:mb-1">Ціна за штуку</span>
+                    <span className="text-2xl md:text-4xl font-black text-[#FFC300] drop-shadow-[0_0_10px_rgba(255,195,0,0.2)] whitespace-nowrap">
+                      {formatPrice(product.price)} <span className="text-xs md:text-sm text-white font-normal uppercase">грн</span>
+                    </span>
+                  </div>
+                  <div className="flex flex-1 gap-2 md:flex-col md:gap-3">
+                    <button
+                      disabled={isOutOfStock}
+                      onClick={() => { addToCart(product); onClose(); }}
+                      className={`flex-1 py-3.5 md:py-5 rounded-2xl font-black text-xs sm:text-sm md:text-lg flex items-center justify-center gap-2 md:gap-3 uppercase tracking-wider md:tracking-widest transition-all active:scale-95 shadow-xl ${
+                        isOutOfStock
+                          ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
+                          : 'bg-white text-black hover:bg-[#FFC300] hover:shadow-yellow-400/20'
+                      }`}
                     >
-                      <Phone size={14} /> Купити в 1 клік
+                      <ShoppingCart size={20} strokeWidth={2.5} /> {isOutOfStock ? 'Немає' : <><span className="sm:hidden">У кошик</span><span className="hidden sm:inline">Додати у кошик</span></>}
                     </button>
-                  )}
+                    {!isOutOfStock && onQuickOrder && (
+                      <button
+                        onClick={() => { onQuickOrder(product); onClose(); }}
+                        className="shrink-0 px-4 md:w-full md:py-4 rounded-2xl font-black text-xs text-[#FFC300] border border-[#FFC300]/30 hover:bg-[#FFC300]/10 hover:border-[#FFC300] transition-all uppercase tracking-widest flex items-center justify-center gap-2"
+                        aria-label="Купити в 1 клік"
+                      >
+                        <Phone size={16} /> <span className="hidden md:inline">Купити в 1 клік</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 

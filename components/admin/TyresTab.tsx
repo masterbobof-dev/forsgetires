@@ -9,6 +9,7 @@ import AiSortModal from './AiSortModal';
 import { invokeAiProxy } from '../../aiProxyClient';
 import { normalizeQuery } from './sync/syncUtils';
 import { useCategories, buildCategoryFilter, getRootCategories, getChildren, isTyreProduct, ProductCategory } from '../../categories';
+import { getPresetForCategory, suggestTitle } from '../../productAttributes';
 
 const PAGE_SIZE = 50;
 
@@ -114,6 +115,7 @@ const TyresTab: React.FC = () => {
       seo_keywords: '',
       slug: ''
   });
+  const [attrForm, setAttrForm] = useState<Record<string, string>>({});
   const [tyreUploadFiles, setTyreUploadFiles] = useState<File[]>([]);
   const [existingGallery, setExistingGallery] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -725,6 +727,7 @@ const TyresTab: React.FC = () => {
 
   const formCategoryForUi = categories.find(c => String(c.id) === tyreForm.category_id);
   const isTyreForm = !formCategoryForUi || formCategoryForUi.kind === 'tyre';
+  const formPreset = isTyreForm ? null : getPresetForCategory(categories, formCategoryForUi);
 
   const handleSaveTyre = async () => {
     setUploading(true);
@@ -744,7 +747,17 @@ const TyresTab: React.FC = () => {
       if (!isTyre) {
         const name = tyreForm.name.trim();
         const brand = tyreForm.manufacturer.trim();
-        const genericTitle = brand && !name.toLowerCase().startsWith(brand.toLowerCase()) ? `${brand} ${name}` : name;
+        const preset = getPresetForCategory(categories, formCategory);
+        const cleanAttrs: Record<string, string> = {};
+        if (preset) for (const f of preset.fields) {
+          let v = (attrForm[f.key] || '').trim().replace(',', '.');
+          if (f.key === 'pcd') v = v.replace(/\s*[хХ×*xX]\s*/g, 'x');          // 5х112 → 5x112
+          if (f.key === 'size') v = v.replace(/\s*[хХ*xX×]\s*/g, '×');         // 242x175x190 → 242×175×190
+          if (v) cleanAttrs[f.key] = v;
+        }
+        const genericTitle = !name && preset
+          ? suggestTitle(preset, brand, cleanAttrs)
+          : brand && !name.toLowerCase().startsWith(brand.toLowerCase()) ? `${brand} ${name}` : name;
         const genericPayload: any = {
           title: genericTitle.replace(/\s+/g, ' ').trim(),
           description: tyreForm.description || null,
@@ -758,6 +771,7 @@ const TyresTab: React.FC = () => {
           season: null,
           axis: null,
           category_id: formCategory!.id,
+          attributes: cleanAttrs,
           seo_title: tyreForm.seo_title || null,
           seo_description: tyreForm.seo_description || null,
           seo_keywords: tyreForm.seo_keywords || null,
@@ -769,7 +783,7 @@ const TyresTab: React.FC = () => {
           stock_quantity: tyreForm.stock_quantity ? parseInt(tyreForm.stock_quantity) : 0,
           in_stock: true
         };
-        if (!genericPayload.title) throw new Error('Вкажіть назву товару');
+        if (!genericPayload.title || genericPayload.title === 'Акумулятор' || genericPayload.title === 'Диск') throw new Error('Вкажіть назву товару або заповніть характеристики');
         const { error } = editingTyreId
           ? await supabase.from('tyres').update(genericPayload).eq('id', editingTyreId)
           : await supabase.from('tyres').insert([genericPayload]);
@@ -849,6 +863,7 @@ const TyresTab: React.FC = () => {
           name = brand && t.title.toLowerCase().startsWith(brand.toLowerCase()) ? t.title.slice(brand.length).trim() : t.title;
       }
 
+      setAttrForm(Object.fromEntries(Object.entries(t.attributes || {}).map(([k, v]) => [k, String(v ?? '')])));
       setTyreForm({ 
         category_id: t.category_id ? String(t.category_id) : '',
         manufacturer: t.manufacturer || '', 
@@ -1430,7 +1445,45 @@ const TyresTab: React.FC = () => {
                                     </div>
                                 )}
                                 <div><label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Виробник (Бренд)</label><input list="brands" value={tyreForm.manufacturer} onChange={e => setTyreForm({...tyreForm, manufacturer: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-bold" placeholder="Напр. Michelin"/><datalist id="brands">{KNOWN_BRANDS.map(b => <option key={b} value={b}/>)}</datalist></div>
-                                <div><label className="block text-[#FFC300] text-xs font-bold uppercase mb-1">{isTyreForm ? 'Назва (Модель)' : 'Назва товару'}</label><input type="text" value={tyreForm.name} onChange={e => setTyreForm({...tyreForm, name: e.target.value})} className="w-full bg-black border border-[#FFC300]/50 rounded-lg p-3 text-white font-bold" placeholder={isTyreForm ? 'Напр. Alpin 6' : 'Напр. Акумулятор 6СТ-60 Аз'}/></div>
+                                <div><label className="block text-[#FFC300] text-xs font-bold uppercase mb-1">{isTyreForm ? 'Назва (Модель)' : 'Назва товару'}</label><input type="text" value={tyreForm.name} onChange={e => setTyreForm({...tyreForm, name: e.target.value})} className="w-full bg-black border border-[#FFC300]/50 rounded-lg p-3 text-white font-bold" placeholder={isTyreForm ? 'Напр. Alpin 6' : formPreset ? 'Можна залишити порожнім' : 'Напр. Акумулятор 6СТ-60 Аз'}/>
+                                    {formPreset && !tyreForm.name.trim() && (
+                                        <p className="text-[11px] text-zinc-500 mt-1">Назва складеться сама: <span className="text-zinc-300">{suggestTitle(formPreset, tyreForm.manufacturer.trim(), attrForm)}</span></p>
+                                    )}
+                                </div>
+                                {formPreset && (
+                                    <div className="bg-zinc-800/60 border border-zinc-700 rounded-xl p-3 space-y-3 animate-in fade-in slide-in-from-top-1">
+                                        <p className="text-xs font-black uppercase tracking-widest text-emerald-400">Характеристики (для фільтрів на сайті)</p>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {formPreset.fields.map(f => (
+                                                <div key={f.key} className={f.type === 'select' && (f.options?.length || 0) <= 3 ? 'col-span-2' : ''}>
+                                                    <label className="block text-zinc-400 text-[11px] font-bold uppercase mb-1">{f.label}{f.unit ? `, ${f.unit}` : ''}</label>
+                                                    {f.type === 'select' && f.options ? (
+                                                        (f.options.length <= 3) ? (
+                                                            <div className="flex gap-1.5">
+                                                                {f.options.map(o => (
+                                                                    <button key={o.value} type="button" onClick={() => setAttrForm(prev => ({ ...prev, [f.key]: prev[f.key] === o.value ? '' : o.value }))}
+                                                                        className={`flex-1 px-2 py-2 rounded-lg border text-xs font-bold transition-colors ${attrForm[f.key] === o.value ? 'bg-[#FFC300] text-black border-[#FFC300]' : 'bg-black border-zinc-700 text-zinc-300 hover:border-zinc-500'}`}>
+                                                                        {o.label}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <select value={attrForm[f.key] || ''} onChange={e => setAttrForm(prev => ({ ...prev, [f.key]: e.target.value }))} className="w-full bg-black border border-zinc-700 rounded-lg p-2.5 text-white text-sm">
+                                                                <option value="">—</option>
+                                                                {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                                            </select>
+                                                        )
+                                                    ) : (
+                                                        <input type="text" inputMode={f.type === 'number' ? 'decimal' : 'text'} value={attrForm[f.key] || ''} placeholder={f.placeholder}
+                                                            onChange={e => setAttrForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+                                                            className="w-full bg-black border border-zinc-700 rounded-lg p-2.5 text-white text-sm" />
+                                                    )}
+                                                    {f.hint && <p className="text-[10px] text-zinc-500 mt-0.5">{f.hint}</p>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                                 {isTyreForm && <>
                                 <div className="grid grid-cols-3 gap-2">
                                     <div><label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Ширина</label><input type="text" value={tyreForm.width} onChange={e => setTyreForm({...tyreForm, width: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white text-center" placeholder="205"/></div>

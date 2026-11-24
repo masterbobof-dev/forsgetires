@@ -396,8 +396,8 @@ const TyreShop: React.FC<TyreShopProps> = ({
       setFilterOptions({
         brands: Array.from(brands).sort((a, b) => a.localeCompare(b)),
         radii: Array.from(radii).sort((a, b) => parseFloat(a.replace(/[^\d.]/g, '')) - parseFloat(b.replace(/[^\d.]/g, ''))),
-        widths: Array.from(widths).sort(),
-        heights: Array.from(heights).sort(),
+        widths: Array.from(widths).sort((a, b) => +a - +b),
+        heights: Array.from(heights).sort((a, b) => +a - +b),
       });
       setAttrValues(Object.fromEntries(Object.entries(attrs).map(([k, set]) => [k, sortAttrValues(Array.from(set))])));
     })();
@@ -831,6 +831,19 @@ const TyreShop: React.FC<TyreShopProps> = ({
         </header>
 
         <CategoryNav categories={categories} active={activeCategory} onChange={changeCategory} favoritesCount={favorites.ids.length} />
+
+        {/* Tyres: size picker right under the sections (only sizes that are in stock) */}
+        {showTyreFilters && (
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            {([['Ширина', filterWidth, setFilterWidth, filterOptions.widths], ['Висота', filterHeight, setFilterHeight, filterOptions.heights], ['R', filterRadius, setFilterRadius, filterOptions.radii.filter(x => /^R\d/i.test(x))]] as const).map(([label, val, set, opts]) => (
+              <select key={label} aria-label={label === 'R' ? 'Радіус' : label} value={val} onChange={e => (set as (v: string) => void)(e.target.value)}
+                className={`w-full bg-zinc-900 border rounded-xl px-3 py-3 font-bold text-sm outline-none focus:border-[#FFC300] ${val ? 'border-[#FFC300] text-[#FFC300]' : 'border-zinc-800 text-white'}`}>
+                <option value="">{label}</option>
+                {(opts as readonly string[]).map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
+            ))}
+          </div>
+        )}
 
         {activeCategory === 'all' && !debouncedSearch.trim() && activeFilterCount === 0 && (
           <HomeShowcase

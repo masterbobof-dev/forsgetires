@@ -149,6 +149,20 @@ const ProductPhotos: React.FC<{ product: Product; maxPhotos: number; onDone: () 
  * no ticked photo is marked "no good photo". 60 products per page.
  */
 const PAGE = 60;
+/** true if the browser can really load and show the picture (3 attempts) */
+const imageOpens = async (url: string) => {
+  for (let i = 0; i < 3; i++) {
+    const ok = await new Promise<boolean>(res => {
+      const img = new Image(); const timer = setTimeout(() => res(false), 15000);
+      img.onload = () => { clearTimeout(timer); res(img.naturalWidth >= 100 && img.naturalHeight >= 100); };
+      img.onerror = () => { clearTimeout(timer); res(false); };
+      img.src = url + (i ? `?r=${i}` : '');
+    });
+    if (ok) return true;
+    await new Promise(r => setTimeout(r, 700 * (i + 1)));
+  }
+  return false;
+};
 const QuickReview: React.FC<{ onChanged: () => void; waiting: number }> = ({ onChanged, waiting }) => {
   const [items, setItems] = useState<Product[]>([]);
   const [total, setTotal] = useState(0);
@@ -156,9 +170,17 @@ const QuickReview: React.FC<{ onChanged: () => void; waiting: number }> = ({ onC
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
+  // photos the browser could not show (after retries): they can never be saved
+  const [failed, setFailed] = useState<Set<string>>(new Set());
+  const [tries, setTries] = useState<Record<string, number>>({});
+  const onImgError = (url: string) => {
+    const n = (tries[url] || 0) + 1;
+    if (n > 3) { setFailed(f => new Set(f).add(url)); return; }
+    setTimeout(() => setTries(t => ({ ...t, [url]: n })), 800 * n); // try again a bit later
+  };
 
   const load = useCallback(async () => {
-    setLoading(true);
+    setLoading(true); setFailed(new Set()); setTries({});
     const { data, count } = await supabase.from('tyres').select('id, title, manufacturer, photo_candidates', { count: 'exact' })
       .eq('photo_review', true).order('id').range(0, PAGE - 1);
     setItems((data as Product[]) || []); setTotal(count || 0); setOff(new Set()); setLoading(false);
@@ -174,14 +196,27 @@ const QuickReview: React.FC<{ onChanged: () => void; waiting: number }> = ({ onC
 
   const tiles = items.flatMap(p => (p.photo_candidates || []).filter(c => c.stored).map((c, i) => ({ p, c, first: i === 0 })));
   const toggle = (url: string) => setOff(s => { const n = new Set(s); n.has(url) ? n.delete(url) : n.add(url); return n; });
-  const keepCount = tiles.filter(t => !off.has(t.c.url)).length;
+  const keepCount = tiles.filter(t => !off.has(t.c.url) && !failed.has(t.c.url)).length;
 
   const save = async () => {
     setSaving(true); setMsg('');
     try {
-      const payload = items.map(p => ({ product_id: p.id, urls: (p.photo_candidates || []).filter(c => c.stored && !off.has(c.url)).map(c => c.url) }));
+      // control: every photo that is going to be saved must really open in the browser
+      const kept = tiles.filter(t => !off.has(t.c.url) && !failed.has(t.c.url));
+      const broken = new Set<string>(failed);
+      let next = 0;
+      await Promise.all(Array.from({ length: 6 }, async () => {
+        while (next < kept.length) { const t = kept[next++]; if (!(await imageOpens(t.c.stored!.full))) broken.add(t.c.url); }
+      }));
+      setFailed(broken);
+      const payload = items.map(p => {
+        const chosen = (p.photo_candidates || []).filter(c => c.stored && !off.has(c.url));
+        const good = chosen.filter(c => !broken.has(c.url));
+        // all chosen photos turned out broken → the product is not touched and stays for the next check
+        return chosen.length && !good.length ? null : { product_id: p.id, urls: good.map(c => c.url) };
+      }).filter(Boolean);
       const r = await call({ action: 'staff.bulk_save', items: payload });
-      setMsg(`Збережено: ${r.attached} товарів з фото, ${r.rejected} без фото`);
+      setMsg(`Збережено: ${r.attached} товарів з фото, ${r.rejected} без фото${broken.size ? `. Фото, що не відкрились (не збережено): ${broken.size}` : ''}`);
       onChanged(); await load();
     } catch (e: any) { setMsg(`Помилка: ${e.message}`); } finally { setSaving(false); }
   };
@@ -198,11 +233,17 @@ const QuickReview: React.FC<{ onChanged: () => void; waiting: number }> = ({ onC
       {msg && <p className="text-sm text-green-400">{msg}</p>}
       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-8 gap-2">
         {tiles.map(({ p, c, first }) => {
-          const on = !off.has(c.url);
+          const bad = failed.has(c.url);
+          const on = !off.has(c.url) && !bad;
+          const n = tries[c.url] || 0;
           return (
-            <button key={p.id + c.url} type="button" onClick={() => toggle(c.url)} title={p.title}
+            <button key={p.id + c.url} type="button" onClick={() => !bad && toggle(c.url)} title={p.title}
               className={`relative rounded-lg overflow-hidden border-2 text-left transition-all ${on ? 'border-green-600' : 'border-red-600 opacity-40'}`}>
-              <div className="aspect-square bg-white"><img src={c.stored!.thumb} alt="" loading="lazy" className="w-full h-full object-contain" /></div>
+              <div className="aspect-square bg-white">
+                {bad
+                  ? <span className="w-full h-full flex items-center justify-center text-center text-[10px] font-bold text-red-600 p-1">Фото не відкрилось — не буде збережено</span>
+                  : <img key={n} src={c.stored!.thumb + (n ? `?r=${n}` : '')} alt="" loading="lazy" onError={() => onImgError(c.url)} className="w-full h-full object-contain" />}
+              </div>
               <span className={`absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center ${on ? 'bg-green-600' : 'bg-red-600'} text-white`}>{on ? <Check size={12} /> : <X size={12} />}</span>
               <span className={`block px-1 py-0.5 text-[10px] leading-tight line-clamp-2 min-h-[2.2em] ${first ? 'text-zinc-200' : 'text-zinc-600'} bg-zinc-950`}>{first ? p.title : '↳ інший ракурс'}</span>
             </button>
@@ -213,7 +254,7 @@ const QuickReview: React.FC<{ onChanged: () => void; waiting: number }> = ({ onC
         <button onClick={save} disabled={saving} className="bg-[#FFC300] hover:bg-white text-black font-black text-sm px-5 py-2.5 rounded-xl flex items-center gap-2 disabled:opacity-50">
           {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Зберегти {total > items.length ? 'і далі' : ''}
         </button>
-        <span className="text-xs text-zinc-400">Залишаю {keepCount} фото, знято {off.size}</span>
+        <span className="text-xs text-zinc-400">Залишаю {keepCount} фото, знято {off.size}{failed.size ? `, не відкрились: ${failed.size}` : ''}{saving ? ' — перевіряю, що всі фото відкриваються…' : ''}</span>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Sparkles, Search, Loader2, Check, X, ImageOff, RefreshCw, Save, Settings2, ExternalLink, AlertCircle, Play, Square } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Sparkles, Search, Loader2, Check, X, ImageOff, RefreshCw, Save, Settings2, ExternalLink, AlertCircle, Play, Square, ChevronRight } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useCategories } from '../../categories';
 
@@ -149,6 +149,14 @@ const ProductPhotos: React.FC<{ product: Product; maxPhotos: number; onDone: () 
  * no ticked photo is marked "no good photo". 60 products per page.
  */
 const PAGE = 60;
+type ListKind = 'auto' | 'without' | 'notfound';
+const LIST_PAGE = 40;
+const LIST_TITLES: Record<ListKind, string> = { auto: 'Товари з фото від ШІ', without: 'Товари ще без фото', notfound: 'Гарного фото не знайдено' };
+const LIST_HINTS: Record<ListKind, string> = {
+  auto: 'Натисніть на товар, щоб подивитися або замінити фото.',
+  without: 'Натисніть на товар, щоб знайти для нього фото вручну. Або запустіть пошук для цілої категорії в кроці 1.',
+  notfound: 'ШІ не знайшов для цих товарів фото на білому фоні. Натисніть на товар — можна змінити запит пошуку і вибрати фото самому.',
+};
 /** true if the browser can really load and show the picture (3 attempts) */
 const imageOpens = async (url: string) => {
   for (let i = 0; i < 3; i++) {
@@ -297,6 +305,8 @@ const LaunchPanel: React.FC<{ onProgress: () => void }> = ({ onProgress }) => {
   };
 
   const left = (status?.to_search || 0) + (status?.to_download || 0);
+  const runTotal = Number(status?.run_total) || 0, runFound = Number(status?.run_found) || 0, runNone = Number(status?.run_none) || 0;
+  const done = Math.min(runTotal, runFound + runNone);
   const running = status?.running && left > 0;
   const field = 'mt-1 w-full bg-black border border-zinc-700 rounded-xl px-3 h-11 text-sm text-white outline-none focus:border-[#FFC300]';
   return (
@@ -327,10 +337,16 @@ const LaunchPanel: React.FC<{ onProgress: () => void }> = ({ onProgress }) => {
       {running ? (
         <div className="flex flex-wrap items-center gap-3 bg-green-500/10 border border-green-500/30 rounded-xl px-3 py-2.5">
           <Loader2 size={16} className="animate-spin text-green-400 shrink-0" />
-          <p className="text-sm text-green-300 flex-1 min-w-[200px]">Пошук іде — залишилось <b>{left}</b> товарів (приблизно {Math.max(1, Math.ceil(left / 30))} хв). Сторінку можна закрити, фото з'являться у кроці 2.</p>
+          <p className="text-sm text-green-300 flex-1 min-w-[200px]">
+            Пошук іде — готово <b>{done}</b> з <b>{runTotal}</b>
+            <span className="text-green-300/70"> · з фото {runFound}, без фото {runNone} · залишилось {left} (≈{Math.max(1, Math.ceil(left / 30))} хв)</span>
+          </p>
           <button onClick={stop} disabled={busy} className="shrink-0 bg-zinc-800 hover:bg-red-600 text-white font-bold text-xs px-3 py-2 rounded-lg flex items-center gap-1.5"><Square size={12} /> Зупинити</button>
         </div>
-      ) : msg ? <p className="text-sm text-zinc-300">{msg}</p> : null}
+      ) : msg ? <p className="text-sm text-zinc-300">{msg}</p> : runTotal > 0 ? (
+        <p className="text-sm text-zinc-400 flex items-center gap-2"><Check size={16} className="text-green-500 shrink-0" />
+          Останній пошук завершено: {runTotal} товарів — з фото <b className="text-white">{runFound}</b>, без фото <b className="text-white">{runNone}</b>.</p>
+      ) : null}
     </div>
   );
 };
@@ -384,6 +400,29 @@ const PhotoFinderTab: React.FC = () => {
     setResults((data as Product[]) || []); setPicked(null);
   };
 
+  // a click on a counter opens the list of those goods in step 2 (photos can be added by hand there)
+  const [listKind, setListKind] = useState<ListKind | null>(null);
+  const [listTotal, setListTotal] = useState(0);
+  const [listLoading, setListLoading] = useState(false);
+  const step2 = useRef<HTMLDivElement>(null);
+  const loadList = async (kind: ListKind, from = 0) => {
+    setListLoading(true);
+    let q = supabase.from('tyres').select(FIELDS + ', photo_search_error', { count: 'exact' });
+    if (kind === 'auto') q = q.eq('photo_auto', true).order('id', { ascending: false });
+    else if (kind === 'without') q = q.not('program_product_id', 'is', null).neq('in_stock', false).is('image_url', null).order('stock_quantity', { ascending: false });
+    else q = q.is('image_url', null).eq('photo_review', false).not('photo_search_error', 'is', null).order('stock_quantity', { ascending: false });
+    const { data, count } = await q.range(from, from + LIST_PAGE - 1);
+    setResults(r => from ? [...r, ...((data as Product[]) || [])] : ((data as Product[]) || []));
+    setListTotal(count || 0); setListLoading(false);
+  };
+  const openList = (kind: 'review' | ListKind) => {
+    setPicked(null); setTerm('');
+    if (kind === 'review') { setListKind(null); setView('quick'); setResults([]); }
+    else { setListKind(kind); setView('search'); loadList(kind); }
+    setTimeout(() => step2.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  };
+  const closeList = () => { setListKind(null); setResults([]); setPicked(null); };
+
   const [showSettings, setShowSettings] = useState(false);
   const [notFound, setNotFound] = useState(0);
   useEffect(() => { supabase.rpc('photo_status_staff').then(({ data }) => setNotFound(Number((data as any)?.not_found) || 0)); }, [queueCount]);
@@ -404,12 +443,16 @@ const PhotoFinderTab: React.FC = () => {
     settings.photo_finder_no_text !== '0' ? 'без написів' : '',
     `від ${settings.photo_finder_min_size || '600'}px`,
   ].filter(Boolean).join(' · ');
-  const stat = (label: string, value: number, accent = false) => (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3">
-      <p className={`text-2xl font-black leading-none ${accent && value > 0 ? 'text-[#FFC300]' : 'text-white'}`}>{value}</p>
-      <p className="text-[11px] text-zinc-500 mt-1.5 leading-tight">{label}</p>
-    </div>
-  );
+  const stat = (label: string, value: number, kind: 'review' | ListKind, accent = false) => {
+    const on = kind === 'review' ? view === 'quick' && !listKind : listKind === kind;
+    return (
+      <button type="button" onClick={() => openList(kind)}
+        className={`text-left bg-zinc-900 border rounded-2xl px-4 py-3 transition-colors hover:border-[#FFC300] ${on ? 'border-[#FFC300]' : 'border-zinc-800'}`}>
+        <p className={`text-2xl font-black leading-none ${accent && value > 0 ? 'text-[#FFC300]' : 'text-white'}`}>{value}</p>
+        <p className="text-[11px] text-zinc-500 mt-1.5 leading-tight flex items-center justify-between gap-1">{label}<ChevronRight size={14} className="shrink-0 text-zinc-600" /></p>
+      </button>
+    );
+  };
 
   return (
     <div className="space-y-5 animate-in fade-in duration-300 max-w-6xl">
@@ -419,10 +462,10 @@ const PhotoFinderTab: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {stat('чекають вашої перевірки', queueCount, true)}
-        {stat('товарів уже з фото від ШІ', stats.withAuto)}
-        {stat('товарів ще без фото', stats.without)}
-        {stat('гарного фото не знайдено', notFound)}
+        {stat('чекають вашої перевірки', queueCount, 'review', true)}
+        {stat('товарів уже з фото від ШІ', stats.withAuto, 'auto')}
+        {stat('товарів ще без фото', stats.without, 'without')}
+        {stat('гарного фото не знайдено', notFound, 'notfound')}
       </div>
 
       {/* Step 1 */}
@@ -471,9 +514,11 @@ const PhotoFinderTab: React.FC = () => {
       </div>
 
       {/* Step 2 */}
-      <div className={card}>
-        {stepTitle(2, `Перевірити знайдені фото${queueCount ? ` (${queueCount})` : ''}`,
-          <select value={view} onChange={e => setView(e.target.value as typeof view)} aria-label="Спосіб перевірки"
+      <div ref={step2} className={`${card} scroll-mt-32`}>
+        {stepTitle(2, listKind ? `${LIST_TITLES[listKind]} (${listTotal})` : `Перевірити знайдені фото${queueCount ? ` (${queueCount})` : ''}`,
+          listKind
+            ? <button onClick={closeList} className="h-9 px-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-zinc-200 flex items-center gap-1.5"><X size={14} /> Закрити список</button>
+            : <select value={view} onChange={e => { setView(e.target.value as typeof view); setResults([]); setPicked(null); }} aria-label="Спосіб перевірки"
             className="bg-black border border-zinc-700 rounded-lg px-2 h-9 text-xs text-zinc-300 outline-none focus:border-[#FFC300]">
             <option value="quick">Усі разом (швидко)</option>
             <option value="queue">По одному товару</option>
@@ -492,7 +537,7 @@ const PhotoFinderTab: React.FC = () => {
         )
       ) : (
         <div className="space-y-3">
-          <div className="flex gap-2">
+          <div className={`flex gap-2 ${listKind ? 'hidden' : ''}`}>
             <div className="relative flex-1">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
               <input value={term} onChange={e => setTerm(e.target.value)} onKeyDown={e => e.key === 'Enter' && doSearch()}
@@ -500,6 +545,7 @@ const PhotoFinderTab: React.FC = () => {
             </div>
             <button onClick={doSearch} className="bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm px-4 rounded-xl">Знайти</button>
           </div>
+          {listKind && !picked && <p className="text-xs text-zinc-500">{LIST_HINTS[listKind]}</p>}
           {!picked && results.length > 0 && (
             <div className="bg-black/40 border border-zinc-800 rounded-2xl divide-y divide-zinc-800">
               {results.map(p => (
@@ -507,15 +553,22 @@ const PhotoFinderTab: React.FC = () => {
                   <div className="w-10 h-10 shrink-0 rounded bg-white overflow-hidden flex items-center justify-center">
                     {p.image_url ? <img src={p.image_url} alt="" className="w-full h-full object-contain" /> : <ImageOff size={14} className="text-zinc-400" />}
                   </div>
-                  <span className="text-sm text-white">{p.title}</span>
+                  <span className="text-sm text-white flex-1 min-w-0">{p.title}</span>
+                  <span className="shrink-0 text-xs font-bold text-[#FFC300]">{p.image_url ? 'Змінити' : 'Додати фото'} →</span>
                 </button>
               ))}
             </div>
           )}
+          {listKind && !picked && results.length < listTotal && (
+            <button onClick={() => loadList(listKind, results.length)} disabled={listLoading} className="w-full h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm font-bold text-zinc-200 flex items-center justify-center gap-2">
+              {listLoading ? <Loader2 size={16} className="animate-spin" /> : null} Показати ще ({listTotal - results.length})
+            </button>
+          )}
+          {listKind && !picked && !listLoading && results.length === 0 && <p className="text-zinc-500 text-sm text-center py-6">Тут поки порожньо.</p>}
           {picked && (
             <>
               <button onClick={() => setPicked(null)} className="text-xs text-zinc-400 hover:text-white">← до результатів</button>
-              <ProductPhotos product={picked} maxPhotos={maxPhotos} onDone={() => { setPicked(null); loadQueue(); }} />
+              <ProductPhotos product={picked} maxPhotos={maxPhotos} onDone={() => { setPicked(null); loadQueue(); if (listKind) loadList(listKind); }} />
             </>
           )}
         </div>

@@ -12,6 +12,7 @@ import { FilterPanel, SearchBar, FilterSheet, FilterState, SortValue, countActiv
 import ProductCard from './shop/ProductCard';
 import { useCategories, buildCategoryFilter, getCategoryPath, getRootOf, getRootCategories, getChildren, isTyreProduct } from '../categories';
 import { getPresetForCategory, getPresetForProduct, getCardChips, sortAttrValues } from '../productAttributes';
+import { productPath, productIdFromLocation } from '../productUrl';
 import AgroBanner from './shop/AgroBanner';
 import SeoContentBlock from './shop/SeoContentBlock';
 import { logAnalyticsEvent } from './admin/analytics';
@@ -123,11 +124,11 @@ const TyreShop: React.FC<TyreShopProps> = ({
   }, [categoriesLoading]);
 
   useEffect(() => {
-    if (categoriesLoading) return;
+    if (categoriesLoading || window.location.pathname.startsWith('/p/')) return;
     const url = new URL(window.location.href);
     if (activeCategory === 'all') url.searchParams.delete('c');
     else url.searchParams.set('c', activeCategory === 'hot' ? 'akcii' : (activeCat?.slug || ''));
-    window.history.replaceState({}, '', url.toString());
+    window.history.replaceState(window.history.state, '', url.toString());
   }, [activeCategory, categoriesLoading]);
 
   const [activeSort, setActiveSort] = useState<SortValue>('newest');
@@ -187,18 +188,63 @@ const TyreShop: React.FC<TyreShopProps> = ({
   const [quickOrderSending, setQuickOrderSending] = useState(false);
   const [showContactHub, setShowContactHub] = useState(false);
 
-  // --- LOGIC: HANDLE INITIAL PRODUCT & URL SYNC ---
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const productId = urlParams.get('p') || urlParams.get('product');
+  // --- LOGIC: PRODUCT WINDOW <-> ADDRESS (/p/<id>-<slug>) ---
+  /** Open the product window and give it its own address; "Back" closes it again. */
+  const openProduct = (p: TyreProduct, opts: { replace?: boolean } = {}) => {
+    setSelectedProductForModal(p);
+    const path = productPath(p);
+    if (window.location.pathname === path) return;
+    const state = { forsageProduct: p.id };
+    if (opts.replace || window.history.state?.forsageProduct) window.history.replaceState(state, '', path);
+    else window.history.pushState(state, '', path);
+  };
+  const closeProduct = () => {
+    if (window.history.state?.forsageProduct) { window.history.back(); return; } // popstate closes the window
+    setSelectedProductForModal(null);
+    const params = new URLSearchParams(window.location.search);
+    params.delete('p'); params.delete('product');
+    const q = params.toString();
+    window.history.replaceState({}, '', `/${q ? `?${q}` : ''}`);
+  };
 
-    if (productId && tyres.length > 0) {
-      const p = tyres.find(t => String(t.id) === productId);
-      if (p) setSelectedProductForModal(p);
+  /** Show a product by id (from the address): use the loaded list or ask the database. */
+  const showProductById = async (id: number) => {
+    const local = tyres.find(t => t.id === id);
+    if (local) { setSelectedProductForModal(local); return; }
+    const { data } = await supabase.from('tyres').select('*').eq('id', id).maybeSingle();
+    if (data) setSelectedProductForModal(parseTyreSpecs(data as TyreProduct));
+  };
+
+  // Product address in the URL when the page opens (also old links ?p=123)
+  const initialProductHandled = useRef(false);
+  useEffect(() => {
+    if (initialProductHandled.current || categoriesLoading) return;
+    initialProductHandled.current = true;
+    const id = productIdFromLocation();
+    if (id) {
+      showProductById(id).then(() => {
+        // turn old ?p=123 links into the new address
+        if (!window.location.pathname.startsWith('/p/')) {
+          supabase.from('tyres').select('id, title, slug').eq('id', id).maybeSingle().then(({ data }) => {
+            if (data) window.history.replaceState({}, '', productPath(data as TyreProduct));
+          });
+        }
+      });
     } else if (initialProduct) {
-      setSelectedProductForModal(initialProduct);
+      openProduct(initialProduct, { replace: true });
     }
-  }, [initialProduct, tyres.length]);
+  }, [categoriesLoading, initialProduct]);
+
+  // Browser "Back" / "Forward"
+  useEffect(() => {
+    const onPop = () => {
+      const id = productIdFromLocation();
+      if (id) showProductById(id);
+      else setSelectedProductForModal(null);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  });
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -208,11 +254,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
       
       // SEO: Meta Description + canonical link of the product page
       setMetaDescription(selectedProductForModal.seo_description || `Купити ${selectedProductForModal.title}. Ціна: ${formatPrice(selectedProductForModal.price)} грн. В наявності. Доставка по Україні.`);
-      setCanonical(`${SITE_URL}/?p=${selectedProductForModal.id}`);
-
-      // Sync URL
-      url.searchParams.set('p', String(selectedProductForModal.id));
-      window.history.replaceState({}, '', url.toString());
+      setCanonical(`${SITE_URL}${productPath(selectedProductForModal)}`);
       logAnalyticsEvent('view_item', String(selectedProductForModal.id), selectedProductForModal.title);
     } else {
       // Only touch SEO tags on category pages; the home page keeps the values from admin SEO settings
@@ -224,8 +266,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
         document.title = 'Акції та знижки — інтернет-магазин Форсаж';
         setCanonical(`${SITE_URL}/?c=akcii`);
       }
-      url.searchParams.delete('p');
-      window.history.replaceState({}, '', url.toString());
+      if (url.searchParams.has('p') && !productIdFromLocation()) { url.searchParams.delete('p'); window.history.replaceState({}, '', url.toString()); }
     }
   }, [selectedProductForModal, activeCat, activeCategory]);
 
@@ -568,7 +609,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
   };
 
   const handleProductClick = (tyre: TyreProduct) => {
-    if (tyre.in_stock !== false) setSelectedProductForModal(tyre);
+    if (tyre.in_stock !== false) openProduct(tyre);
   };
 
   const renderSchema = (product: TyreProduct) => {
@@ -585,7 +626,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
       },
       "offers": {
         "@type": "Offer",
-        "url": `${SITE_URL}/?p=${product.id}`,
+        "url": `${SITE_URL}${productPath(product)}`,
         "priceCurrency": "UAH",
         "price": safeParsePrice(product.price),
         "priceValidUntil": "2026-12-31",
@@ -804,7 +845,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
             </h2>
             <div className="flex gap-4 overflow-x-auto pb-6 snap-x" style={{scrollbarWidth: 'none'}}>
               {recentlyViewed.map(t => (
-                  <div key={t.id} onClick={() => setSelectedProductForModal(t)} className="min-w-[180px] max-w-[220px] bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex flex-col cursor-pointer hover:border-[#FFC300] transition-colors snap-center group">
+                  <div key={t.id} onClick={() => openProduct(t)} className="min-w-[180px] max-w-[220px] bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex flex-col cursor-pointer hover:border-[#FFC300] transition-colors snap-center group">
                     <div className="h-32 mb-3 bg-zinc-950 rounded-xl p-2 flex items-center justify-center overflow-hidden">
                         {t.image_url ? <img src={t.image_url} alt={t.title} className="max-h-full object-contain group-hover:scale-110 transition-transform"/> : <div className="text-zinc-700 font-bold text-[10px] uppercase">Без фото</div>}
                     </div>
@@ -844,12 +885,12 @@ const TyreShop: React.FC<TyreShopProps> = ({
       />
 
       <ProductDetailModal 
-        product={selectedProductForModal} onClose={() => setSelectedProductForModal(null)} 
+        product={selectedProductForModal} onClose={closeProduct} 
         preset={selectedProductForModal ? getPresetForProduct(categories, selectedProductForModal) : null}
         addToCart={addToCart} formatPrice={formatPrice} getSeasonLabel={getSeasonLabel} renderSchema={renderSchema}
         openLightbox={(p) => { setCurrentLightboxImages([p.image_url].filter(Boolean) as string[]); setLightboxOpen(true); }}
         onQuickOrder={(p) => setQuickOrderProduct(p)}
-        onSimilarClick={(t) => setSelectedProductForModal(t)}
+        onSimilarClick={(t) => openProduct(t, { replace: true })}
       />
 
       {lightboxOpen && (

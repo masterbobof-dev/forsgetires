@@ -123,11 +123,11 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
           aria-label="На головну"
         >
           <Logo />
-          <span className="flex flex-col group">
-            <span className="font-black text-lg min-[400px]:text-xl sm:text-2xl md:text-3xl tracking-wide text-white italic -skew-x-12 group-hover:text-[#FFC300] transition-colors">
+          <span className="hidden min-[380px]:flex flex-col group min-w-0 overflow-hidden pr-1">
+            <span className="font-black text-lg sm:text-2xl md:text-3xl tracking-wide text-white italic -skew-x-12 group-hover:text-[#FFC300] transition-colors">
               ФОРСАЖ
             </span>
-            <span className="hidden min-[420px]:block text-[10px] sm:text-[11px] md:text-xs text-zinc-400 font-bold uppercase tracking-[0.15em] sm:tracking-[0.2em] leading-none ml-1 whitespace-nowrap">
+            <span className="hidden md:block text-[10px] sm:text-[11px] md:text-xs text-zinc-400 font-bold uppercase tracking-[0.15em] sm:tracking-[0.2em] leading-none ml-1 whitespace-nowrap">
               Інтернет-магазин
             </span>
           </span>

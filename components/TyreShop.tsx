@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { TyreProduct, CartItem } from '../types';
-import { Loader2, Phone, ArrowDown, ArrowLeft, ArrowRight, MapPin, X, ShoppingCart } from 'lucide-react';
+import { Loader2, Phone, ArrowDown, ArrowLeft, ArrowRight, MapPin, X, ShoppingCart, Scale, Heart } from 'lucide-react';
 import { PHONE_LINK_1, PHONE_NUMBER_1, FORMSPREE_ENDPOINT, TELEGRAM_LINK, VIBER_LINK, SITE_URL } from '../constants';
 
 // Підкомпоненти
@@ -13,6 +13,9 @@ import ProductCard from './shop/ProductCard';
 import { useCategories, buildCategoryFilter, getCategoryPath, getRootOf, getRootCategories, getChildren, isTyreProduct } from '../categories';
 import { getPresetForCategory, getPresetForProduct, getCardChips, sortAttrValues } from '../productAttributes';
 import { productPath, productIdFromLocation } from '../productUrl';
+import { parseSearch, searchFilters } from '../searchQuery';
+import { useStoredIds, FAVORITES_KEY, COMPARE_KEY, COMPARE_MAX } from '../shopLists';
+import CompareModal from './shop/CompareModal';
 import AgroBanner from './shop/AgroBanner';
 import SeoContentBlock from './shop/SeoContentBlock';
 import { logAnalyticsEvent } from './admin/analytics';
@@ -57,6 +60,8 @@ interface TyreShopProps {
   /** signed-in customer (not staff) — orders are linked to the account and the form is prefilled */
   userId?: string;
   userEmail?: string;
+  /** opens the customer sign-in window */
+  onRequireLogin?: () => void;
   cartItems: CartItem[];
   onCartChange: (items: CartItem[]) => void;
 }
@@ -66,6 +71,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
   onBack, 
   userId,
   userEmail,
+  onRequireLogin,
   cartItems,
   onCartChange,
 }) => {
@@ -95,6 +101,11 @@ const TyreShop: React.FC<TyreShopProps> = ({
   }, [selectedProductForModal]);
 
   const [activeCategory, setActiveCategory] = useState<CategorySelection>('all');
+  const favorites = useStoredIds(FAVORITES_KEY);
+  const compare = useStoredIds(COMPARE_KEY, COMPARE_MAX);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [compareProducts, setCompareProducts] = useState<TyreProduct[]>([]);
+  const [compareLoading, setCompareLoading] = useState(false);
   const activeCat = typeof activeCategory === 'number' ? categories.find(c => c.id === activeCategory) : undefined;
   const agroCategory = categories.find(c => c.vehicle_type === 'agro');
   const showTyreFilters = !!activeCat && activeCat.kind === 'tyre';
@@ -117,6 +128,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
     if (categoriesLoading) return;
     const slug = new URLSearchParams(window.location.search).get('c');
     if (slug === 'akcii') setActiveCategory('hot');
+    else if (slug === 'obrane') setActiveCategory('fav');
     else if (slug) {
       const found = categories.find(c => c.slug === slug);
       if (found) setActiveCategory(found.id);
@@ -127,7 +139,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
     if (categoriesLoading || window.location.pathname.startsWith('/p/')) return;
     const url = new URL(window.location.href);
     if (activeCategory === 'all') url.searchParams.delete('c');
-    else url.searchParams.set('c', activeCategory === 'hot' ? 'akcii' : (activeCat?.slug || ''));
+    else url.searchParams.set('c', activeCategory === 'hot' ? 'akcii' : activeCategory === 'fav' ? 'obrane' : (activeCat?.slug || ''));
     window.history.replaceState(window.history.state, '', url.toString());
   }, [activeCategory, categoriesLoading]);
 
@@ -487,8 +499,8 @@ const TyreShop: React.FC<TyreShopProps> = ({
       const from = pageIndex * PAGE_SIZE, to = from + PAGE_SIZE - 1;
       let query = supabase.from('tyres').select('*', { count: 'exact' });
       
-      const term = debouncedSearch.trim().replace(/[%,()]/g, ' ').trim();
-      if (term) query = query.or(`title.ilike.%${term}%,catalog_number.ilike.%${term}%,manufacturer.ilike.%${term}%`);
+      // smart search: sizes in any format, several words, Cyrillic brand names
+      for (const f of searchFilters(parseSearch(debouncedSearch))) query = query.or(f);
       for (const [key, value] of Object.entries(attrFilters)) {
         if (value) query = query.eq(`attributes->>${key}`, value);
       }
@@ -500,6 +512,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
       if (filterSeason && showTyreFilters) query = query.eq('season', filterSeason);
 
       if (activeCategory === 'hot') query = query.eq('is_hot', true);
+      else if (activeCategory === 'fav') query = query.in('id', favorites.ids.length ? favorites.ids : [-1]);
       else if (activeCat) {
         const catFilter = buildCategoryFilter(categories, activeCat, dbReady);
         if (catFilter) query = query.or(catFilter);
@@ -637,6 +650,39 @@ const TyreShop: React.FC<TyreShopProps> = ({
     return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />;
   };
 
+  const showToast = (message: string) => {
+    setToast({ message, visible: true });
+    setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 2500);
+  };
+  const toggleFavorite = (p: TyreProduct) => {
+    const adding = !favorites.has(p.id);
+    favorites.toggle(p.id);
+    showToast(adding ? `В обраному: ${p.title}` : 'Прибрано з обраного');
+    if (adding) logAnalyticsEvent('add_to_wishlist', String(p.id), p.title);
+  };
+  const toggleCompare = (p: TyreProduct) => {
+    const adding = !compare.has(p.id);
+    if (!compare.toggle(p.id)) { showToast(`Можна порівняти до ${COMPARE_MAX} товарів`); return; }
+    showToast(adding ? `Додано до порівняння (${compare.ids.length + 1})` : 'Прибрано з порівняння');
+  };
+
+  // Load products for the compare window
+  useEffect(() => {
+    if (!compareOpen) return;
+    if (compare.ids.length === 0) { setCompareProducts([]); return; }
+    setCompareLoading(true);
+    supabase.from('tyres').select('*').in('id', compare.ids).then(({ data }) => {
+      const list = ((data as TyreProduct[]) || []).map(parseTyreSpecs);
+      setCompareProducts(compare.ids.map(id => list.find(p => p.id === id)).filter(Boolean) as TyreProduct[]);
+      setCompareLoading(false);
+    });
+  }, [compareOpen, compare.ids.join(',')]);
+
+  // the favourites list changed while looking at it → refresh
+  useEffect(() => {
+    if (activeCategory === 'fav' && !categoriesLoading) fetchTyres(0, true);
+  }, [favorites.ids.join(',')]);
+
   const filterPanel = (
     <FilterPanel
       state={filterState}
@@ -664,6 +710,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
               <span className="text-zinc-800">/</span>
               <button onClick={() => changeCategory('all')} className="text-zinc-500 hover:text-[#FFC300] transition-colors">Каталог</button>
               {activeCategory === 'hot' && (<><span className="text-zinc-800">/</span><span className="text-[#FFC300]">Акції</span></>)}
+              {activeCategory === 'fav' && (<><span className="text-zinc-800">/</span><span className="text-[#FFC300]">Обране</span></>)}
               {activeCat && getCategoryPath(categories, activeCat).map((c, i, arr) => (
                 <React.Fragment key={c.id}>
                   <span className="text-zinc-800">/</span>
@@ -675,7 +722,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
             </nav>
 
             <h1 key={`h1-${String(activeCategory)}`} className="text-[28px] leading-[1.05] sm:text-4xl md:text-5xl font-black text-white uppercase italic tracking-tighter animate-in fade-in slide-in-from-bottom-2 duration-300">
-              {activeCat ? activeCat.name : activeCategory === 'hot' ? 'Акції' : <>Форсаж <span className="text-[#FFC300]">Синельникове</span></>}
+              {activeCat ? activeCat.name : activeCategory === 'hot' ? 'Акції' : activeCategory === 'fav' ? 'Обране' : <>Форсаж <span className="text-[#FFC300]">Синельникове</span></>}
             </h1>
 
             <p className="text-zinc-400 text-sm md:text-base max-w-xl leading-relaxed line-clamp-2 md:line-clamp-none">
@@ -735,7 +782,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
           </div>
         </header>
 
-        <CategoryNav categories={categories} active={activeCategory} onChange={changeCategory} />
+        <CategoryNav categories={categories} active={activeCategory} onChange={changeCategory} favoritesCount={favorites.ids.length} />
 
         {activeCategory === 'all' && agroCategory && (
           <AgroBanner
@@ -806,6 +853,10 @@ const TyreShop: React.FC<TyreShopProps> = ({
                       onAddToCart={(e) => { e.stopPropagation(); addToCart(tyre); }}
                       onQuickOrder={(p) => setQuickOrderProduct(p)}
                       formatPrice={formatPrice}
+                      isFavorite={favorites.has(tyre.id)}
+                      onToggleFavorite={() => toggleFavorite(tyre)}
+                      isCompared={compare.has(tyre.id)}
+                      onToggleCompare={() => toggleCompare(tyre)}
                     />
                   </div>
                 ))}
@@ -832,6 +883,29 @@ const TyreShop: React.FC<TyreShopProps> = ({
           </div>
         </div>
       </div>
+
+      {compare.ids.length > 0 && (
+        <button
+          onClick={() => setCompareOpen(true)}
+          className="fixed left-4 md:left-6 z-[150] flex items-center gap-2 bg-[#FFC300] text-black font-black text-xs uppercase tracking-wide pl-3 pr-4 py-3 rounded-2xl shadow-2xl shadow-yellow-900/30 hover:bg-white transition-colors animate-in slide-in-from-left-4 fade-in duration-300"
+          style={{ bottom: 'calc(env(safe-area-inset-bottom) + 16px)' }}
+        >
+          <Scale size={18} /> Порівняти ({compare.ids.length})
+        </button>
+      )}
+
+      <CompareModal
+        open={compareOpen}
+        products={compareProducts}
+        categories={categories}
+        loading={compareLoading}
+        onClose={() => setCompareOpen(false)}
+        onRemove={compare.remove}
+        onClear={() => { compare.clear(); setCompareOpen(false); }}
+        onOpenProduct={(p) => { setCompareOpen(false); openProduct(p); }}
+        onAddToCart={(p) => addToCart(p)}
+        formatPrice={formatPrice}
+      />
 
       <FilterSheet open={filtersOpen} onClose={() => setFiltersOpen(false)} totalCount={totalCount}>
         {filterPanel}
@@ -887,6 +961,13 @@ const TyreShop: React.FC<TyreShopProps> = ({
       <ProductDetailModal 
         product={selectedProductForModal} onClose={closeProduct} 
         preset={selectedProductForModal ? getPresetForProduct(categories, selectedProductForModal) : null}
+        isFavorite={selectedProductForModal ? favorites.has(selectedProductForModal.id) : false}
+        onToggleFavorite={() => selectedProductForModal && toggleFavorite(selectedProductForModal)}
+        isCompared={selectedProductForModal ? compare.has(selectedProductForModal.id) : false}
+        onToggleCompare={() => selectedProductForModal && toggleCompare(selectedProductForModal)}
+        userId={userId}
+        userName={orderName}
+        onRequireLogin={onRequireLogin}
         addToCart={addToCart} formatPrice={formatPrice} getSeasonLabel={getSeasonLabel} renderSchema={renderSchema}
         openLightbox={(p) => { setCurrentLightboxImages([p.image_url].filter(Boolean) as string[]); setLightboxOpen(true); }}
         onQuickOrder={(p) => setQuickOrderProduct(p)}

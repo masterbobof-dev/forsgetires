@@ -79,6 +79,13 @@ export default async function handler(req, res) {
       seller: { '@type': 'Organization', name: SHOP_NAME },
     },
   };
+  try {
+    const reviews = await rest(`product_reviews?product_id=eq.${product.id}&approved=eq.true&select=rating`);
+    if (reviews.length > 0) {
+      const avg = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
+      ld.aggregateRating = { '@type': 'AggregateRating', ratingValue: Number(avg.toFixed(1)), reviewCount: reviews.length, bestRating: 5, worstRating: 1 };
+    }
+  } catch { /* no reviews table yet */ }
   html = html.replace('</head>', `    <script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>\n  </head>`);
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');

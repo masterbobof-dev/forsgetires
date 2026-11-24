@@ -1,16 +1,17 @@
 import React, { useEffect, useRef } from 'react';
-import { Grid, Flame, ChevronRight } from 'lucide-react';
+import { Grid, Flame, ChevronRight, Heart } from 'lucide-react';
 import {
   ProductCategory, getRootCategories, getChildren, getRootOf, getCategoryIcon,
 } from '../../categories';
 
 /** 'all' = всі товари, 'hot' = акції, otherwise a category id. */
-export type CategorySelection = 'all' | 'hot' | number;
+export type CategorySelection = 'all' | 'hot' | 'fav' | number;
 
 interface CategoryNavProps {
   categories: ProductCategory[];
   active: CategorySelection;
   onChange: (sel: CategorySelection) => void;
+  favoritesCount?: number;
 }
 
 const Chip: React.FC<{
@@ -37,7 +38,7 @@ const Chip: React.FC<{
   </button>
 );
 
-const CategoryNav: React.FC<CategoryNavProps> = ({ categories, active, onChange }) => {
+const CategoryNav: React.FC<CategoryNavProps> = ({ categories, active, onChange, favoritesCount = 0 }) => {
   const roots = getRootCategories(categories);
   const activeCat = typeof active === 'number' ? categories.find(c => c.id === active) : undefined;
   const activeRoot = activeCat ? getRootOf(categories, activeCat) : undefined;
@@ -71,6 +72,9 @@ const CategoryNav: React.FC<CategoryNavProps> = ({ categories, active, onChange 
           />
         ))}
         <Chip id="hot" active={active === 'hot'} onClick={() => onChange('hot')} icon={Flame} label="Акції" accent="hot" />
+        {(favoritesCount > 0 || active === 'fav') && (
+          <Chip id="fav" active={active === 'fav'} onClick={() => onChange('fav')} icon={Heart} label={`Обране (${favoritesCount})`} accent="hot" />
+        )}
       </div>
 
       {activeRoot && subcats.length > 0 && (

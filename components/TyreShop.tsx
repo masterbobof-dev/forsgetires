@@ -150,7 +150,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
     window.history.replaceState(window.history.state, '', url.toString());
   }, [activeCategory, categoriesLoading]);
 
-  const [activeSort, setActiveSort] = useState<SortValue>('newest');
+  const [activeSort, setActiveSort] = useState<SortValue>('recommended');
   const [searchQuery, setSearchQuery] = useState('');
   // search runs 350 ms after the customer stops typing
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -544,10 +544,19 @@ const TyreShop: React.FC<TyreShopProps> = ({
         if (catFilter) query = query.or(catFilter);
       }
       
+      // "All goods" without a search shows only what can be bought now (old "on order" tyres are found by search)
+      if (activeCategory === 'all' && !debouncedSearch.trim()) query = query.eq('on_order', false);
+      if (activeSort === 'with_photo') query = query.eq('has_photo', true);
+
       // real stock first, old "on order" tyres after it
-      query = query.order('on_order', { ascending: true }).order('is_hot', { ascending: false }).order('in_stock', { ascending: false });
-      const sorts = { price_asc: 'price_num', price_desc: 'price_num', newest: 'created_at', oldest: 'created_at' };
-      query = query.order((sorts as any)[activeSort] || 'created_at', { ascending: ['price_asc','oldest'].includes(activeSort) });
+      query = query.order('on_order', { ascending: true });
+      if (activeSort === 'recommended' || activeSort === 'with_photo') {
+        // what is nice to buy first: with a photo, hits, then the newest
+        query = query.order('has_photo', { ascending: false }).order('is_hot', { ascending: false }).order('in_stock', { ascending: false }).order('created_at', { ascending: false });
+      } else {
+        const sorts = { price_asc: 'price_num', price_desc: 'price_num', newest: 'created_at', oldest: 'created_at', no_photo: 'created_at' };
+        query = query.order('in_stock', { ascending: false }).order((sorts as any)[activeSort] || 'created_at', { ascending: ['price_asc', 'oldest'].includes(activeSort) });
+      }
 
       const { data, error, count } = await query.range(from, to);
       if (error) throw error;

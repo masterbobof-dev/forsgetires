@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { Search, X, SlidersHorizontal, Eye, EyeOff, ArrowUpDown, Check } from 'lucide-react';
 import { FilterPreset } from '../../productAttributes';
 
-export type SortValue = 'newest' | 'oldest' | 'price_asc' | 'price_desc' | 'with_photo' | 'no_photo';
+export type SortValue = 'recommended' | 'newest' | 'oldest' | 'price_asc' | 'price_desc' | 'with_photo' | 'no_photo';
 
 export interface FilterState {
   searchQuery: string;
@@ -251,10 +251,11 @@ export const SearchBar: React.FC<SearchBarProps> = ({ searchQuery, setSearchQuer
           className="h-full bg-zinc-900 text-[#FFC300] pl-8 pr-2 sm:pr-3 rounded-xl border border-zinc-800 text-xs font-bold appearance-none cursor-pointer outline-none focus:border-[#FFC300] w-[44px] sm:w-auto text-transparent sm:text-[#FFC300]"
           aria-label="Сортування"
         >
+          <option value="recommended">Рекомендовані</option>
           <option value="newest">Новинки</option>
           <option value="price_asc">Найдешевші</option>
           <option value="price_desc">Найдорожчі</option>
-          <option value="with_photo">З фото</option>
+          <option value="with_photo">Тільки з фото</option>
         </select>
       </div>
     </div>

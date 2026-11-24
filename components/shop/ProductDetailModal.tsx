@@ -8,6 +8,13 @@ import ProductReviews from './ProductReviews';
 import { parseTyreIndex, describeTyreIndex } from '../../tyreIndex';
 import { addRecent, getRecent } from '../../recentlyViewed';
 
+/** Why an analog is shown (product_related() in the DB). */
+const REASON_BADGE: Record<string, { label: string; cls: string }> = {
+  cross: { label: 'Точний аналог', cls: 'bg-green-600 text-white' },
+  volume: { label: 'Інший об\'єм', cls: 'bg-[#FFC300] text-black' },
+  approvals: { label: 'Ті ж допуски', cls: 'bg-blue-600 text-white' },
+};
+
 interface ProductDetailModalProps {
   product: TyreProduct | null;
   onClose: () => void;
@@ -33,6 +40,7 @@ interface ProductDetailModalProps {
 
 const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClose, addToCart, formatPrice, getSeasonLabel, renderSchema, openLightbox, onQuickOrder, onSimilarClick, preset, isFavorite, onToggleFavorite, isCompared, onToggleCompare, userId, userName, onRequireLogin, showStock = false }) => {
   const [companions, setCompanions] = useState<TyreProduct[]>([]);
+  const [approvals, setApprovals] = useState<string[]>([]);
   const [similar, setSimilar] = useState<TyreProduct[]>([]);
   const [loadingSimilar, setLoadingSimilar] = useState(false);
   const [photoIdx, setPhotoIdx] = useState(0);
@@ -45,7 +53,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
     if (!product) return;
     addRecent(product);
     let alive = true;
-    setLoadingSimilar(true); setSimilar([]); setCompanions([]);
+    setLoadingSimilar(true); setSimilar([]); setCompanions([]); setApprovals([]);
     (async () => {
       try {
         if (isTyre) {
@@ -60,7 +68,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
         } else {
           // other goods: analogs (same viscosity / same car) and rule-based "З цим купують" — see product_related() in the DB
           const { data } = await supabase.rpc('product_related', { p_id: product.id });
-          if (alive && data) { setSimilar((data.analogs as TyreProduct[]) || []); setCompanions((data.companions as TyreProduct[]) || []); }
+          if (alive && data) { setSimilar((data.analogs as TyreProduct[]) || []); setCompanions((data.companions as TyreProduct[]) || []); setApprovals((data.approvals as string[]) || []); }
         }
       } catch { /* blocks stay empty */ } finally { if (alive) setLoadingSimilar(false); }
     })();
@@ -310,6 +318,15 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                 </div>
               </div>
 
+              {approvals.length > 0 && (
+                <div className="mt-6 bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-2">Допуски та специфікації</h3>
+                  <div className="flex flex-wrap gap-1.5">
+                    {approvals.map(a => <span key={a} className="text-xs font-bold text-white bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1">{a}</span>)}
+                  </div>
+                </div>
+              )}
+
               <ProductReviews productId={product.id} userId={userId} userName={userName} onRequireLogin={onRequireLogin} />
 
               {companions.length > 0 && (
@@ -353,9 +370,13 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                            {(t.image_thumb_url || t.image_url) ? <img src={t.image_thumb_url || t.image_url} alt={t.title} className="max-h-full object-contain group-hover/card:scale-110 transition-transform duration-500"/> : <Info className="opacity-10"/>}
                         </div>
                         <div className="flex-grow">
-                          {(t as TyreProduct & { cross?: boolean }).cross
-                            ? <span className="text-[10px] bg-green-600 text-white font-black uppercase mb-1 inline-block px-1.5 py-0.5 rounded">Точний аналог</span>
-                            : <span className="text-[11px] text-[#FFC300] font-black uppercase mb-1 block">{t.manufacturer || 'Товар'}</span>}
+                          {(() => {
+                            const reason = (t as TyreProduct & { reason?: string; cross?: boolean }).reason || ((t as { cross?: boolean }).cross ? 'cross' : '');
+                            const badge = REASON_BADGE[reason];
+                            return badge
+                              ? <span className={`text-[10px] ${badge.cls} font-black uppercase mb-1 inline-block px-1.5 py-0.5 rounded`}>{badge.label}</span>
+                              : <span className="text-[11px] text-[#FFC300] font-black uppercase mb-1 block">{t.manufacturer || 'Товар'}</span>;
+                          })()}
                           <h4 className="text-white text-xs font-bold line-clamp-2 mb-2 leading-snug">{t.title} {t.radius}</h4>
                         </div>
                         <div className="mt-2 pt-2 border-t border-zinc-800 flex items-center justify-between">

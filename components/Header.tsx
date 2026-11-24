@@ -23,6 +23,12 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [mobileCatalog, setMobileCatalog] = useState(false);
+  // breadcrumb "Каталог" opens the full catalogue menu
+  useEffect(() => {
+    const open = () => { if (window.innerWidth < 768) setMobileCatalog(true); else { window.scrollTo({ top: 0, behavior: 'smooth' }); setCatalogOpen(true); } };
+    window.addEventListener('open-catalog', open);
+    return () => window.removeEventListener('open-catalog', open);
+  }, []);
   const catalogRef = useRef<HTMLDivElement>(null);
   const { categories } = useCategories();
   const roots = getRootCategories(categories);

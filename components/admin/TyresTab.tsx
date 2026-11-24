@@ -94,6 +94,10 @@ const TyresTab: React.FC = () => {
   const [showAiModal, setShowAiModal] = useState(false);
   const [showAttrImport, setShowAttrImport] = useState(false);
   const [editingTyreId, setEditingTyreId] = useState<number | null>(null);
+  /** product comes from the shop program: name, price, stock, article and category are managed there */
+  const [editingFromProgram, setEditingFromProgram] = useState(false);
+  const PROGRAM_FIELDS = ['title', 'price', 'stock_quantity', 'in_stock', 'catalog_number', 'product_number', 'manufacturer', 'category_id', 'base_price'];
+  const stripProgramFields = (payload: any) => { if (editingFromProgram) PROGRAM_FIELDS.forEach(k => delete payload[k]); return payload; };
   const [tyreForm, setTyreForm] = useState({ 
       category_id: '',
       manufacturer: '', 
@@ -788,7 +792,7 @@ const TyresTab: React.FC = () => {
         };
         if (!genericPayload.title || genericPayload.title === 'Акумулятор' || genericPayload.title === 'Диск') throw new Error('Вкажіть назву товару або заповніть характеристики');
         const { error } = editingTyreId
-          ? await supabase.from('tyres').update(genericPayload).eq('id', editingTyreId)
+          ? await supabase.from('tyres').update(stripProgramFields(genericPayload)).eq('id', editingTyreId)
           : await supabase.from('tyres').insert([genericPayload]);
         if (error) throw error;
         fetchTyres(0, true);
@@ -831,7 +835,7 @@ const TyresTab: React.FC = () => {
       if (dbReady) payload.category_id = formCategory ? formCategory.id : null;
 
       const { error } = editingTyreId
-          ? await supabase.from('tyres').update(payload).eq('id', editingTyreId)
+          ? await supabase.from('tyres').update(stripProgramFields(payload)).eq('id', editingTyreId)
           : await supabase.from('tyres').insert([payload]);
       if (error) throw error;
       
@@ -842,6 +846,9 @@ const TyresTab: React.FC = () => {
 
   const openEditTyreModal = (t: TyreProduct) => {
       setEditingTyreId(t.id);
+      setEditingFromProgram(!!t.program_product_id);
+      // purchase price is kept privately; staff read it through tyre_cost()
+      supabase.rpc('tyre_cost', { p_id: t.id }).then(({ data }) => { if (data) setTyreForm(f => ({ ...f, base_price: String(data) })); });
       let width = '', height = '';
       const sizeRegex = /(\d{3})[\/\s](\d{2})/;
       const match = t.title.match(sizeRegex);
@@ -978,13 +985,13 @@ const TyresTab: React.FC = () => {
                         <Settings size={20} />
                     </button>
                     <button onClick={() => setShowAiModal(true)} className="p-2.5 bg-purple-600 text-white rounded-xl shadow-lg shadow-purple-900/20"><Sparkles size={20}/></button>
-                    <button onClick={() => {setEditingTyreId(null); setShowAddTyreModal(true);}} className="p-2.5 bg-[#FFC300] text-black rounded-xl shadow-lg shadow-yellow-900/20"><Plus size={20}/></button>
+                    <button onClick={() => {setEditingTyreId(null); setEditingFromProgram(false); setShowAddTyreModal(true);}} className="p-2.5 bg-[#FFC300] text-black rounded-xl shadow-lg shadow-yellow-900/20"><Plus size={20}/></button>
                 </div>
 
                 <div className="hidden md:flex gap-2">
                     <button onClick={() => setShowAttrImport(true)} className="bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-emerald-600 transition-all shadow-lg active:scale-95"><FileSpreadsheet size={18}/> <span>Імпорт Excel</span></button>
                     <button onClick={() => setShowAiModal(true)} className="bg-purple-600 text-white font-bold px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-purple-500 transition-all shadow-lg active:scale-95"><Sparkles size={18}/> <span>AI Сортування</span></button>
-                    <button onClick={() => {setEditingTyreId(null); setShowAddTyreModal(true);}} className="bg-[#FFC300] text-black font-black px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-[#e6b000] transition-all shadow-lg active:scale-95"><Plus size={18}/> <span>Додати</span></button>
+                    <button onClick={() => {setEditingTyreId(null); setEditingFromProgram(false); setShowAddTyreModal(true);}} className="bg-[#FFC300] text-black font-black px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-[#e6b000] transition-all shadow-lg active:scale-95"><Plus size={18}/> <span>Додати</span></button>
                 </div>
             </div>
 
@@ -1422,6 +1429,11 @@ const TyresTab: React.FC = () => {
                         <h3 className="text-xl sm:text-2xl font-black text-white">{editingTyreId ? 'Редагування' : 'Новий товар'}</h3>
                         <button onClick={() => setShowAddTyreModal(false)} className="p-2 text-zinc-500 hover:text-white bg-zinc-800 rounded-full"><X size={24}/></button>
                     </div>
+                    {editingFromProgram && (
+                        <div className="mb-4 p-3 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-200 text-sm">
+                            Цей товар приходить з програми. <b>Назва, ціна, кількість, артикул, бренд і категорія</b> змінюються тільки в програмі — тут їх зміни не збережуться. Тут можна змінити фото, опис, характеристики та SEO.
+                        </div>
+                    )}
                     <div className="flex-grow overflow-y-auto pr-1 custom-scrollbar">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                             <div className="space-y-4">

@@ -255,7 +255,10 @@ const actions: Record<string, (p: any) => Promise<unknown>> = {
   // ---------- service ----------
   'ping': async () => {
     const st = check(await db.rpc('program_sync_state')) as any;
-    return { site: 'forsage-tires.com', time: new Date().toISOString(), catalog_sync: { last_ok_at: st.last_ok_at, last_error: st.last_error } };
+    const minutes = st.last_ok_at ? Math.round((Date.now() - new Date(st.last_ok_at).getTime()) / 60000) : null;
+    // stale = no successful update for 15+ minutes (the program should show a warning)
+    return { site: 'forsage-tires.com', time: new Date().toISOString(),
+      catalog_sync: { last_ok_at: st.last_ok_at, last_error: st.last_error, minutes_since_ok: minutes, stale: minutes === null || minutes >= 15 } };
   },
 };
 

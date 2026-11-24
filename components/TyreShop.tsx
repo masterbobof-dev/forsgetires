@@ -11,7 +11,7 @@ import ProductDetailModal from './shop/ProductDetailModal';
 import CategoryNav, { CategorySelection } from './shop/CategoryNav';
 import { FilterPanel, SearchBar, FilterSheet, FilterState, SortValue, countActiveFilters } from './shop/FilterToolbar';
 import ProductCard from './shop/ProductCard';
-import { useCategories, buildCategoryFilter, getCategoryPath, getRootOf, getRootCategories, getChildren, isTyreProduct } from '../categories';
+import { useCategories, buildCategoryFilter, getCategoryPath, getRootOf, getRootCategories, getChildren, isTyreProduct, getCategoryIcon } from '../categories';
 import { getPresetForCategory, getPresetForProduct, getCardChips, sortAttrValues } from '../productAttributes';
 import { productPath, productIdFromLocation } from '../productUrl';
 import { parseSearch, searchFilters } from '../searchQuery';
@@ -306,7 +306,8 @@ const TyreShop: React.FC<TyreShopProps> = ({
           status: 'new', 
           user_id: userId || null,
           customer_email: userEmail || null,
-          items: [{ id: quickOrderProduct.id, title: quickOrderProduct.title, quantity: 1, price: quickOrderProduct.price }] 
+          items: [{ id: quickOrderProduct.id, title: quickOrderProduct.title, quantity: 1, price: quickOrderProduct.on_order ? '0' : quickOrderProduct.price }],
+          ...(quickOrderProduct.on_order ? { comment: 'Запит ціни і терміну постачання (товар під замовлення)' } : {}),
       }]);
       if (error) throw error;
       logAnalyticsEvent('purchase', String(quickOrderProduct.id), quickOrderProduct.title, undefined, safeParsePrice(quickOrderProduct.price));
@@ -490,6 +491,12 @@ const TyreShop: React.FC<TyreShopProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  /** icon of the product's category (or its parent) for cards without a photo */
+  const productIcon = (p: TyreProduct) => {
+    const c = categories.find(x => x.id === p.category_id);
+    const parent = c?.parent_id ? categories.find(x => x.id === c.parent_id) : undefined;
+    return getCategoryIcon(c?.icon || parent?.icon || (isTyreProduct(p, categories) ? 'circle-dot' : 'package'));
+  };
   const parseTyreSpecs = (tyre: TyreProduct): TyreProduct => applyPromo(parseTyreSpecsRaw(tyre), promos, categories);
   const parseTyreSpecsRaw = (tyre: TyreProduct): TyreProduct => {
     if (!isTyreProduct(tyre, categories)) {
@@ -525,7 +532,9 @@ const TyreShop: React.FC<TyreShopProps> = ({
       if (filterRadius) query = query.eq('radius', filterRadius);
       if (filterWidth) query = query.ilike('title', `%${filterWidth}%`);
       if (filterHeight) query = query.ilike('title', `%/${filterHeight}%`);
-      if (showOnlyInStock) query = query.neq('in_stock', false);
+      if (showOnlyInStock) query = query.neq('in_stock', false).eq('on_order', false);
+      // goods from the shop program that are sold out are not shown at all
+      query = query.or('in_stock.neq.false,program_product_id.is.null');
       if (filterSeason && showTyreFilters) query = query.eq('season', filterSeason);
 
       if (activeCategory === 'hot') query = query.eq('is_hot', true);
@@ -535,8 +544,9 @@ const TyreShop: React.FC<TyreShopProps> = ({
         if (catFilter) query = query.or(catFilter);
       }
       
-      query = query.order('is_hot', { ascending: false }).order('in_stock', { ascending: false });
-      const sorts = { price_asc: 'price', price_desc: 'price', newest: 'created_at', oldest: 'created_at' };
+      // real stock first, old "on order" tyres after it
+      query = query.order('on_order', { ascending: true }).order('is_hot', { ascending: false }).order('in_stock', { ascending: false });
+      const sorts = { price_asc: 'price_num', price_desc: 'price_num', newest: 'created_at', oldest: 'created_at' };
       query = query.order((sorts as any)[activeSort] || 'created_at', { ascending: ['price_asc','oldest'].includes(activeSort) });
 
       const { data, error, count } = await query.range(from, to);
@@ -896,6 +906,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
                       isCompared={compare.has(tyre.id)}
                       onToggleCompare={() => toggleCompare(tyre)}
                       showStock={enableStockQty}
+                      placeholderIcon={productIcon(tyre)}
                     />
                   </div>
                 ))}
@@ -1046,8 +1057,8 @@ const TyreShop: React.FC<TyreShopProps> = ({
               <div className="bg-[#FFC300]/10 p-4 rounded-full text-[#FFC300] mb-2">
                 <Phone size={32} strokeWidth={2.5}/>
               </div>
-              <h3 className="text-xl font-black text-white uppercase tracking-tight">Купити в 1 клік</h3>
-              <p className="text-zinc-500 text-sm">Введіть ваш номер телефону, і ми зателефонуємо вам для оформлення замовлення.</p>
+              <h3 className="text-xl font-black text-white uppercase tracking-tight">{quickOrderProduct.on_order ? "Дізнатися ціну" : "Купити в 1 клік"}</h3>
+              <p className="text-zinc-500 text-sm">{quickOrderProduct.on_order ? 'Залиште номер — менеджер зателефонує і скаже ціну та термін постачання.' : 'Введіть ваш номер телефону, і ми зателефонуємо вам для оформлення замовлення.'}</p>
               
               <div className="w-full mt-4">
                 <p className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest mb-2 text-left">Ваш телефон</p>

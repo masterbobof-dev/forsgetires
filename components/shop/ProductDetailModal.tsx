@@ -72,6 +72,8 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
   if (!product) return null;
 
   const isOutOfStock = product.in_stock === false;
+  const onOrder = !!product.on_order;
+  const stockQty = product.program_product_id && typeof product.stock_quantity === 'number' ? product.stock_quantity : null;
   const priceNum = parseFloat(product.price || '0');
   const oldPriceNum = parseFloat(product.old_price || '0');
   const hasDiscount = oldPriceNum > priceNum;
@@ -221,8 +223,8 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                 </div>
                 <div className="bg-zinc-800/30 p-4 rounded-2xl border border-zinc-800/50">
                   <p className="text-[11px] text-zinc-500 font-bold uppercase mb-1">Наявність</p>
-                  <p className={`text-sm font-bold ${isOutOfStock ? 'text-red-500' : 'text-emerald-500'}`}>
-                    {isOutOfStock ? 'Під замовлення' : 'В наявності'}
+                  <p className={`text-sm font-bold ${isOutOfStock ? 'text-red-500' : onOrder ? 'text-amber-400' : 'text-emerald-500'}`}>
+                    {isOutOfStock ? 'Немає в наявності' : onOrder ? 'Під замовлення' : stockQty !== null && stockQty > 0 ? `В наявності: ${stockQty > 10 ? '>10' : stockQty} шт` : 'В наявності'}
                   </p>
                 </div>
               </div>
@@ -260,6 +262,17 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
 
               <div className="sticky bottom-0 bg-zinc-900/95 backdrop-blur border-t border-zinc-800 py-3 md:pt-4 md:pb-0 mt-auto z-40 -mx-5 px-5 md:mx-0 md:px-0">
                 <div className="flex items-center gap-3 md:flex-col md:items-stretch">
+                  {onOrder ? (
+                    <div className="flex-1 flex flex-col gap-2 md:gap-3">
+                      <p className="text-sm text-zinc-300"><b className="text-white">Ціну і термін постачання</b> уточнить менеджер — залиште номер телефону.</p>
+                      {onQuickOrder && (
+                        <button onClick={() => { onQuickOrder(product); onClose(); }}
+                          className="w-full py-3.5 md:py-5 rounded-2xl font-black text-sm md:text-lg flex items-center justify-center gap-2 uppercase tracking-wider bg-[#FFC300] text-black hover:bg-white transition-all active:scale-95">
+                          <Phone size={18} /> Дізнатися ціну
+                        </button>
+                      )}
+                    </div>
+                  ) : (<>
                   <div className="flex flex-col shrink-0 md:mb-3">
                     <span className="text-[10px] md:text-[11px] text-zinc-500 font-bold uppercase tracking-widest md:mb-1">Ціна за штуку</span>
                     <span className="text-2xl md:text-4xl font-black text-[#FFC300] drop-shadow-[0_0_10px_rgba(255,195,0,0.2)] whitespace-nowrap">
@@ -288,6 +301,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                       </button>
                     )}
                   </div>
+                  </>)}
                 </div>
               </div>
 

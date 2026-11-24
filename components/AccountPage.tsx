@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { formatUaPhone } from '../phone';
 import { User, Phone, MapPin, Package, LogOut, Save, Loader2, Key, CheckCircle2, ShoppingBag, ArrowLeft, Truck } from 'lucide-react';
 import { supabase } from '../supabaseClient';
+import NovaPoshtaPicker from './NovaPoshtaPicker';
 import type { AuthState } from '../useAuth';
 
 interface Profile { full_name: string; phone: string; city: string; warehouse: string }
@@ -173,8 +174,6 @@ const AccountPage: React.FC<{ auth: AuthState; onBack: () => void }> = ({ auth, 
             {([
               ['full_name', "Ім'я та прізвище", User, 'name'],
               ['phone', 'Телефон', Phone, 'tel'],
-              ['city', 'Місто (для Нової Пошти)', MapPin, 'address-level2'],
-              ['warehouse', 'Відділення / поштомат НП', Package, 'off'],
             ] as const).map(([key, label, Icon, ac]) => (
               <div key={key} className="relative">
                 <Icon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
@@ -182,6 +181,9 @@ const AccountPage: React.FC<{ auth: AuthState; onBack: () => void }> = ({ auth, 
                   autoComplete={ac} type={key === 'phone' ? 'tel' : 'text'} className={inputCls} />
               </div>
             ))}
+            <p className="text-zinc-500 text-xs pt-1">Куди надсилати замовлення (Нова Пошта):</p>
+            <NovaPoshtaPicker city={profile.city} warehouse={profile.warehouse} inputCls={inputCls}
+              onChange={v => setProfile(p => ({ ...p, ...v }))} />
             <button onClick={saveProfile} disabled={saving}
               className="w-full bg-[#FFC300] hover:bg-white text-black font-black py-3 rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-60">
               {saving ? <Loader2 className="animate-spin" size={18} /> : saved ? <><CheckCircle2 size={18} /> Збережено</> : <><Save size={18} /> Зберегти</>}

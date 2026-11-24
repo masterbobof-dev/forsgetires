@@ -12,7 +12,7 @@ export default async function handler(req, res) {
   let product = null;
   if (id) {
     try {
-      const rows = await rest(`tyres?id=eq.${id}&select=id,title,description,seo_title,seo_description,price,old_price,manufacturer,image_url,in_stock,radius,season,slug,catalog_number`);
+      const rows = await rest(`tyres?id=eq.${id}&select=id,title,description,seo_title,seo_description,price,old_price,manufacturer,image_url,in_stock,radius,season,slug,catalog_number,on_order,stock_quantity,program_product_id`);
       product = rows[0] || null;
     } catch { /* show the site anyway */ }
   }
@@ -26,10 +26,11 @@ export default async function handler(req, res) {
 
   const url = `${SITE_URL}${productPath(product)}`;
   const price = parsePrice(product.price);
-  const title = product.seo_title || `${product.title} — ціна ${price} грн | ${SHOP_NAME}`;
+  const onOrder = !!product.on_order;
+  const title = product.seo_title || (onOrder ? `${product.title} — під замовлення | ${SHOP_NAME}` : `${product.title} — ціна ${price} грн | ${SHOP_NAME}`);
   const season = SEASON_UA[product.season] ? `${SEASON_UA[product.season]} шина. ` : '';
   const description = (product.seo_description || stripHtml(product.description) ||
-    `${season}Купити ${product.title} за ${price} грн. Самовивіз у Синельниковому або доставка Новою Поштою по Україні.`).slice(0, 300);
+    (onOrder ? `${product.title} — під замовлення, ціну і термін постачання уточнюйте у менеджера. ` : `${season}Купити ${product.title} за ${price} грн. `) + `Самовивіз у Синельниковому або доставка Новою Поштою по Україні.`).slice(0, 300);
   const image = product.image_url || `${SITE_URL}/favicon.svg`;
 
   html = html.replace(/<title>[\s\S]*?<\/title>/, `<title>${esc(title)}</title>`);
@@ -37,7 +38,7 @@ export default async function handler(req, res) {
   html = setTag(html, /<link rel="canonical"[^>]*>/, `<link rel="canonical" href="${esc(url)}" />`);
   html = setTag(html, /<meta property="og:type"[^>]*>/, '<meta property="og:type" content="product" />');
   html = setTag(html, /<meta property="og:title"[^>]*>/, `<meta property="og:title" content="${esc(product.title)}" />`);
-  html = setTag(html, /<meta property="og:description"[^>]*>/, `<meta property="og:description" content="${esc(`${price} грн. ${description}`)}" />`);
+  html = setTag(html, /<meta property="og:description"[^>]*>/, `<meta property="og:description" content="${esc(onOrder ? description : `${price} грн. ${description}`)}" />`);
   html = setTag(html, /<meta property="og:image"[^>]*>/, `<meta property="og:image" content="${esc(image)}" />`);
   html = setTag(html, /<meta property="og:url"[^>]*>/, `<meta property="og:url" content="${esc(url)}" />`);
   html = setTag(html, /<meta name="twitter:title"[^>]*>/, `<meta name="twitter:title" content="${esc(product.title)}" />`);
@@ -69,8 +70,9 @@ export default async function handler(req, res) {
       ld.aggregateRating = { '@type': 'AggregateRating', ratingValue: Number(avg.toFixed(1)), reviewCount: reviews.length, bestRating: 5, worstRating: 1 };
     }
   } catch { /* no reviews table yet */ }
+  if (onOrder) delete ld.offers; // price is confirmed by the manager
   html = html.replace('</head>', `    <script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>\n  </head>`);
-  html = setRootContent(html, `<h1>${esc(product.title)}</h1><p>Ціна: ${price} грн${product.in_stock === false ? ' (немає в наявності)' : ''}</p><p>${esc(description)}</p><p><a href="/">Каталог товарів</a></p>`);
+  html = setRootContent(html, `<h1>${esc(product.title)}</h1><p>${onOrder ? 'Під замовлення — ціну і термін уточнюйте у менеджера' : `Ціна: ${price} грн${product.in_stock === false ? ' (немає в наявності)' : ''}`}</p><p>${esc(description)}</p><p><a href="/">Каталог товарів</a></p>`);
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=86400');

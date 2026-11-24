@@ -46,7 +46,15 @@ Deno.serve(async (req) => {
       if (products.length < PAGE) break;
     }
     if (!total) await site.rpc('program_sync_save', { p_cursor_at: null, p_cursor_id: null, p_count: 0, p_error: null });
-    return json({ ok: true, pages, total, inserted, updated, cursorAt, ms: Date.now() - started });
+    // Full pass finished (nightly reset): products not seen since the reset were deleted in the program -> hide them
+    let hidden = 0;
+    const caughtUp = Date.now() - started < TIME_BUDGET_MS;
+    if (caughtUp && state.full_resync_at && (!state.missing_checked_at || state.missing_checked_at < state.full_resync_at)) {
+      const { data: n, error } = await site.rpc('program_sync_hide_missing', { p_before: state.full_resync_at });
+      if (error) throw new Error(`hide_missing: ${error.message}`);
+      hidden = n || 0;
+    }
+    return json({ ok: true, pages, total, inserted, updated, hidden, cursorAt, ms: Date.now() - started });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await site.rpc('program_sync_save', { p_cursor_at: null, p_cursor_id: null, p_count: total, p_error: msg.slice(0, 500) });

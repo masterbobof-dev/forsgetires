@@ -1,9 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Lock, LogOut, ShieldAlert, UserCheck, Loader2, Menu, X as CloseIcon, ChevronRight, Settings as SettingsIcon, ShoppingBag, Wrench, BarChart3, Globe, Megaphone, FileText, Database, Users, Calendar, LayoutDashboard, AlertCircle, Sparkles } from 'lucide-react';
-import ScheduleTab from './admin/ScheduleTab';
-import ClientsTab from './admin/ClientsTab';
-import GalleryTab from './admin/GalleryTab';
-import PricesTab from './admin/PricesTab';
+import { Lock, LogOut, ShieldAlert, UserCheck, Loader2, Menu, X as CloseIcon, ChevronRight, Settings as SettingsIcon, ShoppingBag, BarChart3, Globe, Megaphone, FileText, Database, FolderTree, AlertCircle, Sparkles } from 'lucide-react';
 import SettingsTab from './admin/SettingsTab';
 import TyresTab from './admin/TyresTab';
 import OrdersTab from './admin/OrdersTab';
@@ -13,16 +9,15 @@ import SeoTab from './admin/SeoTab';
 import PromoTab from './admin/PromoTab';
 import SyncTab from './admin/SyncTab';
 import AiAssistantTab from './admin/AiAssistantTab';
+import CategoriesTab from './admin/CategoriesTab';
 import { supabase } from '../supabaseClient';
 
 interface AdminPanelProps {
   onLogout: () => void;
   onBackToSite?: () => void;
-  mode: 'service' | 'tyre';
-  setMode: (mode: 'service' | 'tyre') => void;
 }
 
-type AccessStatus = 'loading' | 'granted_admin' | 'granted_staff' | 'granted_manager' | 'denied' | 'setup_required';
+type AccessStatus = 'loading' | 'granted_admin' | 'granted_manager' | 'denied' | 'setup_required';
 
 // ── Reusable Confirm Dialog ────────────────────────────────────────────────
 interface ConfirmDialogProps {
@@ -89,7 +84,7 @@ const useConfirm = () => {
 };
 
 // ── Main Component ─────────────────────────────────────────────────────────
-const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite, mode, setMode }) => {
+const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
   const [activeTab, setActiveTab] = useState<string>('orders');
   const [accessStatus, setAccessStatus] = useState<AccessStatus>('loading');
   const [currentUserEmail, setCurrentUserEmail] = useState('');
@@ -120,26 +115,19 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite, mode, s
       setCurrentUserEmail(email);
 
       const { data: settings, error: settingsError } = await supabase
-        .from('settings').select('key, value').in('key', ['admin_email', 'service_staff_email', 'manager_email']);
+        .from('settings').select('key, value').in('key', ['admin_email', 'manager_email']);
       if (settingsError) throw settingsError;
 
       const adminEmail = settings?.find(s => s.key === 'admin_email')?.value?.trim().toLowerCase();
-      const staffEmail = settings?.find(s => s.key === 'service_staff_email')?.value?.trim().toLowerCase();
       const managerEmail = settings?.find(s => s.key === 'manager_email')?.value?.trim().toLowerCase();
 
       if (!adminEmail) {
         setAccessStatus('setup_required');
       } else if (email === adminEmail) {
         setAccessStatus('granted_admin');
-        if (mode === 'service') setMode('tyre');
       } else if (email === managerEmail) {
         setAccessStatus('granted_manager');
-        setMode('tyre');
         setActiveTab('orders');
-      } else if (email === staffEmail) {
-        setAccessStatus('granted_staff');
-        setMode('service');
-        setActiveTab('schedule');
       } else {
         setAccessStatus('denied');
       }
@@ -159,14 +147,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite, mode, s
       alert('Помилка: ' + error.message);
     }
   };
-
-  useEffect(() => {
-    if (mode === 'service') {
-      if (!['schedule', 'clients', 'gallery', 'prices'].includes(activeTab)) setActiveTab('schedule');
-    } else {
-      if (!['tyres', 'orders', 'stats', 'settings', 'articles', 'seo', 'promo', 'sync'].includes(activeTab)) setActiveTab('orders');
-    }
-  }, [mode]);
 
   // ── Access states ──────────────────────────────────────────────────────
 
@@ -224,12 +204,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite, mode, s
   // ── Main Panel ─────────────────────────────────────────────────────────
   const isAdmin = accessStatus === 'granted_admin';
   const isManager = accessStatus === 'granted_manager';
-  const isStaff = accessStatus === 'granted_staff';
 
   const getTabLabel = (tab: string) => {
     const labels: Record<string, string> = {
-      schedule: 'Розклад', clients: 'Клієнти', prices: 'Прайс', gallery: 'Галерея',
-      tyres: 'Шини', orders: 'Замовлення', promo: 'Маркетинг', sync: 'API / Синхр.',
+      categories: 'Категорії',
+      tyres: 'Товари', orders: 'Замовлення', promo: 'Маркетинг', sync: 'API / Синхр.',
       seo: 'SEO', articles: 'Статті', settings: 'Налашт.', stats: 'Стат.',
       ai: 'AI Помічник',
     };
@@ -238,8 +217,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite, mode, s
 
   const getTabIcon = (tab: string) => {
     const icons: Record<string, React.ReactNode> = {
-      schedule: <Calendar size={18} />, clients: <Users size={18} />, prices: <BarChart3 size={18} />,
-      gallery: <LayoutDashboard size={18} />, tyres: <ShoppingBag size={18} />, orders: <FileText size={18} />,
+      categories: <FolderTree size={18} />, tyres: <ShoppingBag size={18} />, orders: <FileText size={18} />,
       promo: <Megaphone size={18} />, sync: <Database size={18} />, seo: <Globe size={18} />,
       articles: <FileText size={18} />, settings: <SettingsIcon size={18} />, stats: <BarChart3 size={18} />,
       ai: <Sparkles size={18} />,
@@ -247,13 +225,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite, mode, s
     return icons[tab] ?? null;
   };
 
-  const serviceTabs = isStaff ? ['schedule', 'clients'] : ['schedule', 'clients', 'prices', 'gallery'];
-  const tyreTabs = isAdmin
-    ? ['orders', 'tyres', 'ai', 'promo', 'sync', 'seo', 'articles', 'stats', 'settings']
+  const currentTabs = isAdmin
+    ? ['orders', 'tyres', 'categories', 'ai', 'promo', 'sync', 'seo', 'articles', 'stats', 'settings']
     : isManager
-      ? ['orders', 'tyres', 'ai', 'promo', 'seo', 'articles', 'stats']
+      ? ['orders', 'tyres', 'categories', 'ai', 'promo', 'seo', 'articles', 'stats']
       : [];
-  const currentTabs = mode === 'service' ? serviceTabs : tyreTabs;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white pb-20 md:pb-6 animate-in fade-in duration-500">
@@ -272,7 +248,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite, mode, s
             <h1 className="text-lg md:text-xl font-bold uppercase flex items-center gap-2">
               <Lock className="text-[#FFC300] hidden sm:block" />
               <span className="truncate max-w-[150px] sm:max-w-none">
-                {isStaff ? 'Сервіс' : isManager ? 'Менеджер' : 'Admin'}
+                {isManager ? 'Менеджер' : 'Admin'}
               </span>
             </h1>
 
@@ -285,22 +261,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite, mode, s
               </button>
             )}
 
-            {(isAdmin || isManager) && (
-              <div className="bg-black p-0.5 rounded-lg border border-zinc-700 flex ml-1">
-                <button
-                  onClick={() => { setMode('tyre'); setIsMobileMenuOpen(false); }}
-                  className={`px-1.5 sm:px-3 py-1 rounded text-[9px] sm:text-xs font-bold transition-colors flex items-center gap-0.5 sm:gap-1 ${mode === 'tyre' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
-                >
-                  <ShoppingBag size={10} /> <span className="hidden xs:inline">Магазин</span>
-                </button>
-                <button
-                  onClick={() => { setMode('service'); setIsMobileMenuOpen(false); }}
-                  className={`px-1.5 sm:px-3 py-1 rounded text-[9px] sm:text-xs font-bold transition-colors flex items-center gap-0.5 sm:gap-1 ${mode === 'service' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
-                >
-                  <Wrench size={10} /> Сервіс
-                </button>
-              </div>
-            )}
           </div>
 
           {/* Desktop Nav */}
@@ -392,19 +352,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite, mode, s
       )}
 
       <main className="max-w-7xl mx-auto p-2 md:p-4 print:hidden">
-        {activeTab === 'schedule' && <ScheduleTab />}
-        {activeTab === 'clients' && <ClientsTab />}
-        {!isStaff && activeTab === 'gallery' && <GalleryTab />}
-        {!isStaff && activeTab === 'prices' && <PricesTab />}
         {isAdmin && activeTab === 'settings' && <SettingsTab />}
-        {!isStaff && activeTab === 'tyres' && <TyresTab />}
-        {!isStaff && activeTab === 'orders' && <OrdersTab />}
-        {!isStaff && activeTab === 'stats' && <StatsTab />}
-        {!isStaff && activeTab === 'articles' && <ArticlesTab />}
-        {!isStaff && activeTab === 'seo' && <SeoTab />}
-        {!isStaff && activeTab === 'promo' && <PromoTab />}
+        {activeTab === 'tyres' && <TyresTab />}
+        {activeTab === 'categories' && <CategoriesTab />}
+        {activeTab === 'orders' && <OrdersTab />}
+        {activeTab === 'stats' && <StatsTab />}
+        {activeTab === 'articles' && <ArticlesTab />}
+        {activeTab === 'seo' && <SeoTab />}
+        {activeTab === 'promo' && <PromoTab />}
         {isAdmin && activeTab === 'sync' && <SyncTab />}
-        {!isStaff && activeTab === 'ai' && <AiAssistantTab />}
+        {activeTab === 'ai' && <AiAssistantTab />}
       </main>
 
       {/* Mobile Bottom Tab Bar */}

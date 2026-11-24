@@ -7,10 +7,10 @@ import { PHONE_LINK_1, PHONE_NUMBER_1, FORMSPREE_ENDPOINT, TELEGRAM_LINK, VIBER_
 // Підкомпоненти
 import CartDrawer from './shop/CartDrawer';
 import ProductDetailModal from './shop/ProductDetailModal';
-import CategoryNav, { CategoryType, CATEGORIES } from './shop/CategoryNav';
+import CategoryNav, { CategorySelection } from './shop/CategoryNav';
 import FilterToolbar from './shop/FilterToolbar';
 import ProductCard from './shop/ProductCard';
-import ServiceBanner from './shop/ServiceBanner';
+import { useCategories, buildCategoryFilter, getCategoryPath, getRootOf, isTyreProduct } from '../categories';
 import AgroBanner from './shop/AgroBanner';
 import SeoContentBlock from './shop/SeoContentBlock';
 import { logAnalyticsEvent } from './admin/analytics';
@@ -37,28 +37,23 @@ const getSeasonLabel = (s: string | undefined) => {
 }
 
 interface TyreShopProps {
-  initialCategory?: CategoryType;
   initialProduct?: TyreProduct | null;
   onBack?: () => void;
   isAdmin?: boolean;
   onAdminClick?: () => void;
   cartItems: CartItem[];
   onCartChange: (items: CartItem[]) => void;
-  onServiceClick?: () => void;
-  hideTireService?: boolean;
 }
 
 const TyreShop: React.FC<TyreShopProps> = ({ 
-  initialCategory = 'all', 
   initialProduct, 
   onBack, 
   isAdmin, 
   onAdminClick,
   cartItems,
   onCartChange,
-  onServiceClick,
-  hideTireService = false
 }) => {
+  const { categories, dbReady, loading: categoriesLoading } = useCategories();
   const [tyres, setTyres] = useState<TyreProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -75,8 +70,6 @@ const TyreShop: React.FC<TyreShopProps> = ({
   const [recentlyViewed, setRecentlyViewed] = useState<TyreProduct[]>([]);
   const [agroFeaturedProducts, setAgroFeaturedProducts] = useState<TyreProduct[]>([]);
   const [priorityProductId, setPriorityProductId] = useState<number | null>(null);
-  const [heroTitle, setHeroTitle] = useState('ЦІЛОДОБОВИЙ ШИНОМОНТАЖ');
-  const [heroSubtitle, setHeroSubtitle] = useState('В М. СИНЕЛЬНИКОВЕ (24/7)');
 
   useEffect(() => {
     try {
@@ -85,12 +78,29 @@ const TyreShop: React.FC<TyreShopProps> = ({
     } catch(e) {}
   }, [selectedProductForModal]);
 
-  const [activeCategory, setActiveCategory] = useState<CategoryType>(initialCategory);
+  const [activeCategory, setActiveCategory] = useState<CategorySelection>('all');
+  const activeCat = typeof activeCategory === 'number' ? categories.find(c => c.id === activeCategory) : undefined;
+  const agroCategory = categories.find(c => c.vehicle_type === 'agro');
+  const showTyreFilters = !!activeCat && activeCat.kind === 'tyre';
 
-  // --- LOGIC: SYNC INITIAL CATEGORY ---
+  // --- LOGIC: CATEGORY <-> URL (?c=slug) ---
   useEffect(() => {
-    setActiveCategory(initialCategory);
-  }, [initialCategory]);
+    if (categoriesLoading) return;
+    const slug = new URLSearchParams(window.location.search).get('c');
+    if (slug === 'akcii') setActiveCategory('hot');
+    else if (slug) {
+      const found = categories.find(c => c.slug === slug);
+      if (found) setActiveCategory(found.id);
+    }
+  }, [categoriesLoading]);
+
+  useEffect(() => {
+    if (categoriesLoading) return;
+    const url = new URL(window.location.href);
+    if (activeCategory === 'all') url.searchParams.delete('c');
+    else url.searchParams.set('c', activeCategory === 'hot' ? 'akcii' : (activeCat?.slug || ''));
+    window.history.replaceState({}, '', url.toString());
+  }, [activeCategory, categoriesLoading]);
 
   const [activeSort, setActiveSort] = useState<'newest' | 'oldest' | 'price_asc' | 'price_desc' | 'with_photo' | 'no_photo'>('newest');
   const [searchQuery, setSearchQuery] = useState('');
@@ -100,6 +110,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
   const [filterHeight, setFilterHeight] = useState('');
   const [filterRadius, setFilterRadius] = useState('');
   const [filterBrand, setFilterBrand] = useState('');
+  const [filterSeason, setFilterSeason] = useState('');
   const [filterOptions, setFilterOptions] = useState({ widths: [] as string[], heights: [] as string[], radii: [] as string[], brands: [] as string[] });
   
   const [enableStockQty, setEnableStockQty] = useState(false);
@@ -150,7 +161,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
     const url = new URL(window.location.href);
     if (selectedProductForModal) {
       // SEO: Dynamic Title
-      document.title = `${selectedProductForModal.title} — Купити шини ${selectedProductForModal.radius} в Україні | Forsage Tires`;
+      document.title = `${selectedProductForModal.title} — купити в Україні | Forsage`;
       
       // SEO: Meta Description
       let metaDesc = document.querySelector('meta[name="description"]');
@@ -166,11 +177,11 @@ const TyreShop: React.FC<TyreShopProps> = ({
       window.history.replaceState({}, '', url.toString());
       logAnalyticsEvent('view_item', String(selectedProductForModal.id), selectedProductForModal.title);
     } else {
-      document.title = "Forsage Tires — Магазин шин та дисків у Синельниково";
+      document.title = activeCat ? `${activeCat.name} — купити в інтернет-магазині Forsage` : "Forsage — інтернет-магазин шин, дисків та автотоварів";
       url.searchParams.delete('p');
       window.history.replaceState({}, '', url.toString());
     }
-  }, [selectedProductForModal]);
+  }, [selectedProductForModal, activeCat]);
 
   const submitQuickOrder = async () => {
     if (!quickOrderPhone || quickOrderPhone.length < 9) { setOrderError("Введіть коректний номер телефону"); return; }
@@ -200,13 +211,9 @@ const TyreShop: React.FC<TyreShopProps> = ({
         'contact_phone2', 
         'nova_poshta_key', 
         'agro_featured_ids',
-        'hero_title',
-        'hero_subtitle'
       ]);
       if (setts) {
           for (const item of setts) {
-              if (item.key === 'hero_title') setHeroTitle(item.value);
-              if (item.key === 'hero_subtitle') setHeroSubtitle(item.value);
               if (item.key === 'enable_stock_quantity') setEnableStockQty(item.value === 'true');
               if (item.key === 'contact_phone1') { 
                   setShopPhone(item.value); 
@@ -254,14 +261,20 @@ const TyreShop: React.FC<TyreShopProps> = ({
 
   // --- LOGIC: TYRE DATA ---
   useEffect(() => {
+    if (categoriesLoading) return;
     setPage(0);
     setTyres([]); 
     fetchTyres(0, true);
-  }, [activeCategory, activeSort, enableStockQty, filterBrand, filterRadius, filterWidth, filterHeight, showOnlyInStock, searchQuery, priorityProductId]);
+  }, [categoriesLoading, activeCategory, activeSort, enableStockQty, filterBrand, filterRadius, filterWidth, filterHeight, filterSeason, showOnlyInStock, searchQuery, priorityProductId]);
+
+  const resetFilters = () => {
+    setSearchQuery(''); setFilterWidth(''); setFilterHeight(''); setFilterRadius(''); setFilterBrand(''); setFilterSeason('');
+  };
 
   const handleAgroProductClick = (id: number) => {
     setPriorityProductId(id);
-    setActiveCategory('agro');
+    setActiveCategory(agroCategory ? agroCategory.id : 'all');
+    setFilterSeason('');
     setSearchQuery('');
     setFilterBrand('');
     setFilterRadius('');
@@ -271,6 +284,10 @@ const TyreShop: React.FC<TyreShopProps> = ({
   };
 
   const parseTyreSpecs = (tyre: TyreProduct): TyreProduct => {
+    if (!isTyreProduct(tyre, categories)) {
+      const in_stock = enableStockQty ? (tyre.in_stock !== false && (tyre.stock_quantity ?? 0) > 0) : tyre.in_stock !== false;
+      return { ...tyre, season: undefined, width: undefined, height: undefined, in_stock };
+    }
     const m = tyre.title.match(/(\d{3})[\/\s](\d{2})[\s\w]*R(\d{2}(?:\.5|\.3)?[C|c]?)/);
     let width = '', height = '', parsedRadius = tyre.radius || '', vehicle_type = tyre.vehicle_type || 'car';
     if (m) { 
@@ -302,15 +319,13 @@ const TyreShop: React.FC<TyreShopProps> = ({
       if (filterWidth) query = query.ilike('title', `%${filterWidth}%`);
       if (filterHeight) query = query.ilike('title', `%/${filterHeight}%`);
       if (showOnlyInStock) query = query.neq('in_stock', false);
+      if (filterSeason && showTyreFilters) query = query.eq('season', filterSeason);
 
-      if (activeCategory === 'cargo') query = query.or('vehicle_type.eq.cargo,radius.ilike.%C%');
-      else if (activeCategory === 'car') query = query.eq('vehicle_type', 'car');
-      else if (activeCategory === 'truck') query = query.eq('vehicle_type', 'truck');
-      else if (activeCategory === 'agro') query = query.eq('vehicle_type', 'agro');
-      else if (activeCategory === 'suv') query = query.eq('vehicle_type', 'suv');
-      else if (activeCategory === 'out_of_stock') query = query.eq('in_stock', false);
-      else if (['winter','summer','all-season'].includes(activeCategory)) query = query.eq('season', activeCategory);
-      else if (activeCategory.startsWith('hot')) query = query.eq('is_hot', true);
+      if (activeCategory === 'hot') query = query.eq('is_hot', true);
+      else if (activeCat) {
+        const catFilter = buildCategoryFilter(categories, activeCat, dbReady);
+        if (catFilter) query = query.or(catFilter);
+      }
       
       query = query.order('is_hot', { ascending: false }).order('in_stock', { ascending: false });
       const sorts = { price_asc: 'price', price_desc: 'price', newest: 'created_at', oldest: 'created_at' };
@@ -322,7 +337,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
         let processed = data.map(parseTyreSpecs);
         
         // --- PRIORITY LOGIC ---
-        if (priorityProductId && pageIndex === 0 && activeCategory === 'agro') {
+        if (priorityProductId && pageIndex === 0 && agroCategory && activeCategory === agroCategory.id) {
             const index = processed.findIndex(p => p.id === priorityProductId);
             if (index > 0) {
                 const [item] = processed.splice(index, 1);
@@ -415,8 +430,8 @@ const TyreShop: React.FC<TyreShopProps> = ({
       "@type": "Product",
       "name": product.title,
       "image": [product.image_url, ...(product.gallery || [])].filter(Boolean),
-      "description": product.description || `Якісна шина ${product.title} для вашого авто. В наявності на Forsage Tires.`,
-      "sku": `tyre-${product.id}`,
+      "description": product.description || `${product.title} — в наявності в інтернет-магазині Forsage.`,
+      "sku": `product-${product.id}`,
       "brand": {
         "@type": "Brand",
         "name": product.manufacturer || "Forsage Tires"
@@ -444,13 +459,21 @@ const TyreShop: React.FC<TyreShopProps> = ({
                <nav className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-black text-zinc-600">
                  <button onClick={onBack} className="hover:text-[#FFC300] transition-colors">Головна</button>
                  <span className="text-zinc-800">/</span>
-                 <span className="text-zinc-500">{hideTireService ? 'Каталог товарів' : 'Магазин та сервіс'}</span>
-                 {activeCategory !== 'all' && (
+                 <button onClick={() => setActiveCategory('all')} className="text-zinc-500 hover:text-[#FFC300] transition-colors">Каталог товарів</button>
+                 {activeCategory === 'hot' && (
                    <>
                      <span className="text-zinc-800">/</span>
-                     <span className="text-[#FFC300]">{CATEGORIES.find(c => c.id === activeCategory)?.label}</span>
+                     <span className="text-[#FFC300]">Акції</span>
                    </>
                  )}
+                 {activeCat && getCategoryPath(categories, activeCat).map((c, i, arr) => (
+                   <React.Fragment key={c.id}>
+                     <span className="text-zinc-800">/</span>
+                     {i === arr.length - 1
+                       ? <span className="text-[#FFC300]">{c.name}</span>
+                       : <button onClick={() => setActiveCategory(c.id)} className="text-zinc-500 hover:text-[#FFC300] transition-colors">{c.name}</button>}
+                   </React.Fragment>
+                 ))}
                </nav>
 
                <div>
@@ -460,11 +483,10 @@ const TyreShop: React.FC<TyreShopProps> = ({
                </div>
 
                <p className="text-zinc-400 text-sm md:text-base max-w-xl leading-relaxed">
-                 Ми знаходимося в місті{' '}
-                 <span className="text-white font-black">Синельникове</span>.
-                 Надаємо послуги шиномонтажу та маємо{' '}
-                 <span className="text-[#FFC300] font-black">великий вибір шин та запчастин</span>{' '}
-                 в наявності.
+                 Інтернет-магазин у місті{' '}
+                 <span className="text-white font-black">Синельникове</span>:{' '}
+                 <span className="text-[#FFC300] font-black">шини, диски, акумулятори та автотовари</span>{' '}
+                 в наявності. Самовивіз або доставка Новою Поштою по всій Україні.
                </p>
 
                <div className="flex flex-wrap gap-3">
@@ -529,7 +551,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
                         allowFullScreen 
                         loading="lazy" 
                         referrerPolicy="no-referrer-when-downgrade"
-                        title="Forsage Tires location"
+                        title="Forsage location"
                     ></iframe>
                     <div className="bg-zinc-950/90 border-t border-zinc-800 p-3 flex items-center justify-between gap-2">
                         <div className="min-w-0 flex items-center gap-2">
@@ -550,25 +572,26 @@ const TyreShop: React.FC<TyreShopProps> = ({
         </header>
         
         <CategoryNav 
-          activeCategory={activeCategory} 
-          onCategoryChange={(cat) => {
+          categories={categories}
+          active={activeCategory} 
+          onChange={(cat) => {
+            const next = typeof cat === 'number' ? categories.find(c => c.id === cat) : undefined;
             if (cat === 'all') {
-              setSearchQuery('');
-              setFilterWidth('');
-              setFilterHeight('');
-              setFilterRadius('');
-              setFilterBrand('');
+              resetFilters();
               setShowOnlyInStock(false);
+            } else if (!next || next.kind !== 'tyre') {
+              // tyre-only filters make no sense outside tyre categories
+              setFilterWidth(''); setFilterHeight(''); setFilterRadius(''); setFilterSeason('');
             }
+            if (next && activeCat && getRootOf(categories, next).id !== getRootOf(categories, activeCat).id) setFilterBrand('');
+            setPriorityProductId(null);
             setActiveCategory(cat);
           }} 
         />
 
-        {onServiceClick && <ServiceBanner onServiceClick={onServiceClick} />}
-
-        {activeCategory !== 'agro' && (
+        {activeCategory === 'all' && agroCategory && (
           <AgroBanner 
-            onCategoryClick={() => { setPriorityProductId(null); setActiveCategory('agro'); }} 
+            onCategoryClick={() => { setPriorityProductId(null); setActiveCategory(agroCategory.id); }} 
             featuredProducts={agroFeaturedProducts}
             onProductClick={handleAgroProductClick}
           />
@@ -581,11 +604,13 @@ const TyreShop: React.FC<TyreShopProps> = ({
           filterHeight={filterHeight} setFilterHeight={setFilterHeight}
           filterRadius={filterRadius} setFilterRadius={setFilterRadius}
           filterBrand={filterBrand} setFilterBrand={setFilterBrand}
+          filterSeason={filterSeason} setFilterSeason={setFilterSeason}
+          showTyreFilters={showTyreFilters}
           activeSort={activeSort} setActiveSort={setActiveSort}
           filterOptions={filterOptions}
           totalCount={totalCount}
           onSearch={() => fetchTyres(0, true)}
-          onReset={() => { setSearchQuery(''); setFilterWidth(''); setFilterHeight(''); setFilterRadius(''); setFilterBrand(''); setActiveCategory('all'); }}
+          onReset={() => { resetFilters(); setActiveCategory('all'); }}
         />
 
         {loading ? (
@@ -608,7 +633,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
                 <h3 className="text-xl font-black text-white uppercase tracking-tight">Нічого не знайдено</h3>
                 <p className="text-zinc-500 text-sm max-w-xs mx-auto">Спробуйте змінити параметри фільтрації або скинути їх</p>
               </div>
-              <button onClick={() => { setSearchQuery(''); setFilterWidth(''); setFilterHeight(''); setFilterRadius(''); setFilterBrand(''); setActiveCategory('all'); }} className="bg-white text-black font-black px-8 py-3 rounded-xl hover:bg-[#FFC300] transition-all">Скинути все</button>
+              <button onClick={() => { resetFilters(); setActiveCategory('all'); }} className="bg-white text-black font-black px-8 py-3 rounded-xl hover:bg-[#FFC300] transition-all">Скинути все</button>
            </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-8 px-2">
@@ -656,7 +681,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
                     <div className="h-32 mb-3 bg-zinc-950 rounded-xl p-2 flex items-center justify-center overflow-hidden">
                         {t.image_url ? <img src={t.image_url} alt={t.title} className="max-h-full object-contain group-hover:scale-110 transition-transform"/> : <div className="text-zinc-700 font-bold text-[10px] uppercase">Без фото</div>}
                     </div>
-                    <span className="text-[10px] text-[#FFC300] font-black uppercase tracking-widest mb-1 truncate">{t.manufacturer || 'Шина'}</span>
+                    <span className="text-[10px] text-[#FFC300] font-black uppercase tracking-widest mb-1 truncate">{t.manufacturer || 'Товар'}</span>
                     <h4 className="text-white text-xs font-bold line-clamp-2 mb-2 flex-grow">{t.title}</h4>
                     <span className="text-base font-black text-white">{formatPrice(t.price)} грн</span>
                   </div>

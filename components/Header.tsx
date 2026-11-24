@@ -12,7 +12,7 @@ interface HeaderProps {
   cartCount?: number;
 }
 
-const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick, cartCount = 0, hideTireService = false }) => {
+const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick, cartCount = 0 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [phones, setPhones] = useState({
     p1: PHONE_NUMBER_1,
@@ -49,10 +49,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick
   }, []);
 
   const navItems: { label: string; view: ViewState }[] = [
-    { label: 'Каталог Шини', view: 'home' },
-    { label: 'Послуги СТО', view: 'service' },
-    { label: 'Ціни', view: 'prices' },
-    { label: 'Фотогалерея', view: 'gallery' },
+    { label: 'Каталог товарів', view: 'home' },
   ];
 
   const handleNavClick = (view: ViewState) => {
@@ -77,7 +74,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAdminClick
               ФОРСАЖ
             </span>
             <span className="text-[10px] md:text-xs text-zinc-400 font-bold uppercase tracking-[0.2em] leading-none ml-1">
-              Шиномонтаж
+              Інтернет-магазин
             </span>
           </span>
         </button>

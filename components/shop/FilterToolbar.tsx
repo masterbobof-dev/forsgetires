@@ -211,7 +211,7 @@ interface SearchBarProps {
 export const SearchBar: React.FC<SearchBarProps> = ({ searchQuery, setSearchQuery, onSearch, activeSort, setActiveSort, activeFilters, totalCount, onOpenFilters, suggest }) => {
   const [focused, setFocused] = useState(false);
   return (
-  <div className="sticky z-30 -mx-2 px-2 py-2 md:py-3 bg-[#09090b]/85 backdrop-blur-xl lg:static lg:mx-0 lg:px-0 lg:bg-transparent lg:backdrop-blur-none" style={{ top: 'var(--header-h, 64px)' }}>
+  <div className="sticky z-30 -mx-2 px-2 py-2 md:py-3 bg-[#09090b] border-b border-zinc-800/80 shadow-[0_8px_16px_-8px_rgba(0,0,0,0.9)] lg:border-0 lg:shadow-none lg:static lg:mx-0 lg:px-0 lg:bg-transparent lg:backdrop-blur-none" style={{ top: 'var(--header-h, 64px)' }}>
     <div className="flex gap-2">
       <div className="relative flex-grow group">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-[#FFC300] transition-colors" size={16} />
@@ -272,7 +272,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ searchQuery, setSearchQuer
         </select>
       </div>
     </div>
-    <p className="mt-1.5 text-[11px] font-bold uppercase tracking-widest text-zinc-500 px-1">
+    <p className="hidden lg:block mt-1.5 text-[11px] font-bold uppercase tracking-widest text-zinc-500 px-1">
       Знайдено: <span className="text-zinc-300">{totalCount}</span> шт
     </p>
   </div>

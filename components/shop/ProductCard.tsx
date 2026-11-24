@@ -47,6 +47,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
               className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
               alt={altText}
               loading="lazy"
+              decoding="async"
+              width={400}
+              height={500}
               referrerPolicy="no-referrer"
             />
           ) : (

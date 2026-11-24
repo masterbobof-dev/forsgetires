@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy, Suspense, useCallback } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense, useCallback } from 'react';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import { ViewState, TyreProduct, CartItem } from './types';
@@ -81,8 +81,12 @@ const App: React.FC = () => {
     return () => window.removeEventListener('popstate', onPop);
   }, []);
 
+  // signed in through the window on the site → staff go straight to the admin panel
+  const justLoggedIn = useRef(false);
   const auth = useAuth({
+    onLogin: () => { justLoggedIn.current = true; },
     onLogout: () => {
+      justLoggedIn.current = false;
       setIsStaff(false);
       if (window.location.pathname === PATHS.account) navigate('home');
     },
@@ -94,6 +98,12 @@ const App: React.FC = () => {
     setIsStaff(null);
     supabase.rpc('is_staff').then(({ data, error }) => setIsStaff(!error && data === true));
   }, [auth.session?.user?.id]);
+
+  useEffect(() => {
+    if (isStaff === null || !justLoggedIn.current) return;
+    justLoggedIn.current = false;
+    if (isStaff) navigate('admin');
+  }, [isStaff]); // only when the staff check finishes (null → true/false), not on the session change itself
 
   // Google Analytics / Meta Pixel (only if their IDs are set in settings)
   useEffect(() => { if (viewFromPath(window.location.pathname) !== 'admin') initExternalAnalytics(); }, []);

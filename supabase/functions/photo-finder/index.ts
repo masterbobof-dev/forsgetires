@@ -39,16 +39,19 @@ const download = async (url: string) => {
     const type = (res.headers.get('content-type') || '').split(';')[0].trim();
     if (!/^image\/(jpeg|png|jpg)$/.test(type)) throw new Error(`format ${type || '?'}`);
     const bytes = new Uint8Array(await res.arrayBuffer());
-    if (bytes.length > 6_000_000) throw new Error('too big');
+    if (bytes.length > 2_500_000) throw new Error('too big');
     return bytes;
   } finally { clearTimeout(timer); }
 };
 
-const resized = async (bytes: Uint8Array, max: number, q: number) => {
+/** decode once: full (max 800px) and thumbnail (max 320px) JPEGs; huge images are skipped to stay within memory */
+const makeImages = async (bytes: Uint8Array) => {
   const img = await Image.decode(bytes);
-  if (img.width >= img.height) { if (img.width > max) img.resize(max, Image.RESIZE_AUTO); }
-  else if (img.height > max) img.resize(Image.RESIZE_AUTO, max);
-  return await img.encodeJPEG(q);
+  if (img.width * img.height > 4_500_000) throw new Error('image too large');
+  const fit = (max: number) => { if (img.width >= img.height) { if (img.width > max) img.resize(max, Image.RESIZE_AUTO); } else if (img.height > max) img.resize(Image.RESIZE_AUTO, max); };
+  fit(800); const full = await img.encodeJPEG(82);
+  fit(320); const thumb = await img.encodeJPEG(75);
+  return { full, thumb };
 };
 
 Deno.serve(async (req) => {
@@ -60,7 +63,7 @@ Deno.serve(async (req) => {
   const serper = String(keys?.serper_key || '').replace(/[^\x20-\x7e]/g, '').trim();
   if (!serper) return json({ error: 'no serper key' }, 500);
 
-  const { data: jobs, error } = await db.rpc('claim_photo_search', { n: Number(body.n) || 4, p_only_ids: body.ids || null });
+  const { data: jobs, error } = await db.rpc('claim_photo_search', { n: Math.min(Number(body.n) || 1, 2), p_only_ids: body.ids || null });
   if (error) return json({ error: error.message }, 500);
 
   const results = [];
@@ -83,8 +86,7 @@ Deno.serve(async (req) => {
       for (const { img, score } of images) {
         try {
           const src = await download(img.imageUrl);
-          const full = await resized(src, 800, 82);
-          const thumb = await resized(src, 320, 75);
+          const { full, thumb } = await makeImages(src);
           const base = `products/auto/${p.id}-${Date.now().toString(36)}`;
           for (const [suffix, data] of [['', full], ['-thumb', thumb]]) {
             const up = await db.storage.from('galery').upload(`${base}${suffix}.jpg`, data, { contentType: 'image/jpeg', upsert: true, cacheControl: '31536000' });

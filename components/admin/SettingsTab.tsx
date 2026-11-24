@@ -746,9 +746,9 @@ const SettingsTab: React.FC = () => {
            {activeTab === 'suppliers' && (
                <div className="space-y-6 animate-in slide-in-from-right-4">
                    <h4 className="text-lg font-bold text-white mb-4 flex items-center gap-2 pb-4 border-b border-zinc-800"><Briefcase className="text-[#FFC300]" size={20}/> Керування Постачальниками</h4>
-                   <div className="flex gap-4 mb-6">
-                       <input type="text" value={newSupplierName} onChange={(e) => setNewSupplierName(e.target.value)} placeholder="Назва нового постачальника" className="bg-black border border-zinc-700 rounded-lg p-3 text-white flex-grow font-bold" />
-                       <button onClick={handleAddSupplier} className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-6 py-3 rounded-lg flex items-center gap-2 justify-center"><Plus size={18} /> Додати</button>
+                   <div className="flex gap-2 sm:gap-4 mb-6">
+                       <input type="text" value={newSupplierName} onChange={(e) => setNewSupplierName(e.target.value)} placeholder="Назва постачальника" className="bg-black border border-zinc-700 rounded-lg p-3 text-white flex-1 min-w-0 font-bold" />
+                       <button onClick={handleAddSupplier} className="shrink-0 bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 sm:px-6 py-3 rounded-lg flex items-center gap-2 justify-center"><Plus size={18} /> Додати</button>
                    </div>
                    <div className="grid grid-cols-1 gap-3">
                        {suppliers.map(s => {

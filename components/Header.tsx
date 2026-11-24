@@ -92,7 +92,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
             <span className="font-black text-xl sm:text-2xl md:text-3xl tracking-wide text-white italic -skew-x-12 group-hover:text-[#FFC300] transition-colors">
               ФОРСАЖ
             </span>
-            <span className="text-[8px] sm:text-[10px] md:text-xs text-zinc-400 font-bold uppercase tracking-[0.15em] sm:tracking-[0.2em] leading-none ml-1 whitespace-nowrap">
+            <span className="text-[10px] sm:text-[11px] md:text-xs text-zinc-400 font-bold uppercase tracking-[0.15em] sm:tracking-[0.2em] leading-none ml-1 whitespace-nowrap">
               Інтернет-магазин
             </span>
           </span>
@@ -147,7 +147,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
             >
               <ShoppingBag size={16} /> Кошик
               {cartCount > 0 && (
-                <span key={cartCount} className="min-w-[18px] h-[18px] px-1 bg-black text-[#FFC300] text-[10px] font-black rounded-full flex items-center justify-center animate-in zoom-in duration-200">
+                <span key={cartCount} className="min-w-[18px] h-[18px] px-1 bg-black text-[#FFC300] text-[11px] font-black rounded-full flex items-center justify-center animate-in zoom-in duration-200">
                   {cartCount > 99 ? '99+' : cartCount}
                 </span>
               )}
@@ -164,7 +164,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
             >
               <ShoppingBag size={20} />
               {cartCount > 0 && (
-                <span key={`mob-${cartCount}`} className="absolute top-0 right-0 min-w-[16px] h-4 px-0.5 bg-[#FFC300] text-black text-[9px] font-black rounded-full flex items-center justify-center animate-in zoom-in duration-200">
+                <span key={`mob-${cartCount}`} className="absolute top-0 right-0 min-w-[16px] h-4 px-0.5 bg-[#FFC300] text-black text-[10px] font-black rounded-full flex items-center justify-center animate-in zoom-in duration-200">
                   {cartCount > 99 ? '99+' : cartCount}
                 </span>
               )}
@@ -234,7 +234,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
                   <span className="relative">
                     <ShoppingBag size={20} />
                     {cartCount > 0 && (
-                      <span key={`mmob-${cartCount}`} className="absolute -top-2 -right-2 min-w-[16px] h-4 px-0.5 bg-[#FFC300] text-black text-[9px] font-black rounded-full flex items-center justify-center animate-in zoom-in duration-200">
+                      <span key={`mmob-${cartCount}`} className="absolute -top-2 -right-2 min-w-[16px] h-4 px-0.5 bg-[#FFC300] text-black text-[10px] font-black rounded-full flex items-center justify-center animate-in zoom-in duration-200">
                         {cartCount > 99 ? '99+' : cartCount}
                       </span>
                     )}

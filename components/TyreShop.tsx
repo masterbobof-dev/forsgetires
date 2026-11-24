@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { formatUaPhone, isValidUaPhone } from '../phone';
 import { supabase } from '../supabaseClient';
 import { TyreProduct, CartItem } from '../types';
-import { Loader2, Phone, ArrowDown, ArrowLeft, ArrowRight, MapPin, X, ShoppingCart, Scale, Heart } from 'lucide-react';
+import { Loader2, Phone, ArrowDown, ArrowLeft, ArrowRight, MapPin, X, ShoppingCart, Scale, Heart, MessageCircle, Send } from 'lucide-react';
 import { PHONE_LINK_1, PHONE_NUMBER_1, FORMSPREE_ENDPOINT, TELEGRAM_LINK, VIBER_LINK, SITE_URL } from '../constants';
 
 // Підкомпоненти
@@ -88,6 +89,8 @@ const TyreShop: React.FC<TyreShopProps> = ({
 
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [currentLightboxImages, setCurrentLightboxImages] = useState<string[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const lightboxTouch = useRef<number | null>(null);
   const [selectedProductForModal, setSelectedProductForModal] = useState<TyreProduct | null>(null);
   const [recentlyViewed, setRecentlyViewed] = useState<TyreProduct[]>([]);
   const [agroFeaturedProducts, setAgroFeaturedProducts] = useState<TyreProduct[]>([]);
@@ -186,7 +189,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
     supabase.from('customer_profiles').select('full_name, phone, city, warehouse').eq('id', userId).maybeSingle().then(({ data }) => {
       if (!data) return;
       if (data.full_name) setOrderName(prev => prev || data.full_name);
-      if (data.phone) setOrderPhone(prev => prev || data.phone);
+      if (data.phone) { setOrderPhone(prev => prev || formatUaPhone(data.phone)); setQuickOrderPhone(prev => prev || formatUaPhone(data.phone)); }
       if (data.city) { setNpSearchCity(prev => prev || data.city); setSelectedCityName(prev => prev || data.city); }
       if (data.warehouse) setSelectedWarehouseName(prev => prev || data.warehouse);
     });
@@ -284,7 +287,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
   }, [selectedProductForModal, activeCat, activeCategory]);
 
   const submitQuickOrder = async () => {
-    if (!quickOrderPhone || quickOrderPhone.length < 9) { setOrderError("Введіть коректний номер телефону"); return; }
+    if (!isValidUaPhone(quickOrderPhone)) { setOrderError("Введіть номер повністю: +380 XX XXX XX XX"); return; }
     if (!quickOrderProduct) return;
     
     setQuickOrderSending(true); setOrderError('');
@@ -568,7 +571,8 @@ const TyreShop: React.FC<TyreShopProps> = ({
   };
 
   const submitOrder = async () => {
-    if (!orderName || orderPhone.length < 9) { setOrderError("Будь ласка, введіть ім'я та телефон"); return; }
+    if (!orderName.trim()) { setOrderError("Будь ласка, введіть ім'я"); return; }
+    if (!isValidUaPhone(orderPhone)) { setOrderError("Введіть телефон повністю: +380 XX XXX XX XX"); return; }
     setOrderSending(true); setOrderError('');
     try {
       const { error } = await supabase.from('tyre_orders').insert([{ 
@@ -709,7 +713,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
         {/* ── Intro: compact on phones, with mini map on large screens ── */}
         <header className="flex flex-col lg:flex-row justify-between items-stretch lg:items-end gap-4 lg:gap-6 mb-5 md:mb-8">
           <div className="flex-1 space-y-3 md:space-y-5 animate-in fade-in slide-in-from-left-4 duration-500">
-            <nav className="flex items-center flex-wrap gap-x-2 gap-y-1 text-[10px] uppercase tracking-widest font-black text-zinc-600" aria-label="Навігація">
+            <nav className="flex items-center flex-wrap gap-x-2 gap-y-1 text-[11px] uppercase tracking-widest font-black text-zinc-500" aria-label="Навігація">
               <button onClick={onBack} className="hover:text-[#FFC300] transition-colors">Головна</button>
               <span className="text-zinc-800">/</span>
               <button onClick={() => changeCategory('all')} className="text-zinc-500 hover:text-[#FFC300] transition-colors">Каталог</button>
@@ -771,12 +775,12 @@ const TyreShop: React.FC<TyreShopProps> = ({
                 <div className="bg-zinc-950/90 border-t border-zinc-800 p-3 flex items-center justify-between gap-2">
                   <div className="min-w-0 flex items-center gap-2">
                     <MapPin size={12} className="text-[#FFC300] shrink-0" />
-                    <p className="text-zinc-400 text-[10px] font-bold truncate">м. Синельникове, вул. Квітнева 9</p>
+                    <p className="text-zinc-400 text-[11px] font-bold truncate">м. Синельникове, вул. Квітнева 9</p>
                   </div>
                   <a
                     href="https://www.google.com/maps/dir/?api=1&destination=48.317541,35.513511"
                     target="_blank" rel="noopener noreferrer"
-                    className="bg-[#FFC300] px-3 py-1.5 rounded-lg text-black font-black text-[10px] uppercase tracking-widest hover:bg-white transition-colors shrink-0 flex items-center gap-1"
+                    className="bg-[#FFC300] px-3 py-1.5 rounded-lg text-black font-black text-[11px] uppercase tracking-widest hover:bg-white transition-colors shrink-0 flex items-center gap-1"
                   >
                     Маршрут <ArrowRight size={10} />
                   </a>
@@ -861,6 +865,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
                       onToggleFavorite={() => toggleFavorite(tyre)}
                       isCompared={compare.has(tyre.id)}
                       onToggleCompare={() => toggleCompare(tyre)}
+                      showStock={enableStockQty}
                     />
                   </div>
                 ))}
@@ -877,11 +882,11 @@ const TyreShop: React.FC<TyreShopProps> = ({
                   {loadingMore ? <Loader2 className="animate-spin" size={20} /> : <ArrowDown size={20} className="group-hover:translate-y-1 transition-transform" />}
                   <span className="uppercase tracking-widest text-xs md:text-sm">Показати ще</span>
                 </button>
-                <p className="mt-3 text-zinc-600 text-[10px] font-bold uppercase tracking-widest">Показано {tyres.length} з {totalCount}</p>
+                <p className="mt-3 text-zinc-500 text-[11px] font-bold uppercase tracking-widest">Показано {tyres.length} з {totalCount}</p>
               </div>
             )}
 
-            <p className="lg:hidden mt-6 text-center text-[10px] font-bold uppercase tracking-widest text-zinc-700">
+            <p className="lg:hidden mt-6 text-center text-[11px] font-bold uppercase tracking-widest text-zinc-700">
               ← Проведіть пальцем, щоб змінити категорію →
             </p>
           </div>
@@ -925,9 +930,9 @@ const TyreShop: React.FC<TyreShopProps> = ({
               {recentlyViewed.map(t => (
                   <div key={t.id} onClick={() => openProduct(t)} className="min-w-[180px] max-w-[220px] bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex flex-col cursor-pointer hover:border-[#FFC300] transition-colors snap-center group">
                     <div className="h-32 mb-3 bg-zinc-950 rounded-xl p-2 flex items-center justify-center overflow-hidden">
-                        {t.image_url ? <img src={t.image_url} alt={t.title} className="max-h-full object-contain group-hover:scale-110 transition-transform"/> : <div className="text-zinc-700 font-bold text-[10px] uppercase">Без фото</div>}
+                        {t.image_url ? <img src={t.image_url} alt={t.title} className="max-h-full object-contain group-hover:scale-110 transition-transform"/> : <div className="text-zinc-700 font-bold text-[11px] uppercase">Без фото</div>}
                     </div>
-                    <span className="text-[10px] text-[#FFC300] font-black uppercase tracking-widest mb-1 truncate">{t.manufacturer || 'Товар'}</span>
+                    <span className="text-[11px] text-[#FFC300] font-black uppercase tracking-widest mb-1 truncate">{t.manufacturer || 'Товар'}</span>
                     <h4 className="text-white text-xs font-bold line-clamp-2 mb-2 flex-grow">{t.title}</h4>
                     <span className="text-base font-black text-white">{formatPrice(t.price)} грн</span>
                   </div>
@@ -945,7 +950,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
           aria-label="Відкрити кошик"
         >
           <ShoppingCart size={24} />
-          <span className="absolute -top-2 -right-2 bg-red-600 text-white text-[10px] font-bold min-w-[20px] h-5 px-1 flex items-center justify-center rounded-full border-2 border-zinc-900">{cartItems.reduce((a,b)=>a+b.quantity,0)}</span>
+          <span className="absolute -top-2 -right-2 bg-red-600 text-white text-[11px] font-bold min-w-[20px] h-5 px-1 flex items-center justify-center rounded-full border-2 border-zinc-900">{cartItems.reduce((a,b)=>a+b.quantity,0)}</span>
         </button>
       )}
 
@@ -973,15 +978,33 @@ const TyreShop: React.FC<TyreShopProps> = ({
         userName={orderName}
         onRequireLogin={onRequireLogin}
         addToCart={addToCart} formatPrice={formatPrice} getSeasonLabel={getSeasonLabel} renderSchema={renderSchema}
-        openLightbox={(p) => { setCurrentLightboxImages([p.image_url].filter(Boolean) as string[]); setLightboxOpen(true); }}
+        openLightbox={(images, index) => { setCurrentLightboxImages(images); setLightboxIndex(index); setLightboxOpen(true); }}
+        showStock={enableStockQty}
         onQuickOrder={(p) => setQuickOrderProduct(p)}
         onSimilarClick={(t) => openProduct(t, { replace: true })}
       />
 
       {lightboxOpen && (
-        <div className="fixed inset-0 z-[200] bg-black flex items-center justify-center p-4 animate-in fade-in" onClick={() => setLightboxOpen(false)}>
-          <button className="absolute top-4 right-4 text-white p-2 hover:bg-white/10 rounded-full"><X size={32}/></button>
-          <img src={currentLightboxImages[0]} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
+        <div
+          className="fixed inset-0 z-[200] bg-black flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => setLightboxOpen(false)}
+          onTouchStart={e => { lightboxTouch.current = e.touches[0].clientX; }}
+          onTouchEnd={e => {
+            const start = lightboxTouch.current; lightboxTouch.current = null;
+            if (start === null || currentLightboxImages.length < 2) return;
+            const dx = e.changedTouches[0].clientX - start;
+            if (Math.abs(dx) > 50) { e.stopPropagation(); e.preventDefault(); setLightboxIndex(i => (i + (dx < 0 ? 1 : -1) + currentLightboxImages.length) % currentLightboxImages.length); }
+          }}
+        >
+          <button className="absolute top-4 right-4 text-white p-2 hover:bg-white/10 rounded-full z-10" aria-label="Закрити"><X size={32}/></button>
+          {currentLightboxImages.length > 1 && (
+            <>
+              <button onClick={e => { e.stopPropagation(); setLightboxIndex(i => (i - 1 + currentLightboxImages.length) % currentLightboxImages.length); }} className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 text-white items-center justify-center hover:bg-white/20" aria-label="Попереднє фото"><ArrowLeft size={24} /></button>
+              <button onClick={e => { e.stopPropagation(); setLightboxIndex(i => (i + 1) % currentLightboxImages.length); }} className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 text-white items-center justify-center hover:bg-white/20" aria-label="Наступне фото"><ArrowRight size={24} /></button>
+              <span className="absolute bottom-6 left-1/2 -translate-x-1/2 text-white/70 text-sm font-bold">{lightboxIndex + 1} / {currentLightboxImages.length}</span>
+            </>
+          )}
+          <img key={lightboxIndex} src={currentLightboxImages[lightboxIndex]} referrerPolicy="no-referrer" className="max-w-full max-h-full object-contain rounded-lg shadow-2xl animate-in fade-in duration-200" alt="" />
         </div>
       )}
 
@@ -997,12 +1020,13 @@ const TyreShop: React.FC<TyreShopProps> = ({
               <p className="text-zinc-500 text-sm">Введіть ваш номер телефону, і ми зателефонуємо вам для оформлення замовлення.</p>
               
               <div className="w-full mt-4">
-                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-2 text-left">Ваш телефон</p>
+                <p className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest mb-2 text-left">Ваш телефон</p>
                 <input 
                   type="tel" 
-                  placeholder="0XX XXX XX XX" 
+                  placeholder="+380 __ ___ __ __" 
                   value={quickOrderPhone}
-                  onChange={e => setQuickOrderPhone(e.target.value)}
+                  inputMode="tel" autoComplete="tel"
+                  onChange={e => setQuickOrderPhone(formatUaPhone(e.target.value))}
                   className="w-full bg-black border border-zinc-800 rounded-xl py-4 px-6 text-white text-xl font-black focus:border-[#FFC300] outline-none transition-all placeholder:text-zinc-800"
                 />
               </div>
@@ -1017,39 +1041,34 @@ const TyreShop: React.FC<TyreShopProps> = ({
                 {quickOrderSending ? <Loader2 className="animate-spin" size={24}/> : "Замовити дзвінок"}
               </button>
               
-              <p className="text-[9px] text-zinc-600 font-bold uppercase mt-4">Натискаючи кнопку, ви погоджуєтесь з <a href="/oferta" target="_blank" className="underline">офертою</a> та <a href="/privacy" target="_blank" className="underline">обробкою персональних даних</a>.</p>
+              <p className="text-[10px] text-zinc-500 font-bold uppercase mt-4">Натискаючи кнопку, ви погоджуєтесь з <a href="/oferta" target="_blank" className="underline">офертою</a> та <a href="/privacy" target="_blank" className="underline">обробкою персональних даних</a>.</p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Floating Contact Hub */}
-      <div className="fixed right-4 md:right-6 z-[160] flex flex-col items-end gap-3 pointer-events-none" style={{ bottom: "calc(env(safe-area-inset-bottom) + 16px)" }}>
-          <div className={`flex flex-col gap-3 transition-all duration-300 transform origin-bottom ${showContactHub ? 'scale-100 opacity-100 translate-y-0 pointer-events-auto' : 'scale-50 opacity-0 translate-y-10 pointer-events-none'}`}>
-              <a href={TELEGRAM_LINK} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 group">
-                  <span className="bg-black/80 backdrop-blur-md border border-zinc-800 text-white text-[10px] font-black uppercase px-3 py-1.5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity shadow-2xl">Telegram</span>
-                  <div className="w-12 h-12 bg-[#0088cc] rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-900/40 hover:scale-110 active:scale-95 transition-all">
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
-                  </div>
-              </a>
-              <a href={shopPhoneLink} className="flex items-center gap-3 group">
-                  <span className="bg-black/80 backdrop-blur-md border border-zinc-800 text-white text-[10px] font-black uppercase px-3 py-1.5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity shadow-2xl">Дзвінок</span>
-                  <div className="w-12 h-12 bg-[#FFC300] rounded-2xl flex items-center justify-center text-black shadow-xl shadow-yellow-900/40 hover:scale-110 active:scale-95 transition-all">
-                      <Phone size={24} strokeWidth={2.5}/>
-                  </div>
-              </a>
+      {/* Floating contact button: Viber / Telegram / call */}
+      {showContactHub && <div className="fixed inset-0 z-[159] bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-200" onClick={() => setShowContactHub(false)} />}
+      <div className="fixed right-4 md:right-6 z-[160] flex flex-col items-end gap-2.5 pointer-events-none" style={{ bottom: "calc(env(safe-area-inset-bottom) + 16px)" }}>
+          <div className={`flex flex-col items-end gap-2.5 transition-all duration-300 origin-bottom-right ${showContactHub ? 'scale-100 opacity-100 translate-y-0 pointer-events-auto' : 'scale-75 opacity-0 translate-y-6 pointer-events-none'}`}>
+              {[
+                { href: VIBER_LINK, label: 'Viber', cls: 'bg-[#7360F2] text-white', icon: <MessageCircle size={22} /> },
+                { href: TELEGRAM_LINK, label: 'Telegram', cls: 'bg-[#0088cc] text-white', icon: <Send size={22} />, external: true },
+                { href: shopPhoneLink, label: `Подзвонити ${shopPhone}`, cls: 'bg-[#FFC300] text-black', icon: <Phone size={22} strokeWidth={2.5} /> },
+              ].map(item => (
+                <a key={item.label} href={item.href} {...(item.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})} onClick={() => setShowContactHub(false)} className="flex items-center gap-2.5">
+                  <span className="bg-black/90 border border-zinc-800 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-2xl whitespace-nowrap">{item.label}</span>
+                  <span className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-xl active:scale-95 transition-transform ${item.cls}`}>{item.icon}</span>
+                </a>
+              ))}
           </div>
 
           <button 
             onClick={() => setShowContactHub(!showContactHub)}
-            className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-2xl transition-all duration-500 pointer-events-auto active:scale-90 ${showContactHub ? 'bg-zinc-800 text-white rotate-90' : 'bg-[#FFC300] text-black shadow-yellow-900/50'}`}
+            className={`h-14 rounded-2xl flex items-center justify-center gap-2 shadow-2xl transition-all duration-300 pointer-events-auto active:scale-95 ${showContactHub ? 'w-14 bg-zinc-800 text-white' : 'w-14 md:w-auto md:px-5 bg-[#FFC300] text-black shadow-yellow-900/50'}`}
+            aria-label={showContactHub ? 'Закрити' : "Зв'язатися з нами"} aria-expanded={showContactHub}
           >
-            {showContactHub ? <X size={32} /> : (
-              <div className="relative">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="animate-bounce"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
-                <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-600 rounded-full border-2 border-[#FFC300] animate-ping"></span>
-              </div>
-            )}
+            {showContactHub ? <X size={26} /> : <><MessageCircle size={26} strokeWidth={2.5} /><span className="hidden md:inline font-black text-sm uppercase">Зв'язатися</span></>}
           </button>
       </div>
 
@@ -1058,7 +1077,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
            <div className="flex items-center gap-3 w-full overflow-hidden">
              <div className="bg-[#FFC300] p-2 rounded-xl shrink-0"><ShoppingCart size={16} className="text-black" /></div>
              <div className="flex flex-col flex-1 min-w-0">
-               <span className="text-[10px] font-black uppercase tracking-widest text-[#FFC300]">У кошику</span>
+               <span className="text-[11px] font-black uppercase tracking-widest text-[#FFC300]">У кошику</span>
                <span className="text-xs font-bold truncate">{toast.message}</span>
              </div>
            </div>

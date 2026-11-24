@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { formatUaPhone } from '../phone';
 import { User, Phone, MapPin, Package, LogOut, Save, Loader2, Key, CheckCircle2, ShoppingBag, ArrowLeft, Truck } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import type { AuthState } from '../useAuth';
@@ -136,7 +137,7 @@ const AccountPage: React.FC<{ auth: AuthState; onBack: () => void }> = ({ auth, 
                       <p className="font-black text-white">Замовлення № {o.id}</p>
                       <p className="text-zinc-500 text-xs">{new Date(o.created_at).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
                     </div>
-                    <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${st.cls}`}>{st.label}</span>
+                    <span className={`text-[11px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${st.cls}`}>{st.label}</span>
                   </div>
                   <ul className="space-y-1 mb-3">
                     {(o.items || []).map((it, idx) => (
@@ -177,7 +178,7 @@ const AccountPage: React.FC<{ auth: AuthState; onBack: () => void }> = ({ auth, 
             ] as const).map(([key, label, Icon, ac]) => (
               <div key={key} className="relative">
                 <Icon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-                <input value={profile[key]} onChange={e => setProfile({ ...profile, [key]: e.target.value })} placeholder={label}
+                <input value={profile[key]} onChange={e => setProfile({ ...profile, [key]: key === 'phone' ? formatUaPhone(e.target.value) : e.target.value })} placeholder={label}
                   autoComplete={ac} type={key === 'phone' ? 'tel' : 'text'} className={inputCls} />
               </div>
             ))}

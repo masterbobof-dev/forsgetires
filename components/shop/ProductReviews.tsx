@@ -135,7 +135,7 @@ const ProductReviews: React.FC<Props> = ({ productId, userId, userName, onRequir
             <article key={r.id} className="bg-zinc-950/60 border border-zinc-800 rounded-2xl p-3">
               <div className="flex items-center justify-between gap-2 mb-1">
                 <span className="text-white font-bold text-sm">{r.author_name}</span>
-                <span className="text-zinc-600 text-[11px]">{new Date(r.created_at).toLocaleDateString('uk-UA')}</span>
+                <span className="text-zinc-500 text-[11px]">{new Date(r.created_at).toLocaleDateString('uk-UA')}</span>
               </div>
               <Stars value={r.rating} size={12} />
               {r.body && <p className="text-zinc-300 text-sm mt-2 whitespace-pre-line">{r.body}</p>}

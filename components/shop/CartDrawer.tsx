@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { formatUaPhone } from '../../phone';
 import { X, ShoppingBag, Trash2, Minus, Plus, Truck, MapPin, Loader2, CheckCircle } from 'lucide-react';
 import { CartItem } from '../../types';
 
@@ -51,7 +52,7 @@ const CartDrawer: React.FC<CartDrawerProps> = (props) => {
                 <ShoppingBag className="text-[#FFC300]" size={28}/> 
                 Кошик
               </h2>
-              <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-1">
+              <p className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest mt-1">
                 {props.cart.length} позицій у списку
               </p>
            </div>
@@ -63,7 +64,12 @@ const CartDrawer: React.FC<CartDrawerProps> = (props) => {
                <div className="h-full flex flex-col items-center justify-center text-center p-6 animate-in zoom-in duration-500">
                   <div className="w-24 h-24 bg-emerald-500/20 text-emerald-500 rounded-3xl flex items-center justify-center mb-8 rotate-12 shadow-2xl shadow-emerald-900/20"><CheckCircle size={56} strokeWidth={2.5}/></div>
                   <h3 className="text-3xl font-black text-white mb-3 tracking-tight uppercase">Дякуємо!</h3>
-                  <p className="text-zinc-400 mb-10 text-sm leading-relaxed">Ваше замовлення успішно оформлене. Наш менеджер зв'яжеться з вами протягом 15 хвилин для підтвердження.</p>
+                  <p className="text-zinc-300 mb-5 text-sm leading-relaxed">Замовлення прийнято. Що буде далі:</p>
+                  <ol className="text-left text-sm text-zinc-400 space-y-2 mb-8 w-full max-w-xs">
+                    <li className="flex gap-2"><span className="w-5 h-5 rounded-full bg-[#FFC300] text-black text-[11px] font-black flex items-center justify-center shrink-0">1</span> Менеджер зателефонує вам, щоб підтвердити наявність і ціну.</li>
+                    <li className="flex gap-2"><span className="w-5 h-5 rounded-full bg-[#FFC300] text-black text-[11px] font-black flex items-center justify-center shrink-0">2</span> Відправимо Новою Поштою або підготуємо до самовивозу.</li>
+                    <li className="flex gap-2"><span className="w-5 h-5 rounded-full bg-[#FFC300] text-black text-[11px] font-black flex items-center justify-center shrink-0">3</span> Номер ТТН з'явиться у «Моєму кабінеті» (якщо ви зареєстровані).</li>
+                  </ol>
                   <button onClick={() => { props.setOrderSuccess(false); props.onClose(); }} className="w-full bg-white text-black font-black py-5 rounded-2xl hover:bg-[#FFC300] transition-all shadow-xl active:scale-95 uppercase tracking-widest text-sm">ПРОДОВЖИТИ ПОКУПКИ</button>
                </div>
            ) : props.cart.length === 0 ? (
@@ -85,7 +91,7 @@ const CartDrawer: React.FC<CartDrawerProps> = (props) => {
                            <div className="flex-grow min-w-0 flex flex-col justify-between">
                               <div>
                                 <h4 className="text-white font-bold text-sm truncate group-hover:text-[#FFC300] transition-colors">{item.title}</h4>
-                                <p className="text-[#FFC300] font-black text-base mt-1">{props.formatPrice(item.price)} <span className="text-[10px] font-normal text-zinc-500">грн</span></p>
+                                <p className="text-[#FFC300] font-black text-base mt-1">{props.formatPrice(item.price)} <span className="text-[11px] font-normal text-zinc-500">грн</span></p>
                               </div>
                               <div className="flex items-center justify-between mt-3">
                                  <div className="flex items-center bg-black/50 rounded-xl p-1 border border-zinc-800">
@@ -110,7 +116,7 @@ const CartDrawer: React.FC<CartDrawerProps> = (props) => {
                           <input value={props.orderName} onChange={e => props.setOrderName(e.target.value)} placeholder="Ваше ім'я" className="w-full bg-black/50 border border-zinc-700 rounded-2xl p-4 text-white focus:border-[#FFC300] outline-none transition-all placeholder:text-zinc-600 font-bold text-sm" />
                         </div>
                         <div className="relative group">
-                          <input value={props.orderPhone} onChange={e => props.setOrderPhone(e.target.value)} placeholder="Телефон (099...)" className="w-full bg-black/50 border border-zinc-700 rounded-2xl p-4 text-white focus:border-[#FFC300] outline-none transition-all placeholder:text-zinc-600 font-bold text-sm" />
+                          <input type="tel" inputMode="tel" autoComplete="tel" value={props.orderPhone} onChange={e => props.setOrderPhone(formatUaPhone(e.target.value))} placeholder="+380 __ ___ __ __" className="w-full bg-black/50 border border-zinc-700 rounded-2xl p-4 text-white focus:border-[#FFC300] outline-none transition-all placeholder:text-zinc-600 font-bold text-sm" />
                         </div>
                         
                         <div className="flex items-center gap-3 pt-4">
@@ -119,8 +125,8 @@ const CartDrawer: React.FC<CartDrawerProps> = (props) => {
                         </div>
 
                         <div className="grid grid-cols-2 gap-2 p-1.5 bg-black rounded-2xl border border-zinc-800">
-                           <button onClick={() => props.setDeliveryMethod('pickup')} className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${props.deliveryMethod === 'pickup' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-600 hover:text-zinc-400'}`}>Самовивіз</button>
-                           <button onClick={() => props.setDeliveryMethod('newpost')} className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${props.deliveryMethod === 'newpost' ? 'bg-blue-600 text-white shadow-lg' : 'text-zinc-600 hover:text-zinc-400'}`}>Нова Пошта</button>
+                           <button onClick={() => props.setDeliveryMethod('pickup')} className={`py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${props.deliveryMethod === 'pickup' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-400'}`}>Самовивіз</button>
+                           <button onClick={() => props.setDeliveryMethod('newpost')} className={`py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${props.deliveryMethod === 'newpost' ? 'bg-blue-600 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-400'}`}>Нова Пошта</button>
                         </div>
 
                         {props.deliveryMethod === 'newpost' && (
@@ -141,8 +147,8 @@ const CartDrawer: React.FC<CartDrawerProps> = (props) => {
                                  {props.npWarehouses.map((w, i) => <option key={i} value={w.Description}>{w.Description}</option>)}
                               </select>
                               <div className="grid grid-cols-2 gap-2 p-1.5 bg-black rounded-2xl border border-zinc-800 mt-2">
-                                 <button onClick={() => props.setPaymentMethod('prepayment')} className={`py-3 rounded-xl text-[9px] font-black uppercase tracking-tighter ${props.paymentMethod === 'prepayment' ? 'bg-blue-600 text-white' : 'text-zinc-600'}`}>Предоплата</button>
-                                 <button onClick={() => props.setPaymentMethod('full')} className={`py-3 rounded-xl text-[9px] font-black uppercase tracking-tighter ${props.paymentMethod === 'full' ? 'bg-blue-600 text-white' : 'text-zinc-600'}`}>Повна оплата</button>
+                                 <button onClick={() => props.setPaymentMethod('prepayment')} className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-tighter ${props.paymentMethod === 'prepayment' ? 'bg-blue-600 text-white' : 'text-zinc-500'}`}>Предоплата</button>
+                                 <button onClick={() => props.setPaymentMethod('full')} className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-tighter ${props.paymentMethod === 'full' ? 'bg-blue-600 text-white' : 'text-zinc-500'}`}>Повна оплата</button>
                               </div>
                            </div>
                         )}
@@ -156,7 +162,7 @@ const CartDrawer: React.FC<CartDrawerProps> = (props) => {
            <div className="p-8 border-t border-zinc-800 bg-black/60 backdrop-blur-xl sticky bottom-0">
               <div className="flex justify-between items-end mb-8">
                  <div className="flex flex-col">
-                    <span className="text-zinc-500 font-black uppercase text-[10px] tracking-widest mb-1">Загальна сума:</span>
+                    <span className="text-zinc-500 font-black uppercase text-[11px] tracking-widest mb-1">Загальна сума:</span>
                     <span className="text-4xl font-black text-[#FFC300] tracking-tighter">{props.cartTotal} <span className="text-sm text-white font-normal">грн</span></span>
                  </div>
               </div>
@@ -168,7 +174,7 @@ const CartDrawer: React.FC<CartDrawerProps> = (props) => {
               >
                  {props.orderSending ? <Loader2 className="animate-spin" size={28}/> : <><Truck size={28} strokeWidth={2.5}/> ОФОРМИТИ ЗАМОВЛЕННЯ</>}
               </button>
-              <p className="mt-3 text-[10px] text-zinc-500 text-center leading-snug">
+              <p className="mt-3 text-[11px] text-zinc-500 text-center leading-snug">
                 Оформлюючи замовлення, ви погоджуєтесь з <a href="/oferta" target="_blank" className="underline hover:text-zinc-300">публічною офертою</a> та{' '}
                 <a href="/privacy" target="_blank" className="underline hover:text-zinc-300">політикою конфіденційності</a>.
               </p>

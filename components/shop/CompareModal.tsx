@@ -64,7 +64,7 @@ const CompareModal: React.FC<CompareModalProps> = ({ open, products, categories,
                       <div className="relative bg-zinc-950 border border-zinc-800 rounded-2xl p-2 flex flex-col gap-2 h-full">
                         <button onClick={() => onRemove(p.id)} className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-black/60 text-zinc-400 hover:text-red-400 z-10" aria-label="Прибрати з порівняння"><Trash2 size={14} /></button>
                         <button onClick={() => onOpenProduct(p)} className="h-24 md:h-36 rounded-xl bg-zinc-900 overflow-hidden flex items-center justify-center">
-                          {p.image_url ? <img src={p.image_url} alt={p.title} className="w-full h-full object-contain" loading="lazy" referrerPolicy="no-referrer" /> : <span className="text-[10px] text-zinc-600 uppercase font-bold">Без фото</span>}
+                          {p.image_url ? <img src={p.image_url} alt={p.title} className="w-full h-full object-contain" loading="lazy" referrerPolicy="no-referrer" /> : <span className="text-[11px] text-zinc-500 uppercase font-bold">Без фото</span>}
                         </button>
                         <button onClick={() => onOpenProduct(p)} className="text-left text-xs md:text-sm font-bold text-white hover:text-[#FFC300] line-clamp-3 leading-snug">{p.title}</button>
                         <button onClick={() => onAddToCart(p)} disabled={p.in_stock === false}
@@ -82,7 +82,7 @@ const CompareModal: React.FC<CompareModalProps> = ({ open, products, categories,
                   const differs = new Set(values).size > 1;
                   return (
                     <tr key={row.label} className="border-t border-zinc-800">
-                      <td className="sticky left-0 z-10 bg-zinc-900 px-2 md:px-3 py-2.5 text-zinc-500 text-[10px] md:text-xs font-bold uppercase tracking-wide">{row.label}</td>
+                      <td className="sticky left-0 z-10 bg-zinc-900 px-2 md:px-3 py-2.5 text-zinc-500 text-[11px] md:text-xs font-bold uppercase tracking-wide">{row.label}</td>
                       {values.map((v, i) => (
                         <td key={i} className={`px-3 py-2.5 ${differs ? 'text-white font-bold' : 'text-zinc-400'} ${row.label === 'Ціна' ? 'text-[#FFC300] font-black' : ''}`}>{v}</td>
                       ))}
@@ -93,7 +93,7 @@ const CompareModal: React.FC<CompareModalProps> = ({ open, products, categories,
             </table>
           )}
         </div>
-        <p className="px-4 py-2 text-[10px] text-zinc-600 border-t border-zinc-800">Жирним виділено характеристики, що відрізняються.</p>
+        <p className="px-4 py-2 text-[11px] text-zinc-500 border-t border-zinc-800">Жирним виділено характеристики, що відрізняються.</p>
       </div>
     </div>
   );

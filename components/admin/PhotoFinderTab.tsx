@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Sparkles, Search, Loader2, Check, X, ImageOff, RefreshCw, Save, Settings2, ExternalLink, AlertCircle } from 'lucide-react';
+import { Sparkles, Search, Loader2, Check, X, ImageOff, RefreshCw, Save, Settings2, ExternalLink, AlertCircle, Play, Square } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
+import { useCategories } from '../../categories';
 
 /** AI photo search: settings, review queue (choose photos before they are attached) and manual search. */
 
@@ -212,6 +213,87 @@ const QuickReview: React.FC<{ onChanged: () => void }> = ({ onChanged }) => {
   );
 };
 
+/** Start a photo search for a chosen category and amount; shows the progress of the background job. */
+const LaunchPanel: React.FC<{ onProgress: () => void }> = ({ onProgress }) => {
+  const { categories } = useCategories({ includeInactive: true });
+  const [stats, setStats] = useState<Record<number, number>>({});
+  const [status, setStatus] = useState<any>(null);
+  const [category, setCategory] = useState<string>('');
+  const [amount, setAmount] = useState<string>('100');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const refresh = useCallback(async () => {
+    const [{ data: st }, { data: rows }] = await Promise.all([supabase.rpc('photo_status_staff'), supabase.rpc('photo_category_stats')]);
+    setStatus(st);
+    setStats(Object.fromEntries(((rows as any[]) || []).map(r => [Number(r.category_id), Number(r.without_photo)])));
+  }, []);
+  useEffect(() => { refresh(); const t = setInterval(() => { refresh(); onProgress(); }, 20000); return () => clearInterval(t); }, [refresh, onProgress]);
+
+  // goods without a photo in a category including its subcategories
+  const total = (id: number): number => (stats[id] || 0) + categories.filter(c => c.parent_id === id).reduce((s, c) => s + total(c.id), 0);
+  const all = (Object.values(stats) as number[]).reduce((a, b) => a + b, 0);
+  const roots = categories.filter(c => !c.parent_id && total(c.id) > 0).sort((a, b) => total(b.id) - total(a.id));
+  const available = category ? total(Number(category)) : all;
+
+  const start = async () => {
+    setBusy(true); setMsg('');
+    const { data, error } = await supabase.rpc('photo_queue', { p_category: category ? Number(category) : null, p_limit: amount === 'all' ? 100000 : Number(amount) });
+    setMsg(error ? `Помилка: ${error.message}` : data ? `Запущено: ${data} товарів у черзі. Фото з'являтимуться у «Швидкій перевірці».` : 'У цій категорії немає товарів без фото.');
+    setBusy(false); refresh();
+  };
+  const stop = async () => {
+    setBusy(true);
+    const { data, error } = await supabase.rpc('photo_queue_stop');
+    setMsg(error ? `Помилка: ${error.message}` : `Зупинено. Знято з черги: ${data}.`);
+    setBusy(false); refresh();
+  };
+
+  const running = status?.running && (status?.to_search > 0 || status?.to_download > 0);
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
+      <h3 className="text-sm font-black uppercase tracking-widest text-zinc-400 flex items-center gap-2"><Play size={16} /> Запустити пошук фото</h3>
+      <div className="grid sm:grid-cols-[1fr_auto_auto] gap-2 items-end">
+        <label className="text-xs text-zinc-400">Категорія
+          <select value={category} onChange={e => setCategory(e.target.value)} className="mt-1 w-full bg-black border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#FFC300]">
+            <option value="">Усі категорії — {all} без фото</option>
+            {roots.map(r => (
+              <optgroup key={r.id} label={r.name}>
+                <option value={r.id}>{r.name} — усе ({total(r.id)})</option>
+                {categories.filter(c => c.parent_id === r.id && total(c.id) > 0).sort((a, b) => total(b.id) - total(a.id))
+                  .map(c => <option key={c.id} value={c.id}>  {c.name} ({total(c.id)})</option>)}
+              </optgroup>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs text-zinc-400">Скільки товарів
+          <select value={amount} onChange={e => setAmount(e.target.value)} className="mt-1 w-full bg-black border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#FFC300]">
+            {['50', '100', '200', '500', '1000'].map(n => <option key={n} value={n}>{n}</option>)}
+            <option value="all">Усі ({available})</option>
+          </select>
+        </label>
+        <div className="flex gap-2">
+          <button onClick={start} disabled={busy || available === 0} className="bg-[#FFC300] hover:bg-white text-black font-black text-sm px-4 py-2.5 rounded-xl flex items-center gap-2 disabled:opacity-40">
+            {busy ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />} Запустити
+          </button>
+          {running && <button onClick={stop} disabled={busy} className="bg-zinc-800 hover:bg-red-600 text-white font-bold text-sm px-4 py-2.5 rounded-xl flex items-center gap-2"><Square size={14} /> Зупинити</button>}
+        </div>
+      </div>
+      {status && (
+        <div className="flex flex-wrap gap-2 text-xs">
+          <span className={`px-3 py-1.5 rounded-lg ${running ? 'bg-green-500/15 text-green-400' : 'bg-zinc-800 text-zinc-400'}`}>{running ? '● Пошук іде' : 'Пошук не запущено'}</span>
+          <span className="bg-zinc-800 text-zinc-300 px-3 py-1.5 rounded-lg">У черзі на пошук: <b>{status.to_search}</b></span>
+          <span className="bg-zinc-800 text-zinc-300 px-3 py-1.5 rounded-lg">Перевіряє ШІ: <b>{status.to_download}</b></span>
+          <span className="bg-zinc-800 text-zinc-300 px-3 py-1.5 rounded-lg">Чекає перегляду: <b className="text-[#FFC300]">{status.to_review}</b></span>
+          <span className="bg-zinc-800 text-zinc-300 px-3 py-1.5 rounded-lg">Без гарного фото: <b>{status.not_found}</b></span>
+        </div>
+      )}
+      {msg && <p className="text-sm text-zinc-300">{msg}</p>}
+      <p className="text-xs text-zinc-500">Кожен товар — 1 запит Serper. Швидкість приблизно 50–80 товарів на хвилину.</p>
+    </div>
+  );
+};
+
 const PhotoFinderTab: React.FC = () => {
   const [settings, setSettings] = useState<SettingsState>(DEFAULTS);
   const [savedMsg, setSavedMsg] = useState('');
@@ -276,6 +358,8 @@ const PhotoFinderTab: React.FC = () => {
           <span className="bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2">Без фото: <b className="text-white">{stats.without}</b></span>
         </div>
       </div>
+
+      <LaunchPanel onProgress={loadQueue} />
 
       {/* Settings */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">

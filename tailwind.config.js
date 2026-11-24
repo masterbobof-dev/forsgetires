@@ -7,4 +7,6 @@ export default {
   ],
   theme: { extend: {} },
   plugins: [],
+  // on phones a finger scrolling over a tile must not leave it highlighted
+  future: { hoverOnlyWhenSupported: true },
 };

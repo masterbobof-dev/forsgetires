@@ -222,7 +222,7 @@ const QuickReview: React.FC<{ onChanged: () => void; waiting: number }> = ({ onC
   };
 
   if (loading) return <div className="flex justify-center py-10"><Loader2 className="animate-spin text-[#FFC300]" /></div>;
-  if (!items.length) return <p className="text-zinc-500 text-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-6 text-center">Немає фото на перевірку.{msg && <><br /><span className="text-green-400">{msg}</span></>}</p>;
+  if (!items.length) return <p className="text-zinc-500 text-sm text-center py-6">Немає фото на перевірку. Запустіть пошук у кроці 1.{msg && <><br /><span className="text-green-400">{msg}</span></>}</p>;
 
   return (
     <div className="space-y-3">
@@ -296,13 +296,14 @@ const LaunchPanel: React.FC<{ onProgress: () => void }> = ({ onProgress }) => {
     setBusy(false); refresh();
   };
 
-  const running = status?.running && (status?.to_search > 0 || status?.to_download > 0);
+  const left = (status?.to_search || 0) + (status?.to_download || 0);
+  const running = status?.running && left > 0;
+  const field = 'mt-1 w-full bg-black border border-zinc-700 rounded-xl px-3 h-11 text-sm text-white outline-none focus:border-[#FFC300]';
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
-      <h3 className="text-sm font-black uppercase tracking-widest text-zinc-400 flex items-center gap-2"><Play size={16} /> Запустити пошук фото</h3>
-      <div className="grid sm:grid-cols-[1fr_auto_auto] gap-2 items-end">
+    <div className="space-y-3">
+      <div className="grid sm:grid-cols-[1fr_150px_auto] gap-3 items-end">
         <label className="text-xs text-zinc-400">Категорія
-          <select value={category} onChange={e => setCategory(e.target.value)} className="mt-1 w-full bg-black border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#FFC300]">
+          <select value={category} onChange={e => setCategory(e.target.value)} className={field}>
             <option value="">Усі категорії — {all} без фото</option>
             {roots.map(r => (
               <optgroup key={r.id} label={r.name}>
@@ -314,29 +315,22 @@ const LaunchPanel: React.FC<{ onProgress: () => void }> = ({ onProgress }) => {
           </select>
         </label>
         <label className="text-xs text-zinc-400">Скільки товарів
-          <select value={amount} onChange={e => setAmount(e.target.value)} className="mt-1 w-full bg-black border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#FFC300]">
+          <select value={amount} onChange={e => setAmount(e.target.value)} className={field}>
             {['50', '100', '200', '500', '1000'].map(n => <option key={n} value={n}>{n}</option>)}
             <option value="all">Усі ({available})</option>
           </select>
         </label>
-        <div className="flex gap-2">
-          <button onClick={start} disabled={busy || available === 0} className="bg-[#FFC300] hover:bg-white text-black font-black text-sm px-4 py-2.5 rounded-xl flex items-center gap-2 disabled:opacity-40">
-            {busy ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />} Запустити
-          </button>
-          {running && <button onClick={stop} disabled={busy} className="bg-zinc-800 hover:bg-red-600 text-white font-bold text-sm px-4 py-2.5 rounded-xl flex items-center gap-2"><Square size={14} /> Зупинити</button>}
-        </div>
+        <button onClick={start} disabled={busy || available === 0} className="h-11 bg-[#FFC300] hover:bg-white text-black font-black text-sm px-6 rounded-xl flex items-center justify-center gap-2 disabled:opacity-40">
+          {busy ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />} Знайти фото
+        </button>
       </div>
-      {status && (
-        <div className="flex flex-wrap gap-2 text-xs">
-          <span className={`px-3 py-1.5 rounded-lg ${running ? 'bg-green-500/15 text-green-400' : 'bg-zinc-800 text-zinc-400'}`}>{running ? '● Пошук іде' : 'Пошук не запущено'}</span>
-          <span className="bg-zinc-800 text-zinc-300 px-3 py-1.5 rounded-lg">У черзі на пошук: <b>{status.to_search}</b></span>
-          <span className="bg-zinc-800 text-zinc-300 px-3 py-1.5 rounded-lg">Перевіряє ШІ: <b>{status.to_download}</b></span>
-          <span className="bg-zinc-800 text-zinc-300 px-3 py-1.5 rounded-lg">Чекає перегляду: <b className="text-[#FFC300]">{status.to_review}</b></span>
-          <span className="bg-zinc-800 text-zinc-300 px-3 py-1.5 rounded-lg">Без гарного фото: <b>{status.not_found}</b></span>
+      {running ? (
+        <div className="flex flex-wrap items-center gap-3 bg-green-500/10 border border-green-500/30 rounded-xl px-3 py-2.5">
+          <Loader2 size={16} className="animate-spin text-green-400 shrink-0" />
+          <p className="text-sm text-green-300 flex-1 min-w-[200px]">Пошук іде — залишилось <b>{left}</b> товарів (приблизно {Math.max(1, Math.ceil(left / 30))} хв). Сторінку можна закрити, фото з'являться у кроці 2.</p>
+          <button onClick={stop} disabled={busy} className="shrink-0 bg-zinc-800 hover:bg-red-600 text-white font-bold text-xs px-3 py-2 rounded-lg flex items-center gap-1.5"><Square size={12} /> Зупинити</button>
         </div>
-      )}
-      {msg && <p className="text-sm text-zinc-300">{msg}</p>}
-      <p className="text-xs text-zinc-500">Кожен товар — 1 запит Serper. Швидкість приблизно 30 товарів на хвилину; нові фото з'являються нижче самі. Не для кожного товару в інтернеті є гарне фото — такі потрапляють у «Без гарного фото».</p>
+      ) : msg ? <p className="text-sm text-zinc-300">{msg}</p> : null}
     </div>
   );
 };
@@ -390,70 +384,106 @@ const PhotoFinderTab: React.FC = () => {
     setResults((data as Product[]) || []); setPicked(null);
   };
 
-  const toggleCls = (on: boolean) => `px-3 py-1.5 rounded-lg text-xs font-bold ${on ? 'bg-[#FFC300] text-black' : 'bg-zinc-800 text-zinc-300'}`;
+  const [showSettings, setShowSettings] = useState(false);
+  const [notFound, setNotFound] = useState(0);
+  useEffect(() => { supabase.rpc('photo_status_staff').then(({ data }) => setNotFound(Number((data as any)?.not_found) || 0)); }, [queueCount]);
+
+  const toggleCls = (on: boolean) => `px-3 h-9 rounded-lg text-xs font-bold ${on ? 'bg-[#FFC300] text-black' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}`;
+  const card = 'bg-zinc-900 border border-zinc-800 rounded-2xl p-4 md:p-5';
+  const stepTitle = (n: number, text: string, extra?: React.ReactNode) => (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mb-4">
+      <span className="w-7 h-7 shrink-0 rounded-full bg-[#FFC300] text-black font-black text-sm flex items-center justify-center">{n}</span>
+      <h3 className="text-base font-black text-white flex-1 min-w-[60%] sm:min-w-0">{text}</h3>
+      {extra}
+    </div>
+  );
+  const summary = [
+    settings.photo_finder_mode === 'auto' ? 'закріплювати без перевірки' : 'показувати мені перед збереженням',
+    `до ${maxPhotos} фото на товар`,
+    settings.photo_finder_white_bg !== '0' ? 'білий фон' : '',
+    settings.photo_finder_no_text !== '0' ? 'без написів' : '',
+    `від ${settings.photo_finder_min_size || '600'}px`,
+  ].filter(Boolean).join(' · ');
+  const stat = (label: string, value: number, accent = false) => (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3">
+      <p className={`text-2xl font-black leading-none ${accent && value > 0 ? 'text-[#FFC300]' : 'text-white'}`}>{value}</p>
+      <p className="text-[11px] text-zinc-500 mt-1.5 leading-tight">{label}</p>
+    </div>
+  );
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-300">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-black text-white flex items-center gap-2"><Sparkles className="text-[#FFC300]" /> Фото ШІ</h2>
-          <p className="text-zinc-400 text-sm mt-1">Пошук фото товарів у Google з перевіркою ШІ: той самий товар, білий фон, без написів, чітке фото.</p>
-        </div>
-        <div className="flex gap-2 text-xs">
-          <span className="bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2">На перевірку: <b className="text-[#FFC300]">{queueCount}</b></span>
-          <span className="bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2">З авто-фото: <b className="text-white">{stats.withAuto}</b></span>
-          <span className="bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2">Без фото: <b className="text-white">{stats.without}</b></span>
-        </div>
+    <div className="space-y-5 animate-in fade-in duration-300 max-w-6xl">
+      <div>
+        <h2 className="text-2xl font-black text-white flex items-center gap-2"><Sparkles className="text-[#FFC300]" /> Фото ШІ</h2>
+        <p className="text-zinc-400 text-sm mt-1">ШІ шукає фото товарів в інтернеті, ви переглядаєте й зберігаєте.</p>
       </div>
 
-      <LaunchPanel onProgress={loadQueue} />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {stat('чекають вашої перевірки', queueCount, true)}
+        {stat('товарів уже з фото від ШІ', stats.withAuto)}
+        {stat('товарів ще без фото', stats.without)}
+        {stat('гарного фото не знайдено', notFound)}
+      </div>
 
-      {/* Settings */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-        <h3 className="text-sm font-black uppercase tracking-widest text-zinc-400 flex items-center gap-2 mb-3"><Settings2 size={16} /> Налаштування фонового пошуку</h3>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-          <div>
-            <p className="text-zinc-400 text-xs mb-1.5">Що робити зі знайденими фото</p>
-            <div className="flex gap-1.5">
-              <button onClick={() => set('photo_finder_mode', 'review')} className={toggleCls(settings.photo_finder_mode !== 'auto')}>Показати мені</button>
-              <button onClick={() => set('photo_finder_mode', 'auto')} className={toggleCls(settings.photo_finder_mode === 'auto')}>Закріпити самі</button>
+      {/* Step 1 */}
+      <div className={card}>
+        {stepTitle(1, 'Знайти фото')}
+        <LaunchPanel onProgress={loadQueue} />
+        <div className="mt-4 pt-3 border-t border-zinc-800">
+          <button onClick={() => setShowSettings(v => !v)} className="w-full flex items-center gap-2 text-left text-xs text-zinc-400 hover:text-white">
+            <Settings2 size={14} className="shrink-0" />
+            <span className="flex-1"><b className="text-zinc-300">Налаштування:</b> {summary}</span>
+            <span className="shrink-0 text-[#FFC300] font-bold">{showSettings ? 'Згорнути' : 'Змінити'}</span>
+          </button>
+          {showSettings && (
+            <div className="mt-4 space-y-4">
+              <div className="grid sm:grid-cols-2 gap-x-6 gap-y-4">
+                <div>
+                  <p className="text-zinc-300 text-xs font-bold mb-1.5">Що робити зі знайденими фото</p>
+                  <div className="flex gap-1.5">
+                    <button onClick={() => set('photo_finder_mode', 'review')} className={toggleCls(settings.photo_finder_mode !== 'auto')}>Показати мені</button>
+                    <button onClick={() => set('photo_finder_mode', 'auto')} className={toggleCls(settings.photo_finder_mode === 'auto')}>Закріпити без перевірки</button>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-zinc-300 text-xs font-bold mb-1.5">Скільки фото на один товар</p>
+                  <div className="flex gap-1.5">{['1', '2', '3', '4', '5'].map(n => <button key={n} onClick={() => set('photo_finder_max_photos', n)} className={`${toggleCls(settings.photo_finder_max_photos === n)} w-9 !px-0`}>{n}</button>)}</div>
+                </div>
+                <div>
+                  <p className="text-zinc-300 text-xs font-bold mb-1.5">Вимоги до фото</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button onClick={() => set('photo_finder_white_bg', settings.photo_finder_white_bg === '0' ? '1' : '0')} className={toggleCls(settings.photo_finder_white_bg !== '0')}>Тільки білий фон</button>
+                    <button onClick={() => set('photo_finder_no_text', settings.photo_finder_no_text === '0' ? '1' : '0')} className={toggleCls(settings.photo_finder_no_text !== '0')}>Без написів і водяних знаків</button>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-zinc-300 text-xs font-bold mb-1.5">Мінімальний розмір фото</p>
+                  <div className="flex gap-1.5">{['400', '600', '800'].map(n => <button key={n} onClick={() => set('photo_finder_min_size', n)} className={toggleCls(settings.photo_finder_min_size === n)}>{n}px</button>)}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <button onClick={saveSettings} className="h-10 bg-white hover:bg-[#FFC300] text-black font-black text-sm px-4 rounded-xl flex items-center gap-2"><Save size={16} /> Зберегти налаштування</button>
+                {savedMsg && <span className="text-sm text-green-400">{savedMsg}</span>}
+              </div>
             </div>
-          </div>
-          <div>
-            <p className="text-zinc-400 text-xs mb-1.5">Фото на товар (ракурси)</p>
-            <div className="flex gap-1.5">{['1', '2', '3', '4', '5'].map(n => <button key={n} onClick={() => set('photo_finder_max_photos', n)} className={toggleCls(settings.photo_finder_max_photos === n)}>{n}</button>)}</div>
-          </div>
-          <div>
-            <p className="text-zinc-400 text-xs mb-1.5">Вимоги</p>
-            <div className="flex flex-wrap gap-1.5">
-              <button onClick={() => set('photo_finder_white_bg', settings.photo_finder_white_bg === '0' ? '1' : '0')} className={toggleCls(settings.photo_finder_white_bg !== '0')}>Білий фон</button>
-              <button onClick={() => set('photo_finder_no_text', settings.photo_finder_no_text === '0' ? '1' : '0')} className={toggleCls(settings.photo_finder_no_text !== '0')}>Без написів</button>
-            </div>
-          </div>
-          <div>
-            <p className="text-zinc-400 text-xs mb-1.5">Мінімальний розмір фото</p>
-            <div className="flex gap-1.5">{['400', '600', '800'].map(n => <button key={n} onClick={() => set('photo_finder_min_size', n)} className={toggleCls(settings.photo_finder_min_size === n)}>{n}px</button>)}</div>
-          </div>
-        </div>
-        <div className="mt-4 flex items-center gap-3">
-          <button onClick={saveSettings} className="bg-white hover:bg-[#FFC300] text-black font-black text-sm px-4 py-2 rounded-xl flex items-center gap-2"><Save size={16} /> Зберегти</button>
-          {savedMsg && <span className="text-sm text-green-400">{savedMsg}</span>}
+          )}
         </div>
       </div>
 
-      <div className="flex gap-2">
-        <button onClick={() => setView('quick')} className={toggleCls(view === 'quick')}>Швидка перевірка ({queueCount})</button>
-        <button onClick={() => setView('queue')} className={toggleCls(view === 'queue')}>По одному</button>
-        <button onClick={() => setView('search')} className={toggleCls(view === 'search')}>Пошук для товару</button>
-        {view === 'queue' && <button onClick={loadQueue} className="ml-auto text-zinc-400 hover:text-white text-xs flex items-center gap-1"><RefreshCw size={14} /> Оновити</button>}
-      </div>
+      {/* Step 2 */}
+      <div className={card}>
+        {stepTitle(2, `Перевірити знайдені фото${queueCount ? ` (${queueCount})` : ''}`,
+          <select value={view} onChange={e => setView(e.target.value as typeof view)} aria-label="Спосіб перевірки"
+            className="bg-black border border-zinc-700 rounded-lg px-2 h-9 text-xs text-zinc-300 outline-none focus:border-[#FFC300]">
+            <option value="quick">Усі разом (швидко)</option>
+            <option value="queue">По одному товару</option>
+            <option value="search">Знайти фото для одного товару</option>
+          </select>)}
 
       {view === 'quick' ? <QuickReview onChanged={loadQueue} waiting={queueCount} /> : view === 'queue' ? (
         loading ? <div className="flex justify-center py-10"><Loader2 className="animate-spin text-[#FFC300]" /></div>
         : queue.length === 0 ? (
-          <p className="text-zinc-500 text-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-6 text-center">
-            Черга порожня. Тут з'являтимуться товари, для яких фоновий пошук знайшов фото (у режимі «Показати мені»).
-          </p>
+          <p className="text-zinc-500 text-sm text-center py-6">Немає фото на перевірку.</p>
         ) : (
           <div className="space-y-4">
             {queue.map(p => <ProductPhotos key={p.id} product={p} maxPhotos={maxPhotos} onDone={loadQueue} />)}
@@ -466,12 +496,12 @@ const PhotoFinderTab: React.FC = () => {
             <div className="relative flex-1">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
               <input value={term} onChange={e => setTerm(e.target.value)} onKeyDown={e => e.key === 'Enter' && doSearch()}
-                placeholder="Назва, артикул або номер товару" className="w-full bg-black border border-zinc-700 rounded-xl pl-9 pr-3 py-2.5 text-sm text-white outline-none focus:border-[#FFC300]" />
+                placeholder="Назва, артикул або номер товару" className="w-full bg-black border border-zinc-700 rounded-xl pl-9 pr-3 h-11 text-sm text-white outline-none focus:border-[#FFC300]" />
             </div>
             <button onClick={doSearch} className="bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm px-4 rounded-xl">Знайти</button>
           </div>
           {!picked && results.length > 0 && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl divide-y divide-zinc-800">
+            <div className="bg-black/40 border border-zinc-800 rounded-2xl divide-y divide-zinc-800">
               {results.map(p => (
                 <button key={p.id} onClick={() => setPicked(p)} className="w-full text-left flex items-center gap-3 p-3 hover:bg-zinc-800/60">
                   <div className="w-10 h-10 shrink-0 rounded bg-white overflow-hidden flex items-center justify-center">
@@ -490,6 +520,7 @@ const PhotoFinderTab: React.FC = () => {
           )}
         </div>
       )}
+      </div>
     </div>
   );
 };

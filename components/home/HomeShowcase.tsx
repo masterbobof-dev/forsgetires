@@ -189,8 +189,10 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
           <div className="flex gap-3 overflow-x-auto pb-2 -mx-3 px-3 snap-x scrollbar-hide">
             {recent.map(p => (
               <button key={p.id} onClick={() => openRecent(p.id)} className="snap-start shrink-0 w-[210px] flex items-center gap-2 text-left bg-zinc-900 border border-zinc-800 hover:border-[#FFC300] rounded-xl p-2 transition-colors">
-                <span className="w-12 h-12 shrink-0 bg-white rounded-lg overflow-hidden flex items-center justify-center">
-                  {(p.image_thumb_url || p.image_url) && <img src={p.image_thumb_url || p.image_url} alt="" loading="lazy" className="w-full h-full object-contain" />}
+                <span className={`w-12 h-12 shrink-0 rounded-lg overflow-hidden flex items-center justify-center ${(p.image_thumb_url || p.image_url) ? 'bg-white' : 'bg-zinc-800'}`}>
+                  {(p.image_thumb_url || p.image_url)
+                    ? <img src={p.image_thumb_url || p.image_url} alt="" loading="lazy" className="w-full h-full object-contain" />
+                    : (() => { const c = categories.find(x => x.id === p.category_id); const I = getCategoryIcon(c?.icon || categories.find(x => x.id === c?.parent_id)?.icon); return <I size={22} className="text-zinc-500" />; })()}
                 </span>
                 <span className="min-w-0">
                   <span className="block text-[11px] font-bold text-white line-clamp-2 leading-tight">{p.title}</span>

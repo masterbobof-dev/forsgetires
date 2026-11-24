@@ -1059,6 +1059,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
         showStock={enableStockQty}
         onQuickOrder={(p) => setQuickOrderProduct(p)}
         onSimilarClick={(t) => openProduct(t, { replace: true })}
+        iconFor={productIcon}
       />
 
       {lightboxOpen && (

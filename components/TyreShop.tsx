@@ -283,8 +283,8 @@ const TyreShop: React.FC<TyreShopProps> = ({
     } else {
       // Only touch SEO tags on category pages; the home page keeps the values from admin SEO settings
       if (activeCat) {
-        document.title = `${activeCat.name} — купити в інтернет-магазині Форсаж | Синельникове`;
-        setMetaDescription(activeCat.description || `${activeCat.name} в наявності в інтернет-магазині Форсаж. Самовивіз у Синельниковому, доставка Новою Поштою по всій Україні.`);
+        document.title = activeCat.seo_title || `${activeCat.name} — купити в інтернет-магазині Форсаж | Синельникове`;
+        setMetaDescription(activeCat.seo_description || activeCat.description?.slice(0, 300) || `${activeCat.name} в наявності в інтернет-магазині Форсаж. Самовивіз у Синельниковому, доставка Новою Поштою по всій Україні.`);
         setCanonical(`${SITE_URL}/?c=${activeCat.slug}`);
       } else if (activeCategory === 'hot') {
         document.title = 'Акції та знижки — інтернет-магазин Форсаж';
@@ -934,6 +934,17 @@ const TyreShop: React.FC<TyreShopProps> = ({
                 </button>
                 <p className="mt-3 text-zinc-500 text-[11px] font-bold uppercase tracking-widest">Показано {tyres.length} з {totalCount}</p>
               </div>
+            )}
+
+            {activeCat?.description && !debouncedSearch && (
+              <details className="mt-10 bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4 md:p-6 group">
+                <summary className="cursor-pointer font-black uppercase tracking-tight text-zinc-200 list-none flex items-center justify-between">
+                  Про категорію «{activeCat.name}»<ArrowDown size={16} className="group-open:rotate-180 transition-transform" />
+                </summary>
+                <div className="mt-3 space-y-2 text-sm text-zinc-400 leading-relaxed">
+                  {activeCat.description.split(/\n+/).filter(Boolean).map((t, i) => <p key={i}>{t}</p>)}
+                </div>
+              </details>
             )}
 
             <p className="lg:hidden mt-6 text-center text-[11px] font-bold uppercase tracking-widest text-zinc-700">

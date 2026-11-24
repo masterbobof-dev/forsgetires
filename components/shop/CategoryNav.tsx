@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { Grid, Flame, ChevronRight, Heart } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Grid, Flame, ChevronRight, ChevronDown, Heart } from 'lucide-react';
 import {
   ProductCategory, getRootCategories, getChildren, getRootOf, getCategoryIcon,
 } from '../../categories';
@@ -57,9 +57,46 @@ const CategoryNav: React.FC<CategoryNavProps> = ({ categories, active, onChange,
     if (activeCat) center(subRow.current, String(activeCat.id));
   }, [active, activeRoot?.id, activeCat?.id]);
 
+  // Phone: one button that drops down a grid of ALL sections (instead of a long sideways row)
+  const [open, setOpen] = useState(false);
+  type Item = { id: string; sel: CategorySelection; icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; label: string; on: boolean; hot?: boolean };
+  const items: Item[] = [
+    { id: 'all', sel: 'all', icon: Grid, label: 'Всі товари', on: active === 'all' },
+    ...roots.map(c => ({ id: String(c.id), sel: c.id as CategorySelection, icon: getCategoryIcon(c.icon), label: c.name, on: activeRoot?.id === c.id })),
+    { id: 'hot', sel: 'hot', icon: Flame, label: 'Акції', on: active === 'hot', hot: true },
+    ...((favoritesCount > 0 || active === 'fav') ? [{ id: 'fav', sel: 'fav' as CategorySelection, icon: Heart, label: `Обране (${favoritesCount})`, on: active === 'fav', hot: true }] : []),
+  ];
+  const current = items.find(i => i.on) || items[0];
+  const CurIcon = current.icon;
+
   return (
     <div className="mb-4 md:mb-6 space-y-2">
-      <div ref={rootRow} className="relative flex gap-2 overflow-x-auto pb-1 -mx-3 px-3 md:mx-0 md:px-0 scrollbar-hide fade-edges md:[mask-image:none] md:[-webkit-mask-image:none] md:flex-wrap" style={{ WebkitOverflowScrolling: 'touch' }}>
+      <div className="md:hidden">
+        <button onClick={() => setOpen(o => !o)} aria-expanded={open}
+          className={`w-full flex items-center gap-2.5 px-3 py-3 rounded-xl border font-black text-xs uppercase tracking-wide transition-colors ${current.hot ? 'bg-red-600 border-red-600 text-white' : 'bg-[#FFC300] border-[#FFC300] text-black'}`}>
+          <CurIcon size={17} strokeWidth={2.5} />
+          <span className="flex-1 text-left truncate">{current.label}</span>
+          <span className="text-[10px] font-bold opacity-70 normal-case">{open ? 'згорнути' : `усі розділи (${items.length})`}</span>
+          <ChevronDown size={18} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+        </button>
+        {open && (
+          <div className="grid grid-cols-3 min-[480px]:grid-cols-4 gap-2 mt-2 animate-in fade-in slide-in-from-top-2 duration-200">
+            {items.map(i => {
+              const Icon = i.icon;
+              return (
+                <button key={i.id} onClick={() => { onChange(i.sel); setOpen(false); }}
+                  className={`flex flex-col items-center justify-center gap-1.5 min-h-[72px] px-1.5 py-2 rounded-xl border text-center transition-colors ${
+                    i.on ? (i.hot ? 'bg-red-600 border-red-600 text-white' : 'bg-[#FFC300] border-[#FFC300] text-black')
+                      : i.hot ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-zinc-900 border-zinc-800 text-zinc-200 active:bg-zinc-800'}`}>
+                  <span className={i.on ? '' : i.hot ? '' : 'text-[#FFC300]'}><Icon size={20} /></span>
+                  <span className="font-black text-[10px] uppercase leading-tight break-words hyphens-auto w-full">{i.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      <div ref={rootRow} className="hidden md:flex relative gap-2 overflow-x-auto pb-1 -mx-3 px-3 md:mx-0 md:px-0 scrollbar-hide fade-edges md:[mask-image:none] md:[-webkit-mask-image:none] md:flex-wrap" style={{ WebkitOverflowScrolling: 'touch' }}>
         <Chip id="all" active={active === 'all'} onClick={() => onChange('all')} icon={Grid} label="Всі товари" />
         {roots.map(cat => (
           <Chip

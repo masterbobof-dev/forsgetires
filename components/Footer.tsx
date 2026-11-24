@@ -14,9 +14,9 @@ const Footer: React.FC<{ onNavigate?: (v: ViewState) => void }> = ({ onNavigate 
         <div className="flex flex-col gap-6">
           <div className="flex flex-col">
             <span className="font-black text-4xl tracking-tighter text-white italic -skew-x-12">
-              ФОРСАЖ<span className="text-[#FFC300]">24</span>
+              ФОРСАЖ
             </span>
-            <span className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.4em] leading-none mt-1 ml-1">
+            <span className="text-[11px] text-zinc-500 font-black uppercase tracking-[0.4em] leading-none mt-1 ml-1">
               Інтернет-магазин
             </span>
           </div>
@@ -24,7 +24,7 @@ const Footer: React.FC<{ onNavigate?: (v: ViewState) => void }> = ({ onNavigate 
             Інтернет-магазин у м. Синельникове: шини, диски, акумулятори та автотовари в наявності. Доставка по всій Україні.
           </p>
           <div className="flex items-center gap-4">
-             <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-black uppercase tracking-widest">
+             <div className="flex items-center gap-2 text-zinc-500 text-[11px] font-black uppercase tracking-widest">
                <ShieldCheck size={16} className="text-[#FFC300]" /> 100% Гарантія
              </div>
           </div>
@@ -66,7 +66,7 @@ const Footer: React.FC<{ onNavigate?: (v: ViewState) => void }> = ({ onNavigate 
                 <Phone size={20} />
               </div>
               <div className="flex flex-col">
-                <span className="text-[10px] uppercase font-black text-zinc-600 tracking-widest">Основний</span>
+                <span className="text-[11px] uppercase font-black text-zinc-500 tracking-widest">Основний</span>
                 <span className="font-black text-lg tracking-tight">{PHONE_NUMBER_1}</span>
               </div>
             </a>
@@ -75,7 +75,7 @@ const Footer: React.FC<{ onNavigate?: (v: ViewState) => void }> = ({ onNavigate 
                 <Phone size={20} />
               </div>
               <div className="flex flex-col">
-                <span className="text-[10px] uppercase font-black text-zinc-600 tracking-widest">Додатковий</span>
+                <span className="text-[11px] uppercase font-black text-zinc-500 tracking-widest">Додатковий</span>
                 <span className="font-black text-lg tracking-tight">{PHONE_NUMBER_2}</span>
               </div>
             </a>
@@ -94,7 +94,7 @@ const Footer: React.FC<{ onNavigate?: (v: ViewState) => void }> = ({ onNavigate 
               </div>
               <div className="flex flex-col">
                 <span className="font-black text-white text-lg">24 / 7</span>
-                <span className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-600">Замовлення онлайн цілодобово</span>
+                <span className="text-[11px] uppercase tracking-[0.2em] font-black text-zinc-500">Замовлення онлайн цілодобово</span>
               </div>
             </div>
             <div className="flex items-start gap-4 text-zinc-400">
@@ -103,7 +103,7 @@ const Footer: React.FC<{ onNavigate?: (v: ViewState) => void }> = ({ onNavigate 
               </div>
               <div className="flex flex-col">
                 <span className="font-black text-white text-lg">м. Синельникове</span>
-                <span className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-600">Дніпропетровська обл.</span>
+                <span className="text-[11px] uppercase tracking-[0.2em] font-black text-zinc-500">Дніпропетровська обл.</span>
               </div>
             </div>
           </div>
@@ -111,10 +111,10 @@ const Footer: React.FC<{ onNavigate?: (v: ViewState) => void }> = ({ onNavigate 
       </div>
 
       <div className="max-w-7xl mx-auto px-4 pt-10 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6">
-        <p className="text-zinc-600 text-[10px] font-black uppercase tracking-[0.4em] text-center md:text-left">
+        <p className="text-zinc-500 text-[11px] font-black uppercase tracking-[0.4em] text-center md:text-left">
           © {new Date().getFullYear()} Інтернет-магазин ФОРСАЖ. Всі права захищено.
         </p>
-        <div className="flex gap-6 text-[10px] font-black uppercase tracking-widest text-zinc-600">
+        <div className="flex gap-6 text-[11px] font-black uppercase tracking-widest text-zinc-500">
            <a href="/privacy" onClick={link('privacy')} className="hover:text-zinc-300 transition-colors">Політика конфіденційності</a>
            <a href="/oferta" onClick={link('oferta')} className="hover:text-zinc-300 transition-colors">Публічна оферта</a>
         </div>

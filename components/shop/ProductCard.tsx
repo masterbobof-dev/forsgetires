@@ -2,6 +2,7 @@
 import React from 'react';
 import { ShoppingCart, Flame, ShoppingBag, Eye, Info, Heart, Scale } from 'lucide-react';
 import { TyreProduct } from '../../types';
+import { parseTyreIndex, describeTyreIndex } from '../../tyreIndex';
 
 interface ProductCardProps {
   tyre: TyreProduct;
@@ -15,20 +16,20 @@ interface ProductCardProps {
   onToggleFavorite?: () => void;
   isCompared?: boolean;
   onToggleCompare?: () => void;
+  /** stock tracking is on → show "Залишилося N шт" for low quantities */
+  showStock?: boolean;
 }
 
-const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, onQuickOrder, formatPrice, chips = [], isFavorite, onToggleFavorite, isCompared, onToggleCompare }) => {
+const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, onQuickOrder, formatPrice, chips = [], isFavorite, onToggleFavorite, isCompared, onToggleCompare, showStock = false }) => {
   const isOutOfStock = tyre.in_stock === false;
   const priceNum = parseFloat(tyre.price || '0');
   const oldPriceNum = parseFloat(tyre.old_price || '0');
   const hasDiscount = oldPriceNum > priceNum;
   const discountPercent = hasDiscount ? Math.round(((oldPriceNum - priceNum) / oldPriceNum) * 100) : 0;
   
-  // Check if product is new (last 7 days)
-  const isNew = tyre.created_at ? (new Date().getTime() - new Date(tyre.created_at).getTime()) < (7 * 24 * 60 * 60 * 1000) : false;
-  
-  // Low stock logic
-  const isLowStock = tyre.stock_quantity !== undefined && tyre.stock_quantity > 0 && tyre.stock_quantity <= 4;
+  // Only real quantities (when stock tracking is on) produce "Залишилося N шт"
+  const isLowStock = showStock && typeof tyre.stock_quantity === 'number' && tyre.stock_quantity > 0 && tyre.stock_quantity <= 4;
+  const tyreIndex = tyre.width ? parseTyreIndex(tyre.title) : null;
 
   const altText = `${tyre.manufacturer || ''} ${tyre.title} ${tyre.width ? tyre.width + '/' + tyre.height : ''} ${tyre.radius || ''} купити в Синельниковому`;
 
@@ -59,26 +60,22 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center text-zinc-800">
               <ShoppingBag size={36} strokeWidth={1} className="opacity-20 mb-2"/>
-              <span className="text-[10px] font-bold uppercase tracking-widest">Немає фото</span>
+              <span className="text-[11px] font-bold uppercase tracking-widest">Немає фото</span>
             </div>
           )}
           
           {/* Badges */}
           <div className="absolute top-2 left-2 sm:top-3 sm:left-3 z-10 flex flex-wrap sm:flex-col gap-1 sm:gap-1.5 max-w-[calc(100%-1rem)]">
-            {isNew && (
-              <div className="bg-emerald-600 text-white text-[9px] sm:text-[10px] font-black px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full shadow-lg uppercase">
-                NEW
-              </div>
-            )}
+            {/* at most two badges: discount and "hit" */}
             {tyre.is_hot && (
-              <div className="bg-orange-600 text-white text-[9px] sm:text-[10px] font-black px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full shadow-lg uppercase flex items-center gap-1 animate-pulse">
+              <div className="bg-orange-600 text-white text-[11px] sm:text-[11px] font-black px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full shadow-lg uppercase flex items-center gap-1">
                 <Flame size={12} fill="currentColor"/> 
-                <span>HOT</span>
+                <span>Хіт</span>
               </div>
             )}
             {hasDiscount && (
-              <div className="bg-red-600 text-white text-[9px] sm:text-[10px] font-black px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full shadow-lg uppercase flex items-center gap-1">
-                SALE -{discountPercent}%
+              <div className="bg-red-600 text-white text-[10px] sm:text-[11px] font-black px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full shadow-lg uppercase flex items-center gap-1">
+                −{discountPercent}%
               </div>
             )}
           </div>
@@ -107,7 +104,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
 
           {isLowStock && !isOutOfStock && (
             <div className="absolute bottom-2 left-2 sm:bottom-3 sm:left-3 z-10">
-              <div className="bg-black/60 backdrop-blur-md text-red-500 text-[9px] font-black px-2 py-1 rounded-lg border border-red-500/30 uppercase tracking-tighter">
+              <div className="bg-black/60 backdrop-blur-md text-red-500 text-[10px] font-black px-2 py-1 rounded-lg border border-red-500/30 uppercase tracking-tighter">
                 Залишилося: {tyre.stock_quantity} шт
               </div>
             </div>
@@ -122,7 +119,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
                {onQuickOrder && (
                  <button 
                   onClick={(e) => { e.stopPropagation(); onQuickOrder(tyre); }}
-                  className="bg-[#FFC300] text-black px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300 delay-75 shadow-xl hover:bg-white"
+                  className="bg-[#FFC300] text-black px-4 py-2 rounded-xl font-black text-[11px] uppercase tracking-widest transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300 delay-75 shadow-xl hover:bg-white"
                  >
                    Швидке замовлення
                  </button>
@@ -142,11 +139,11 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
        {/* Content Section */}
        <div className="p-3 sm:p-4 flex flex-col flex-grow">
           <div className="flex justify-between items-start mb-1">
-            <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider truncate max-w-[70%]">
+            <span className="text-[11px] text-zinc-500 uppercase font-bold tracking-wider truncate max-w-[70%]">
               {tyre.manufacturer || 'Товар'}
             </span>
             {tyre.season && (
-              <span className="text-[9px] text-zinc-400 border border-zinc-800 px-1.5 py-0.5 rounded uppercase font-medium">
+              <span className="text-[10px] text-zinc-400 border border-zinc-800 px-1.5 py-0.5 rounded uppercase font-medium">
                 {tyre.season === 'winter' ? 'Зима' : tyre.season === 'summer' ? 'Літо' : 'Всесезон'}
               </span>
             )}
@@ -158,24 +155,29 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
           
           <div className="flex flex-wrap gap-1 sm:gap-1.5 mb-3 sm:mb-4">
             {chips.map(chip => (
-              <span key={chip} className="bg-zinc-800/60 text-zinc-200 text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded border border-zinc-700/60 whitespace-nowrap">
+              <span key={chip} className="bg-zinc-800/60 text-zinc-200 text-[11px] font-bold px-1.5 sm:px-2 py-0.5 rounded border border-zinc-700/60 whitespace-nowrap">
                 {chip}
               </span>
             ))}
             {tyre.width && (
-              <span className="bg-zinc-800/50 text-zinc-300 text-[10px] font-bold px-2 py-0.5 rounded border border-zinc-800">
+              <span className="bg-zinc-800/50 text-zinc-300 text-[11px] font-bold px-2 py-0.5 rounded border border-zinc-800">
                 {tyre.width}/{tyre.height}
               </span>
             )}
             {tyre.radius && (
-              <span className="bg-[#FFC300]/10 text-[#FFC300] text-[10px] font-black px-2 py-0.5 rounded border border-[#FFC300]/20">
+              <span className="bg-[#FFC300]/10 text-[#FFC300] text-[11px] font-black px-2 py-0.5 rounded border border-[#FFC300]/20">
                 {tyre.radius}
+              </span>
+            )}
+            {tyreIndex && (
+              <span title={describeTyreIndex(tyreIndex)} className="bg-zinc-800/50 text-zinc-300 text-[11px] font-bold px-2 py-0.5 rounded border border-zinc-800">
+                {tyreIndex.code}
               </span>
             )}
           </div>
 
           {tyre.description && (
-            <p className="hidden sm:block text-[10px] md:text-xs text-zinc-500 line-clamp-2 mb-4 leading-relaxed group-hover:text-zinc-400 transition-colors">
+            <p className="hidden sm:block text-[11px] md:text-xs text-zinc-500 line-clamp-2 mb-4 leading-relaxed group-hover:text-zinc-400 transition-colors">
               {tyre.description.length > 80 ? tyre.description.slice(0, 80) + '...' : tyre.description}
             </p>
           )}
@@ -183,7 +185,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
           <div className="mt-auto pt-3 sm:pt-4 border-t border-zinc-800/50 flex items-center justify-between gap-2">
             <div className="flex flex-col">
               {hasDiscount && (
-                <span className="text-zinc-500 text-[10px] line-through decoration-red-500/50">
+                <span className="text-zinc-500 text-[11px] line-through decoration-red-500/50">
                   {formatPrice(tyre.old_price)}
                 </span>
               )}
@@ -191,7 +193,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
                 <span className="text-lg sm:text-xl font-black text-[#FFC300]">
                   {formatPrice(tyre.price)}
                 </span>
-                <span className="text-[10px] font-bold text-zinc-500 uppercase">грн</span>
+                <span className="text-[11px] font-bold text-zinc-500 uppercase">грн</span>
               </div>
             </div>
             

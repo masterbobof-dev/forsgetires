@@ -42,10 +42,11 @@ const getGeoInfo = async () => {
     if (cached) return JSON.parse(cached);
 
     try {
-        const res = await fetch('https://ip-api.com/json/?fields=status,country,city');
-        const data = await res.json();
-        if (data.status === 'success') {
-            const geo = { country: data.country, city: data.city };
+        // our own Vercel function (reads Vercel's geolocation headers)
+        const res = await fetch('/api/geo');
+        if (res.ok) {
+            const data = await res.json();
+            const geo = { country: data.country || 'Unknown', city: data.city || 'Unknown' };
             sessionStorage.setItem('analytics_geo', JSON.stringify(geo));
             return geo;
         }

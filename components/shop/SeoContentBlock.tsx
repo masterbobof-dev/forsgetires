@@ -72,7 +72,7 @@ const SeoContentBlock: React.FC = () => {
             </div>
             
             {/* LSI Keywords Tag Cloud (Very subtle) */}
-            <div className="mt-12 pt-8 border-t border-zinc-800/30 flex flex-wrap gap-x-4 gap-y-2 text-[10px] text-zinc-600 font-medium uppercase tracking-widest">
+            <div className="mt-12 pt-8 border-t border-zinc-800/30 flex flex-wrap gap-x-4 gap-y-2 text-[11px] text-zinc-500 font-medium uppercase tracking-widest">
                 <span>автошини дніпро</span>
                 <span>•</span>
                 <span>вулканізація область</span>

@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatUaPhone } from '../../phone';
 import { X, Loader2, Mail, Key, ArrowLeft, Send, CheckCircle2, AlertCircle, User, Phone, Lock, ShoppingBag } from 'lucide-react';
 import type { AuthState } from '../../useAuth';
 
@@ -72,8 +73,8 @@ export const AuthFormBody: React.FC<{ auth: AuthState; allowRegister: boolean; a
         <>
           <AuthField type="text" value={auth.fullName} onChange={auth.setFullName} onBlur={() => auth.touchField('fullName')}
             placeholder="Ім'я та прізвище" icon={<User size={18} />} error={auth.fieldErrors.fullName} touched={auth.touched.fullName} autoComplete="name" />
-          <AuthField type="tel" value={auth.phone} onChange={auth.setPhone} onBlur={() => auth.touchField('phone')}
-            placeholder="Телефон, напр. 067 123 45 67" icon={<Phone size={18} />} error={auth.fieldErrors.phone} touched={auth.touched.phone} autoComplete="tel" inputMode="tel" />
+          <AuthField type="tel" value={auth.phone} onChange={v => auth.setPhone(formatUaPhone(v))} onBlur={() => auth.touchField('phone')}
+            placeholder="Телефон: +380 __ ___ __ __" icon={<Phone size={18} />} error={auth.fieldErrors.phone} touched={auth.touched.phone} autoComplete="tel" inputMode="tel" />
         </>
       )}
       <AuthField type="email" value={auth.email} onChange={auth.setEmail} onBlur={() => auth.touchField('email')}

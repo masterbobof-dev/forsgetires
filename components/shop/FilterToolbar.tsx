@@ -35,7 +35,7 @@ interface FilterPanelProps {
 }
 
 const selectCls = 'w-full bg-black/40 text-white px-3 py-2.5 rounded-xl border border-zinc-800 text-sm font-bold appearance-none cursor-pointer hover:border-[#FFC300]/50 transition-colors focus:border-[#FFC300] outline-none';
-const labelCls = 'block text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5';
+const labelCls = 'block text-[11px] font-black uppercase tracking-widest text-zinc-500 mb-1.5';
 
 export const countActiveFilters = (s: FilterState) =>
   [s.filterWidth, s.filterHeight, s.filterRadius, s.filterBrand, s.filterSeason].filter(Boolean).length +
@@ -234,7 +234,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ searchQuery, setSearchQuer
         <SlidersHorizontal size={16} />
         <span className="hidden sm:inline">Фільтри</span>
         {activeFilters > 0 && (
-          <span className="absolute -top-1.5 -right-1.5 sm:static min-w-[18px] h-[18px] px-1 rounded-full bg-black text-[#FFC300] text-[10px] font-black flex items-center justify-center">
+          <span className="absolute -top-1.5 -right-1.5 sm:static min-w-[18px] h-[18px] px-1 rounded-full bg-black text-[#FFC300] text-[11px] font-black flex items-center justify-center">
             {activeFilters}
           </span>
         )}
@@ -255,7 +255,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ searchQuery, setSearchQuer
         </select>
       </div>
     </div>
-    <p className="mt-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-600 px-1">
+    <p className="mt-1.5 text-[11px] font-bold uppercase tracking-widest text-zinc-500 px-1">
       Знайдено: <span className="text-zinc-300">{totalCount}</span> шт
     </p>
   </div>

@@ -39,13 +39,13 @@ const AgroBanner: React.FC<AgroBannerProps> = ({ onCategoryClick, featuredProduc
             </div>
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <span className="bg-emerald-500 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-widest animate-pulse">В наявності</span>
-                <span className="text-yellow-400/60 text-[10px] font-bold uppercase tracking-widest hidden md:block">• Прямі поставки</span>
+                <span className="bg-emerald-500 text-white text-[11px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-widest animate-pulse">В наявності</span>
+                <span className="text-yellow-400/60 text-[11px] font-bold uppercase tracking-widest hidden md:block">• Прямі поставки</span>
               </div>
               <p className="text-white font-black text-lg md:text-2xl uppercase tracking-tighter leading-tight">
                 Агро та Спецшини
               </p>
-              <p className="text-emerald-400/80 text-[10px] md:text-sm font-bold uppercase tracking-widest mt-0.5 md:mt-1">
+              <p className="text-emerald-400/80 text-[11px] md:text-sm font-bold uppercase tracking-widest mt-0.5 md:mt-1">
                 Трактори • Комбайни • Спецтехніка
               </p>
             </div>
@@ -73,10 +73,10 @@ const AgroBanner: React.FC<AgroBannerProps> = ({ onCategoryClick, featuredProduc
                   <img src={product.image_url} alt="" className="w-full h-full object-cover" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[10px] md:text-xs font-black text-white truncate uppercase leading-tight">{product.title}</p>
+                  <p className="text-[11px] md:text-xs font-black text-white truncate uppercase leading-tight">{product.title}</p>
                   <p className="text-xs md:text-sm font-black text-[#FFC300] mt-0.5">{Math.round(parseFloat(product.price)).toLocaleString()} грн</p>
                   <div className="flex items-center gap-1 mt-1 opacity-0 group-hover/card:opacity-100 transition-opacity">
-                    <span className="text-[8px] font-black text-emerald-400 uppercase tracking-tighter">Дивитись</span>
+                    <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">Дивитись</span>
                     <ArrowRight size={8} className="text-emerald-400" />
                   </div>
                 </div>
@@ -89,7 +89,7 @@ const AgroBanner: React.FC<AgroBannerProps> = ({ onCategoryClick, featuredProduc
         <div className="hidden lg:flex items-center gap-3 shrink-0 cursor-pointer group/cta" onClick={onCategoryClick}>
           <div className="hidden xl:flex flex-col items-end">
             <span className="text-white text-xs font-black uppercase tracking-widest italic leading-none">Всі пропозиції</span>
-            <span className="text-emerald-500 text-[10px] font-bold uppercase tracking-tighter opacity-60">Перейти до розділу</span>
+            <span className="text-emerald-500 text-[11px] font-bold uppercase tracking-tighter opacity-60">Перейти до розділу</span>
           </div>
           <div className="bg-emerald-500/20 border border-emerald-500/40 group-hover/cta:bg-emerald-500 p-2.5 md:p-3 rounded-xl transition-all group-hover/cta:border-emerald-400 group-hover/cta:shadow-[0_0_20px_rgba(16,185,129,0.4)]">
             <ArrowRight size={20} className="text-emerald-400 group-hover/cta:text-white transition-colors group-hover/cta:translate-x-1 transform duration-300" />

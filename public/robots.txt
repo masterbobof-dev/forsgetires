@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://forsage-sinelnikove.com/sitemap.xml
+Sitemap: https://www.forsage-tires.com/sitemap.xml

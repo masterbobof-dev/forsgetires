@@ -6,6 +6,8 @@
 export interface ParsedSearch {
   /** words that must all be found in title / brand / article */
   tokens: string[];
+  /** the query looks like a part number (OEM, cross number, barcode, article): letters/digits only, upper-case */
+  partNumber?: string;
   width?: string;
   height?: string;
   radius?: string;
@@ -41,6 +43,11 @@ const RADIUS_RE = /(?:^|\s)z?r\s?(\d{2}(?:[.,]5)?)(c)?(?=\s|$)/i;
 export const parseSearch = (raw: string): ParsedSearch => {
   let q = ` ${raw.toLowerCase().replace(/[%(),'"]/g, ' ').replace(/\s+/g, ' ').trim()} `;
   const out: ParsedSearch = { tokens: [] };
+  // "0 986 452 041", "W712/75", "4820000123456" → one compact number
+  const compact = raw.toUpperCase().replace(/[^0-9A-ZА-ЯІЇЄҐ]/g, '');
+  if (compact.length >= 4 && /\d/.test(compact) && (compact.match(/\d/g) || []).length >= 3 && raw.trim().split(/\s+/).length <= 5 && !/[а-яіїєґ]{3,}/i.test(raw)) {
+    out.partNumber = compact;
+  }
 
   const size = q.match(SIZE_COMPACT_RE) || q.match(SIZE_RE);
   if (size) {
@@ -67,8 +74,18 @@ export const searchFilters = (s: ParsedSearch): string[] => {
   const filters: string[] = [];
   // values are quoted so spaces and dots are safe inside PostgREST "or(...)"
   const like = (col: string, v: string) => `${col}.ilike."*${v.replace(/["\\*]/g, '')}*"`;
+  if (s.partNumber && !s.width) {
+    // a part number: any of the product's numbers, or every word in the title
+    const words = s.tokens.map(t => {
+      const n = t.toUpperCase().replace(/[^0-9A-ZА-ЯІЇЄҐ]/g, '');
+      return `or(title.ilike."*${t.replace(/["\\*]/g, '')}*"${n.length >= 3 ? `,search_numbers.ilike."*${n}*"` : ''})`;
+    });
+    filters.push([like('search_numbers', s.partNumber), like('catalog_number', s.partNumber), like('product_number', s.partNumber),
+      words.length > 1 ? `and(${words.join(',')})` : words[0]].filter(Boolean).join(','));
+    return filters;
+  }
   for (const t of s.tokens) {
-    filters.push([like('title', t), like('manufacturer', t), like('catalog_number', t), like('product_number', t)].join(','));
+    filters.push([like('title', t), like('manufacturer', t), like('catalog_number', t), like('product_number', t), like('search_numbers', t.toUpperCase().replace(/[^0-9A-ZА-ЯІЇЄҐ]/g, '') || t)].join(','));
   }
   if (s.width && s.height) {
     filters.push([like('title', `${s.width}/${s.height}`), like('title', `${s.width} ${s.height}`), like('title', `${s.width}x${s.height}`)].join(','));

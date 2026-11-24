@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ShoppingCart, Flame, ShoppingBag, Eye, Info, Heart, Scale } from 'lucide-react';
+import { ShoppingCart, Flame, ShoppingBag, Eye, Info, Heart, Scale, PhoneCall, Clock } from 'lucide-react';
 import { TyreProduct } from '../../types';
 import { parseTyreIndex, describeTyreIndex } from '../../tyreIndex';
 
@@ -18,10 +18,15 @@ interface ProductCardProps {
   onToggleCompare?: () => void;
   /** stock tracking is on → show "Залишилося N шт" for low quantities */
   showStock?: boolean;
+  /** icon of the product's category, shown when there is no photo */
+  placeholderIcon?: React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 }
 
-const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, onQuickOrder, formatPrice, chips = [], isFavorite, onToggleFavorite, isCompared, onToggleCompare, showStock = false }) => {
+const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, onQuickOrder, formatPrice, chips = [], isFavorite, onToggleFavorite, isCompared, onToggleCompare, showStock = false, placeholderIcon: PlaceholderIcon }) => {
   const isOutOfStock = tyre.in_stock === false;
+  const onOrder = !!tyre.on_order;
+  // own stock from the shop program: real quantity
+  const stockQty = tyre.program_product_id && typeof tyre.stock_quantity === 'number' ? tyre.stock_quantity : null;
   const priceNum = parseFloat(tyre.price || '0');
   const oldPriceNum = parseFloat(tyre.old_price || '0');
   const hasDiscount = oldPriceNum > priceNum;
@@ -58,9 +63,10 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
               referrerPolicy="no-referrer"
             />
           ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center text-zinc-800">
-              <ShoppingBag size={36} strokeWidth={1} className="opacity-20 mb-2"/>
-              <span className="text-[11px] font-bold uppercase tracking-widest">Немає фото</span>
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-900 to-zinc-950">
+              {PlaceholderIcon
+                ? <PlaceholderIcon size={64} strokeWidth={1.25} className="text-zinc-700 group-hover:text-[#FFC300]/40 transition-colors" />
+                : <ShoppingBag size={56} strokeWidth={1.25} className="text-zinc-700" />}
             </div>
           )}
           
@@ -121,7 +127,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
                   onClick={(e) => { e.stopPropagation(); onQuickOrder(tyre); }}
                   className="bg-[#FFC300] text-black px-4 py-2 rounded-xl font-black text-[11px] uppercase tracking-widest transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300 delay-75 shadow-xl hover:bg-white"
                  >
-                   Швидке замовлення
+                   {onOrder ? 'Дізнатися ціну' : 'Швидке замовлення'}
                  </button>
                )}
             </div>
@@ -176,6 +182,14 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
             )}
           </div>
 
+          {onOrder ? (
+            <p className="flex items-center gap-1.5 text-[11px] font-bold text-amber-400 mb-2"><Clock size={13} /> Під замовлення</p>
+          ) : stockQty !== null && stockQty > 0 ? (
+            <p className="flex items-center gap-1.5 text-[11px] font-bold text-green-400 mb-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400" /> В наявності: {stockQty > 10 ? '>10' : stockQty} шт
+            </p>
+          ) : null}
+
           {tyre.description && (
             <p className="hidden sm:block text-[11px] md:text-xs text-zinc-500 line-clamp-2 mb-4 leading-relaxed group-hover:text-zinc-400 transition-colors">
               {tyre.description.length > 80 ? tyre.description.slice(0, 80) + '...' : tyre.description}
@@ -183,6 +197,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
           )}
 
           <div className="mt-auto pt-3 sm:pt-4 border-t border-zinc-800/50 flex items-center justify-between gap-2">
+            {onOrder ? (
+              <span className="text-sm font-black text-zinc-300 leading-tight">Ціну<br className="sm:hidden" /> уточнюйте</span>
+            ) : (
             <div className="flex flex-col">
               {hasDiscount && (
                 <span className="text-zinc-500 text-[11px] line-through decoration-red-500/50">
@@ -196,7 +213,17 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
                 <span className="text-[11px] font-bold text-zinc-500 uppercase">грн</span>
               </div>
             </div>
+            )}
             
+            {onOrder && onQuickOrder ? (
+              <button
+                onClick={(e) => { e.stopPropagation(); onQuickOrder(tyre); }}
+                className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-zinc-800 hover:bg-[#FFC300] hover:text-black text-white text-[11px] font-black uppercase transition-colors active:scale-95 shrink-0"
+                title="Дізнатися ціну і термін"
+              >
+                <PhoneCall size={16} /> <span className="hidden sm:inline">Дізнатися ціну</span>
+              </button>
+            ) : (
             <button 
               onClick={onAddToCart} 
               disabled={isOutOfStock} 
@@ -209,6 +236,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
             >
               <ShoppingCart size={20} strokeWidth={2.5} />
             </button>
+            )}
           </div>
        </div>
     </article>

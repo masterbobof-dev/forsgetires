@@ -25,7 +25,7 @@ const loadData = async () => {
   try { categories = await rest('product_categories?select=id,name,parent_id,kind,filter_preset,is_active'); } catch { /* none */ }
   const products = await restAll(
     'tyres?select=id,title,description,price,old_price,manufacturer,image_url,gallery,in_stock,category_id,vehicle_type,radius,season,catalog_number,attributes,slug,stock_quantity' +
-    '&in_stock=not.is.false&image_url=not.is.null&order=id'
+    '&in_stock=not.is.false&on_order=is.false&image_url=not.is.null&order=id'
   );
   const byId = new Map(categories.map((c) => [c.id, c]));
   const rootOf = (c) => { let cur = c; const seen = new Set(); while (cur?.parent_id && byId.has(cur.parent_id) && !seen.has(cur.id)) { seen.add(cur.id); cur = byId.get(cur.parent_id); } return cur; };

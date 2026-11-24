@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ComponentType } from 'react';
 import {
   Package, CircleDot, Disc, Battery, Droplet, Car, Truck, Tractor, Mountain,
   Wrench, Snowflake, Sun, Flame, ShoppingBag, Lightbulb, Gauge, Cog, Sparkles, Grid,
+  Filter, Zap, Fan, Wind, Flashlight, Hammer, Thermometer, CircleStop, Settings2, Link, Plug, Paintbrush, Shield, Fuel, Key, Cable,
 } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { TyreProduct } from './types';
@@ -44,6 +45,9 @@ export const CATEGORY_ICONS: Record<string, ComponentType<{ size?: number; strok
   'cog': Cog,
   'sparkles': Sparkles,
   'grid': Grid,
+  'filter': Filter, 'zap': Zap, 'fan': Fan, 'wind': Wind, 'flashlight': Flashlight, 'hammer': Hammer,
+  'thermometer': Thermometer, 'brake': CircleStop, 'settings': Settings2, 'link': Link, 'plug': Plug,
+  'paintbrush': Paintbrush, 'shield': Shield, 'fuel': Fuel, 'key': Key, 'cable': Cable,
 };
 
 export const getCategoryIcon = (icon?: string | null) => CATEGORY_ICONS[icon || ''] || Package;

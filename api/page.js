@@ -108,7 +108,7 @@ async function build(pathname, query) {
     const ids = subtreeIds(cats, cat.id);
     let filter = `category_id.in.(${ids.join(',')})`;
     if (cat.kind === 'tyre' && !cat.parent_id) filter += ',category_id.is.null';
-    const items = await rest(`tyres?select=${PRODUCT_FIELDS}&in_stock=not.is.false&or=(${encodeURIComponent(filter)})&order=created_at.desc&limit=60`);
+    const items = await rest(`tyres?select=${PRODUCT_FIELDS}&in_stock=not.is.false&or=(${encodeURIComponent(filter)})&order=on_order.asc,created_at.desc&limit=60`);
     const parent = cat.parent_id && cats.find((c) => c.id === cat.parent_id);
     const name = parent ? `${parent.name} — ${cat.name}` : cat.name;
     const kids = cats.filter((c) => c.parent_id === cat.id);

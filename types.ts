@@ -64,6 +64,8 @@ export interface TyreProduct {
   gallery_thumbs?: string[] | null;
   /** set on the site when a promo (site_promos) applies */
   promo_badge?: string | null;
+  /** old tyres: not in stock, price to be confirmed by the manager */
+  on_order?: boolean;
 
   // Cart Logic
   quantity?: number;

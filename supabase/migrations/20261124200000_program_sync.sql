@@ -214,3 +214,9 @@ create or replace function private.clean_sku(s text) returns text language sql i
 --  * schedules:
 -- select cron.schedule('program-sync', '*/2 * * * *', $c$ select net.http_post(url := 'https://zzxueclhkhvwdmxflmyx.supabase.co/functions/v1/program-sync', headers := jsonb_build_object('Content-Type','application/json','x-sync-key',(select value from private.integration_secrets where name='program_sync_token')), body := '{}'::jsonb, timeout_milliseconds := 150000) $c$);
 -- select cron.schedule('program-sync-full-reset', '17 1 * * *', $c$ update private.sync_state set cursor_at = '1970-01-01', cursor_id = '00000000-0000-0000-0000-000000000000', full_resync_at = now() where name = 'program_catalog' $c$);
+
+-- 2026-11-24 later the same day (applied live, non-destructive):
+--  * purchase prices moved to private.tyre_costs, trigger tyres_hide_cost keeps public tyres.base_price empty; staff read via public.tyre_cost(id)
+--  * tyres.on_order (old site tyres: "під замовлення"), tyres.search_numbers (sku/OEM/cross/barcodes from the program), tyres.price_num (numeric, for sorting)
+--  * public.program_sync_hide_missing(p_before) + private.sync_state.missing_checked_at: hide products deleted in the program after the nightly full pass
+--  * photo search: tyres.photo_search_at / photo_search_error / photo_auto, public.claim_photo_search(n, ids), edge function photo-finder

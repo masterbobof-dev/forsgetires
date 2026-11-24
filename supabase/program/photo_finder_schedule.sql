@@ -13,3 +13,9 @@ select cron.schedule('photo-finder', '* * * * *', $c$
       from generate_series(0, 10) g)
   end
 $c$);
+
+-- 2026-11-24: the search now runs only for products queued by staff in the admin panel ("Фото ШІ" → "Запустити пошук"):
+--   public.photo_queue(category_id | null, limit)  — queue products of a category (with subcategories) and start the job
+--   public.photo_queue_stop()                       — clear the queue and stop the job
+--   public.photo_status_staff(), public.photo_category_stats() — progress and per-category counts for the panel
+--   public.photo_cron_ensure()                      — (re)creates the 'photo-finder' cron job; it stops itself when done

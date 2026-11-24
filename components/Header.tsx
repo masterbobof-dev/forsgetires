@@ -5,6 +5,7 @@ import { ViewState } from '../types';
 import { Menu, X, Phone, User, ShoppingBag, ChevronDown, Flame, LayoutGrid, Lock } from 'lucide-react';
 import { useCategories, getRootCategories, getChildren, getCategoryIcon } from '../categories';
 import { linkClick } from '../navigation';
+import CatalogMenu from './CatalogMenu';
 import { PHONE_NUMBER_1, PHONE_NUMBER_2, PHONE_LINK_1, PHONE_LINK_2 } from '../constants';
 import { supabase } from '../supabaseClient';
 
@@ -21,6 +22,7 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountClick, isLoggedIn = false, isStaff = false, cartCount = 0 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [catalogOpen, setCatalogOpen] = useState(false);
+  const [mobileCatalog, setMobileCatalog] = useState(false);
   const catalogRef = useRef<HTMLDivElement>(null);
   const { categories } = useCategories();
   const roots = getRootCategories(categories);
@@ -38,6 +40,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
   const goCategory = (slug: string) => (e: React.MouseEvent) => {
     setCatalogOpen(false);
     setIsMenuOpen(false);
+    setMobileCatalog(false);
     linkClick(catPath(slug))(e);
   };
   const headerRef = useRef<HTMLElement>(null);
@@ -121,10 +124,10 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
         >
           <Logo />
           <span className="flex flex-col group">
-            <span className="font-black text-xl sm:text-2xl md:text-3xl tracking-wide text-white italic -skew-x-12 group-hover:text-[#FFC300] transition-colors">
+            <span className="font-black text-lg min-[400px]:text-xl sm:text-2xl md:text-3xl tracking-wide text-white italic -skew-x-12 group-hover:text-[#FFC300] transition-colors">
               ФОРСАЖ
             </span>
-            <span className="text-[10px] sm:text-[11px] md:text-xs text-zinc-400 font-bold uppercase tracking-[0.15em] sm:tracking-[0.2em] leading-none ml-1 whitespace-nowrap">
+            <span className="hidden min-[420px]:block text-[10px] sm:text-[11px] md:text-xs text-zinc-400 font-bold uppercase tracking-[0.15em] sm:tracking-[0.2em] leading-none ml-1 whitespace-nowrap">
               Інтернет-магазин
             </span>
           </span>
@@ -164,32 +167,12 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
                 <LayoutGrid size={18} /> Каталог <ChevronDown size={16} className={`transition-transform ${catalogOpen ? 'rotate-180' : ''}`} />
               </button>
               {catalogOpen && (
-                <div className="absolute right-0 top-full mt-4 w-[min(760px,calc(100vw-2rem))] bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-4 grid grid-cols-[1fr_200px] gap-4 animate-in fade-in slide-in-from-top-2 duration-200 normal-case">
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-3 content-start">
-                    {roots.map(c => {
-                      const Icon = getCategoryIcon(c.icon);
-                      const kids = getChildren(categories, c.id);
-                      return (
-                        <div key={c.id}>
-                          <a href={catPath(c.slug)} onClick={goCategory(c.slug)} className="flex items-center gap-2 font-black text-white hover:text-[#FFC300] transition-colors">
-                            <span className="text-[#FFC300]"><Icon size={18} /></span>{c.name}
-                          </a>
-                          {kids.length > 0 && (
-                            <div className="mt-1 ml-7 flex flex-col gap-0.5">
-                              {kids.slice(0, 6).map(k => (
-                                <a key={k.id} href={catPath(k.slug)} onClick={goCategory(k.slug)} className="text-sm text-zinc-400 hover:text-white transition-colors">{k.name}</a>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                    <a href={catPath('akcii')} onClick={goCategory('akcii')} className="flex items-center gap-2 font-black text-orange-400 hover:text-orange-300"><Flame size={18} /> Хіти та акції</a>
-                  </div>
-                  <div className="border-l border-zinc-800 pl-4 flex flex-col gap-2">
-                    <span className="text-[11px] font-black uppercase tracking-widest text-zinc-500">Покупцям</span>
+                <div className="fixed left-1/2 -translate-x-1/2 mt-4 w-[min(1120px,calc(100vw-2rem))] bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-4 animate-in fade-in slide-in-from-top-2 duration-200"
+                  style={{ top: 'var(--header-h, 72px)' }}>
+                  <CatalogMenu categories={categories} onPick={goCategory} hrefFor={catPath} onClose={() => setCatalogOpen(false)} />
+                  <div className="mt-3 pt-3 border-t border-zinc-800 flex flex-wrap gap-x-5 gap-y-1">
                     {infoLinks.map(([href, label]) => (
-                      <a key={href} href={href} onClick={(e) => { setCatalogOpen(false); linkClick(href)(e); }} className="text-sm text-zinc-300 hover:text-[#FFC300] transition-colors">{label}</a>
+                      <a key={href} href={href} onClick={(e) => { setCatalogOpen(false); linkClick(href)(e); }} className="text-xs text-zinc-400 hover:text-[#FFC300] transition-colors">{label}</a>
                     ))}
                   </div>
                 </div>
@@ -211,7 +194,11 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
           </nav>
 
           {/* Mobile Controls */}
-          <div className="flex items-center gap-2 md:hidden">
+          <div className="flex items-center gap-1.5 md:hidden shrink-0">
+            <button onClick={() => { setIsMenuOpen(false); setMobileCatalog(true); }}
+              className="flex items-center gap-1.5 h-9 px-2.5 rounded-xl bg-[#FFC300] text-black font-black text-[11px] uppercase active:scale-95 shrink-0" aria-label="Каталог товарів">
+              <LayoutGrid size={16} /> Каталог
+            </button>
             {/* Cart badge — mobile */}
             <button
               onClick={openCart}
@@ -228,7 +215,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
 
             <button
               onClick={() => onAccountClick?.()}
-              className={`w-9 h-9 flex items-center justify-center transition-colors ${isLoggedIn || isStaff ? 'text-[#FFC300]' : 'text-zinc-300 hover:text-[#FFC300]'}`}
+              className={`hidden min-[420px]:flex w-9 h-9 items-center justify-center transition-colors ${isLoggedIn || isStaff ? 'text-[#FFC300]' : 'text-zinc-300 hover:text-[#FFC300]'}`}
               aria-label={isStaff ? 'Адмін-панель' : isLoggedIn ? 'Мій кабінет' : 'Увійти'}
             >
               {isStaff ? <Lock size={20} /> : <User size={20} />}
@@ -303,18 +290,10 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
                 )}
               </button>
             ))}
-            {roots.length > 0 && (
-              <div className="grid grid-cols-2 gap-2 py-3 border-b border-white/5">
-                {roots.map(c => {
-                  const Icon = getCategoryIcon(c.icon);
-                  return (
-                    <a key={c.id} href={catPath(c.slug)} onClick={goCategory(c.slug)} className="flex items-center gap-2 bg-black/40 rounded-xl px-3 py-2.5 text-sm font-bold text-zinc-200 hover:text-[#FFC300]">
-                      <span className="text-[#FFC300]"><Icon size={16} /></span>{c.name}
-                    </a>
-                  );
-                })}
-              </div>
-            )}
+            <button onClick={() => { setIsMenuOpen(false); setMobileCatalog(true); }}
+              className="my-3 flex items-center gap-3 rounded-2xl bg-[#FFC300] text-black px-4 py-3.5 font-black uppercase">
+              <LayoutGrid size={20} /> Каталог товарів <span className="ml-auto text-xs font-bold normal-case opacity-70">{roots.length} розділів</span>
+            </button>
             <div className="flex flex-col py-2">
               {infoLinks.map(([href, label]) => (
                 <a key={href} href={href} onClick={(e) => { setIsMenuOpen(false); linkClick(href)(e); }} className="py-2 text-zinc-400 hover:text-white font-bold">{label}</a>
@@ -323,6 +302,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
           </nav>
         </div>
       )}
+      {mobileCatalog && <CatalogMenu mobile categories={categories} onPick={goCategory} hrefFor={catPath} onClose={() => setMobileCatalog(false)} />}
     </header>
   );
 };

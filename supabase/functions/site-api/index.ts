@@ -147,6 +147,8 @@ const actions: Record<string, (p: any) => Promise<unknown>> = {
     const r: any = await productByProgramId(p.program_product_id);
     const photos = (need(p.photos, 'photos') as any[]).map(x => ({ full: need(x.full, 'full'), thumb: x.thumb || x.full }));
     await savePhotos(r.id, photos);
+    // photos chosen in the program replace an auto-found one
+    await db.from('tyres').update({ photo_auto: false }).eq('id', r.id);
     return { photos };
   },
   'photos.remove': async (p) => {
@@ -157,6 +159,16 @@ const actions: Record<string, (p: any) => Promise<unknown>> = {
     const paths = [p.full, ...photosOf(r).filter(x => x.full === p.full).map(x => x.thumb)].filter((u: string) => u?.includes(prefix)).map((u: string) => u.split(prefix)[1]);
     if (paths.length) await db.storage.from(BUCKET).remove(paths);
     return { photos };
+  },
+
+  /** photos the site found automatically (checked by AI) — the program downloads them into its own database.
+   *  Pass the last `found_at` you received as `since` to get only new ones. */
+  'photos.auto_list': async (p) => {
+    let q = db.from('tyres').select('program_product_id, image_url, image_thumb_url, photo_verified_at')
+      .eq('photo_auto', true).eq('photo_verified', true).not('program_product_id', 'is', null).not('image_url', 'is', null)
+      .order('photo_verified_at', { ascending: true }).limit(Math.min(p.limit || 200, 1000));
+    if (p.since) q = q.gt('photo_verified_at', p.since);
+    return (check(await q) as any[]).map(r => ({ program_product_id: r.program_product_id, full: r.image_url, thumb: r.image_thumb_url || r.image_url, found_at: r.photo_verified_at }));
   },
 
   // ---------- categories ----------

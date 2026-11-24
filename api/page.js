@@ -107,7 +107,7 @@ async function build(pathname, query) {
       title: `${name} — купити в ${CITY}, ціни | ${SHOP_NAME}`,
       description: (cat.description || `${name} в інтернет-магазині «${SHOP_NAME}». ${DELIVERY}`).slice(0, 300),
       url: `${SITE_URL}/?c=${cat.slug}`,
-      ld: { '@context': 'https://schema.org', '@type': 'ItemList', name, itemListElement: items.slice(0, 30).map((p, i) => ({ '@type': 'ListItem', position: i + 1, url: SITE_URL + productPath(p), name: p.title })) },
+      ld: items.length ? { '@context': 'https://schema.org', '@type': 'ItemList', name, itemListElement: items.slice(0, 30).map((p, i) => ({ '@type': 'ListItem', position: i + 1, url: SITE_URL + productPath(p), name: p.title })) } : null,
       content: `<h1>${esc(name)}</h1>${cat.description ? `<p>${esc(cat.description)}</p>` : ''}${kids.length ? `<ul>${kids.map((k) => `<li>${link(`/?c=${k.slug}`, k.name)}</li>`).join('')}</ul>` : ''}${items.length ? productList(items) : '<p>Товари цієї категорії скоро з\'являться в каталозі.</p>'}${navBlock(cats)}`,
     };
   }

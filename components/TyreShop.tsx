@@ -753,9 +753,9 @@ const TyreShop: React.FC<TyreShopProps> = ({
         <header className={`${activeCategory === 'all' && !debouncedSearch.trim() && activeFilterCount === 0 ? 'sr-only' : ''} flex flex-col lg:flex-row justify-between items-stretch lg:items-end gap-4 lg:gap-6 mb-5 md:mb-8`}>
           <div className="flex-1 space-y-3 md:space-y-5 animate-in fade-in slide-in-from-left-4 duration-500">
             <nav className="flex items-center flex-wrap gap-x-2 gap-y-1 text-[11px] uppercase tracking-widest font-black text-zinc-500" aria-label="Навігація">
-              <button onClick={onBack} className="hover:text-[#FFC300] transition-colors">Головна</button>
+              <button onClick={() => { changeCategory('all'); resetFilters(); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="hover:text-[#FFC300] transition-colors">Головна</button>
               <span className="text-zinc-800">/</span>
-              <button onClick={() => changeCategory('all')} className="text-zinc-500 hover:text-[#FFC300] transition-colors">Каталог</button>
+              <button onClick={() => window.dispatchEvent(new Event('open-catalog'))} className="text-zinc-500 hover:text-[#FFC300] transition-colors">Каталог</button>
               {activeCategory === 'hot' && (<><span className="text-zinc-800">/</span><span className="text-[#FFC300]">Акції</span></>)}
               {activeCategory === 'fav' && (<><span className="text-zinc-800">/</span><span className="text-[#FFC300]">Обране</span></>)}
               {activeCat && getCategoryPath(categories, activeCat).map((c, i, arr) => (

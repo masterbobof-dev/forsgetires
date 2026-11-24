@@ -21,16 +21,16 @@ const tokens = (t: string) => t.toLowerCase().split(/[^0-9a-zа-яіїєґ]+/i).
 
 const scoreCandidate = (img: any, title: string, sku?: string, brand?: string) => {
   const w = Number(img.imageWidth) || 0, h = Number(img.imageHeight) || 0;
-  if (w < 250 || h < 250 || w * h > 6_000_000) return -1;
+  if (w < 600 || h < 600 || w * h > 9_000_000) return -1;           // only good quality images
   const ratio = w / h;
-  if (ratio < 0.5 || ratio > 2.2) return -1;
+  if (ratio < 0.7 || ratio > 1.45) return -1;                          // product shots are close to square
   if (BAD_DOMAINS.test(img.imageUrl || '') || BAD_DOMAINS.test(img.domain || '') || BAD_DOMAINS.test(img.link || '')) return -1;
   const text = `${img.title || ''} ${img.link || ''}`.toLowerCase();
   let s = 0;
   for (const t of tokens(title)) if (text.includes(t)) s += /\d/.test(t) ? 3 : 1;
   if (sku && sku.length >= 4 && text.replace(/[^0-9a-z]/g, '').includes(sku.toLowerCase().replace(/[^0-9a-z]/g, ''))) s += 6;
   if (brand && text.includes(brand.toLowerCase())) s += 2;
-  if (w >= 500 && h >= 500) s += 1;
+  if (w >= 800 && h >= 800) s += 1;
   return s;
 };
 
@@ -49,14 +49,21 @@ const geminiKey = async () => {
 };
 const b64 = (bytes: Uint8Array) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s); };
 
-/** true = the photo shows this product, false = another product; throws RetryLater on rate limits */
+/**
+ * AI check of a product photo. true = the same product, on a white background, without added text
+ * (watermarks, prices, shop names, banners), sharp and filling the frame; false = rejected;
+ * null = no AI key / no answer. Throws RetryLater on rate limits.
+ */
 const photoMatches = async (bytes: Uint8Array, type: string, p: any): Promise<boolean | null> => {
   const key = await geminiKey();
-  if (!key) return null; // no AI key: accept as before
+  if (!key) return null;
   const prompt = `Назва товару в автомагазині: «${p.title}»${p.manufacturer ? `. Бренд: ${p.manufacturer}` : ''}.\n` +
-    'Чи зображено на фото САМЕ цей товар? Правила: якщо на упаковці чи виробі видно ІНШИЙ бренд — false; ' +
-    'якщо це інший тип товару — false; якщо це логотип, схема, банер, автомобіль, людина замість товару — false; ' +
-    'якщо бренд не видно, але тип товару і вигляд відповідають назві — true. Відповідай лише JSON {"match": true} або {"match": false}.';
+    'Оціни фото для картки товару в інтернет-магазині. Поверни JSON з полями:\n' +
+    '"match": на фото САМЕ цей товар (якщо видно ІНШИЙ бренд або інший тип товару — false; логотип, схема, автомобіль, людина — false; бренд не видно, але тип і вигляд відповідають — true);\n' +
+    '"white_background": фон чисто білий або майже білий, без інтер\'єру, столу, полиці, руки;\n' +
+    '"no_extra_text": на зображенні НЕМАЄ доданого тексту — водяних знаків, цін, назв магазинів, адрес сайтів, рекламних написів, рамок, колажів (текст і етикетка на самій упаковці товару — дозволено);\n' +
+    '"good_quality": фото чітке, не розмите, товар видно повністю і він займає більшу частину кадру.\n' +
+    'Відповідай лише JSON, наприклад {"match": true, "white_background": true, "no_extra_text": true, "good_quality": true}.';
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -67,7 +74,10 @@ const photoMatches = async (bytes: Uint8Array, type: string, p: any): Promise<bo
   if (res.status === 429 || res.status === 503) throw new RetryLater(`gemini ${res.status}`);
   if (!res.ok) return null;
   const text = (await res.json())?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  try { return JSON.parse(text).match === true; } catch { return /true/.test(text) ? true : /false/.test(text) ? false : null; }
+  try {
+    const r = JSON.parse(text);
+    return r.match === true && r.white_background === true && r.no_extra_text === true && r.good_quality === true;
+  } catch { return null; }
 };
 
 // ---------- phase 1: batched search ----------
@@ -97,7 +107,7 @@ const search = async (n: number, ids?: number[]) => {
       .map((img: any) => ({ url: img.imageUrl, link: img.link || img.imageUrl, w: img.imageWidth, h: img.imageHeight, score: scoreCandidate(img, p.title, p.catalog_number, p.manufacturer) }))
       .filter((x: any) => x.score >= 2)
       .sort((a: any, b: any) => b.score - a.score)
-      .slice(0, 4);
+      .slice(0, 6);
     if (images.length) withCandidates++;
     await db.from('tyres').update(images.length
       ? { photo_candidates: images, photo_search_error: null }
@@ -140,7 +150,7 @@ const downloadOne = async (p: any) => {
   for (const c of p.photo_candidates || []) {
     try {
       const { bytes, type } = await fetchImage(c.url);
-      if (bytes.length <= 1_500_000 && (await photoMatches(bytes, type, p)) === false) throw new Error('AI: інший товар');
+      if (bytes.length > 1_500_000 || (await photoMatches(bytes, type, p)) !== true) throw new Error('AI: не підходить');
       const base = `products/auto/${p.id}-${Date.now().toString(36)}`;
       let full: string, thumb: string;
       if (bytes.length <= SMALL_ENOUGH || type === 'image/webp') {
@@ -163,7 +173,7 @@ const downloadOne = async (p: any) => {
       lastErr = String(e?.message || e).slice(0, 120);
     }
   }
-  await db.from('tyres').update({ photo_search_error: `download failed: ${lastErr}` }).eq('id', p.id);
+  await db.from('tyres').update({ photo_search_error: `no good photo: ${lastErr}` }).eq('id', p.id);
   return { id: p.id, ok: false, error: lastErr };
 };
 
@@ -172,7 +182,7 @@ const download = async (n: number) => {
   if (error) throw new Error(error.message);
   const results = [];
   for (const p of jobs || []) results.push(await downloadOne(p)); // one at a time: keeps memory low
-  return { downloaded: results.filter(r => r.ok).length, failed: results.filter(r => !r.ok).length };
+  return { downloaded: results.filter(r => r.ok).length, failed: results.filter(r => !r.ok).length, retry: results.filter(r => r.error === 'retry later').length };
 };
 
 // ---------- re-check photos found earlier; a wrong one is removed and the next candidate is tried ----------
@@ -204,7 +214,21 @@ const verify = async (n: number) => {
       skipped++;
     }
   }
-  return { checked: (jobs || []).length, ok, wrong, skipped };
+  return { checked: list.length, ok, wrong, skipped };
+};
+
+// ---------- remove every auto-found photo file (products/auto/*) ----------
+const purge = async () => {
+  let removed = 0;
+  for (let round = 0; round < 50; round++) {
+    const { data: files, error } = await db.storage.from('galery').list('products/auto', { limit: 1000 });
+    if (error) throw new Error(error.message);
+    if (!files?.length) break;
+    const { error: rmErr } = await db.storage.from('galery').remove(files.map(f => `products/auto/${f.name}`));
+    if (rmErr) throw new Error(rmErr.message);
+    removed += files.length;
+  }
+  return { removed };
 };
 
 Deno.serve(async (req) => {
@@ -215,8 +239,9 @@ Deno.serve(async (req) => {
     if (body.action === 'search') return json(await search(Math.min(Number(body.n) || 100, 100), body.ids));
     if (body.action === 'download') return json(await download(Math.min(Number(body.n) || 4, 8)));
     if (body.action === 'verify') return json(await verify(Math.min(Number(body.n) || 10, 20)));
+    if (body.action === 'purge') return json(await purge());
     if (body.action === 'status') return json((await db.rpc('photo_job_status')).data);
-    return json({ error: 'action: search | download | status' }, 400);
+    return json({ error: 'action: search | download | verify | purge | status' }, 400);
   } catch (e) {
     return json({ error: String(e?.message || e) }, 500);
   }

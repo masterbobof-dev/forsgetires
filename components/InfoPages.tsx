@@ -3,6 +3,7 @@ import { ArrowLeft, Truck, Store, Wallet, ShieldCheck, RotateCcw, Phone, MapPin,
 import { supabase } from '../supabaseClient';
 import { PHONE_NUMBER_1, PHONE_NUMBER_2, PHONE_LINK_1, PHONE_LINK_2, TELEGRAM_LINK, VIBER_LINK } from '../constants';
 import { linkClick } from '../navigation';
+import { ArticleBody } from './ArticlesPage';
 
 export type InfoPage = 'delivery' | 'warranty' | 'about' | 'contacts' | 'faq';
 
@@ -38,6 +39,12 @@ const InfoPages: React.FC<{ page: InfoPage; onBack: () => void }> = ({ page, onB
   const [phones, setPhones] = useState({ p1: PHONE_NUMBER_1, p2: PHONE_NUMBER_2, l1: PHONE_LINK_1, l2: PHONE_LINK_2 });
   const [email, setEmail] = useState('');
   const [open, setOpen] = useState<number | null>(0);
+  // text edited in the shop program (table site_pages) replaces the built-in text
+  const [custom, setCustom] = useState<{ title: string; content: string } | null>(null);
+  useEffect(() => {
+    setCustom(null);
+    supabase.from('site_pages').select('title, content').eq('slug', page).maybeSingle().then(({ data }) => setCustom((data as any) || null));
+  }, [page]);
 
   useEffect(() => {
     document.title = `${meta.title} — інтернет-магазин Форсаж`;
@@ -55,7 +62,7 @@ const InfoPages: React.FC<{ page: InfoPage; onBack: () => void }> = ({ page, onB
     });
   }, []);
 
-  const faqLd = page === 'faq' ? {
+  const faqLd = page === 'faq' && !custom ? {
     '@context': 'https://schema.org', '@type': 'FAQPage',
     mainEntity: FAQ.map(f => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.text } })),
   } : null;
@@ -64,10 +71,14 @@ const InfoPages: React.FC<{ page: InfoPage; onBack: () => void }> = ({ page, onB
     <article className="max-w-4xl mx-auto px-4 py-6 md:py-12 pb-28 animate-in fade-in slide-in-from-bottom-4 duration-300">
       {faqLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />}
       <button onClick={onBack} className="text-zinc-500 hover:text-[#FFC300] text-xs font-black uppercase tracking-widest flex items-center gap-1 mb-6"><ArrowLeft size={14} /> До каталогу</button>
-      <h1 className="text-3xl md:text-5xl font-black uppercase italic tracking-tighter mb-2">{meta.title}</h1>
-      <p className="text-zinc-400 mb-6 md:mb-8 max-w-2xl">{meta.description}</p>
+      <h1 className="text-3xl md:text-5xl font-black uppercase italic tracking-tighter mb-2">{custom?.title || meta.title}</h1>
+      {custom ? (
+        <div className="mb-6 md:mb-8 max-w-3xl"><ArticleBody content={custom.content} /></div>
+      ) : (
+        <p className="text-zinc-400 mb-6 md:mb-8 max-w-2xl">{meta.description}</p>
+      )}
 
-      {page === 'delivery' && (
+      {page === 'delivery' && !custom && (
         <div className="grid md:grid-cols-2 gap-3">
           <Card icon={Store} title="Самовивіз">
             <p>м. Синельникове, вул. Квітнева, 9.</p>
@@ -92,7 +103,7 @@ const InfoPages: React.FC<{ page: InfoPage; onBack: () => void }> = ({ page, onB
         </div>
       )}
 
-      {page === 'warranty' && (
+      {page === 'warranty' && !custom && (
         <div className="grid md:grid-cols-2 gap-3">
           <Card icon={ShieldCheck} title="Гарантія">
             <p>На всі товари діє гарантія виробника. Строки залежать від бренду та типу товару — уточнюйте у менеджера.</p>
@@ -114,7 +125,7 @@ const InfoPages: React.FC<{ page: InfoPage; onBack: () => void }> = ({ page, onB
         </div>
       )}
 
-      {page === 'about' && (
+      {page === 'about' && !custom && (
         <div className="grid md:grid-cols-2 gap-3">
           <Card icon={Store} title="Хто ми">
             <p>«Форсаж» — інтернет-магазин у місті Синельникове Дніпропетровської області. Продаємо шини для легкових авто, позашляховиків, бусів, вантажівок та сільгосптехніки, а також диски, акумулятори й автотовари.</p>
@@ -152,7 +163,7 @@ const InfoPages: React.FC<{ page: InfoPage; onBack: () => void }> = ({ page, onB
         </div>
       )}
 
-      {page === 'faq' && (
+      {page === 'faq' && !custom && (
         <div className="space-y-2">
           {FAQ.map((f, i) => (
             <div key={f.q} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">

@@ -48,7 +48,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
        <div className="aspect-square sm:aspect-[4/5] bg-zinc-950 relative overflow-hidden">
           {tyre.image_url ? (
             <img 
-              src={tyre.image_url} 
+              src={tyre.image_thumb_url || tyre.image_url} 
               className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
               alt={altText}
               loading="lazy"
@@ -75,7 +75,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
             )}
             {hasDiscount && (
               <div className="bg-red-600 text-white text-[10px] sm:text-[11px] font-black px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full shadow-lg uppercase flex items-center gap-1">
-                −{discountPercent}%
+                {tyre.promo_badge || `−${discountPercent}%`}
               </div>
             )}
           </div>

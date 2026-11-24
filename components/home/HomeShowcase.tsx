@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Truck, Store, Wallet, ShieldCheck, Flame, ChevronRight, BookOpen, Star, HelpCircle } from 'lucide-react';
+import { Search, Truck, Store, Wallet, ShieldCheck, Flame, ChevronRight, ChevronLeft, BookOpen, HelpCircle, Percent } from 'lucide-react';
+import { useSitePromos, fetchBanners, fetchHomeBlocks, SiteBanner, HomeBlockType, DEFAULT_HOME_BLOCKS } from '../../sitePromos';
+import { navigateTo } from '../../navigation';
 import { supabase } from '../../supabaseClient';
 import { TyreProduct } from '../../types';
 import { ProductCategory, getRootCategories, getCategoryIcon, buildCategoryFilter } from '../../categories';
@@ -38,6 +40,10 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
   const [articles, setArticles] = useState<Article[]>([]);
   const [reviews, setReviews] = useState<{ id: number; author_name: string; rating: number; body: string | null; tyres?: { title: string } | null }[]>([]);
   const roots = getRootCategories(categories);
+  const [blocks, setBlocks] = useState<{ type: HomeBlockType; title?: string }[]>(DEFAULT_HOME_BLOCKS.map(type => ({ type })));
+  const [banners, setBanners] = useState<SiteBanner[]>([]);
+  const { promos } = useSitePromos();
+  useEffect(() => { fetchHomeBlocks().then(setBlocks); fetchBanners().then(setBanners); }, []);
 
   useEffect(() => {
     if (!roots.length) return;
@@ -58,8 +64,16 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
       .then(({ data }) => setReviews((data as any) || []));
   }, []);
 
-  return (
-    <div className="space-y-8 md:space-y-12 mb-10">
+  const linkTo = (href?: string | null) => (e: React.MouseEvent) => {
+    if (!href) return;
+    if (/^https?:\/\//.test(href) && !href.includes('forsage-tires.com')) return; // external: normal link
+    e.preventDefault();
+    navigateTo(href.replace(/^https?:\/\/(www\.)?forsage-tires\.com/, '') || '/');
+  };
+
+  const sections: Record<HomeBlockType, React.ReactNode> = {
+    banners: banners.length > 0 ? <BannerSlider banners={banners} linkTo={linkTo} /> : null,
+    size_search: <>
       {/* Quick size search */}
       <section className="bg-gradient-to-br from-zinc-900 to-zinc-950 border border-zinc-800 rounded-3xl p-4 md:p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="flex items-center justify-between gap-2 mb-3">
@@ -76,6 +90,8 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
         </div>
       </section>
 
+      </>,
+    categories: <>
       {/* Category tiles */}
       <section>
         <h2 className="text-lg md:text-2xl font-black uppercase tracking-tight mb-3 md:mb-4">Каталог</h2>
@@ -99,6 +115,8 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
         </div>
       </section>
 
+      </>,
+    hits: <>
       {/* Hits & discounts */}
       {hot.length > 0 && (
         <section>
@@ -126,6 +144,25 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
         </section>
       )}
 
+      </>,
+    promos: promos.length > 0 ? (
+      <section>
+        <h2 className="text-lg md:text-2xl font-black uppercase tracking-tight mb-3 md:mb-4 flex items-center gap-2"><Percent className="text-red-500" /> Акції</h2>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {promos.map(pr => {
+            const cat = pr.target_type === 'category' ? categories.find(c => pr.target_ids.includes(String(c.id))) : undefined;
+            return (
+              <button key={pr.id} onClick={() => onPickCategory(cat ? cat.id : 'hot')} className="text-left bg-gradient-to-br from-red-600/20 to-zinc-900 border border-red-500/30 hover:border-red-400 rounded-2xl p-4 transition-colors">
+                <span className="inline-block bg-red-600 text-white text-xs font-black px-2 py-0.5 rounded-full mb-2">{pr.badge_text || `−${Math.round(pr.discount_percent)}%`}</span>
+                <span className="block font-black text-white leading-tight">{pr.title}</span>
+                {pr.ends_at && <span className="block text-xs text-zinc-400 mt-1">до {new Date(pr.ends_at).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long' })}</span>}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+    ) : null,
+    benefits: <>
       {/* Benefits */}
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-3">
         {BENEFITS.map(b => (
@@ -136,6 +173,8 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
         ))}
       </section>
 
+      </>,
+    reviews: <>
       {/* Reviews */}
       {reviews.length > 0 && (
         <section>
@@ -152,6 +191,8 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
         </section>
       )}
 
+      </>,
+    articles: <>
       {/* Articles */}
       {articles.length > 0 && (
         <section>
@@ -173,9 +214,60 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
         </section>
       )}
 
+      </>,
+  };
+
+  return (
+    <div className="space-y-8 md:space-y-12 mb-10">
+      {blocks.map(b => <React.Fragment key={b.type}>{sections[b.type]}</React.Fragment>)}
       <h2 className="text-lg md:text-2xl font-black uppercase tracking-tight -mb-4 md:-mb-6">Усі товари</h2>
       <SizeGuideModal open={guideOpen} onClose={() => setGuideOpen(false)} />
     </div>
+  );
+};
+
+/** Banners from the program: swipe / arrows, auto-advance every 6 s. */
+const BannerSlider: React.FC<{ banners: SiteBanner[]; linkTo: (href?: string | null) => (e: React.MouseEvent) => void }> = ({ banners, linkTo }) => {
+  const [i, setI] = useState(0);
+  const [touchX, setTouchX] = useState<number | null>(null);
+  const n = banners.length;
+  useEffect(() => {
+    if (n < 2) return;
+    const t = setInterval(() => setI(v => (v + 1) % n), 6000);
+    return () => clearInterval(t);
+  }, [n, i]);
+  const go = (d: number) => setI(v => (v + d + n) % n);
+  return (
+    <section className="relative rounded-3xl overflow-hidden bg-zinc-900 border border-zinc-800 animate-in fade-in duration-500"
+      onTouchStart={e => setTouchX(e.touches[0].clientX)}
+      onTouchEnd={e => { if (touchX === null) return; const dx = e.changedTouches[0].clientX - touchX; if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1); setTouchX(null); }}>
+      <div className="flex transition-transform duration-500 ease-out" style={{ transform: `translateX(-${i * 100}%)` }}>
+        {banners.map((b, k) => (
+          <a key={b.id} href={b.link || undefined} onClick={linkTo(b.link)} className="relative shrink-0 w-full block aspect-[4/3] sm:aspect-[16/6] md:aspect-[16/5]" aria-hidden={k !== i} tabIndex={k === i ? 0 : -1}>
+            <picture>
+              {b.image_mobile_url && <source media="(max-width: 639px)" srcSet={b.image_mobile_url} />}
+              <img src={b.image_url} alt={b.title || 'Акція'} className="absolute inset-0 w-full h-full object-cover" loading={k === 0 ? 'eager' : 'lazy'} />
+            </picture>
+            {(b.title || b.subtitle || b.button_text) && (
+              <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/30 to-transparent flex flex-col justify-end sm:justify-center p-5 md:p-10 gap-2">
+                {b.title && <span className="text-2xl md:text-4xl font-black text-white uppercase italic tracking-tight max-w-xl leading-none">{b.title}</span>}
+                {b.subtitle && <span className="text-sm md:text-lg text-zinc-200 max-w-lg">{b.subtitle}</span>}
+                {b.button_text && <span className="mt-1 self-start bg-[#FFC300] text-black font-black uppercase text-xs md:text-sm px-4 py-2.5 rounded-xl">{b.button_text}</span>}
+              </div>
+            )}
+          </a>
+        ))}
+      </div>
+      {n > 1 && (
+        <>
+          <button onClick={() => go(-1)} aria-label="Попередній банер" className="hidden md:flex absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 hover:bg-black/80 text-white items-center justify-center"><ChevronLeft /></button>
+          <button onClick={() => go(1)} aria-label="Наступний банер" className="hidden md:flex absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 hover:bg-black/80 text-white items-center justify-center"><ChevronRight /></button>
+          <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
+            {banners.map((b, k) => <button key={b.id} onClick={() => setI(k)} aria-label={`Банер ${k + 1}`} className={`h-1.5 rounded-full transition-all ${k === i ? 'w-6 bg-[#FFC300]' : 'w-1.5 bg-white/50'}`} />)}
+          </div>
+        </>
+      )}
+    </section>
   );
 };
 

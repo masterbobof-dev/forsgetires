@@ -4,7 +4,7 @@ import { Article, fetchArticles, articlePath, articleExcerpt, articleIdFromPath 
 import { linkClick } from '../navigation';
 
 /** Article text is stored as plain text: blank lines separate paragraphs, short lines without a full stop are headings. */
-const ArticleBody: React.FC<{ content: string }> = ({ content }) => {
+export const ArticleBody: React.FC<{ content: string }> = ({ content }) => {
   const blocks = content.replace(/\r/g, '').split(/\n{2,}|\n(?=[А-ЯІЇЄA-Z💡])/).map(b => b.trim()).filter(Boolean);
   return (
     <div className="space-y-4 text-zinc-300 leading-relaxed text-base">

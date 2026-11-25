@@ -107,7 +107,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
   const infoLinks: [string, string][] = [
     ['/dostavka-i-oplata', 'Доставка і оплата'],
     ['/garantiya-i-povernennya', 'Гарантія і повернення'],
-    ['/faq', 'Часті питання'],
+    ['/faq', 'Поширені питання'],
     ['/statti', 'Корисні статті'],
     ['/kontakty', 'Контакти'],
   ];

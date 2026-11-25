@@ -65,6 +65,11 @@ const CartDrawer: React.FC<CartDrawerProps> = (props) => {
                   <div className="w-24 h-24 bg-emerald-500/20 text-emerald-500 rounded-3xl flex items-center justify-center mb-8 rotate-12 shadow-2xl shadow-emerald-900/20"><CheckCircle size={56} strokeWidth={2.5}/></div>
                   <h3 className="text-3xl font-black text-white mb-3 tracking-tight uppercase">Дякуємо!</h3>
                   <p className="text-zinc-300 mb-5 text-sm leading-relaxed">Замовлення прийнято. Що буде далі:</p>
+                  {props.paymentMethod === 'full' && props.deliveryMethod !== 'pickup' && (
+                    <div className="w-full max-w-xs mb-5 text-left text-sm bg-blue-500/10 border border-blue-500/30 text-blue-200 rounded-2xl p-3">
+                      <b className="text-white">Повна оплата.</b> Менеджер зв'яжеться з вами, уточнить деталі та надішле реквізити для оплати. Нічого платити зараз не потрібно.
+                    </div>
+                  )}
                   <ol className="text-left text-sm text-zinc-400 space-y-2 mb-8 w-full max-w-xs">
                     <li className="flex gap-2"><span className="w-5 h-5 rounded-full bg-[#FFC300] text-black text-[11px] font-black flex items-center justify-center shrink-0">1</span> Менеджер зателефонує вам, щоб підтвердити наявність і ціну.</li>
                     <li className="flex gap-2"><span className="w-5 h-5 rounded-full bg-[#FFC300] text-black text-[11px] font-black flex items-center justify-center shrink-0">2</span> Відправимо Новою Поштою або підготуємо до самовивозу.</li>
@@ -113,7 +118,7 @@ const CartDrawer: React.FC<CartDrawerProps> = (props) => {
                      </div>
                      <div className="space-y-4">
                         <div className="relative group">
-                          <input value={props.orderName} onChange={e => props.setOrderName(e.target.value)} placeholder="Ваше ім'я" className="w-full bg-black/50 border border-zinc-700 rounded-2xl p-4 text-white focus:border-[#FFC300] outline-none transition-all placeholder:text-zinc-600 font-bold text-sm" />
+                          <input value={props.orderName} onChange={e => props.setOrderName(e.target.value)} placeholder="Прізвище Ім'я По батькові" autoComplete="name" className="w-full bg-black/50 border border-zinc-700 rounded-2xl p-4 text-white focus:border-[#FFC300] outline-none transition-all placeholder:text-zinc-600 font-bold text-sm" />
                         </div>
                         <div className="relative group">
                           <input type="tel" inputMode="tel" autoComplete="tel" value={props.orderPhone} onChange={e => props.setOrderPhone(formatUaPhone(e.target.value))} placeholder="+380 __ ___ __ __" className="w-full bg-black/50 border border-zinc-700 rounded-2xl p-4 text-white focus:border-[#FFC300] outline-none transition-all placeholder:text-zinc-600 font-bold text-sm" />

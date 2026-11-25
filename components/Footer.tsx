@@ -41,7 +41,7 @@ const Footer: React.FC<{ onNavigate?: (v: ViewState) => void }> = ({ onNavigate 
             {([
               ['delivery', '/dostavka-i-oplata', 'Доставка і оплата'],
               ['warranty', '/garantiya-i-povernennya', 'Гарантія і повернення'],
-              ['faq', '/faq', 'Часті питання'],
+              ['faq', '/faq', 'Поширені питання'],
               ['articles', '/statti', 'Корисні статті'],
               ['about', '/pro-nas', 'Про магазин'],
               ['contacts', '/kontakty', 'Контакти'],

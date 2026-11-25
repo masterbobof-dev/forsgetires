@@ -162,6 +162,12 @@ Deno.serve(async (req) => {
       if (!sync?.token || req.headers.get('x-sync-key') !== sync.token) return json({ error: 'forbidden' }, 403);
       return json(await generateCategories({}));
     }
+    // background job: drafts for the next 25 best-stocked products without a description
+    if (body.action === 'auto_products') {
+      const { data: sync } = await db.rpc('program_sync_state');
+      if (!sync?.token || req.headers.get('x-sync-key') !== sync.token) return json({ error: 'forbidden' }, 403);
+      return json(await generate({ n: 25 }));
+    }
     if (!(await staffEmail(req))) return json({ error: 'Лише для персоналу' }, 403);
     if (body.action === 'generate') return json(await generate(body));
     if (body.action === 'save') return json(await save(body));

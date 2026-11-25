@@ -25,7 +25,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
   const [mobileCatalog, setMobileCatalog] = useState(false);
   // breadcrumb "Каталог" opens the full catalogue menu
   useEffect(() => {
-    const open = () => { if (window.innerWidth < 768) setMobileCatalog(true); else { window.scrollTo({ top: 0, behavior: 'smooth' }); setCatalogOpen(true); } };
+    const open = () => { if (window.innerWidth < 768) return; { window.scrollTo({ top: 0, behavior: 'smooth' }); setCatalogOpen(true); } };
     window.addEventListener('open-catalog', open);
     return () => window.removeEventListener('open-catalog', open);
   }, []);
@@ -129,7 +129,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
           aria-label="На головну"
         >
           <Logo />
-          <span className="hidden md:flex flex-col group min-w-0 overflow-hidden pr-1">
+          <span className="hidden min-[360px]:flex flex-col group min-w-0 overflow-hidden pr-1">
             <span className="font-black text-lg sm:text-2xl md:text-3xl tracking-wide text-white italic -skew-x-12 group-hover:text-[#FFC300] transition-colors">
               ФОРСАЖ
             </span>
@@ -201,10 +201,6 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
 
           {/* Mobile Controls */}
           <div className="flex items-center gap-1.5 md:hidden shrink-0">
-            <button onClick={() => { setIsMenuOpen(false); setMobileCatalog(true); }}
-              className="flex items-center gap-1.5 h-9 px-2.5 rounded-xl bg-[#FFC300] text-black font-black text-[11px] uppercase active:scale-95 shrink-0" aria-label="Каталог товарів">
-              <LayoutGrid size={16} /> Каталог
-            </button>
             {/* Cart badge — mobile */}
             <button
               onClick={openCart}

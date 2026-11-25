@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import NoPhoto from './NoPhoto';
 import { Heart, Scale, X, ShoppingCart, ZoomIn, ChevronLeft, ChevronRight, Gauge, ShieldCheck, Truck, CreditCard, Info, Snowflake, Sun, CloudSun, Ruler, Flame, Loader2, Phone, ArrowRight } from 'lucide-react';
 import { TyreProduct } from '../../types';
@@ -48,6 +48,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
   const [loadingSimilar, setLoadingSimilar] = useState(false);
   const [photoIdx, setPhotoIdx] = useState(0);
   const [touchX, setTouchX] = useState<number | null>(null);
+  const lastScroll = useRef(0); // a tap right after scrolling must not open another product
   useEffect(() => { setPhotoIdx(0); }, [product?.id]);
 
   const isTyre = !!(product && (product.width || product.radius || product.season));
@@ -182,8 +183,17 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
   return (
     <div className="fixed inset-0 z-[170] bg-black/90 backdrop-blur-md flex items-end md:items-center justify-center p-0 md:p-4 animate-in fade-in duration-300" onClick={onClose}>
       {renderSchema(product)}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-t-3xl md:rounded-3xl w-full max-w-6xl shadow-2xl relative overflow-y-auto overscroll-contain max-h-[94vh] md:max-h-[92vh] animate-in slide-in-from-bottom md:slide-in-from-bottom-8 md:zoom-in-95 duration-300" onClick={e => e.stopPropagation()}>
-        <div className="sticky top-0 z-30 h-0 flex justify-end">
+      <div className="bg-zinc-900 md:border border-zinc-800 md:rounded-3xl w-full max-w-6xl shadow-2xl relative overflow-y-auto overscroll-contain h-[100dvh] md:h-auto md:max-h-[92vh] animate-in slide-in-from-bottom md:slide-in-from-bottom-8 md:zoom-in-95 duration-300"
+        onClick={e => e.stopPropagation()}
+        onScroll={() => { lastScroll.current = Date.now(); }}
+        onClickCapture={e => { if (Date.now() - lastScroll.current < 350) { e.preventDefault(); e.stopPropagation(); } }}>
+        {/* phone: a real bar with "close" that always stays on top */}
+        <div className="md:hidden sticky top-0 z-30 flex items-center gap-2 px-3 h-12 bg-zinc-900/95 backdrop-blur border-b border-zinc-800">
+          <button onClick={onClose} className="h-9 pl-2 pr-3 flex items-center gap-1 rounded-xl bg-zinc-800 text-white text-sm font-bold" aria-label="Закрити"><ChevronLeft size={18} /> Назад</button>
+          <span className="flex-1 truncate text-xs text-zinc-400 font-bold">{product.title}</span>
+          <button onClick={onClose} className="h-9 w-9 flex items-center justify-center rounded-xl bg-zinc-800 text-white" aria-label="Закрити картку"><X size={20} /></button>
+        </div>
+        <div className="hidden md:flex sticky top-0 z-30 h-0 justify-end">
           <button onClick={onClose} className="m-3 h-10 w-10 flex items-center justify-center text-zinc-300 hover:text-white bg-black/70 hover:bg-black rounded-full transition-all shrink-0" aria-label="Закрити"><X size={22} /></button>
         </div>
 

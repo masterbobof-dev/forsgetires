@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Grid, Flame, ChevronRight, ChevronDown, Heart } from 'lucide-react';
+import { Grid, Flame, ChevronRight, ChevronDown, ChevronLeft, Heart } from 'lucide-react';
 import {
   ProductCategory, getRootCategories, getChildren, getRootOf, getCategoryIcon,
 } from '../../categories';
@@ -59,9 +59,17 @@ const CategoryNav: React.FC<CategoryNavProps> = ({ categories, active, onChange,
 
   // Phone: one button that drops down a grid of ALL sections (instead of a long sideways row)
   const [open, setOpen] = useState(false);
+  const [drill, setDrill] = useState<number | null>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  // breadcrumb "Каталог" on phones opens this list
+  useEffect(() => {
+    const h = () => { if (window.innerWidth < 768) { setOpen(true); setDrill(null); boxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } };
+    window.addEventListener('open-catalog', h);
+    return () => window.removeEventListener('open-catalog', h);
+  }, []);
   type Item = { id: string; sel: CategorySelection; icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; label: string; on: boolean; hot?: boolean };
   const items: Item[] = [
-    { id: 'all', sel: 'all', icon: Grid, label: 'Всі товари', on: active === 'all' },
+    { id: 'all', sel: 'all', icon: Grid, label: 'Категорії', on: active === 'all' },
     ...roots.map(c => ({ id: String(c.id), sel: c.id as CategorySelection, icon: getCategoryIcon(c.icon), label: c.name, on: activeRoot?.id === c.id })),
     { id: 'hot', sel: 'hot', icon: Flame, label: 'Акції', on: active === 'hot', hot: true },
     ...((favoritesCount > 0 || active === 'fav') ? [{ id: 'fav', sel: 'fav' as CategorySelection, icon: Heart, label: `Обране (${favoritesCount})`, on: active === 'fav', hot: true }] : []),
@@ -71,56 +79,56 @@ const CategoryNav: React.FC<CategoryNavProps> = ({ categories, active, onChange,
 
   return (
     <div className="mb-4 md:mb-6 space-y-2">
-      <div className="md:hidden">
-        <button onClick={() => setOpen(o => !o)} aria-expanded={open}
-          className={`w-full flex items-center gap-2.5 px-3 py-3 rounded-xl border font-black text-xs uppercase tracking-wide transition-colors ${current.hot ? 'bg-red-600 border-red-600 text-white' : 'bg-[#FFC300] border-[#FFC300] text-black'}`}>
+      <div className="md:hidden" ref={boxRef}>
+        <button onClick={() => { setOpen(o => !o); setDrill(null); }} aria-expanded={open}
+          className={`${open ? 'sticky top-[60px] z-30 shadow-[0_8px_16px_-6px_rgba(0,0,0,0.9)]' : ''} w-full flex items-center gap-2.5 px-3 py-3 rounded-xl border font-black text-xs uppercase tracking-wide transition-colors ${current.hot ? 'bg-red-600 border-red-600 text-white' : 'bg-[#FFC300] border-[#FFC300] text-black'}`}>
           <CurIcon size={17} strokeWidth={2.5} />
-          <span className="flex-1 text-left truncate">{current.label}</span>
-          <span className="text-[10px] font-bold opacity-70 normal-case">{open ? 'згорнути' : `усі розділи (${categories.length})`}</span>
+          <span className="flex-1 text-left truncate">{current.id === 'all' ? 'Категорії' : current.label}</span>
+          <span className="text-[10px] font-bold opacity-70 normal-case">{open ? 'закрити' : 'усі категорії'}</span>
           <ChevronDown size={18} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
-        {open && (
-          <div className="mt-2 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
-            <div className="grid grid-cols-3 gap-2">
-              {items.filter(i => i.id === 'all' || i.hot).map(i => {
-                const Icon = i.icon;
-                return (
-                  <button key={i.id} onClick={() => { onChange(i.sel); setOpen(false); }}
-                    className={`flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl border font-black text-[10px] uppercase ${i.on ? (i.hot ? 'bg-red-600 border-red-600 text-white' : 'bg-[#FFC300] border-[#FFC300] text-black') : i.hot ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-zinc-900 border-zinc-800 text-zinc-200'}`}>
-                    <Icon size={15} /> <span className="truncate">{i.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-            {roots.map(r => {
-              const RIcon = getCategoryIcon(r.icon);
-              const kids = getChildren(categories, r.id);
-              return (
-                <div key={r.id}>
-                  <button onClick={() => { onChange(r.id); setOpen(false); }}
-                    className={`w-full flex items-center gap-2 px-1 py-1.5 font-black text-sm uppercase ${active === r.id ? 'text-[#FFC300]' : 'text-white'}`}>
-                    <span className="text-[#FFC300]"><RIcon size={17} /></span> <span className="flex-1 text-left">{r.name}</span>
-                    <span className="text-[10px] font-bold text-zinc-500 normal-case">усі ›</span>
-                  </button>
-                  {kids.length > 0 && (
-                    <div className="grid grid-cols-3 gap-1.5 mt-1">
-                      {kids.map(k => {
-                        const KIcon = getCategoryIcon(k.icon || r.icon);
-                        return (
-                          <button key={k.id} onClick={() => { onChange(k.id); setOpen(false); }}
-                            className={`flex flex-col items-center justify-center gap-1 min-h-[58px] px-1 py-1.5 rounded-xl border text-center ${active === k.id ? 'bg-[#FFC300] border-[#FFC300] text-black' : 'bg-zinc-900 border-zinc-800 text-zinc-200'}`}>
-                            <span className={active === k.id ? '' : 'text-[#FFC300]'}><KIcon size={15} /></span>
-                            <span className="font-bold text-[10px] leading-tight break-words w-full">{k.name}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+        {open && (() => {
+          const close = () => { setOpen(false); setDrill(null); };
+          const pick = (sel: CategorySelection) => { onChange(sel); close(); };
+          const drillRoot = drill != null ? roots.find(r => r.id === drill) : undefined;
+          const tile = (key: string | number, Icon: any, label: string, on: boolean, onClick: () => void, extra = '', arrow = false) => (
+            <button key={key} onClick={onClick}
+              className={`relative flex flex-col items-center justify-center gap-1.5 min-h-[76px] px-1.5 py-2 rounded-xl border text-center ${on ? 'bg-[#FFC300] border-[#FFC300] text-black' : 'bg-zinc-900 border-zinc-800 text-zinc-200 active:bg-zinc-800'} ${extra}`}>
+              <span className={on ? '' : 'text-[#FFC300]'}><Icon size={20} /></span>
+              <span className="font-black text-[10px] uppercase leading-tight break-words w-full">{label}</span>
+              {arrow && <ChevronRight size={12} className="absolute right-1.5 top-1.5 text-zinc-500" />}
+            </button>
+          );
+          return (
+            <div className="mt-2 animate-in fade-in slide-in-from-top-2 duration-200">
+              {drillRoot ? (
+                <>
+                  <div className="flex items-center gap-2 mb-2">
+                    <button onClick={() => setDrill(null)} className="h-9 px-3 rounded-xl bg-zinc-900 border border-zinc-800 text-white text-xs font-bold flex items-center gap-1"><ChevronLeft size={14} /> Назад</button>
+                    <span className="font-black uppercase text-sm text-white truncate">{drillRoot.name}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {tile('all-' + drillRoot.id, Grid, `Усі: ${drillRoot.name}`, active === drillRoot.id, () => pick(drillRoot.id), '!border-[#FFC300]/40')}
+                    {getChildren(categories, drillRoot.id).map(k => tile(k.id, getCategoryIcon(k.icon || drillRoot.icon), k.name, active === k.id, () => pick(k.id)))}
+                  </div>
+                </>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {roots.map(r => {
+                    const hasKids = getChildren(categories, r.id).length > 0;
+                    return tile(r.id, getCategoryIcon(r.icon), r.name, activeRoot?.id === r.id, () => hasKids ? setDrill(r.id) : pick(r.id), '', hasKids);
+                  })}
+                  {items.filter(i => i.hot).map(i => tile(i.id, i.icon, i.label, i.on, () => pick(i.sel), i.on ? '' : '!bg-red-500/10 !border-red-500/30 !text-red-400'))}
+                  {active !== 'all' && tile('all', Grid, 'Усі товари', false, () => pick('all'))}
                 </div>
-              );
-            })}
-          </div>
-        )}
+              )}
+              <button onClick={() => { close(); boxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
+                className="mt-3 w-full h-11 rounded-xl border border-zinc-800 bg-zinc-900 text-sm font-bold text-zinc-300 flex items-center justify-center gap-1">
+                <ChevronDown size={16} className="rotate-180" /> Закрити категорії
+              </button>
+            </div>
+          );
+        })()}
       </div>
       <div ref={rootRow} className="hidden md:flex relative gap-2 overflow-x-auto pb-1 -mx-3 px-3 md:mx-0 md:px-0 scrollbar-hide fade-edges md:[mask-image:none] md:[-webkit-mask-image:none] md:flex-wrap" style={{ WebkitOverflowScrolling: 'touch' }}>
         <Chip id="all" active={active === 'all'} onClick={() => onChange('all')} icon={Grid} label="Всі товари" />

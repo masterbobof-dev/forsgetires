@@ -12,7 +12,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 
 const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
-const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
+const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info, x-sync-key', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const json = (d: unknown, status = 200) => new Response(JSON.stringify(d), { status, headers: { 'Content-Type': 'application/json', ...cors } });
 const CITY = 'Синельникове';
 
@@ -156,6 +156,18 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
   let body: any = {}; try { body = await req.json(); } catch { /* empty */ }
   try {
+    // background job (header x-sync-key): next 15 category texts
+    if (body.action === 'auto_categories') {
+      const { data: sync } = await db.rpc('program_sync_state');
+      if (!sync?.token || req.headers.get('x-sync-key') !== sync.token) return json({ error: 'forbidden' }, 403);
+      return json(await generateCategories({}));
+    }
+    // background job: drafts for the next 25 best-stocked products without a description
+    if (body.action === 'auto_products') {
+      const { data: sync } = await db.rpc('program_sync_state');
+      if (!sync?.token || req.headers.get('x-sync-key') !== sync.token) return json({ error: 'forbidden' }, 403);
+      return json(await generate({ n: 25 }));
+    }
     if (!(await staffEmail(req))) return json({ error: 'Лише для персоналу' }, 403);
     if (body.action === 'generate') return json(await generate(body));
     if (body.action === 'save') return json(await save(body));

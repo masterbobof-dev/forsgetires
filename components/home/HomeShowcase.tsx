@@ -54,14 +54,17 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
   useEffect(() => { fetchHomeBlocks().then(setBlocks); fetchBanners().then(setBanners); }, []);
 
   useEffect(() => {
-    // hits with photos; if there are few, add goods in stock with photos (biggest stock first)
+    // hits with photos; if there are few, add recommended goods
     (async () => {
       const { data: hits } = await supabase.from('tyres').select('*').eq('is_hot', true).neq('in_stock', false).eq('on_order', false).eq('has_photo', true).limit(12);
       let list = (hits as TyreProduct[]) || [];
       setHotIsPicked(list.length >= 4);
       if (list.length < 12) {
-        const { data: more } = await supabase.from('tyres').select('*').neq('in_stock', false).eq('on_order', false).eq('has_photo', true)
-          .not('id', 'in', `(${list.map(p => p.id).join(',') || 0})`).order('stock_quantity', { ascending: false }).limit(12 - list.length);
+        // the rest: what visitors look at and put in the cart, spread over different sections (falls back to the biggest stock)
+        const need = 12 - list.length;
+        let { data: more } = await supabase.rpc('home_recommended', { p_n: need, p_skip: list.map(p => p.id) });
+        if (!more?.length) ({ data: more } = await supabase.from('tyres').select('*').neq('in_stock', false).eq('on_order', false).eq('has_photo', true)
+          .not('id', 'in', `(${list.map(p => p.id).join(',') || 0})`).order('stock_quantity', { ascending: false }).limit(need));
         list = [...list, ...((more as TyreProduct[]) || [])];
       }
       setHot(list.map(prepare));

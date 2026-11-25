@@ -151,6 +151,12 @@ async function build(pathname, query) {
     };
   }
 
+  // an address of a section that does not exist (or is empty now): show the catalogue, but keep it out of Google
+  if (pathname.startsWith('/katalog/') && slug !== 'obrane') {
+    return { title: `Розділ не знайдено | ${SHOP_NAME}`, description: `Каталог інтернет-магазину. ${DELIVERY}`, url: `${SITE_URL}/`, noindex: true,
+      content: `<h1>Розділ не знайдено</h1><p>Такого розділу немає або в ньому зараз немає товарів. Оберіть інший:</p>${navBlock(cats)}` };
+  }
+
   // --- home ---
   const [hot, articles] = await Promise.all([
     rest(`tyres?select=${PRODUCT_FIELDS}&is_hot=eq.true&in_stock=not.is.false&order=created_at.desc&limit=24`).catch(() => []),

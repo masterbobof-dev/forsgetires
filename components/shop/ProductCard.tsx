@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import NoPhoto from './NoPhoto';
 import { ShoppingCart, Flame, ShoppingBag, Eye, Info, Heart, Scale, PhoneCall, Clock } from 'lucide-react';
 import { TyreProduct } from '../../types';
@@ -24,6 +24,8 @@ interface ProductCardProps {
 }
 
 const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, onQuickOrder, formatPrice, chips = [], isFavorite, onToggleFavorite, isCompared, onToggleCompare, showStock = false, placeholderIcon: PlaceholderIcon }) => {
+  const [imgBroken, setImgBroken] = useState(false); // a photo that does not open → the yellow icon instead of a "?"
+  const hasImg = !!tyre.image_url && !imgBroken;
   const isOutOfStock = tyre.in_stock === false;
   const onOrder = !!tyre.on_order;
   // own stock from the shop program: real quantity
@@ -51,8 +53,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
       }`}
     >
        {/* Image Section */}
-       <div className={`aspect-square relative overflow-hidden ${tyre.image_url ? 'bg-white' : 'bg-zinc-950'}`}>
-          {tyre.image_url ? (
+       <div className={`aspect-square relative overflow-hidden ${hasImg ? 'bg-white' : 'bg-zinc-950'}`}>
+          {hasImg ? (
             <img 
               src={tyre.image_thumb_url || tyre.image_url} 
               className="w-full h-full object-contain p-3 sm:p-4 mix-blend-multiply transition-transform duration-700 group-hover:scale-105" 
@@ -62,6 +64,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
               width={400}
               height={500}
               referrerPolicy="no-referrer"
+              onError={() => setImgBroken(true)}
             />
           ) : (
             <NoPhoto icon={PlaceholderIcon} size={46} />
@@ -191,14 +194,14 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
             {onOrder ? (
               <span className="text-sm font-black text-zinc-300 leading-tight">Ціну<br className="sm:hidden" /> уточнюйте</span>
             ) : (
-            <div className="flex flex-col">
+            <div className="flex flex-col min-w-0">
               {hasDiscount && (
                 <span className="text-zinc-500 text-[11px] line-through decoration-red-500/50">
                   {formatPrice(tyre.old_price)}
                 </span>
               )}
-              <div className="flex items-baseline gap-1">
-                <span className="text-lg sm:text-xl font-black text-[#FFC300]">
+              <div className="flex items-baseline gap-1 min-w-0">
+                <span className={`${String(formatPrice(tyre.price)).length > 4 ? 'text-base' : 'text-lg'} sm:text-xl font-black text-[#FFC300] truncate`}>
                   {formatPrice(tyre.price)}
                 </span>
                 <span className="text-[11px] font-bold text-zinc-500 uppercase">грн</span>

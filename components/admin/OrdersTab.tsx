@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import { TyreOrder } from '../../types';
-import { Phone, Edit2, Truck, Save, Trash2, X, AlertTriangle, Calendar, Package } from 'lucide-react';
+import { Phone, Edit2, Truck, Save, Trash2, X, AlertTriangle, Calendar, Package, Printer, FileSpreadsheet } from 'lucide-react';
+import { downloadCsv } from './exportCsv';
 
 const OrdersTab: React.FC = () => {
   const [orders, setOrders] = useState<TyreOrder[]>([]);
@@ -22,6 +23,45 @@ const OrdersTab: React.FC = () => {
     order.customer_phone.includes(searchPhone) || 
     order.customer_name.toLowerCase().includes(searchPhone.toLowerCase())
   );
+
+  const money = (v: unknown) => parseFloat(String(v ?? '').replace(/[^\d.]/g, '')) || 0;
+  const orderSum = (o: any) => (o.items || []).reduce((s: number, i: any) => s + money(i.price) * (i.quantity || 1), 0);
+  const esc = (v: unknown) => String(v ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
+
+  /** printable order form: who, where, what, how much */
+  const printOrder = (o: any) => {
+    const w = window.open('', '_blank', 'width=820,height=900');
+    if (!w) { alert('Дозвольте спливаючі вікна для друку'); return; }
+    const rows = (o.items || []).map((i: any, n: number) => `<tr><td>${n + 1}</td><td>${esc(i.title)}</td><td class="r">${i.quantity || 1}</td><td class="r">${money(i.price).toFixed(2)}</td><td class="r">${(money(i.price) * (i.quantity || 1)).toFixed(2)}</td></tr>`).join('');
+    w.document.write(`<!doctype html><html lang="uk"><head><meta charset="utf-8"><title>Замовлення №${o.id}</title><style>
+      body{font-family:Arial,sans-serif;color:#000;margin:24px;font-size:14px}h1{font-size:20px;margin:0 0 4px}
+      table{width:100%;border-collapse:collapse;margin-top:14px}td,th{border:1px solid #000;padding:6px 8px;text-align:left}th{background:#eee}.r{text-align:right}
+      .info td{border:0;padding:3px 0}.sum{font-size:18px;font-weight:bold;text-align:right;margin-top:10px}.sign{margin-top:40px;display:flex;justify-content:space-between}
+    </style></head><body>
+      <h1>Замовлення №${o.id} від ${new Date(o.created_at).toLocaleString('uk-UA')}</h1>
+      <div>Інтернет-магазин «Форсаж», м. Синельникове, вул. Квітнева, 9</div>
+      <table class="info">
+        <tr><td width="170"><b>Покупець:</b></td><td>${esc(o.customer_name)}</td></tr>
+        <tr><td><b>Телефон:</b></td><td>${esc(o.customer_phone)}</td></tr>
+        <tr><td><b>Доставка:</b></td><td>${o.delivery_method === 'pickup' ? 'Самовивіз' : `Нова Пошта: ${esc(o.delivery_city)}, ${esc(o.delivery_warehouse)}`}</td></tr>
+        <tr><td><b>Оплата:</b></td><td>${o.delivery_method === 'pickup' ? 'при отриманні' : o.payment_method === 'full' ? 'повна оплата' : 'передоплата'}</td></tr>
+        ${o.tracking_number ? `<tr><td><b>ТТН:</b></td><td>${esc(o.tracking_number)}</td></tr>` : ''}
+        ${o.comment ? `<tr><td><b>Коментар:</b></td><td>${esc(o.comment)}</td></tr>` : ''}
+      </table>
+      <table><tr><th>№</th><th>Товар</th><th class="r">К-сть</th><th class="r">Ціна, грн</th><th class="r">Сума, грн</th></tr>${rows}</table>
+      <div class="sum">Разом: ${orderSum(o).toFixed(2)} грн</div>
+      <div class="sign"><span>Видав: ______________</span><span>Отримав: ______________</span></div>
+      <script>window.onload=function(){window.print()}<\/script>
+    </body></html>`);
+    w.document.close();
+  };
+
+  /** the orders that are on the screen now (with the search applied) → Excel */
+  const exportOrders = () => downloadCsv(`zamovlennya-${new Date().toISOString().slice(0, 10)}.csv`,
+    ['№', 'Дата', 'Статус', 'Покупець', 'Телефон', 'Доставка', 'Місто', 'Відділення', 'Оплата', 'ТТН', 'Товари', 'Сума, грн'],
+    filteredOrders.map((o: any) => [o.id, new Date(o.created_at).toLocaleString('uk-UA'), o.status, o.customer_name, o.customer_phone,
+      o.delivery_method === 'pickup' ? 'Самовивіз' : 'Нова Пошта', o.delivery_city, o.delivery_warehouse, o.payment_method, o.tracking_number,
+      (o.items || []).map((i: any) => `${i.title} × ${i.quantity || 1}`).join(' | '), orderSum(o).toFixed(2)]));
 
   const handleSave = async () => {
     if (!editingOrder) return;
@@ -75,6 +115,10 @@ const OrdersTab: React.FC = () => {
                    </button>
                )}
            </div>
+           <button onClick={exportOrders} disabled={!filteredOrders.length} title="Замовлення зі списку — в Excel"
+               className="shrink-0 h-11 px-4 rounded-xl bg-zinc-800 border border-zinc-700 text-white text-sm font-bold flex items-center gap-2 hover:bg-zinc-700 disabled:opacity-40">
+               <FileSpreadsheet size={16}/> <span className="hidden md:inline">В Excel</span>
+           </button>
            {searchPhone && (
                <div className="bg-[#FFC300]/10 border border-[#FFC300]/30 px-3 py-1.5 rounded-lg flex items-center gap-2 w-full md:w-auto">
                    <AlertTriangle size={14} className="text-[#FFC300]"/>
@@ -120,6 +164,10 @@ const OrdersTab: React.FC = () => {
                     </span>
 
                     <div className="flex gap-1.5">
+                        <button onClick={(e) => { e.stopPropagation(); printOrder(order); }} title="Друк бланка замовлення"
+                            className="p-2 bg-zinc-800 rounded-xl hover:bg-zinc-700 hover:text-white border border-zinc-700 transition-all active:scale-95">
+                            <Printer size={14}/>
+                        </button>
                         <button 
                             onClick={(e) => { e.stopPropagation(); setEditingOrder(order); setShowModal(true); }} 
                             className="p-2 bg-zinc-800 rounded-xl hover:bg-zinc-700 hover:text-white border border-zinc-700 transition-all active:scale-95"

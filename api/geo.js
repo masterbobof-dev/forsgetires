@@ -6,6 +6,7 @@ export default function handler(req, res) {
   const code = String(req.headers['x-vercel-ip-country'] || '');
   let city = String(req.headers['x-vercel-ip-city'] || '');
   try { city = decodeURIComponent(city); } catch { /* keep raw */ }
+  let region = String(req.headers['x-vercel-ip-country-region'] || '');
   res.setHeader('Cache-Control', 'private, no-store');
-  res.status(200).json({ country: COUNTRIES[code] || code || 'Unknown', city: city || 'Unknown' });
+  res.status(200).json({ country: COUNTRIES[code] || code || 'Unknown', city: city || 'Unknown', region: region || null });
 }

@@ -126,8 +126,8 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
     const img = t.image_thumb_url || t.image_url;
     const Icon = iconFor ? iconFor(t) : undefined;
     return (
-      <div key={t.id} className="snap-start shrink-0 w-[112px] md:w-[172px] bg-zinc-950 border border-zinc-800 hover:border-[#FFC300] rounded-2xl overflow-hidden flex flex-col transition-colors">
-        <button onClick={openItem(t)} className="text-left flex-1">
+      <div key={t.id} className="snap-start shrink-0 w-[112px] md:w-[172px] bg-zinc-950 border border-zinc-800 hover:border-zinc-600 rounded-2xl overflow-hidden flex flex-col transition-colors">
+        <button onClick={openItem(t)} className="text-left flex-1 outline-none focus:outline-none [-webkit-tap-highlight-color:transparent]">
           <div className={`relative aspect-square flex items-center justify-center ${img ? 'bg-white' : ''}`}>
             {img ? <img src={img} alt={t.title} loading="lazy" className="w-full h-full object-contain p-2" /> : <NoPhoto icon={Icon} size={26} />}
             {badge && <span className={`absolute top-1.5 left-1.5 text-[9px] ${badge.cls} font-black uppercase px-1.5 py-0.5 rounded`}>{badge.label}</span>}
@@ -246,7 +246,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
               {isLowStock && !isOutOfStock && <span className="bg-red-600/20 text-red-500 border border-red-500/30 px-2.5 py-1 rounded-full text-[11px] font-black uppercase">Залишилося: {product.stock_quantity} шт</span>}
             </div>
 
-            <h1 className="text-xl md:text-2xl font-black text-white leading-tight">{product.title}</h1>
+            <h1 className={`${product.title.length > 70 ? "text-base" : "text-xl"} md:text-2xl font-black text-white leading-tight`}>{product.title}</h1>
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
               <span className={`font-bold flex items-center gap-1.5 ${availabilityCls}`}><span className="w-2 h-2 rounded-full bg-current" />{availability}</span>

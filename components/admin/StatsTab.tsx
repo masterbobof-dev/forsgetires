@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import SalesReport from './SalesReport';
+import VisitorStats from './VisitorStats';
 import { DollarSign, Users, Eye, ShoppingCart, Activity, ArrowUpRight, ArrowDownRight, Smartphone, Monitor, Globe, Navigation, Clock } from 'lucide-react';
 
 const StatsTab: React.FC = () => {
@@ -138,8 +139,6 @@ const StatsTab: React.FC = () => {
 
   return (
     <div className="space-y-8 pb-20 animate-in fade-in duration-700">
-        <SalesReport />
-
         {/* TOP KPI STRIP */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-zinc-900/80 backdrop-blur-md p-5 rounded-2xl border border-zinc-800 shadow-2xl relative group overflow-hidden">
@@ -194,124 +193,8 @@ const StatsTab: React.FC = () => {
             </div>
         </div>
 
-        {/* MIDDLE SECTION: Charts & Activity */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
-                <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-xl">
-                    <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-white font-black uppercase tracking-wider text-sm flex items-center gap-2">
-                            <Activity className="text-blue-400" size={18}/> Технічний розподіл
-                        </h3>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-                        <div className="space-y-4">
-                            <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Пристрої юзерів</p>
-                            <div className="space-y-3">
-                                {Object.entries(stats.deviceType).map(([name, val]: any) => {
-                                    const totalArr = Object.values(stats.deviceType) as number[];
-                                    const total = totalArr.length > 0 ? totalArr.reduce((a: number, b: number) => a + b, 0) : 1;
-                                    const pct = Math.round(((val as number) / total) * 100);
-                                    return (
-                                        <div key={name}>
-                                            <div className="flex justify-between items-center mb-1">
-                                                <span className="text-xs font-bold text-zinc-300 flex items-center gap-2 uppercase tracking-wide">
-                                                    {name === 'mobile' ? <Smartphone size={12}/> : <Monitor size={12}/>} {name || 'Інше'}
-                                                </span>
-                                                <span className="text-xs text-[#FFC300] font-black">{pct}%</span>
-                                            </div>
-                                            <div className="h-1.5 w-full bg-black rounded-full overflow-hidden">
-                                                <div className="h-full bg-blue-500 rounded-full" style={{width: `${pct}%`}}></div>
-                                            </div>
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                        </div>
-                        <div className="space-y-4">
-                            <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Географія (Топ міст)</p>
-                            <div className="space-y-3">
-                                {stats.topCities.map(([name, val]: any) => {
-                                    const total = stats.topCities.reduce((a, b) => a + b[1], 0) || 1;
-                                    const pct = Math.round((val / total) * 100);
-                                    return (
-                                        <div key={name}>
-                                            <div className="flex justify-between items-center mb-1">
-                                                <span className="text-xs font-bold text-zinc-300 uppercase tracking-wide flex items-center gap-2"><Globe size={12}/> {name}</span>
-                                                <span className="text-xs text-zinc-500">{val} сес.</span>
-                                            </div>
-                                            <div className="h-1.5 w-full bg-black rounded-full overflow-hidden">
-                                                <div className="h-full bg-[#FFC300] rounded-full" style={{width: `${pct}%`}}></div>
-                                            </div>
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-xl">
-                        <h3 className="text-zinc-400 font-black uppercase text-[10px] mb-4 flex items-center gap-2 tracking-widest">
-                            <Eye size={14} className="text-blue-400"/> Популярні Товари
-                        </h3>
-                        <div className="space-y-2">
-                             {stats.topViewed.map((it, idx) => (
-                                 <div key={idx} className="flex items-center justify-between p-3 bg-black/40 rounded-xl border border-zinc-800/50 hover:border-blue-500/30 transition-colors">
-                                     <span className="text-xs font-bold text-zinc-300 truncate w-2/3">{it.name}</span>
-                                     <span className="text-blue-400 font-black text-xs">{it.count} перегляди</span>
-                                 </div>
-                             ))}
-                             {stats.topViewed.length === 0 && <p className="text-zinc-600 text-xs italic italic">Немає даних...</p>}
-                        </div>
-                    </div>
-                    <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-xl">
-                        <h3 className="text-zinc-400 font-black uppercase text-[10px] mb-4 flex items-center gap-2 tracking-widest">
-                            <ShoppingCart size={14} className="text-[#FFC300]"/> Додано в кошик
-                        </h3>
-                        <div className="space-y-2">
-                             {stats.topCart.map((it, idx) => (
-                                 <div key={idx} className="flex items-center justify-between p-3 bg-black/40 rounded-xl border border-zinc-800/50 hover:border-[#FFC300]/30 transition-colors">
-                                     <span className="text-xs font-bold text-zinc-300 truncate w-2/3">{it.name}</span>
-                                     <span className="text-[#FFC300] font-black text-xs">{it.count} рази</span>
-                                 </div>
-                             ))}
-                             {stats.topCart.length === 0 && <p className="text-zinc-600 text-xs italic">Немає даних...</p>}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-xl overflow-hidden self-start">
-               <h3 className="text-white font-black uppercase tracking-wider text-sm mb-6 flex items-center gap-2">
-                   <Clock className="text-zinc-500" size={18}/> Останні дії
-               </h3>
-               <div className="space-y-4 relative">
-                   <div className="absolute left-[11px] top-0 bottom-0 w-[1px] bg-zinc-800"></div>
-                   {stats.recentEvents.map((ev, i) => (
-                       <div key={i} className="relative z-10 flex gap-4">
-                           <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 border-4 border-zinc-900 shadow-xl ${
-                               ev.event_type === 'add_to_cart' ? 'bg-[#FFC300] text-black' : 
-                               ev.event_type === 'view_item' ? 'bg-blue-500 text-white' : 
-                               ev.event_type === 'quick_order' ? 'bg-red-500 text-white' : 'bg-zinc-700 text-white'
-                           }`}>
-                               {ev.event_type === 'add_to_cart' ? <ShoppingCart size={10} strokeWidth={3}/> : 
-                                ev.event_type === 'view_item' ? <Eye size={10} strokeWidth={3}/> : <Activity size={10} strokeWidth={3}/>}
-                           </div>
-                           <div className="flex flex-col min-w-0">
-                               <span className="text-white font-bold text-xs">{getEventLabel(ev.event_type)}</span>
-                               <span className="text-[10px] text-zinc-400 truncate">{ev.item_name || ev.page_path || 'Система'}</span>
-                               <span className="text-[9px] text-zinc-600 font-mono mt-0.5">{new Date(ev.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} • {ev.city || 'UA'}</span>
-                           </div>
-                       </div>
-                   ))}
-                   {stats.recentEvents.length === 0 && <p className="text-zinc-600 text-xs italic pl-8">Подій поки немає...</p>}
-               </div>
-               <button onClick={() => fetchStats()} className="w-full mt-6 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors">
-                   Оновити стрічку
-               </button>
-            </div>
-        </div>
+        <VisitorStats />
+        <SalesReport />
     </div>
   );
 };

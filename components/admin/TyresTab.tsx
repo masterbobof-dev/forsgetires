@@ -5,8 +5,8 @@ import { supabase } from '../../supabaseClient';
 import { TyreProduct, Supplier } from '../../types';
 import { WHEEL_RADII, CAR_RADII, CARGO_RADII, TRUCK_RADII, AGRO_RADII } from '../../constants';
 import readXlsxFile from 'read-excel-file';
-import AiSortModal from './AiSortModal';
 import AttributeImport from './AttributeImport';
+import { downloadCsv } from './exportCsv';
 import { buildTyreTitle } from '../../tyreIndex';
 import { invokeAiProxy } from '../../aiProxyClient';
 import { normalizeQuery } from './sync/syncUtils';
@@ -58,6 +58,31 @@ const TyresTab: React.FC = () => {
   const [filterSupplierId, setFilterSupplierId] = useState<string>('all');
   const [filterCategoryId, setFilterCategoryId] = useState<string>('all');
   const { categories, dbReady } = useCategories({ includeInactive: true });
+  const [exporting, setExporting] = useState(false);
+  /** price list for Excel: all goods of the chosen category (or everything), in stock first */
+  const exportProducts = async () => {
+    setExporting(true);
+    try {
+      const rows: any[] = [];
+      for (let from = 0; from < 20000; from += 1000) {
+        let q = supabase.from('tyres').select('catalog_number, title, manufacturer, price, stock_quantity, in_stock, category_id').order('title').range(from, from + 999);
+        if (filterCategoryId !== 'all') {
+          const cat = categories.find(c => String(c.id) === String(filterCategoryId));
+          const f = cat ? buildCategoryFilter(categories, cat, dbReady) : null;
+          if (f) q = q.or(f);
+        }
+        const { data, error } = await q;
+        if (error) throw error;
+        rows.push(...(data || []));
+        if (!data || data.length < 1000) break;
+      }
+      const catName = (id: number) => categories.find(c => c.id === id)?.name || '';
+      downloadCsv(`tovary-${new Date().toISOString().slice(0, 10)}.csv`,
+        ['Код', 'Назва', 'Бренд', 'Категорія', 'Ціна, грн', 'Залишок', 'В наявності'],
+        rows.map(r => [r.catalog_number, r.title, r.manufacturer, catName(r.category_id), r.price, r.stock_quantity, r.in_stock === false ? 'ні' : 'так']));
+    } catch (e: any) { alert('Не вдалося вивантажити: ' + (e?.message || e)); }
+    setExporting(false);
+  };
   // Flat list "Шини", "— Легкові", ... for <select>
   const categoryOptions: { cat: ProductCategory; label: string }[] = getRootCategories(categories).flatMap(root => [
       { cat: root, label: root.name },
@@ -91,7 +116,6 @@ const TyresTab: React.FC = () => {
   const [isApplyingBulk, setIsApplyingBulk] = useState(false);
 
   const [showAddTyreModal, setShowAddTyreModal] = useState(false);
-  const [showAiModal, setShowAiModal] = useState(false);
   const [showAttrImport, setShowAttrImport] = useState(false);
   const [editingTyreId, setEditingTyreId] = useState<number | null>(null);
   /** product comes from the shop program: name, price, stock, article and category are managed there */
@@ -329,6 +353,8 @@ const TyresTab: React.FC = () => {
 
        if (data) {
           const processedData = data.map(t => {
+              // season exists only for tyres — a pipe or a filter has none
+              if (!isTyreProduct(t, categories)) return { ...t, season: null };
               const inferredSeason = detectSeason(t.title, t.description || '');
               let finalSeason = inferredSeason || t.season || 'summer';
               
@@ -984,14 +1010,11 @@ const TyresTab: React.FC = () => {
                     >
                         <Settings size={20} />
                     </button>
-                    <button onClick={() => setShowAiModal(true)} className="p-2.5 bg-purple-600 text-white rounded-xl shadow-lg shadow-purple-900/20"><Sparkles size={20}/></button>
-                    <button onClick={() => {setEditingTyreId(null); setEditingFromProgram(false); setShowAddTyreModal(true);}} className="p-2.5 bg-[#FFC300] text-black rounded-xl shadow-lg shadow-yellow-900/20"><Plus size={20}/></button>
                 </div>
 
                 <div className="hidden md:flex gap-2">
-                    <button onClick={() => setShowAttrImport(true)} className="bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-emerald-600 transition-all shadow-lg active:scale-95"><FileSpreadsheet size={18}/> <span>Імпорт Excel</span></button>
-                    <button onClick={() => setShowAiModal(true)} className="bg-purple-600 text-white font-bold px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-purple-500 transition-all shadow-lg active:scale-95"><Sparkles size={18}/> <span>AI Сортування</span></button>
-                    <button onClick={() => {setEditingTyreId(null); setEditingFromProgram(false); setShowAddTyreModal(true);}} className="bg-[#FFC300] text-black font-black px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-[#e6b000] transition-all shadow-lg active:scale-95"><Plus size={18}/> <span>Додати</span></button>
+                    <button onClick={() => setShowAttrImport(true)} className="bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-emerald-600 transition-all shadow-lg active:scale-95"><FileSpreadsheet size={18}/> <span>Характеристики з Excel</span></button>
+                    <button onClick={exportProducts} disabled={exporting} className="bg-zinc-800 border border-zinc-700 text-white font-bold px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-zinc-700 transition-all active:scale-95 disabled:opacity-50"><FileSpreadsheet size={18}/> <span>{exporting ? 'Готуємо…' : 'Вивантажити в Excel'}</span></button>
                 </div>
             </div>
 
@@ -1692,9 +1715,6 @@ const TyresTab: React.FC = () => {
         {showAttrImport && <AttributeImport onClose={() => setShowAttrImport(false)} onDone={() => fetchTyres(0, true)} />}
 
         {/* AI Modal */}
-        {showAiModal && (
-            <AiSortModal onClose={() => setShowAiModal(false)} onRefreshTyres={() => fetchTyres(0, true)} />
-        )}
         {/* AI SEARCH MODAL */}
         {showAiSearchModal && (
             <div className="fixed inset-0 z-[400] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">

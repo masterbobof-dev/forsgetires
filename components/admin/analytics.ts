@@ -36,6 +36,20 @@ const getDeviceInfo = () => {
     return { device, os, browser, resolution: `${window.screen.width}x${window.screen.height}` };
 };
 
+/** where the visitor came from (remembered for the whole visit): google, instagram, another site, or '' = typed the address */
+const getSource = () => {
+    let src = sessionStorage.getItem('analytics_source');
+    if (src === null) {
+        const utm = new URLSearchParams(window.location.search).get('utm_source');
+        let host = '';
+        try { host = document.referrer ? new URL(document.referrer).hostname.replace(/^www\./, '') : ''; } catch { /* ignore */ }
+        if (host === window.location.hostname.replace(/^www\./, '')) host = '';
+        src = (utm || host || '').toLowerCase().slice(0, 80);
+        sessionStorage.setItem('analytics_source', src);
+    }
+    return src;
+};
+
 // Кешування геопозиції в межах сесії, щоб не спамити API
 const getGeoInfo = async () => {
     const cached = sessionStorage.getItem('analytics_geo');
@@ -46,7 +60,7 @@ const getGeoInfo = async () => {
         const res = await fetch('/api/geo');
         if (res.ok) {
             const data = await res.json();
-            const geo = { country: data.country || 'Unknown', city: data.city || 'Unknown' };
+            const geo = { country: data.country || 'Unknown', city: data.city || 'Unknown', region: data.region || null };
             sessionStorage.setItem('analytics_geo', JSON.stringify(geo));
             return geo;
         }
@@ -79,11 +93,14 @@ export const logAnalyticsEvent = async (
             os_name: device.os,
             screen_resolution: device.resolution,
             country: geo.country,
-            city: geo.city
+            city: geo.city,
+            region: geo.region || null,
+            referrer: getSource(),
+            value: value ?? null,
         };
 
         // Background insert without awaiting to avoid blocking UI
-        supabase.from('analytics_events').insert([payload]).then();
+        supabase.from('analytics_events').insert([payload]).then(({ error }) => { if (error) console.warn('Analytics:', error.message); });
     } catch (e) {
         // Silently fail to not interrupt user experience
         console.warn('Analytics logging failed:', e);

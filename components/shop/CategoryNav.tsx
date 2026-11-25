@@ -81,7 +81,7 @@ const CategoryNav: React.FC<CategoryNavProps> = ({ categories, active, onChange,
     <div className="mb-4 md:mb-6 space-y-2">
       <div className="md:hidden" ref={boxRef}>
         <button onClick={() => { setOpen(o => !o); setDrill(null); }} aria-expanded={open}
-          className={`${open ? 'sticky top-[60px] z-30 shadow-[0_8px_16px_-6px_rgba(0,0,0,0.9)]' : ''} w-full flex items-center gap-2.5 px-3 py-3 rounded-xl border font-black text-xs uppercase tracking-wide transition-colors ${current.hot ? 'bg-red-600 border-red-600 text-white' : 'bg-[#FFC300] border-[#FFC300] text-black'}`}>
+          className={`${open ? 'sticky top-[60px] z-30 shadow-[0_8px_16px_-6px_rgba(0,0,0,0.9)]' : ''} w-full flex items-center gap-2.5 px-3 py-3 rounded-xl border font-black text-xs uppercase tracking-wide transition-colors bg-[#FFC300] border-[#FFC300] text-black`}>
           <CurIcon size={17} strokeWidth={2.5} />
           <span className="flex-1 text-left truncate">{current.id === 'all' ? 'Категорії' : current.label}</span>
           <span className="text-[10px] font-bold opacity-70 normal-case">{open ? 'закрити' : 'усі категорії'}</span>

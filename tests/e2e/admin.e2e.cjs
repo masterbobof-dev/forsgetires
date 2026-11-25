@@ -6,7 +6,7 @@
  */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const { serveDist, launch, openShop, step, fixtures, actions, until } = require('./harness.cjs');
+const { openShop, step, fixtures, actions, until, runScenarios } = require('./harness.cjs');
 
 const OWNER = () => fixtures.session('owner@test.ua', 'owner-1');
 const VARTA = 'Акумулятор VARTA Blue Dynamic 60Ah 540A R+';
@@ -385,19 +385,4 @@ const phone = async (browser, url) => {
 };
 
 // ---------------------------------------------------------------------------------------------
-(async () => {
-  const site = await serveDist();
-  const browser = await launch();
-  const only = process.argv[2];
-  const scenarios = { list, quickEdits, editWindow, photosAndFiles, phone };
-  let failed = 0;
-  for (const [name, run] of Object.entries(scenarios)) {
-    if (only && only !== name) continue;
-    console.log(`\nadmin ${name}`);
-    try { await run(browser, site.url); } catch { failed++; }
-  }
-  await browser.close();
-  await site.close();
-  console.log(failed ? `\n${failed} scenario(s) failed` : '\nAll scenarios passed');
-  process.exit(failed ? 1 : 0);
-})();
+runScenarios('admin', { list, quickEdits, editWindow, photosAndFiles, phone });

@@ -147,6 +147,9 @@ const createFake = ({ tables = {}, rpc = {}, functions = {}, user = null } = {})
     // statistics events carry a random session id, the time and the screen size: keep only what is stable
     if (url.pathname.endsWith('/analytics_events') && body) entry.body = JSON.stringify([].concat(body).map((e) => [e.event_type, e.item_id, e.item_name, e.path_name, e.value]));
     entry.body = entry.body.replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z/g, '<time>'); // "now" differs from run to run
+    // uploaded files get the current time in their name (smart_1795…_photo.png), and the browser separates
+    // the parts of an upload with a random mark
+    for (const k of ['path', 'query', 'body']) entry[k] = entry[k].replace(/smart_\d{10,}_/g, 'smart_<time>_').replace(/WebKitFormBoundary\w+/g, 'FormBoundary');
     fake.log.push(entry);
 
     // --- auth ---
@@ -195,6 +198,9 @@ const createFake = ({ tables = {}, rpc = {}, functions = {}, user = null } = {})
     }
     if (method === 'DELETE') {
       fake.tables[name] = rows.filter((r) => !matches.includes(r));
+      (fake.inserted[`${name}:delete`] ||= []).push({ where: query, rows: matches.length });
+      // .delete().select(…, { count: 'exact' }) gets the deleted rows and their number back
+      if (prefer.includes('return=representation')) return json(matches, 200, { 'content-range': `${matches.length ? `0-${matches.length - 1}` : '*'}/${prefer.includes('count=') ? matches.length : '*'}` });
       return json(undefined, 204);
     }
 

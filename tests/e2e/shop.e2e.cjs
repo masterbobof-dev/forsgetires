@@ -6,7 +6,7 @@
  * Run:  npm run build && npm run e2e
  */
 const assert = require('node:assert/strict');
-const { serveDist, launch, openShop, step, fixtures, actions, until } = require('./harness.cjs');
+const { openShop, step, fixtures, actions, until, runScenarios } = require('./harness.cjs');
 
 const cards = (page) => page.locator('article');
 const titles = (page) => page.locator('article h3').allTextContents().then((t) => t.map((s) => s.trim()));
@@ -685,19 +685,4 @@ const stockTracking = async (browser, url) => {
 };
 
 // ---------------------------------------------------------------------------------------------
-(async () => {
-  const site = await serveDist();
-  const browser = await launch();
-  const only = process.argv[2];
-  const scenarios = { catalogue, purchase, lists, links, homeBlocks, customer, phone, stockTracking };
-  let failed = 0;
-  for (const [name, run] of Object.entries(scenarios)) {
-    if (only && only !== name) continue;
-    console.log(`\n${name}`);
-    try { await run(browser, site.url); } catch { failed++; }
-  }
-  await browser.close();
-  await site.close();
-  console.log(failed ? `\n${failed} scenario(s) failed` : '\nAll scenarios passed');
-  process.exit(failed ? 1 : 0);
-})();
+runScenarios('shop', { catalogue, purchase, lists, links, homeBlocks, customer, phone, stockTracking });

@@ -187,4 +187,21 @@ const snapshot = async (shop, name) => {
   await page.screenshot({ path: path.join(SNAP_DIR, `${name}.png`), animations: 'disabled' });
 };
 
-module.exports = { serveDist, launch, openShop, settle, actions, step, until, sleep, fixtures, SNAP_DIR };
+/** run the scenarios of a test file one after another (or only the one named on the command line), then report */
+const runScenarios = async (title, scenarios) => {
+  const site = await serveDist();
+  const browser = await launch();
+  const only = process.argv[2];
+  let failed = 0;
+  for (const [name, run] of Object.entries(scenarios)) {
+    if (only && only !== name) continue;
+    console.log(`\n${title} ${name}`);
+    try { await run(browser, site.url); } catch { failed++; }
+  }
+  await browser.close();
+  await site.close();
+  console.log(failed ? `\n${failed} scenario(s) failed` : '\nAll scenarios passed');
+  process.exit(failed ? 1 : 0);
+};
+
+module.exports = { serveDist, launch, openShop, settle, actions, step, until, sleep, runScenarios, fixtures, SNAP_DIR };

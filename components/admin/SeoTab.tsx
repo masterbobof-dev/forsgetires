@@ -27,7 +27,7 @@ const SeoTab: React.FC = () => {
     seo_keywords: 'шиномонтаж, синельникове, купити шини, ремонт дисків',
     seo_image: '',
     seo_robots: 'index, follow',
-    seo_canonical: 'https://forsage-sinelnikove.com'
+    seo_canonical: 'https://www.forsage-tires.com'
   });
 
   const [analysis, setAnalysis] = useState({
@@ -264,7 +264,7 @@ const SeoTab: React.FC = () => {
   const generateSitemap = async () => {
       setLoading(true);
       try {
-          const baseUrl = settings.seo_canonical || 'https://forsage-sinelnikove.com';
+          const baseUrl = settings.seo_canonical || 'https://www.forsage-tires.com';
           const pages = ['', '/prices', '/gallery'];
           
           let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
@@ -453,7 +453,7 @@ const SeoTab: React.FC = () => {
                     <div className="w-7 h-7 bg-gray-200 rounded-full flex items-center justify-center text-[10px] font-bold text-gray-600">F</div>
                     <div className="flex flex-col">
                       <span className="text-xs text-black">Forsage Sinelnikove</span>
-                      <span className="text-[10px] text-gray-500">{settings.seo_canonical || 'https://forsage-sinelnikove.com'}</span>
+                      <span className="text-[10px] text-gray-500">{settings.seo_canonical || 'https://www.forsage-tires.com'}</span>
                     </div>
                   </div>
                   <h3 className="text-[#1a0dab] text-xl cursor-pointer hover:underline truncate">

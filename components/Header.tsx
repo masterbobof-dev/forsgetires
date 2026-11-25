@@ -133,8 +133,8 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
             <span className="font-black text-lg sm:text-2xl md:text-3xl tracking-wide text-white italic -skew-x-12 group-hover:text-[#FFC300] transition-colors">
               ФОРСАЖ
             </span>
-            <span className="hidden md:block text-[10px] sm:text-[11px] md:text-xs text-zinc-400 font-bold uppercase tracking-[0.15em] sm:tracking-[0.2em] leading-none ml-1 whitespace-nowrap">
-              Інтернет-магазин
+            <span className="block text-[8px] min-[400px]:text-[9px] sm:text-[11px] md:text-xs text-[#FFC300]/90 md:text-zinc-400 font-bold uppercase tracking-[0.12em] sm:tracking-[0.2em] leading-none ml-0.5 mt-0.5 whitespace-nowrap">
+              <span className="md:hidden">Автозапчастини · Шини</span><span className="hidden md:inline">Автозапчастини · Шини · АКБ</span>
             </span>
           </span>
         </button>

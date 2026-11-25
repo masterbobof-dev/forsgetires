@@ -300,7 +300,7 @@ const BannerSlider: React.FC<{ banners: SiteBanner[]; linkTo: (href?: string | n
   const go = (d: number) => setI(v => (v + d + n) % n);
   return (
     <section className="relative rounded-3xl overflow-hidden bg-zinc-900 border border-zinc-800 animate-in fade-in duration-500"
-      onTouchStart={e => setTouchX(e.touches[0].clientX)}
+      data-no-swipe="" onTouchStart={e => setTouchX(e.touches[0].clientX)}
       onTouchEnd={e => { if (touchX === null) return; const dx = e.changedTouches[0].clientX - touchX; if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1); setTouchX(null); }}>
       <div className="flex transition-transform duration-500 ease-out" style={{ transform: `translateX(-${i * 100}%)` }}>
         {banners.map((b, k) => (

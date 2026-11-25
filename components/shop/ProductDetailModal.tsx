@@ -126,10 +126,10 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
     const img = t.image_thumb_url || t.image_url;
     const Icon = iconFor ? iconFor(t) : undefined;
     return (
-      <div key={t.id} className="snap-start shrink-0 w-[148px] md:w-[172px] bg-zinc-950 border border-zinc-800 hover:border-[#FFC300] rounded-2xl overflow-hidden flex flex-col transition-colors">
+      <div key={t.id} className="snap-start shrink-0 w-[112px] md:w-[172px] bg-zinc-950 border border-zinc-800 hover:border-[#FFC300] rounded-2xl overflow-hidden flex flex-col transition-colors">
         <button onClick={openItem(t)} className="text-left flex-1">
           <div className={`relative aspect-square flex items-center justify-center ${img ? 'bg-white' : ''}`}>
-            {img ? <img src={img} alt={t.title} loading="lazy" className="w-full h-full object-contain p-2" /> : <NoPhoto icon={Icon} size={34} />}
+            {img ? <img src={img} alt={t.title} loading="lazy" className="w-full h-full object-contain p-2" /> : <NoPhoto icon={Icon} size={26} />}
             {badge && <span className={`absolute top-1.5 left-1.5 text-[9px] ${badge.cls} font-black uppercase px-1.5 py-0.5 rounded`}>{badge.label}</span>}
           </div>
           <p className="px-2.5 pt-2 text-[11px] font-bold text-white line-clamp-2 min-h-[2.6em] leading-snug">{t.title} {t.radius}</p>
@@ -146,7 +146,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
       <h3 className="text-white text-sm md:text-base font-black uppercase tracking-wide mb-3 flex items-center gap-2">
         <span className="w-1.5 h-4 bg-[#FFC300] rounded-full" />{title}
       </h3>
-      <div className="flex gap-3 overflow-x-auto pb-2 snap-x scrollbar-hide -mx-4 px-4 scroll-pl-4 md:-mx-7 md:px-7 md:scroll-pl-7">{items.map(relatedCard)}</div>
+      <div className="flex gap-2 md:gap-3 overflow-x-auto overscroll-x-contain pb-2 snap-x scrollbar-hide -mx-4 px-4 scroll-pl-4 md:-mx-7 md:px-7 md:scroll-pl-7">{items.map(relatedCard)}</div>
     </section>
   );
 
@@ -183,7 +183,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
   return (
     <div className="fixed inset-0 z-[170] bg-black/90 backdrop-blur-md flex items-end md:items-center justify-center p-0 md:p-4 animate-in fade-in duration-300" onClick={onClose}>
       {renderSchema(product)}
-      <div className="bg-zinc-900 md:border border-zinc-800 md:rounded-3xl w-full max-w-6xl shadow-2xl relative overflow-y-auto overscroll-contain h-[100dvh] md:h-auto md:max-h-[92vh] animate-in slide-in-from-bottom md:slide-in-from-bottom-8 md:zoom-in-95 duration-300"
+      <div className="bg-zinc-900 md:border border-zinc-800 md:rounded-3xl w-full max-w-6xl shadow-2xl relative overflow-y-auto overflow-x-hidden overscroll-contain h-[100dvh] md:h-auto md:max-h-[92vh] animate-in slide-in-from-bottom md:slide-in-from-bottom-8 md:zoom-in-95 duration-300"
         onClick={e => e.stopPropagation()}
         onScroll={() => { lastScroll.current = Date.now(); }}
         onClickCapture={e => { if (Date.now() - lastScroll.current < 350) { e.preventDefault(); e.stopPropagation(); } }}>
@@ -203,7 +203,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
             <div
               className={`relative flex items-center justify-center w-full group overflow-hidden ${current ? 'aspect-[4/3] md:aspect-square md:max-h-[62vh] cursor-zoom-in' : 'h-40 md:h-72 bg-gradient-to-br from-zinc-800 to-zinc-950'}`}
               onClick={() => photos.length && openLightbox(photos, photoIdx)}
-              onTouchStart={e => setTouchX(e.touches[0].clientX)}
+              data-no-swipe="" onTouchStart={e => setTouchX(e.touches[0].clientX)}
               onTouchEnd={e => {
                 if (touchX === null || photos.length < 2) return;
                 const dx = e.changedTouches[0].clientX - touchX;

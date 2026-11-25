@@ -117,3 +117,8 @@ input[type='date']::-webkit-calendar-picker-indicator {
 
 /* No grey flash on tap (phones) */
 button, a { -webkit-tap-highlight-color: transparent; }
+
+/* iPhone zooms the page when a field with text smaller than 16px gets focus */
+@media (max-width: 767px) {
+  input, select, textarea { font-size: 16px !important; }
+}

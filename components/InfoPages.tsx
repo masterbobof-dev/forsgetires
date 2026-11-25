@@ -12,10 +12,10 @@ export const INFO_PAGES: Record<InfoPage, { path: string; title: string; descrip
   warranty: { path: '/garantiya-i-povernennya', title: 'Гарантія і повернення', description: 'Гарантія виробника на всі товари. Повернення та обмін протягом 14 днів згідно із законом.' },
   about: { path: '/pro-nas', title: 'Про магазин', description: 'Інтернет-магазин «Форсаж» у Синельниковому: шини, диски, акумулятори та автотовари з доставкою по Україні.' },
   contacts: { path: '/kontakty', title: 'Контакти', description: 'Телефони, Viber, Telegram та адреса магазину «Форсаж»: м. Синельникове, вул. Квітнева, 9.' },
-  faq: { path: '/faq', title: 'Часті питання', description: 'Відповіді на популярні питання: як оформити замовлення, доставка, оплата, підбір розміру шин, повернення.' },
+  faq: { path: '/faq', title: 'Поширені питання', description: 'Відповіді на популярні питання: як оформити замовлення, доставка, оплата, підбір розміру шин, повернення.' },
 };
 
-const MAP_LINK = 'https://www.google.com/maps/dir/?api=1&destination=48.317541,35.513511';
+const MAP_LINK = 'https://www.google.com/maps/dir/?api=1&destination=%D0%B2%D1%83%D0%BB%D0%B8%D1%86%D1%8F%20%D0%9A%D0%B2%D1%96%D1%82%D0%BD%D0%B5%D0%B2%D0%B0%209%2C%20%D0%A1%D0%B8%D0%BD%D0%B5%D0%BB%D1%8C%D0%BD%D0%B8%D0%BA%D0%BE%D0%B2%D0%B5%2C%20%D0%94%D0%BD%D1%96%D0%BF%D1%80%D0%BE%D0%BF%D0%B5%D1%82%D1%80%D0%BE%D0%B2%D1%81%D1%8C%D0%BA%D0%B0%20%D0%BE%D0%B1%D0%BB%D0%B0%D1%81%D1%82%D1%8C';
 
 const Card: React.FC<{ icon: React.ComponentType<{ size?: number }>; title: string; children: React.ReactNode }> = ({ icon: Icon, title, children }) => (
   <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 md:p-5">
@@ -152,7 +152,7 @@ const InfoPages: React.FC<{ page: InfoPage; onBack: () => void }> = ({ page, onB
           </Card>
           <div className="md:col-span-2 bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
             <iframe
-              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2653.2206680489955!2d35.513511315682!3d48.31754097923793!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zNDjCsDE5JzAzLjEiTiAzNcKwMzAnNDguNiJF!5e0!3m2!1suk!2sua!4v1650000000000!5m2!1suk!2sua"
+              src="https://www.google.com/maps?q=%D0%B2%D1%83%D0%BB%D0%B8%D1%86%D1%8F%20%D0%9A%D0%B2%D1%96%D1%82%D0%BD%D0%B5%D0%B2%D0%B0%209%2C%20%D0%A1%D0%B8%D0%BD%D0%B5%D0%BB%D1%8C%D0%BD%D0%B8%D0%BA%D0%BE%D0%B2%D0%B5%2C%20%D0%94%D0%BD%D1%96%D0%BF%D1%80%D0%BE%D0%BF%D0%B5%D1%82%D1%80%D0%BE%D0%B2%D1%81%D1%8C%D0%BA%D0%B0%20%D0%BE%D0%B1%D0%BB%D0%B0%D1%81%D1%82%D1%8C&z=17&hl=uk&output=embed"
               width="100%" height="280" style={{ border: 0, filter: 'grayscale(1) invert(0.85) contrast(1.1)' }} loading="lazy" referrerPolicy="no-referrer-when-downgrade" title="Карта: магазин Форсаж"
             />
             <div className="p-4 flex flex-wrap items-center justify-between gap-2">

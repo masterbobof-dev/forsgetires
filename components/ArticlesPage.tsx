@@ -93,7 +93,7 @@ const ArticlesPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {articles.map((a, i) => (
             <a key={a.id} href={articlePath(a)} onClick={linkClick(articlePath(a))} className="group bg-zinc-900 border border-zinc-800 hover:border-[#FFC300] rounded-2xl overflow-hidden transition-colors animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: `${i * 50}ms` }}>
-              {a.image_url && <div className="aspect-[16/9] bg-zinc-950 overflow-hidden"><img src={a.image_url} alt={a.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" /></div>}
+              <div className="aspect-[16/9] bg-gradient-to-br from-zinc-800 to-zinc-950 overflow-hidden flex items-center justify-center">{a.image_url ? <img src={a.image_url} alt={a.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" /> : <span className="text-[#FFC300]/60 font-black italic text-3xl -skew-x-12">ФОРСАЖ</span>}</div>
               <div className="p-4">
                 <h2 className="font-black text-white leading-snug group-hover:text-[#FFC300] transition-colors">{a.title}</h2>
                 <p className="text-zinc-400 text-sm mt-2 line-clamp-3">{articleExcerpt(a.content, 160)}</p>

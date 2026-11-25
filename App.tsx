@@ -1,3 +1,5 @@
+import { installSwipeBack } from './swipeBack';
+installSwipeBack();
 import React, { useState, useEffect, useRef, lazy, Suspense, useCallback } from 'react';
 import Header from './components/Header';
 import Footer from './components/Footer';

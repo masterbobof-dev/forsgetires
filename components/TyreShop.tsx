@@ -611,7 +611,8 @@ const TyreShop: React.FC<TyreShopProps> = ({
   };
 
   const submitOrder = async () => {
-    if (!orderName.trim()) { setOrderError("Будь ласка, введіть ім'я"); return; }
+    // Nova Poshta needs the full name: at least surname + name
+    if (orderName.trim().split(/\s+/).filter(w => w.replace(/[^a-zа-яіїєґ'’-]/gi, '').length >= 2).length < 2) { setOrderError("Вкажіть прізвище та ім'я повністю (ПІБ) — без цього Нова Пошта не видасть посилку"); return; }
     if (!isValidUaPhone(orderPhone)) { setOrderError("Введіть телефон повністю: +380 XX XXX XX XX"); return; }
     setOrderSending(true); setOrderError('');
     try {
@@ -791,7 +792,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
                 <span className="text-white font-black text-sm md:text-lg tracking-tight">{shopPhone2}</span>
               </a>
               <a
-                href="https://www.google.com/maps/dir/?api=1&destination=48.317541,35.513511"
+                href="https://www.google.com/maps/dir/?api=1&destination=%D0%B2%D1%83%D0%BB%D0%B8%D1%86%D1%8F%20%D0%9A%D0%B2%D1%96%D1%82%D0%BD%D0%B5%D0%B2%D0%B0%209%2C%20%D0%A1%D0%B8%D0%BD%D0%B5%D0%BB%D1%8C%D0%BD%D0%B8%D0%BA%D0%BE%D0%B2%D0%B5%2C%20%D0%94%D0%BD%D1%96%D0%BF%D1%80%D0%BE%D0%BF%D0%B5%D1%82%D1%80%D0%BE%D0%B2%D1%81%D1%8C%D0%BA%D0%B0%20%D0%BE%D0%B1%D0%BB%D0%B0%D1%81%D1%82%D1%8C"
                 target="_blank" rel="noopener noreferrer"
                 className="lg:hidden flex items-center gap-2 bg-zinc-900 border border-zinc-800 pl-1.5 pr-3 py-1.5 md:pl-2 md:pr-4 md:py-2 rounded-xl hover:border-[#FFC300] transition-all active:scale-95"
               >
@@ -807,7 +808,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
               <div className="absolute -inset-1 bg-gradient-to-r from-[#FFC300]/40 to-yellow-600/20 rounded-3xl blur opacity-30 group-hover:opacity-60 transition duration-700"></div>
               <div className="relative bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl">
                 <iframe
-                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2653.2206680489955!2d35.513511315682!3d48.31754097923793!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zNDjCsDE5JzAzLjEiTiAzNcKwMzAnNDguNiJF!5e0!3m2!1suk!2sua!4v1650000000000!5m2!1suk!2sua"
+                  src="https://www.google.com/maps?q=%D0%B2%D1%83%D0%BB%D0%B8%D1%86%D1%8F%20%D0%9A%D0%B2%D1%96%D1%82%D0%BD%D0%B5%D0%B2%D0%B0%209%2C%20%D0%A1%D0%B8%D0%BD%D0%B5%D0%BB%D1%8C%D0%BD%D0%B8%D0%BA%D0%BE%D0%B2%D0%B5%2C%20%D0%94%D0%BD%D1%96%D0%BF%D1%80%D0%BE%D0%BF%D0%B5%D1%82%D1%80%D0%BE%D0%B2%D1%81%D1%8C%D0%BA%D0%B0%20%D0%BE%D0%B1%D0%BB%D0%B0%D1%81%D1%82%D1%8C&z=17&hl=uk&output=embed"
                   width="100%" height="180"
                   style={{ border: 0, filter: 'grayscale(1) invert(0.85) contrast(1.1)' }}
                   allowFullScreen loading="lazy" referrerPolicy="no-referrer-when-downgrade"
@@ -819,7 +820,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
                     <p className="text-zinc-400 text-[11px] font-bold truncate">м. Синельникове, вул. Квітнева 9</p>
                   </div>
                   <a
-                    href="https://www.google.com/maps/dir/?api=1&destination=48.317541,35.513511"
+                    href="https://www.google.com/maps/dir/?api=1&destination=%D0%B2%D1%83%D0%BB%D0%B8%D1%86%D1%8F%20%D0%9A%D0%B2%D1%96%D1%82%D0%BD%D0%B5%D0%B2%D0%B0%209%2C%20%D0%A1%D0%B8%D0%BD%D0%B5%D0%BB%D1%8C%D0%BD%D0%B8%D0%BA%D0%BE%D0%B2%D0%B5%2C%20%D0%94%D0%BD%D1%96%D0%BF%D1%80%D0%BE%D0%BF%D0%B5%D1%82%D1%80%D0%BE%D0%B2%D1%81%D1%8C%D0%BA%D0%B0%20%D0%BE%D0%B1%D0%BB%D0%B0%D1%81%D1%82%D1%8C"
                     target="_blank" rel="noopener noreferrer"
                     className="bg-[#FFC300] px-3 py-1.5 rounded-lg text-black font-black text-[11px] uppercase tracking-widest hover:bg-white transition-colors shrink-0 flex items-center gap-1"
                   >

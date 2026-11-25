@@ -237,21 +237,21 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
       : [];
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white pb-20 md:pb-6 animate-in fade-in duration-500">
+    <div className="min-h-screen bg-zinc-950 text-white pb-20 lg:pb-6 animate-in fade-in duration-500">
       {/* Confirm dialog */}
       {confirmDialog}
 
       <header className="bg-zinc-900 border-b border-zinc-800 sticky top-0 z-50 shadow-md print:hidden">
         {/* Row 1: who is logged in, back to the site, log out */}
         <div className="max-w-[1800px] mx-auto flex items-center gap-2 md:gap-3 px-2 md:px-4 h-14">
-          <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden p-2 bg-zinc-800 rounded-lg text-zinc-300 hover:text-white" aria-label="Меню">
+          <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden p-2 bg-zinc-800 rounded-lg text-zinc-300 hover:text-white" aria-label="Меню">
             <Menu size={22} />
           </button>
           <h1 className="text-base md:text-lg font-black uppercase flex items-center gap-2 shrink-0">
             <Lock size={18} className="text-[#FFC300]" /> {isManager ? 'Менеджер' : 'Адмін'}
           </h1>
-          {/* phones: the open section */}
-          <span className="md:hidden flex items-center gap-1.5 min-w-0 bg-black/50 px-3 py-1.5 rounded-full border border-zinc-800">
+          {/* phones and tablets: the open section */}
+          <span className="lg:hidden flex items-center gap-1.5 min-w-0 bg-black/50 px-3 py-1.5 rounded-full border border-zinc-800">
             <span className="text-[#FFC300] shrink-0">{getTabIcon(activeTab)}</span>
             <span className="text-[11px] font-black uppercase truncate">{getTabLabel(activeTab)}</span>
           </span>
@@ -267,14 +267,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
           </button>
         </div>
 
-        {/* Row 2 (computer): every section is visible, wraps to a second line instead of being cut off */}
-        <nav className="hidden md:block border-t border-zinc-800/70">
-          <div className="max-w-[1800px] mx-auto px-4 py-2 flex flex-wrap 2xl:flex-nowrap gap-1">
+        {/* Row 2 (computer): every section in one line. Spacing, icons and letters shrink with the window —
+            the sizes are in index.css (.admin-tabs). Narrower than 1024 px the phone menu is used instead. */}
+        <nav className="hidden lg:block border-t border-zinc-800/70">
+          <div className="admin-tabs no-scrollbar max-w-[1800px] mx-auto py-2">
             {currentTabs.map(t => (
               <button
                 key={t}
                 onClick={() => setActiveTab(t)}
-                className={`h-9 px-3 rounded-lg font-bold text-xs uppercase whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+                className={`h-9 rounded-lg font-bold text-xs uppercase whitespace-nowrap transition-colors flex items-center shrink-0 ${
                   activeTab === t ? 'bg-[#FFC300] text-black' : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
                 }`}
               >
@@ -288,7 +289,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
 
       {/* Mobile Sidebar */}
       {isMobileMenuOpen && (
-        <div className="fixed inset-0 z-[100] md:hidden animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[100] lg:hidden animate-in fade-in duration-200">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
           <div className="absolute left-0 top-0 bottom-0 w-[280px] bg-zinc-900 border-r border-zinc-800 shadow-2xl flex flex-col animate-in slide-in-from-left duration-300">
             <div className="p-6 border-b border-zinc-800 flex justify-between items-center">
@@ -354,8 +355,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
         {isAdmin && activeTab === 'telegram' && <TelegramTab />}
       </main>
 
-      {/* Phones: the main sections at the bottom, the rest in "Ще" */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 border-t border-zinc-800 shadow-2xl print:hidden pb-[env(safe-area-inset-bottom)]">
+      {/* Phones and tablets: the main sections at the bottom, the rest in "Ще" */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 border-t border-zinc-800 shadow-2xl print:hidden pb-[env(safe-area-inset-bottom)]">
         <div className="grid grid-cols-5">
           {currentTabs.filter(t => ['orders', 'tyres', 'photos', 'categories'].includes(t)).map(t => (
             <button key={t} onClick={() => setActiveTab(t)}

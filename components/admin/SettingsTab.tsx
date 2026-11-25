@@ -9,7 +9,6 @@ import {
 import { supabase } from '../../supabaseClient';
 import { Supplier } from '../../types';
 import { PHONE_NUMBER_1, PHONE_NUMBER_2, MAP_DIRECT_LINK } from '../../constants';
-import ExcelImportPanel from './sync/ExcelImportPanel';
 import { normalizeProviderId, type AIProviderId } from '../../aiSeoClient';
 import { fetchAdminAiKeyStatus, saveAdminAiKeys } from '../../aiProxyClient';
 
@@ -782,11 +781,6 @@ const SettingsTab: React.FC = () => {
                <div className="space-y-6 animate-in slide-in-from-right-4">
                    <h4 className="text-lg font-bold text-white mb-4 flex items-center gap-2 pb-4 border-b border-zinc-800"><LayoutGrid className="text-[#FFC300]" size={20}/> Керування Складом та Імпортом</h4>
                    
-                   {/* EXCEL IMPORT SECTION */}
-                   <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-1 mb-6 ">
-                       <ExcelImportPanel suppliers={suppliers} />
-                   </div>
-
                    {/* SMART PHOTO MATCHING */}
                    <div className="mt-6 bg-black/30 p-6 rounded-xl border border-zinc-800">
                         <h4 className="text-lg font-bold text-white mb-2 flex items-center gap-2"><Wand2 size={18} className="text-[#FFC300]"/> Розумне завантаження фото</h4>

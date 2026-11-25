@@ -7,7 +7,6 @@ import StatsTab from './admin/StatsTab';
 import ArticlesTab from './admin/ArticlesTab';
 import SeoTab from './admin/SeoTab';
 import PromoTab from './admin/PromoTab';
-import SyncTab from './admin/SyncTab';
 import AiAssistantTab from './admin/AiAssistantTab';
 import CategoriesTab from './admin/CategoriesTab';
 import ReviewsTab from './admin/ReviewsTab';
@@ -215,7 +214,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
     const labels: Record<string, string> = {
       categories: 'Категорії', reviews: 'Відгуки',
       tyres: 'Товари', orders: 'Замовлення', promo: 'Маркетинг', sync: 'API / Синхр.',
-      seo: 'SEO', articles: 'Статті', settings: 'Налашт.', stats: 'Стат.',
+      seo: 'SEO', articles: 'Статті', settings: 'Налаштування', stats: 'Статистика',
       ai: 'AI Помічник', photos: 'Фото ШІ', seoai: 'SEO ШІ', telegram: 'Telegram',
     };
     return labels[tab] ?? tab;
@@ -232,7 +231,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
   };
 
   const currentTabs = isAdmin
-    ? ['orders', 'tyres', 'photos', 'categories', 'reviews', 'ai', 'promo', 'sync', 'seo', 'seoai', 'articles', 'stats', 'telegram', 'settings']
+    ? ['orders', 'tyres', 'photos', 'categories', 'reviews', 'ai', 'promo', 'seo', 'seoai', 'articles', 'stats', 'telegram', 'settings']
     : isManager
       ? ['orders', 'tyres', 'photos', 'categories', 'reviews', 'ai', 'promo', 'seo', 'seoai', 'articles', 'stats']
       : [];
@@ -244,7 +243,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
 
       <header className="bg-zinc-900 border-b border-zinc-800 sticky top-0 z-50 shadow-md print:hidden">
         {/* Row 1: who is logged in, back to the site, log out */}
-        <div className="max-w-7xl mx-auto flex items-center gap-2 md:gap-3 px-2 md:px-4 h-14">
+        <div className="max-w-[1800px] mx-auto flex items-center gap-2 md:gap-3 px-2 md:px-4 h-14">
           <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden p-2 bg-zinc-800 rounded-lg text-zinc-300 hover:text-white" aria-label="Меню">
             <Menu size={22} />
           </button>
@@ -270,7 +269,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
 
         {/* Row 2 (computer): every section is visible, wraps to a second line instead of being cut off */}
         <nav className="hidden md:block border-t border-zinc-800/70">
-          <div className="max-w-7xl mx-auto px-4 py-2 flex flex-wrap gap-1">
+          <div className="max-w-[1800px] mx-auto px-4 py-2 flex flex-wrap 2xl:flex-nowrap gap-1">
             {currentTabs.map(t => (
               <button
                 key={t}
@@ -339,7 +338,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
         </div>
       )}
 
-      <main className="max-w-7xl mx-auto p-2 md:p-4 print:hidden">
+      <main className="max-w-[1800px] mx-auto p-2 md:p-4 print:hidden">
         {isAdmin && activeTab === 'settings' && <SettingsTab />}
         {activeTab === 'tyres' && <TyresTab />}
         {activeTab === 'categories' && <CategoriesTab />}
@@ -349,7 +348,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
         {activeTab === 'articles' && <ArticlesTab />}
         {activeTab === 'seo' && <SeoTab />}
         {activeTab === 'promo' && <PromoTab />}
-        {isAdmin && activeTab === 'sync' && <SyncTab />}
         {activeTab === 'ai' && <AiAssistantTab />}
         {activeTab === 'photos' && <PhotoFinderTab />}
         {activeTab === 'seoai' && <SeoAiTab />}

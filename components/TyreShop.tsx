@@ -162,6 +162,8 @@ const TyreShop: React.FC<TyreShopProps> = ({
   // search runs 350 ms after the customer stops typing
   const [debouncedSearch, setDebouncedSearch] = useState('');
   useEffect(() => { const t = setTimeout(() => setDebouncedSearch(searchQuery), 350); return () => clearTimeout(t); }, [searchQuery]);
+  // statistics: which sections people open
+  useEffect(() => { if (activeCat) logAnalyticsEvent('page_view', undefined, `Розділ: ${activeCat.name}`); }, [activeCat?.id]);
   useEffect(() => { if (debouncedSearch.trim().length >= 3) logAnalyticsEvent('search', undefined, debouncedSearch.trim()); }, [debouncedSearch]);
   const [showOnlyInStock, setShowOnlyInStock] = useState(false);
 
@@ -774,7 +776,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
               {activeCat ? activeCat.name : activeCategory === 'hot' ? 'Акції' : activeCategory === 'fav' ? 'Обране' : <>Форсаж <span className="text-[#FFC300]">Синельникове</span></>}
             </h1>
 
-            <p className="text-zinc-400 text-sm md:text-base max-w-xl leading-relaxed line-clamp-2 md:line-clamp-none">
+            <p className={`${activeCat?.description ? '' : 'hidden md:block'} text-zinc-400 text-sm md:text-base max-w-xl leading-relaxed line-clamp-2 md:line-clamp-none`}>
               {activeCat?.description || <>
                 <span className="md:hidden"><span className="text-[#FFC300] font-bold">Шини, диски, АКБ, автотовари</span> в наявності. Самовивіз або Нова Пошта.</span>
                 <span className="hidden md:inline"><span className="text-[#FFC300] font-bold">Шини, диски, акумулятори та автотовари</span> в наявності.
@@ -782,7 +784,8 @@ const TyreShop: React.FC<TyreShopProps> = ({
               </>}
             </p>
 
-            <div className="flex flex-wrap gap-2">
+            {/* phones are in the header on phones — here only on bigger screens */}
+            <div className="hidden md:flex flex-wrap gap-2">
               <a href={shopPhoneLink} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 pl-1.5 pr-3 py-1.5 md:pl-2 md:pr-4 md:py-2 rounded-xl hover:border-[#FFC300] transition-all group active:scale-95">
                 <span className="w-8 h-8 md:w-10 md:h-10 bg-[#FFC300] rounded-lg flex items-center justify-center text-black group-hover:scale-110 transition-transform"><Phone size={16} /></span>
                 <span className="text-white font-black text-sm md:text-lg tracking-tight">{shopPhone}</span>

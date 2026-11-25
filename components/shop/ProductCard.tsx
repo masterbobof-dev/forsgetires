@@ -191,14 +191,14 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
             {onOrder ? (
               <span className="text-sm font-black text-zinc-300 leading-tight">Ціну<br className="sm:hidden" /> уточнюйте</span>
             ) : (
-            <div className="flex flex-col">
+            <div className="flex flex-col min-w-0">
               {hasDiscount && (
                 <span className="text-zinc-500 text-[11px] line-through decoration-red-500/50">
                   {formatPrice(tyre.old_price)}
                 </span>
               )}
-              <div className="flex items-baseline gap-1">
-                <span className="text-lg sm:text-xl font-black text-[#FFC300]">
+              <div className="flex items-baseline gap-1 min-w-0">
+                <span className={`${String(formatPrice(tyre.price)).length > 4 ? 'text-base' : 'text-lg'} sm:text-xl font-black text-[#FFC300] truncate`}>
                   {formatPrice(tyre.price)}
                 </span>
                 <span className="text-[11px] font-bold text-zinc-500 uppercase">грн</span>

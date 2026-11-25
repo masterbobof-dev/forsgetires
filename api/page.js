@@ -51,7 +51,8 @@ const PRODUCT_FIELDS = 'id,title,slug,price,image_url';
 
 async function build(pathname, query) {
   let cats = [];
-  try { cats = await rest('product_categories?select=id,name,slug,parent_id,kind,description,seo_title,seo_description,noindex&is_active=eq.true&order=sort_order'); } catch { /* ignore */ }
+  let allCats = [];
+  try { cats = allCats = await rest('product_categories?select=id,name,slug,parent_id,kind,description,seo_title,seo_description,noindex&is_active=eq.true&order=sort_order'); } catch { /* ignore */ }
   // only categories with goods in stock (same as the site menu), biggest first
   try {
     const counts = await rest('rpc/category_counts');
@@ -141,13 +142,14 @@ async function build(pathname, query) {
       content: `<h1>Хіти та акції</h1>${productList(items)}${navBlock(cats)}`,
     };
   }
-  const cat = slug && cats.find((c) => c.slug === slug);
+  // sections whose goods are all "on order" (e.g. car tyres) are hidden from the menu but are real pages
+  const cat = slug && (cats.find((c) => c.slug === slug) || allCats.find((c) => c.slug === slug));
   if (cat) {
-    const ids = subtreeIds(cats, cat.id);
+    const ids = subtreeIds(allCats.length ? allCats : cats, cat.id);
     let filter = `category_id.in.(${ids.join(',')})`;
     if (cat.kind === 'tyre' && !cat.parent_id) filter += ',category_id.is.null';
     const items = await rest(`tyres?select=${PRODUCT_FIELDS}&in_stock=not.is.false&or=(${encodeURIComponent(filter)})&order=on_order.asc,created_at.desc&limit=60`);
-    const parent = cat.parent_id && cats.find((c) => c.id === cat.parent_id);
+    const parent = cat.parent_id && (cats.find((c) => c.id === cat.parent_id) || allCats.find((c) => c.id === cat.parent_id));
     const name = parent ? `${parent.name} — ${cat.name}` : cat.name;
     const kids = cats.filter((c) => c.parent_id === cat.id);
     return {

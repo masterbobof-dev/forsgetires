@@ -1,0 +1,37 @@
+# Automatic checks:
+#  - on every pull request / push to main: type check, unit tests, build
+#  - after every production deploy on Vercel: the live site answers correctly (smoke test)
+name: checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+  deployment_status:
+
+jobs:
+  code:
+    if: github.event_name != 'deployment_status'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Unit tests
+        run: npm test
+      - name: Build
+        run: npm run build
+
+  live-site:
+    if: github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'Production'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Wait for the new version to go live
+        run: sleep 30
+      - name: Smoke test of the live site
+        run: node tests/smoke.mjs https://www.forsage-tires.com

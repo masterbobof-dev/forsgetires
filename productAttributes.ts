@@ -235,11 +235,11 @@ export const FILTER_PRESETS: Record<FilterPresetId, FilterPreset> = {
     txt('hose_d', 'Діаметр', 'мм', '10'),
   ] },
   brakes: { id: 'brakes', label: 'Гальмівна система (деталь, розташування)', fields: [
-    sel('brake_part', 'Деталь', [['pads', 'Колодки'], ['disc', 'Диск'], ['drum', 'Барабан'], ['cyl', 'Циліндр'], ['pipe', 'Трубка'], ['hose', 'Шланг'], ['cable', 'Трос'], ['caliper', 'Супорт'], ['kit', 'Ремкомплект']]),
+    sel('brake_part', 'Деталь', [['pads', 'Колодки'], ['disc', 'Диск'], ['drum', 'Барабан'], ['cyl', 'Циліндр'], ['pipe', 'Трубка'], ['hose', 'Шланг'], ['cable', 'Трос'], ['caliper', 'Супорт'], ['kit', 'Ремкомплект'], ['fluid', 'Гальмівна рідина'], ['regulator', 'Регулятор тиску'], ['bleed', 'Штуцер прокачки']]),
     sel('pos', 'Розташування', POS, 'chips'),
   ] },
   gaskets: { id: 'gaskets', label: 'Прокладки (місце)', fields: [
-    sel('gasket_place', 'Місце', [['head', 'ГБЦ'], ['valvecover', 'Клапанної кришки'], ['manifold', 'Колектора'], ['pan', 'Піддона'], ['exhaust', 'Приймальної труби'], ['throttle', 'Дроселя'], ['pump', 'Насоса'], ['thermostat', 'Термостата'], ['ring', 'Кільце']]),
+    sel('gasket_place', 'Місце', [['head', 'ГБЦ'], ['valvecover', 'Клапанної кришки'], ['manifold', 'Колектора'], ['pan', 'Піддона'], ['exhaust', 'Вихлопу / глушника'], ['throttle', 'Дроселя'], ['pump', 'Насоса'], ['thermostat', 'Термостата'], ['ring', 'Кільце'], ['engine_kit', 'Комплект двигуна'], ['intake', 'Впуску / ресивера'], ['gearbox', 'КПП / редуктора'], ['heater', 'Пічки'], ['carb', 'Карбюратора']]),
     KIT,
   ] },
   boots: { id: 'boots', label: 'Пильовики (місце)', fields: [

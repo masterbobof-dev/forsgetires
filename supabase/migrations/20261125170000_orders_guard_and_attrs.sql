@@ -1,0 +1,8 @@
+-- Applied live 2026-11-25
+-- 1) private.tyre_orders_sanitize (BEFORE INSERT on tyre_orders, skipped for staff):
+--    status forced to 'new', staff-only fields cleared, text lengths capped, phone must have >= 10 digits,
+--    anti-spam (5 orders / phone / 10 min, 40 / site / 10 min), item names and prices re-read from tyres.
+-- 2) private.bookings_guard: max 20 bookings / 10 min, text lengths capped.
+-- 3) auto_attrs_more: more patterns for gaskets (engine kit, intake, gearbox, heater, carb, exhaust words),
+--    brakes (fluid, pressure regulator, bleed screw, "р-к"), fresheners ("дезодорант" = spray), seals ("коленв").
+-- Full function bodies: see pg_get_functiondef in the live database.

@@ -324,7 +324,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
       setOrderSuccess(true);
       setQuickOrderProduct(null);
       setQuickOrderPhone('');
-    } catch (err) { setOrderError("Помилка при відправці замовлення"); } finally { setQuickOrderSending(false); }
+    } catch (err: any) { setOrderError(/Забагато|телефону|немає товарів/.test(err?.message || '') ? err.message : "Помилка при відправці замовлення. Спробуйте ще раз або зателефонуйте нам"); } finally { setQuickOrderSending(false); }
   };
 
   // --- LOGIC: FETCHING SETTINGS ---
@@ -643,7 +643,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
       }
       setOrderSuccess(true); 
       onCartChange([]);
-    } catch (err) { setOrderError("Помилка при відправці замовлення"); } finally { setOrderSending(false); }
+    } catch (err: any) { setOrderError(/Забагато|телефону|немає товарів/.test(err?.message || '') ? err.message : "Помилка при відправці замовлення. Спробуйте ще раз або зателефонуйте нам"); } finally { setOrderSending(false); }
   };
 
   const fetchNpCities = async (term: string) => {

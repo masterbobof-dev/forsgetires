@@ -1,0 +1,6 @@
+-- Applied live 2026-11-25: site health monitoring
+-- private.site_problems(): list of problems (program sync stale > 60 min or error, failed cron jobs in the last hour,
+--   >= 5 server function failures in the last hour, no backup today after 04:00 Kyiv, >= 10 browser errors in the last hour)
+-- private.health_watch(): hourly (cron "health-watch", minute 7); sends a Telegram alert to owners, at most once per 6 hours
+-- public.site_problems_service(): service_role only; used by the telegram-bot daily report (✅ / ⚠️ line)
+-- Browser errors are written by errorReporter.ts as analytics_events.event_type = 'js_error'.

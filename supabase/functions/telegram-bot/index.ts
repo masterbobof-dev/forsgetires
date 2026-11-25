@@ -145,6 +145,18 @@ const syncState = async () => {
   return min > 120 ? `\n⚠️ Синхронізація з програмою не оновлювалась ${Math.round(min / 60)} год.` : '';
 };
 
+const healthLine = async () => {
+  const { data } = await db.rpc('site_problems_service');
+  const p = (data as string[]) || [];
+  return p.length ? `\n\n⚠️ <b>Стан сайту:</b>\n• ${p.map(esc).join('\n• ')}` : '\n\n✅ Сайт працює без збоїв: обмін з програмою, резервна копія, фонові задачі.';
+};
+
+const alert = async (text: string) => {
+  const people = await recipients(true);
+  for (const p of people) await send(p.chat_id, String(text).slice(0, 3500));
+  return { sent: people.length };
+};
+
 const daily = async () => {
   const people = await recipients(true);
   const [{ count: waitingReviews }, { count: newOrders }] = await Promise.all([
@@ -153,7 +165,7 @@ const daily = async () => {
   ]);
   const text = (await summary(todayStart(), '📊 Підсумок дня', true)) +
     (newOrders ? `\n\n❗ Не оброблено нових замовлень: ${newOrders} — /orders` : '') +
-    (waitingReviews ? `\n💬 Відгуків чекають перевірки: ${waitingReviews}` : '') + (await syncState());
+    (waitingReviews ? `\n💬 Відгуків чекають перевірки: ${waitingReviews}` : '') + (await syncState()) + (await healthLine());
   for (const p of people) await send(p.chat_id, text);
   return { sent: people.length };
 };
@@ -349,6 +361,7 @@ Deno.serve(async (req) => {
       if (body.action === 'notify_order') return json(await notifyOrder(Number(body.id)));
       if (body.action === 'notify_review') return json(await notifyReview(Number(body.id)));
       if (body.action === 'daily') return json(await daily());
+      if (body.action === 'alert') return json(await alert(body.text));
       if (body.action === 'setup') return json(await setup());
       return json({ error: 'unknown action' }, 400);
     }

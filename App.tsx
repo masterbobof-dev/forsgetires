@@ -63,6 +63,18 @@ const App: React.FC = () => {
       console.error('Error saving cart to localStorage:', e);
     }
   }, [cartItems]);
+  // a saved cart can be days old: refresh prices / names / stock from the catalogue, drop goods that are gone
+  useEffect(() => {
+    const ids = cartItems.map(i => i.id);
+    if (!ids.length) return;
+    supabase.from('tyres').select('*').in('id', ids).then(({ data, error }) => {
+      if (error || !data) return;
+      setCartItems(prev => prev.flatMap(i => {
+        const fresh = (data as TyreProduct[]).find(p => p.id === i.id);
+        return fresh && fresh.in_stock !== false ? [{ ...fresh, quantity: i.quantity }] : [];
+      }));
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   /** Navigate inside the site, keeping real addresses (/account, /oferta ...) */

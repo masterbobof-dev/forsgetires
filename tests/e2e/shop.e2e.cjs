@@ -6,18 +6,7 @@
  * Run:  npm run build && npm run e2e
  */
 const assert = require('node:assert/strict');
-const { serveDist, launch, openShop, step, fixtures, actions } = require('./harness.cjs');
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-/** repeat a check until it passes (the page needs a moment after every click) */
-const until = async (fn, timeout = 8000) => {
-  const start = Date.now(); let last;
-  for (;;) {
-    try { return await fn(); } catch (e) { last = e; }
-    if (Date.now() - start > timeout) throw last;
-    await sleep(80);
-  }
-};
+const { serveDist, launch, openShop, step, fixtures, actions, until } = require('./harness.cjs');
 
 const cards = (page) => page.locator('article');
 const titles = (page) => page.locator('article h3').allTextContents().then((t) => t.map((s) => s.trim()));
@@ -447,6 +436,15 @@ const lists = async (browser, url) => {
     assert.ok(await modalTitle(page, 'Hankook Kinergy Eco2 K435 205/55 R16 91H').isVisible(), 'the product window stays open');
   });
 
+  await step(shop, S, 'favourite and compare inside the product window', async () => {
+    await ui.click(productWindow(page).getByRole('button', { name: 'В обране' }));
+    await until(async () => assert.ok(await productWindow(page).getByRole('button', { name: 'В обраному' }).isVisible()));
+    await ui.click(productWindow(page).getByRole('button', { name: 'Порівняти', exact: true }));
+    await until(async () => assert.ok(await productWindow(page).getByRole('button', { name: 'У порівнянні' }).isVisible()));
+    assert.deepEqual(await stored(page, 'forsage_favorites'), [1001]);
+    assert.deepEqual(await stored(page, 'forsage_compare'), [1001]);
+  });
+
   await step(shop, S, 'similar product replaces the window', async () => {
     await until(async () => assert.ok(await page.getByRole('heading', { name: 'Схожі пропозиції' }).isVisible()));
     await ui.click(productWindow(page).locator('button', { hasText: 'Laufenn i FIT Ice LW71' }).first());
@@ -510,6 +508,54 @@ const links = async (browser, url) => {
     });
     await shop.context.close();
   }
+};
+
+// ---------------------------------------------------------------------------------------------
+const homeBlocks = async (browser, url) => {
+  const all = ['banners', 'size_search', 'categories', 'hits', 'promos', 'benefits', 'reviews', 'articles'].map((type) => ({ type, enabled: true }));
+  const shop = await openShop(browser, url, { tables: (t) => t.settings.push({ key: 'home_blocks', value: JSON.stringify(all) }) });
+  const { page } = shop;
+  const ui = actions(shop);
+  const S = 'home';
+
+  await step(shop, S, 'all blocks of the home page', async () => {
+    await ui.goto(`${url}/`);
+    await expectCards(page, 60);
+    for (const name of ['Підбір шин за розміром', 'Каталог', 'Хіти та акції', 'Акції', 'Відгуки покупців']) {
+      await until(async () => assert.ok(await page.getByRole('heading', { name, exact: true }).isVisible(), `block "${name}"`));
+    }
+  });
+
+  await step(shop, S, 'tyre search by size', async () => {
+    const block = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Підбір шин за розміром' }) });
+    await ui.select(block.locator('select[aria-label="Ширина"]'), '205');
+    await ui.select(block.locator('select[aria-label="Висота"]'), '55');
+    await ui.select(block.locator('select[aria-label="Радіус"]'), 'R16');
+    await ui.click(block.getByRole('button', { name: 'Знайти шини' }));
+    await expectPath(page, '/katalog/shyny');
+    await expectCards(page, 3);
+    assert.equal(await page.locator('select[aria-label="Ширина"]').inputValue(), '205');
+  });
+
+  await step(shop, S, 'section tile', async () => {
+    await ui.click(page.getByRole('navigation', { name: 'Навігація' }).getByRole('button', { name: 'Головна' }));
+    await expectCards(page, 60);
+    const tiles = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Каталог', exact: true }) });
+    await ui.click(tiles.getByRole('button', { name: /Акумулятори/ }));
+    await expectPath(page, '/katalog/akumulyatory');
+    await expectCards(page, 4);
+  });
+
+  await step(shop, S, 'all hits link', async () => {
+    await ui.click(page.getByRole('navigation', { name: 'Навігація' }).getByRole('button', { name: 'Головна' }));
+    await expectCards(page, 60);
+    const hits = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Хіти та акції' }) });
+    await ui.click(hits.getByRole('button', { name: 'Усі' }));
+    await expectPath(page, '/katalog/akcii');
+    await expectCards(page, 5);
+  });
+
+  await shop.context.close();
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -643,7 +689,7 @@ const stockTracking = async (browser, url) => {
   const site = await serveDist();
   const browser = await launch();
   const only = process.argv[2];
-  const scenarios = { catalogue, purchase, lists, links, customer, phone, stockTracking };
+  const scenarios = { catalogue, purchase, lists, links, homeBlocks, customer, phone, stockTracking };
   let failed = 0;
   for (const [name, run] of Object.entries(scenarios)) {
     if (only && only !== name) continue;

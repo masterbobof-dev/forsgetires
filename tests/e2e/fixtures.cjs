@@ -123,8 +123,17 @@ const rpc = {
     const other = fake.tables.tyres.filter((p) => p.category_id === 115);
     return { analogs: same.slice(0, 3).map((p, i) => ({ ...light(p), reason: i === 0 ? 'cross' : 'volume' })), companions: other.slice(0, 2).map(light), approvals: me.auto_approvals || [] };
   },
+  // purchase price: kept privately, staff read it through this function
+  tyre_cost: ({ p_id }) => (p_id === 1001 ? 2100 : null),
   is_staff: (_args, fake) => !!fake.user && fake.user.email === 'owner@test.ua',
   is_admin: (_args, fake) => !!fake.user && fake.user.email === 'owner@test.ua',
+};
+
+/** edge functions the admin panel calls */
+const functions = {
+  'ai-proxy': (body) => (body.mode === 'image_search'
+    ? { ok: true, data: [0, 1, 2].map((i) => ({ imageUrl: svg(['#0f766e', '#1d4ed8', '#be123c'][i], `AI${i}`), title: `Знайдене фото ${i}` })) }
+    : { ok: true, text: '' }),
 };
 
 /** fake signed-in session for localStorage (the site reads it without asking the server) */
@@ -135,4 +144,4 @@ const session = (email, id = 'user-1') => {
   return { user, storageKey: 'sb-zzxueclhkhvwdmxflmyx-auth-token', value: JSON.stringify({ access_token, refresh_token: 'r', token_type: 'bearer', expires_in: 3600, expires_at: 4102444800, user }) };
 };
 
-module.exports = { tables, rpc, session, svg, categories, products };
+module.exports = { tables, rpc, functions, session, svg, categories, products };

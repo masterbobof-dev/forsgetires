@@ -98,12 +98,13 @@ const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers
 
 /**
  * @param tables  { tableName: rows[] }
- * @param rpc     { fnName: (args, fake) => any }
+ * @param rpc       { fnName: (args, fake) => any }           — database functions
+ * @param functions { name: (body, fake) => any }             — edge functions
  * @param user    signed-in user for /auth/v1/user (or null)
  */
-const createFake = ({ tables = {}, rpc = {}, user = null } = {}) => {
+const createFake = ({ tables = {}, rpc = {}, functions = {}, user = null } = {}) => {
   const fake = {
-    tables, rpc, user,
+    tables, rpc, functions, user,
     /** every request the site made: { method, path, query, body } */
     log: [],
     /** rows the site inserted, per table */
@@ -144,7 +145,10 @@ const createFake = ({ tables = {}, rpc = {}, user = null } = {}) => {
       return json({});
     }
     // --- edge functions ---
-    if (url.pathname.startsWith('/functions/v1/')) return json({});
+    if (url.pathname.startsWith('/functions/v1/')) {
+      const handler = fake.functions[url.pathname.split('/').pop()];
+      return json(handler ? await handler(body || {}, fake) : {});
+    }
     // --- storage (photos are data: links in the fixtures) ---
     if (url.pathname.startsWith('/storage/v1/')) return json({});
 

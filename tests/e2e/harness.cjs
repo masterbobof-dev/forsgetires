@@ -54,7 +54,7 @@ const NP = {
 const openShop = async (browser, baseUrl, opts = {}) => {
   const tables = fixtures.tables();
   if (opts.tables) opts.tables(tables);
-  const fake = createFake({ tables, rpc: { ...fixtures.rpc }, user: opts.user ? opts.user.user : null });
+  const fake = createFake({ tables, rpc: { ...fixtures.rpc }, functions: { ...fixtures.functions }, user: opts.user ? opts.user.user : null });
   const context = await browser.newContext({
     ...(opts.device ? devices[opts.device] : { viewport: opts.viewport || { width: 1366, height: 900 } }),
     locale: 'uk-UA', timezoneId: 'Europe/Kyiv',
@@ -128,7 +128,19 @@ const actions = (shop) => {
   };
 };
 
-let stepNo = 0;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** repeat a check until it passes (the page needs a moment after every click) */
+const until = async (fn, timeout = 8000) => {
+  const start = Date.now(); let last;
+  for (;;) {
+    try { return await fn(); } catch (e) { last = e; }
+    if (Date.now() - start > timeout) throw last;
+    await sleep(80);
+  }
+};
+
+/** steps are numbered inside their scenario, so a scenario run alone writes the same file names as in a full run */
+const stepNo = {};
 /** one named step of a scenario; with E2E_SNAP_DIR it also records what the customer sees */
 const step = async (shop, scenario, name, fn) => {
   const label = `${scenario} › ${name}`;
@@ -136,7 +148,7 @@ const step = async (shop, scenario, name, fn) => {
     await fn();
     await settle(shop);
     if (shop.errors.length) throw new Error(`JavaScript error on the page: ${shop.errors.join(' | ')}`);
-    if (SNAP_DIR) await snapshot(shop, `${scenario}-${String(++stepNo).padStart(2, '0')}-${name}`.replace(/[^\wа-яіїєґ-]+/gi, '_'));
+    if (SNAP_DIR) { stepNo[scenario] = (stepNo[scenario] || 0) + 1; await snapshot(shop, `${scenario}-${String(stepNo[scenario]).padStart(2, '0')}-${name}`.replace(/[^\wа-яіїєґ-]+/gi, '_')); }
     console.log(`  ✓ ${label}`);
   } catch (e) {
     fs.mkdirSync(ARTIFACTS, { recursive: true });
@@ -160,6 +172,8 @@ const snapshot = async (shop, name) => {
     canonical: document.querySelector('link[rel="canonical"]')?.getAttribute('href') || '',
     robots: document.querySelector('meta[name="robots"]')?.getAttribute('content') || '',
     scrollY: Math.round(window.scrollY),
+    // the browser's Back list: a product opened in a new entry or in place of the current one
+    history: `${history.length} ${JSON.stringify(history.state)}`,
     headerH: getComputedStyle(document.documentElement).getPropertyValue('--header-h').trim(),
     // inner scroll positions (side panels, rows of chips, windows)
     scrolls: [...document.querySelectorAll('#root *')].filter((e) => e.scrollTop || e.scrollLeft).map((e) => `${e.tagName.toLowerCase()}.${String(e.className).slice(0, 40)} top=${e.scrollTop} left=${e.scrollLeft}`),
@@ -172,4 +186,4 @@ const snapshot = async (shop, name) => {
   await page.screenshot({ path: path.join(SNAP_DIR, `${name}.png`), animations: 'disabled' });
 };
 
-module.exports = { serveDist, launch, openShop, settle, actions, step, fixtures, SNAP_DIR };
+module.exports = { serveDist, launch, openShop, settle, actions, step, until, sleep, fixtures, SNAP_DIR };

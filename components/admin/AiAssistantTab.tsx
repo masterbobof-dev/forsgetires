@@ -43,7 +43,7 @@ const AiAssistantTab: React.FC = () => {
       const status = await fetchAdminAiKeyStatus();
       setAiKeyStatus(status);
     } catch {
-      setAiKeyStatus({ hasGemini: false, hasOpenai: false, hasGroq: false });
+      setAiKeyStatus({ hasGemini: false, hasOpenai: false, hasGroq: false, hasCustom: false, hasSerper: false });
     }
     setAiSettingsReady(true);
   }, []);

@@ -60,6 +60,12 @@ async function build(pathname, query) {
     cats = cats.map((c) => ({ ...c, available: total(c) })).filter((c) => c.available > 0).sort((a, b) => b.available - a.available);
   } catch { /* keep all */ }
 
+  // --- an address that does not exist ---
+  if (pathname === '/404') {
+    return { status: 404, noindex: true, title: `Сторінку не знайдено | ${SHOP_NAME}`, description: `Каталог інтернет-магазину. ${DELIVERY}`, url: `${SITE_URL}/`,
+      content: `<h1>Сторінку не знайдено</h1><p>Такої сторінки немає. Перейдіть до каталогу:</p>${navBlock(cats)}` };
+  }
+
   // --- articles ---
   if (pathname === '/statti' || pathname.startsWith('/statti/')) {
     const id = (pathname.match(/^\/statti\/(\d+)/) || [])[1];
@@ -115,7 +121,10 @@ async function build(pathname, query) {
         content: `<h1>${esc(custom.title)}</h1>${paragraphs(custom.content)}${navBlock(cats)}`,
       };
     }
+    // questions and answers for Google's results page
+    const qa = pathname === '/faq' ? i.body.map((b) => b.match(/^(.+?\?)\s+(.+)$/)).filter(Boolean) : [];
     return {
+      ld: qa.length ? { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: qa.map((m) => ({ '@type': 'Question', name: m[1], acceptedAnswer: { '@type': 'Answer', text: m[2] } })) } : undefined,
       title: `${i.title} — інтернет-магазин ${SHOP_NAME}`, description: i.description, url: SITE_URL + pathname,
       content: `<h1>${esc(i.title)}</h1><p>${esc(i.description)}</p>${i.body.map((b) => `<p>${esc(b)}</p>`).join('')}${navBlock(cats)}`,
     };

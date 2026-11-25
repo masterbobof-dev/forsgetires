@@ -53,8 +53,12 @@
       "destination": "/api/page?path=/:city"
     },
     {
-      "source": "/((?!api/|assets/).*)",
+      "source": "/:app(admin|account|oferta|privacy)",
       "destination": "/app.html"
+    },
+    {
+      "source": "/((?!api/|assets/).*)",
+      "destination": "/api/page?path=/404"
     }
   ],
   "redirects": [

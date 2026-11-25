@@ -948,10 +948,11 @@ const TyreShop: React.FC<TyreShopProps> = ({
                 <div className="space-y-2">
                   <h3 className="text-lg md:text-xl font-black text-white uppercase tracking-tight">Нічого не знайдено</h3>
                   <p className="text-zinc-500 text-sm max-w-xs mx-auto">
-                    {activeFilterCount || searchQuery ? 'Спробуйте змінити або скинути фільтри' : 'У цій категорії поки немає товарів. Зателефонуйте — підберемо під замовлення!'}
+                    {searchQuery ? <>За запитом «{searchQuery}» нічого немає. Спробуйте коротше — одне-два слова або артикул, чи зателефонуйте: підберемо й привеземо під замовлення.</> : activeFilterCount ? 'Спробуйте змінити або скинути фільтри' : 'У цій категорії поки немає товарів. Зателефонуйте — підберемо під замовлення!'}
                   </p>
                 </div>
                 <div className="flex flex-wrap justify-center gap-2">
+                  {searchQuery && activeCategory !== 'all' && <button onClick={() => { const q = searchQuery; changeCategory('all'); setTimeout(() => setSearchQuery(q), 50); }} className="bg-[#FFC300] text-black font-black px-6 py-3 rounded-xl hover:bg-white transition-all">Шукати в усіх розділах</button>}
                   {(activeFilterCount > 0 || searchQuery) && <button onClick={resetFilters} className="bg-white text-black font-black px-6 py-3 rounded-xl hover:bg-[#FFC300] transition-all">Скинути фільтри</button>}
                   <a href={shopPhoneLink} className="bg-zinc-800 text-white font-black px-6 py-3 rounded-xl hover:bg-zinc-700 transition-all flex items-center gap-2"><Phone size={16} /> {shopPhone}</a>
                 </div>

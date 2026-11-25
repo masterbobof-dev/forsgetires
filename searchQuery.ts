@@ -33,6 +33,28 @@ const BRAND_ALIASES: Record<string, string> = {
   'мотюль': 'motul', 'ліквімолі': 'liqui moly', 'ліквімолі ': 'liqui moly',
 };
 
+/**
+ * The catalogue mixes Russian and Ukrainian names, so a word is searched together with its twin:
+ * "масло" also finds "олива", "тормозные" finds "гальмівні". Word roots, so any ending matches.
+ */
+const TWINS: string[][] = [
+  ['масл', 'олив'], ['тормоз', 'гальм'], ['свеч', 'свіч'], ['фильтр', 'фільтр'], ['воздуш', 'повітр'], ['топлив', 'палив'],
+  ['ремен', 'ремін'], ['подшипник', 'підшипник'], ['пыльник', 'пильник', 'пильовик'], ['рулев', 'рульов', 'кермов'], ['шаров', 'кульов'],
+  ['стойк', 'стійк'], ['щетк', 'щітк', 'дворник', 'склоочис'], ['охлажд', 'охолодж'], ['жидкост', 'рідин'], ['омыват', 'омивач'],
+  ['аккумулятор', 'акумулятор'], ['зажиган', 'запалюв'], ['сцеплен', 'зчеплен'], ['ступиц', 'маточин'], ['рычаг', 'важіл', 'важел'],
+  ['глушител', 'глушник'], ['зеркал', 'дзеркал'], ['стекл', 'скло'], ['провод', 'дрот', 'дріт'], ['предохранител', 'запобіжник'],
+  ['смазк', 'мастил', 'змазк'], ['краск', 'фарб'], ['коврик', 'килимк'], ['чехл', 'чохл'], ['двигател', 'двигун'], ['цепь', 'ланцюг'],
+  ['кольц', 'кільц'], ['очистител', 'очисник'], ['радиатор', 'радіатор'], ['крышк', 'кришк'], ['лампочк', 'лампа', 'ламп'],
+  ['левый', 'левая', 'лівий', 'ліва'], ['правый', 'правая', 'правий', 'права'], ['передн', 'передн'], ['насос', 'помпа'],
+  ['клемм', 'клем'], ['зарядн', 'зарядн'], ['пружин', 'пружин'], ['опор', 'опор'], ['прокладк', 'прокладк'],
+];
+/** other spellings of a search word (roots), empty if the word has no twin */
+export const twinsOf = (word: string): string[] => {
+  const w = word.toLowerCase();
+  const group = TWINS.find(g => g.some(r => w.startsWith(r) || (r.length >= 5 && w.length >= 4 && r.startsWith(w))));
+  return group ? [...new Set(group)].filter(r => !w.startsWith(r) || r.length < w.length) : [];
+};
+
 // Words that don't help to find anything ("шина 205/55 r16" → only the size matters)
 const STOP_WORDS = new Set(['шина', 'шини', 'шин', 'резина', 'гума', 'покришка', 'купити', 'для', 'на', 'ціна', 'диск', 'диски', 'акумулятор', 'акб']);
 
@@ -85,7 +107,7 @@ export const searchFilters = (s: ParsedSearch): string[] => {
     return filters;
   }
   for (const t of s.tokens) {
-    filters.push([like('title', t), like('manufacturer', t), like('catalog_number', t), like('product_number', t), like('search_numbers', t.toUpperCase().replace(/[^0-9A-ZА-ЯІЇЄҐ]/g, '') || t)].join(','));
+    filters.push([like('title', t), ...twinsOf(t).map(r => like('title', r)), like('manufacturer', t), like('catalog_number', t), like('product_number', t), like('search_numbers', t.toUpperCase().replace(/[^0-9A-ZА-ЯІЇЄҐ]/g, '') || t)].join(','));
   }
   if (s.width && s.height) {
     filters.push([like('title', `${s.width}/${s.height}`), like('title', `${s.width} ${s.height}`), like('title', `${s.width}x${s.height}`)].join(','));

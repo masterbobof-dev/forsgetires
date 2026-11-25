@@ -43,7 +43,7 @@ export default async function handler(req, res) {
   const season = SEASON_UA[product.season] ? `${SEASON_UA[product.season]} шина. ` : '';
   const description = (product.seo_description || tplDesc || stripHtml(product.description) ||
     (onOrder ? `${product.title} — під замовлення, ціну і термін постачання уточнюйте у менеджера. ` : `${season}Купити ${product.title} за ${price} грн. `) + `Самовивіз у Синельниковому або доставка Новою Поштою по Україні.`).slice(0, 300);
-  const image = product.image_url || `${SITE_URL}/favicon.svg`;
+  const image = product.image_url || `${SITE_URL}/og.jpg`;
 
   html = html.replace(/<title>[\s\S]*?<\/title>/, `<title>${esc(title)}</title>`);
   html = setTag(html, /<meta name="description"[^>]*>/, `<meta name="description" content="${esc(description)}" />`);

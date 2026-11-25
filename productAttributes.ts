@@ -6,7 +6,8 @@
 import { ProductCategory, getRootOf } from './categories';
 import type { TyreProduct } from './types';
 
-export type FilterPresetId = 'batteries' | 'wheels' | 'oils' | 'lamps' | 'wipers' | 'coolant' | 'brakefluid' | 'fuses' | 'filters' | 'belts';
+export type FilterPresetId = 'batteries' | 'wheels' | 'oils' | 'lamps' | 'wipers' | 'coolant' | 'brakefluid' | 'fuses' | 'filters' | 'belts'
+  | 'terminals' | 'ignition' | 'fresheners' | 'seals' | 'clamps' | 'bearings' | 'gloves' | 'shocks' | 'relays' | 'fasteners' | 'hoses' | 'brakes' | 'gaskets' | 'boots' | 'jacks' | 'cables';
 
 export interface AttrOption { value: string; label: string; short?: string }
 
@@ -30,6 +31,13 @@ export interface FilterPreset {
   label: string;
   fields: AttrField[];
 }
+
+/** select field from [value, label] pairs */
+const sel = (key: string, label: string, pairs: [string, string][], filter: AttrField['filter'] = 'select', onCard = true): AttrField =>
+  ({ key, label, type: 'select', filter, onCard, options: pairs.map(([value, l]) => ({ value, label: l, short: l })) });
+const txt = (key: string, label: string, unit = '', placeholder = ''): AttrField => ({ key, label, type: 'text', unit: unit || undefined, placeholder, filter: 'select', onCard: true });
+const POS: [string, string][] = [['front', 'Передній'], ['rear', 'Задній']];
+const KIT = sel('pack', 'Комплект', [['kit', 'Комплект']], 'none');
 
 const opts = (values: string[], unit = ''): AttrOption[] => values.map(v => ({ value: v, label: `${v}${unit}` }));
 
@@ -171,6 +179,84 @@ export const FILTER_PRESETS: Record<FilterPresetId, FilterPreset> = {
       { key: 'belt_size', label: 'Розмір', type: 'text', placeholder: '6PK1198', filter: 'select', onCard: true },
     ],
   },
+  terminals: { id: 'terminals', label: 'Клеми АКБ (полюс, матеріал)', fields: [
+    sel('term_pole', 'Полюс', [['pair', 'Комплект (+ і −)'], ['plus', 'Плюс (+)'], ['minus', 'Мінус (−)']], 'chips'),
+    sel('material', 'Матеріал', [['brass', 'Латунь'], ['lead', 'Свинець'], ['zinc', 'Цинк'], ['alu', 'Алюміній'], ['copper', 'Мідь']]),
+    sel('term_kind', 'Призначення', [['wire', 'Для проводів']], 'none'),
+  ] },
+  ignition: { id: 'ignition', label: 'Запалювання (вид, ключ свічки, клапани)', fields: [
+    sel('ign_type', 'Вид', [['plug', 'Свічка запалювання'], ['glow', 'Свічка розжарювання'], ['wires', 'Проводи'], ['coil', 'Котушка'], ['rotor', 'Бігунок'], ['cap', 'Кришка трамблера'], ['lock', 'Замок запалювання'], ['module', 'Модуль']]),
+    { ...sel('plug_key', 'Ключ свічки', [['16', '16 мм'], ['21', '21 мм']], 'chips'), hint: 'Розмір головки під свічковий ключ' },
+    sel('valves', 'Двигун', [['8', '8 клапанів'], ['16', '16 клапанів']]),
+    sel('plug_metal', 'Електрод', [['iridium', 'Іридій'], ['platinum', 'Платина']]),
+    sel('plug_for', 'Для', [['moto', 'Мото / скутер']], 'none'),
+    KIT,
+  ] },
+  fresheners: { id: 'fresheners', label: 'Ароматизатори (вид)', fields: [
+    sel('scent_form', 'Вид', [['hanging', 'Підвіска'], ['liquid', 'Рідкий (флакон)'], ['can', 'Консерва'], ['spray', 'Спрей'], ['vent', 'На обдув'], ['bag', 'Мішечок'], ['dash', 'На панель']]),
+  ] },
+  seals: { id: 'seals', label: 'Сальники (місце, розмір)', fields: [
+    sel('seal_place', 'Місце', [['valve', 'Клапанів'], ['crank', 'Колінвала'], ['cam', 'Розподілвала'], ['axle', 'Півосі'], ['hub', 'Маточини'], ['gearbox', 'КПП / редуктора']]),
+    txt('seal_size', 'Розмір', 'мм', '35×57×9'),
+    KIT,
+  ] },
+  clamps: { id: 'clamps', label: 'Хомути (вид, розмір)', fields: [
+    sel('clamp_type', 'Вид', [['worm', 'Черв\'ячний'], ['power', 'Силовий'], ['plastic', 'Пластиковий'], ['exhaust', 'Глушника'], ['cv', 'Пильовика ШРУСа']]),
+    txt('clamp_size', 'Розмір', 'мм', '20–32'),
+  ] },
+  bearings: { id: 'bearings', label: 'Підшипники (вид, номер)', fields: [
+    sel('bearing_type', 'Вид', [['hub', 'Маточини'], ['release', 'Вижимний'], ['strut', 'Опорний'], ['ball', 'Кульковий']]),
+    txt('bearing_no', 'Номер', '', '6204'),
+    sel('bearing_seal', 'Захист', [['2RS', '2RS (гума)'], ['ZZ', 'ZZ (метал)']]),
+    sel('pos', 'Розташування', POS),
+  ] },
+  gloves: { id: 'gloves', label: 'Рукавички (розмір, покриття)', fields: [
+    txt('glove_size', 'Розмір', '', '10'),
+    sel('coating', 'Покриття', [['nitrile', 'Нітрил'], ['latex', 'Латекс'], ['pvc', 'ПВХ'], ['pu', 'Поліуретан']]),
+  ] },
+  shocks: { id: 'shocks', label: 'Амортизатори (вид, розташування)', fields: [
+    sel('shock_type', 'Вид', [['shock', 'Амортизатор'], ['oil', 'Масляний'], ['gasoil', 'Газомасляний'], ['trunk', 'Багажника / капота'], ['spring', 'Пружина']]),
+    sel('pos', 'Розташування', POS, 'chips'),
+  ] },
+  relays: { id: 'relays', label: 'Реле (контакти, струм, напруга)', fields: [
+    sel('relay_for', 'Призначення', [['universal', 'Універсальне'], ['turn', 'Поворотів'], ['wiper', 'Двірників']]),
+    txt('contacts', 'Контактів', '', '4'),
+    txt('amp', 'Струм', 'A', '30'),
+    { key: 'voltage', label: 'Напруга', type: 'select', filter: 'select', onCard: true, options: opts(['12', '24'], 'V') },
+  ] },
+  fasteners: { id: 'fasteners', label: 'Метизи (вид, різьба, ключ)', fields: [
+    sel('fast_type', 'Вид', [['bolt', 'Болт'], ['nut', 'Гайка'], ['stud', 'Шпилька'], ['washer', 'Шайба']], 'chips'),
+    txt('thread', 'Різьба', '', 'M12×1.5'),
+    txt('key_size', 'Ключ', 'мм', '17'),
+    sel('fast_for', 'Для', [['wheel', 'Колісні']], 'none'),
+  ] },
+  hoses: { id: 'hoses', label: 'Шланги (призначення, діаметр)', fields: [
+    sel('hose_for', 'Призначення', [['fuel', 'Паливний'], ['gas', 'Газовий'], ['brake', 'Гальмівний'], ['vacuum', 'Вакуумний'], ['universal', 'Універсальний']]),
+    txt('hose_d', 'Діаметр', 'мм', '10'),
+  ] },
+  brakes: { id: 'brakes', label: 'Гальмівна система (деталь, розташування)', fields: [
+    sel('brake_part', 'Деталь', [['pads', 'Колодки'], ['disc', 'Диск'], ['drum', 'Барабан'], ['cyl', 'Циліндр'], ['pipe', 'Трубка'], ['hose', 'Шланг'], ['cable', 'Трос'], ['caliper', 'Супорт'], ['kit', 'Ремкомплект']]),
+    sel('pos', 'Розташування', POS, 'chips'),
+  ] },
+  gaskets: { id: 'gaskets', label: 'Прокладки (місце)', fields: [
+    sel('gasket_place', 'Місце', [['head', 'ГБЦ'], ['valvecover', 'Клапанної кришки'], ['manifold', 'Колектора'], ['pan', 'Піддона'], ['exhaust', 'Приймальної труби'], ['throttle', 'Дроселя'], ['pump', 'Насоса'], ['thermostat', 'Термостата'], ['ring', 'Кільце']]),
+    KIT,
+  ] },
+  boots: { id: 'boots', label: 'Пильовики (місце)', fields: [
+    sel('boot_place', 'Місце', [['cv', 'ШРУСа'], ['rack', 'Рульової рейки'], ['shock', 'Амортизатора'], ['tie', 'Наконечника'], ['ball', 'Кульової опори'], ['caliper', 'Супорта'], ['gear', 'Куліси КПП']]),
+    sel('boot_side', 'ШРУС', [['outer', 'Зовнішній'], ['inner', 'Внутрішній']]),
+  ] },
+  jacks: { id: 'jacks', label: 'Домкрати та компресори', fields: [
+    sel('tool_kind', 'Вид', [['jack', 'Домкрат'], ['compressor', 'Компресор'], ['gauge', 'Манометр'], ['wrench', 'Ключ балонний']], 'chips'),
+    sel('jack_type', 'Тип домкрата', [['bottle', 'Гідравлічний'], ['trolley', 'Підкатний'], ['scissor', 'Ромбовий']]),
+    txt('load_t', 'Вантажопідйомність', 'т', '2'),
+    txt('flow', 'Продуктивність', 'л/хв', '35'),
+  ] },
+  cables: { id: 'cables', label: 'Троси (вид, навантаження, довжина)', fields: [
+    sel('cable_kind', 'Вид', [['tow', 'Буксирувальний'], ['handbrake', 'Ручного гальма'], ['clutch', 'Зчеплення'], ['gas', 'Газу'], ['speedo', 'Спідометра'], ['hood', 'Капота']]),
+    txt('load_t', 'Навантаження', 'т', '3'),
+    txt('len_m', 'Довжина', 'м', '5'),
+  ] },
 };
 
 export const PRESET_OPTIONS: { value: '' | FilterPresetId; label: string }[] = [
@@ -178,7 +264,7 @@ export const PRESET_OPTIONS: { value: '' | FilterPresetId; label: string }[] = [
   { value: 'batteries', label: FILTER_PRESETS.batteries.label },
   { value: 'wheels', label: FILTER_PRESETS.wheels.label },
   { value: 'oils', label: FILTER_PRESETS.oils.label },
-  ...(['lamps', 'wipers', 'coolant', 'brakefluid', 'fuses', 'filters', 'belts'] as FilterPresetId[]).map(id => ({ value: id, label: FILTER_PRESETS[id].label })),
+  ...(['lamps', 'wipers', 'coolant', 'brakefluid', 'fuses', 'filters', 'belts', 'terminals', 'ignition', 'fresheners', 'seals', 'clamps', 'bearings', 'gloves', 'shocks', 'relays', 'fasteners', 'hoses', 'brakes', 'gaskets', 'boots', 'jacks', 'cables'] as FilterPresetId[]).map(id => ({ value: id, label: FILTER_PRESETS[id].label })),
 ];
 
 /** The preset of a category: its own, or inherited from the top-level category. */

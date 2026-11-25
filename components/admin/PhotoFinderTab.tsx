@@ -314,7 +314,7 @@ const LaunchPanel: React.FC<{ onProgress: () => void }> = ({ onProgress }) => {
       <div className="grid sm:grid-cols-[1fr_150px_auto] gap-3 items-end">
         <label className="text-xs text-zinc-400">Категорія
           <select value={category} onChange={e => setCategory(e.target.value)} className={field}>
-            <option value="">Усі категорії — {all} без фото</option>
+            <option value="">Усі категорії — ще не шукали: {all}</option>
             {roots.map(r => (
               <optgroup key={r.id} label={r.name}>
                 <option value={r.id}>{r.name} — усе ({total(r.id)})</option>
@@ -323,6 +323,7 @@ const LaunchPanel: React.FC<{ onProgress: () => void }> = ({ onProgress }) => {
               </optgroup>
             ))}
           </select>
+          <span className="block mt-1 text-[11px] text-zinc-500">Числа — товари, для яких ШІ ще не шукав фото. Де вже шукав і не знайшов, повторно не шукає.</span>
         </label>
         <label className="text-xs text-zinc-400">Скільки товарів
           <select value={amount} onChange={e => setAmount(e.target.value)} className={field}>
@@ -464,7 +465,7 @@ const PhotoFinderTab: React.FC = () => {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {stat('чекають вашої перевірки', queueCount, 'review', true)}
         {stat('товарів уже з фото від ШІ', stats.withAuto, 'auto')}
-        {stat('товарів ще без фото', stats.without, 'without')}
+        {stat('усього без фото (разом із тими, де не знайдено)', stats.without, 'without')}
         {stat('гарного фото не знайдено', notFound, 'notfound')}
       </div>
 

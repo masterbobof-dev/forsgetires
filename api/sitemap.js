@@ -12,7 +12,7 @@ const urlTag = (loc, { lastmod, changefreq, priority }) =>
 export default async function handler(req, res) {
   try {
     let categories = [];
-    try { categories = await rest('product_categories?select=slug&is_active=eq.true&order=sort_order'); } catch { /* table missing */ }
+    try { categories = await rest('product_categories?select=slug&is_active=eq.true&noindex=is.false&order=sort_order'); } catch { /* table missing */ }
     const products = await restAll('tyres?select=id,title,slug,created_at&in_stock=not.is.false&order=id');
 
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';

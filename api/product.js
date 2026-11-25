@@ -2,7 +2,7 @@
 // <title>, description, canonical link, social preview (og:*) and Product structured
 // data already in the HTML — for Google and for link previews in Viber/Telegram/Facebook.
 import { SITE_URL, SHOP_NAME, rest, escapeXml as esc, productPath, parsePrice, stripHtml, SEASON_UA } from './_shop.js';
-import { loadAppHtml, setTag, setRootContent } from './_html.js';
+import { loadAppHtml, setTag, setRootContent, siteSettings, applySite, fillTemplate, findRedirect } from './_html.js';
 
 export default async function handler(req, res) {
   const raw = String(req.query.slug || '');
@@ -12,12 +12,16 @@ export default async function handler(req, res) {
   let product = null;
   if (id) {
     try {
-      const rows = await rest(`tyres?id=eq.${id}&select=id,title,description,seo_title,seo_description,price,old_price,manufacturer,image_url,in_stock,radius,season,slug,catalog_number,on_order,stock_quantity,program_product_id`);
+      const rows = await rest(`tyres?id=eq.${id}&select=id,title,description,seo_title,seo_description,price,old_price,manufacturer,category_id,image_url,in_stock,radius,season,slug,catalog_number,on_order,stock_quantity,program_product_id`);
       product = rows[0] || null;
     } catch { /* show the site anyway */ }
   }
 
+  const site = await siteSettings(rest);
+  html = applySite(html, site);
   if (!product) {
+    const to = await findRedirect(rest, `/p/${raw}`) || (id ? await findRedirect(rest, `/p/${id}`) : null);
+    if (to) { res.setHeader('Location', to); res.setHeader('Cache-Control', 'public, s-maxage=300'); return res.status(301).end(); }
     html = setTag(html, /<meta name="robots"[^>]*>/, '<meta name="robots" content="noindex, follow" />');
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'public, s-maxage=300');
@@ -27,9 +31,17 @@ export default async function handler(req, res) {
   const url = `${SITE_URL}${productPath(product)}`;
   const price = parsePrice(product.price);
   const onOrder = !!product.on_order;
-  const title = product.seo_title || (onOrder ? `${product.title} — під замовлення | ${SHOP_NAME}` : `${product.title} — ціна ${price} грн | ${SHOP_NAME}`);
+  // admin templates (SEO tab): own section's template first, then the general one
+  let cats = [];
+  try { cats = await rest('product_categories?select=id,parent_id,name,noindex'); } catch { /* none */ }
+  const chain = []; for (let c = cats.find((k) => k.id === product.category_id); c && chain.length < 5; c = cats.find((k) => k.id === c.parent_id)) chain.push(c);
+  const tpl = (kind) => [...chain.map((c) => site[`seo_tpl_${kind}_${c.id}`]), site[`seo_tpl_${kind}`]].find((t) => t && t.trim());
+  const vars = { 'назва': product.title, 'бренд': product.manufacturer || '', 'ціна': onOrder ? '' : String(price), 'артикул': product.catalog_number || '', 'категорія': chain[0]?.name || '', 'розділ': chain[chain.length - 1]?.name || '', 'місто': 'Синельникове', 'магазин': SHOP_NAME };
+  const tplTitle = tpl('title') && fillTemplate(tpl('title'), vars);
+  const tplDesc = tpl('desc') && fillTemplate(tpl('desc'), vars);
+  const title = product.seo_title || tplTitle || (onOrder ? `${product.title} — під замовлення | ${SHOP_NAME}` : `${product.title} — ціна ${price} грн | ${SHOP_NAME}`);
   const season = SEASON_UA[product.season] ? `${SEASON_UA[product.season]} шина. ` : '';
-  const description = (product.seo_description || stripHtml(product.description) ||
+  const description = (product.seo_description || tplDesc || stripHtml(product.description) ||
     (onOrder ? `${product.title} — під замовлення, ціну і термін постачання уточнюйте у менеджера. ` : `${season}Купити ${product.title} за ${price} грн. `) + `Самовивіз у Синельниковому або доставка Новою Поштою по Україні.`).slice(0, 300);
   const image = product.image_url || `${SITE_URL}/favicon.svg`;
 
@@ -44,6 +56,8 @@ export default async function handler(req, res) {
   html = setTag(html, /<meta name="twitter:title"[^>]*>/, `<meta name="twitter:title" content="${esc(product.title)}" />`);
   html = setTag(html, /<meta name="twitter:description"[^>]*>/, `<meta name="twitter:description" content="${esc(description)}" />`);
   html = setTag(html, /<meta name="twitter:image"[^>]*>/, `<meta name="twitter:image" content="${esc(image)}" />`);
+
+  if (chain.some((c) => c.noindex)) html = setTag(html, /<meta name="robots"[^>]*>/, '<meta name="robots" content="noindex, follow" />');
 
   const ld = {
     '@context': 'https://schema.org/',

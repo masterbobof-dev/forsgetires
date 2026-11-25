@@ -152,6 +152,61 @@ const saveCategories = async (body: any) => {
   return { saved };
 };
 
+
+/** AI mode (settings.seo_mode = 'ai'): fills ONLY empty Google titles/descriptions of products and categories
+ *  and publishes them right away. Never touches what staff wrote by hand, never writes product descriptions. */
+const autoSeo = async () => {
+  const { data: mode } = await db.from('settings').select('value').eq('key', 'seo_mode').maybeSingle();
+  if (String(mode?.value || 'manual') !== 'ai') return { skipped: 'manual mode' };
+  const out: any = { products: 0, categories: 0 };
+  const { data: items } = await db.from('tyres').select('id, title, manufacturer, catalog_number, attributes, product_categories(name)')
+    .neq('in_stock', false).eq('on_order', false).not('program_product_id', 'is', null).is('seo_auto_at', null)
+    .or('seo_title.is.null,seo_title.eq.').order('stock_quantity', { ascending: false }).limit(25);
+  if (items?.length) {
+    const input = items.map((p: any) => ({ id: p.id, name: p.title, brand: p.manufacturer || undefined, article: p.catalog_number || undefined,
+      category: p.product_categories?.name || undefined, specs: p.attributes && Object.keys(p.attributes).length ? p.attributes : undefined }));
+    const res = await gemini(`Ти — SEO-фахівець інтернет-магазину автотоварів. Для кожного товару напиши:
+"seo_title": заголовок для Google 45–65 символів: що це українською + бренд/модель/розмір/артикул з назви, наприкінці «купити» або «ціна»; без лапок і капсу;
+"seo_description": опис для Google 140–160 символів: що це і для чого, заклик купити, згадка «${CITY}» або «доставка по Україні».
+Заголовки різних товарів мають відрізнятися (додай об'єм, розмір чи артикул, якщо є).
+${RULES}
+Поверни JSON-масив {"id", "seo_title", "seo_description"} для кожного товару.
+Товари: ${JSON.stringify(input)}`);
+    const now = new Date().toISOString();
+    for (const r of Array.isArray(res) ? res : []) {
+      const id = Number(r.id);
+      if (!items.some((p: any) => p.id === id) || !r.seo_title) continue;
+      await db.from('tyres').update({ seo_title: String(r.seo_title).trim().slice(0, 90), seo_description: String(r.seo_description || '').trim().slice(0, 200) || null, seo_auto_at: now })
+        .eq('id', id).or('seo_title.is.null,seo_title.eq.');
+      out.products++;
+    }
+    // skipped ones are marked so the job moves on
+    await db.from('tyres').update({ seo_auto_at: now }).in('id', items.map((p: any) => p.id)).is('seo_auto_at', null);
+  }
+  const { data: cats } = await db.from('product_categories').select('id, name, parent_id, description, seo_title, seo_description')
+    .eq('is_active', true).or('seo_title.is.null,seo_title.eq.').limit(10);
+  if (cats?.length) {
+    const { data: all } = await db.from('product_categories').select('id, name');
+    const res = await gemini(`Ти — SEO-копірайтер інтернет-магазину автотоварів «Форсаж» (м. ${CITY}). Для кожної категорії напиши:
+"description": текст для сторінки категорії, 3–5 абзаців (700–1200 символів): що входить, як вибрати, на що звернути увагу; наприкінці — самовивіз у ${CITY} і доставка Новою Поштою;
+"seo_title": до 65 символів, напр. «Масляні фільтри — купити в ${CITY} | Форсаж»;
+"seo_description": 140–160 символів із закликом купити.
+${RULES}
+Поверни JSON-масив {"id", "description", "seo_title", "seo_description"}.
+Категорії: ${JSON.stringify(cats.map((c: any) => ({ id: c.id, name: c.name, parent: all?.find((x: any) => x.id === c.parent_id)?.name })))}`);
+    for (const r of Array.isArray(res) ? res : []) {
+      const c = cats.find((x: any) => x.id === Number(r.id));
+      if (!c || !r.seo_title) continue;
+      const upd: any = { seo_title: String(r.seo_title).trim() };
+      if (!c.seo_description && r.seo_description) upd.seo_description = String(r.seo_description).trim();
+      if (!c.description && r.description) upd.description = String(r.description).trim();
+      await db.from('product_categories').update(upd).eq('id', c.id);
+      out.categories++;
+    }
+  }
+  return out;
+};
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
   let body: any = {}; try { body = await req.json(); } catch { /* empty */ }
@@ -167,6 +222,11 @@ Deno.serve(async (req) => {
       const { data: sync } = await db.rpc('program_sync_state');
       if (!sync?.token || req.headers.get('x-sync-key') !== sync.token) return json({ error: 'forbidden' }, 403);
       return json(await generate({ n: 25 }));
+    }
+    if (body.action === 'auto_seo') {
+      const { data: sync } = await db.rpc('program_sync_state');
+      if (!sync?.token || req.headers.get('x-sync-key') !== sync.token) return json({ error: 'forbidden' }, 403);
+      return json(await autoSeo());
     }
     if (!(await staffEmail(req))) return json({ error: 'Лише для персоналу' }, 403);
     if (body.action === 'generate') return json(await generate(body));

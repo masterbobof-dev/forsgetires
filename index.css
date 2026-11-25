@@ -128,3 +128,37 @@ html, body { overflow-x: clip; overscroll-behavior-x: none; max-width: 100%; }
 
 /* No accidental zoom on phones: double-tap and pinch do not scale the page, text keeps its size when the phone is rotated */
 html { touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+/* Admin: the row of sections always fits in one line on a computer screen.
+   --t goes from 0 (window 1280 px wide) to 1 (1600 px and wider): spacing and icons grow smoothly with the window.
+   From 1024 to 1280 px there is room for the names only, so the icons are hidden.
+   Narrower than 1024 px the row is not shown at all — the phone menu is used. */
+.admin-tabs {
+  --t: clamp(0px, calc((100vw - 1280px) / 320), 1px);
+  display: flex;
+  flex-wrap: nowrap;
+  gap: calc(2px + 2 * var(--t));
+  padding-left: calc(8px + 8 * var(--t));
+  padding-right: calc(8px + 8 * var(--t));
+  overflow-x: auto; /* safety net: a longer name makes the row scroll, the page itself never gets wider */
+}
+.admin-tabs > button {
+  gap: calc(4px + 2 * var(--t));
+  padding-left: calc(4.5px + 7.5 * var(--t));
+  padding-right: calc(4.5px + 7.5 * var(--t));
+}
+.admin-tabs > button > svg {
+  width: calc(14px + 4 * var(--t));
+  height: calc(14px + 4 * var(--t));
+}
+@media (max-width: 1279.98px) {
+  .admin-tabs > button {
+    --side: clamp(6px, calc((100vw - 1024px) * 5 / 128 + 6px), 14px);
+    font-size: 11px;
+    padding-left: var(--side);
+    padding-right: var(--side);
+  }
+  .admin-tabs > button > svg {
+    display: none;
+  }
+}

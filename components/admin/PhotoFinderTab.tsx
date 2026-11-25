@@ -258,7 +258,7 @@ const QuickReview: React.FC<{ onChanged: () => void; waiting: number }> = ({ onC
           );
         })}
       </div>
-      <div className="sticky bottom-20 md:bottom-4 z-10 flex flex-wrap items-center gap-3 bg-zinc-950/95 backdrop-blur border border-zinc-800 rounded-2xl p-3">
+      <div className="sticky bottom-20 lg:bottom-4 z-10 flex flex-wrap items-center gap-3 bg-zinc-950/95 backdrop-blur border border-zinc-800 rounded-2xl p-3">
         <button onClick={save} disabled={saving} className="bg-[#FFC300] hover:bg-white text-black font-black text-sm px-5 py-2.5 rounded-xl flex items-center gap-2 disabled:opacity-50">
           {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Зберегти {total > items.length ? 'і далі' : ''}
         </button>

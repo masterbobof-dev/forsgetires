@@ -124,7 +124,7 @@ const rpc = {
     return { analogs: same.slice(0, 3).map((p, i) => ({ ...light(p), reason: i === 0 ? 'cross' : 'volume' })), companions: other.slice(0, 2).map(light), approvals: me.auto_approvals || [] };
   },
   // purchase price: kept privately, staff read it through this function
-  tyre_cost: ({ p_id }) => (p_id === 1001 ? 2100 : null),
+  tyre_cost: ({ p_id }) => (p_id === 1002 ? 2100 : null),
   is_staff: (_args, fake) => !!fake.user && fake.user.email === 'owner@test.ua',
   is_admin: (_args, fake) => !!fake.user && fake.user.email === 'owner@test.ua',
 };

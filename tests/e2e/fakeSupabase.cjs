@@ -94,6 +94,8 @@ const pickColumns = (rows, select) => {
 };
 
 // ---------- the fake ----------
+/** pause between two answers, so the page finishes with one before the next arrives */
+const ANSWER_GAP_MS = 4;
 const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*', 'access-control-expose-headers': 'content-range' };
 
 /**
@@ -116,11 +118,20 @@ const createFake = ({ tables = {}, rpc = {}, functions = {}, user = null } = {})
       const lines = fake.log.splice(0).map((r) => `${r.method} ${r.path}${r.query ? `?${r.query}` : ''}${r.body ? ` ${r.body}` : ''}`);
       return lines.sort();
     },
+    /**
+     * Answers leave one at a time, in the order the requests came, with a short pause between them.
+     * Without this, two requests sent in the same instant get their answers in the same millisecond and the browser
+     * may handle them in either order — a page that fires two loads of one list would then show a different
+     * result from run to run.
+     */
     async handle(route) {
       fake.inFlight++;
-      try { await respond(route); } finally { fake.inFlight--; fake.lastActivity = Date.now(); }
+      const turn = line.then(() => respond(route)).then(() => new Promise((r) => setTimeout(r, ANSWER_GAP_MS)));
+      line = turn.catch(() => {});
+      try { await turn; } finally { fake.inFlight--; fake.lastActivity = Date.now(); }
     },
   };
+  let line = Promise.resolve();
 
   const respond = async (route) => {
     const req = route.request();

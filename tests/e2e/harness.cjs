@@ -164,7 +164,8 @@ const snapshot = async (shop, name) => {
   const { page, fake } = shop;
   fs.mkdirSync(SNAP_DIR, { recursive: true });
   // toasts hide on a timer: wait for them so that every run records the same picture
-  await page.waitForFunction(() => !document.querySelector('.fixed.bottom-\\[100px\\]'), null, { timeout: 6000 }).catch(() => {});
+  // (shop: the cart toast; admin: the green / red message at the top — some of those stay until the next one)
+  await page.waitForFunction(() => !document.querySelector('.fixed.bottom-\\[100px\\], .fixed.top-20.rounded-full'), null, { timeout: 7000 }).catch(() => {});
   const state = await page.evaluate(() => ({
     url: location.pathname + location.search,
     title: document.title,

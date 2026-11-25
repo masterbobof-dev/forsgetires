@@ -54,10 +54,14 @@ Deno.serve(async (req) => {
       if (error) throw new Error(`hide_missing: ${error.message}`);
       hidden = n || 0;
     }
-    return json({ ok: true, pages, total, inserted, updated, hidden, cursorAt, ms: Date.now() - started });
+    const result = { ok: true, pages, total, inserted, updated, hidden, cursorAt, ms: Date.now() - started };
+    // journal: only runs that changed something (every 2 minutes would be noise)
+    if (total || hidden) await site.rpc('program_sync_log', { p: result });
+    return json(result);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await site.rpc('program_sync_save', { p_cursor_at: null, p_cursor_id: null, p_count: total, p_error: msg.slice(0, 500) });
+    await site.rpc('program_sync_log', { p: { total, inserted, updated, ms: Date.now() - started, error: msg.slice(0, 500) } });
     return json({ ok: false, error: msg, total }, 500);
   }
 });

@@ -24,23 +24,6 @@ export const MAP_EMBED_URL = "https://maps.google.com/maps?q=%D0%BC.+%D0%A1%D0%B
 // Specific location link
 export const MAP_DIRECT_LINK = "https://share.google/PQZz6JyQrYR4Vayfv"; 
 
-// Images
-export const HERO_BG_IMAGE = "/IMG_4686.jpg";
-
-export const GALLERY_IMAGES = [
-  { 
-    src: "/IMG_4686.jpg", 
-    alt: "Фасад шиномонтажу Forsage" 
-  },
-  { 
-    src: "/IMG_4697.jpg", 
-    alt: "Шиномонтаж та парковка" 
-  },
-  { 
-    src: "/IMG_4699.jpg", 
-    alt: "В'їзд та територія" 
-  },
-];
 
 export const SERVICES: ServiceItem[] = [
   { id: '1', title: 'Ремонт шин (будь-якої складності)', icon: Wrench },

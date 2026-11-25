@@ -6,7 +6,7 @@
 import { ProductCategory, getRootOf } from './categories';
 import type { TyreProduct } from './types';
 
-export type FilterPresetId = 'batteries' | 'wheels';
+export type FilterPresetId = 'batteries' | 'wheels' | 'oils';
 
 export interface AttrOption { value: string; label: string; short?: string }
 
@@ -78,12 +78,32 @@ export const FILTER_PRESETS: Record<FilterPresetId, FilterPreset> = {
       },
     ],
   },
+  oils: {
+    id: 'oils',
+    label: 'Масла та рідини (вʼязкість, обʼєм, допуски, тип)',
+    fields: [
+      {
+        key: 'oil_type', label: 'Тип', type: 'select', filter: 'select',
+        options: [
+          { value: 'engine', label: 'Моторне', short: 'Моторне' },
+          { value: 'trans', label: 'Трансмісійне', short: 'Трансм.' },
+          { value: 'atf', label: 'ATF / АКПП', short: 'ATF' },
+          { value: 'brake', label: 'Гальмівна рідина', short: 'Гальмівна' },
+          { value: 'coolant', label: 'Антифриз', short: 'Антифриз' },
+        ],
+      },
+      { key: 'viscosity', label: 'Вʼязкість', type: 'text', placeholder: '5W30', filter: 'select', onCard: true },
+      { key: 'volume', label: 'Обʼєм', type: 'number', unit: 'л', placeholder: '4', filter: 'select', onCard: true },
+      { key: 'approval', label: 'Допуск', type: 'text', placeholder: 'VW 502.00', filter: 'select', hint: 'Береться з назви товару або з програми' },
+    ],
+  },
 };
 
 export const PRESET_OPTIONS: { value: '' | FilterPresetId; label: string }[] = [
   { value: '', label: 'Без спеціальних фільтрів' },
   { value: 'batteries', label: FILTER_PRESETS.batteries.label },
   { value: 'wheels', label: FILTER_PRESETS.wheels.label },
+  { value: 'oils', label: FILTER_PRESETS.oils.label },
 ];
 
 /** The preset of a category: its own, or inherited from the top-level category. */

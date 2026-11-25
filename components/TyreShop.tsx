@@ -371,7 +371,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
     if (categoriesLoading) return;
     let cancelled = false;
     (async () => {
-      let q = supabase.from('tyres').select(dbReady ? 'manufacturer, radius, title, attributes' : 'manufacturer, radius, title').neq('in_stock', false);
+      let q = supabase.from('tyres').select(dbReady ? 'manufacturer, radius, title, attributes, auto_approvals' : 'manufacturer, radius, title').neq('in_stock', false);
       if (activeCategory === 'hot') q = q.eq('is_hot', true);
       else if (activeCat) {
         const f = buildCategoryFilter(categories, activeCat, dbReady);
@@ -386,6 +386,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
         if (item.radius) radii.add(item.radius.trim());
         const m = (item.title || '').match(/(\d{3})[\/\s](\d{2})/);
         if (m) { widths.add(m[1]); heights.add(m[2]); }
+        for (const a of item.auto_approvals || []) (attrs.approval ||= new Set()).add(a);
         if (item.attributes && typeof item.attributes === 'object') {
           for (const [k, v] of Object.entries(item.attributes)) {
             if (v === null || v === undefined || String(v).trim() === '') continue;
@@ -534,7 +535,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
       // smart search: sizes in any format, several words, Cyrillic brand names
       for (const f of searchFilters(parseSearch(debouncedSearch))) query = query.or(f);
       for (const [key, value] of Object.entries(attrFilters)) {
-        if (value) query = query.eq(`attributes->>${key}`, value);
+        if (value) query = key === 'approval' ? query.contains('auto_approvals', [value]) : query.eq(`attributes->>${key}`, value);
       }
       if (filterBrand) query = query.eq('manufacturer', filterBrand);
       if (filterRadius) query = query.eq('radius', filterRadius);
@@ -831,6 +832,28 @@ const TyreShop: React.FC<TyreShopProps> = ({
         </header>
 
         <CategoryNav categories={categories} active={activeCategory} onChange={changeCategory} favoritesCount={favorites.ids.length} />
+
+        {/* Batteries / oils / wheels: the main characteristics right under the sections */}
+        {!showTyreFilters && preset && (() => {
+          const fields = preset.fields.filter(f => f.filter !== 'none' && f.key !== 'size' && f.key !== 'voltage')
+            .map(f => ({ f, values: f.options ? f.options.filter(o => (attrValues[f.key] || []).includes(o.value)) : (attrValues[f.key] || []).map(v => ({ value: v, label: f.unit ? `${v} ${f.unit}` : v })) }))
+            .filter(x => x.values.length > 1 || attrFilters[x.f.key]);
+          if (!fields.length) return null;
+          return (
+            <div className={`grid gap-2 mb-4 ${fields.length >= 4 ? 'grid-cols-2 md:grid-cols-4' : fields.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+              {fields.map(({ f, values }) => {
+                const val = attrFilters[f.key] || '';
+                return (
+                  <select key={f.key} aria-label={f.label} value={val} onChange={e => setAttrFilters(prev => ({ ...prev, [f.key]: e.target.value }))}
+                    className={`w-full min-w-0 bg-zinc-900 border rounded-xl px-3 py-3 font-bold text-sm outline-none focus:border-[#FFC300] ${val ? 'border-[#FFC300] text-[#FFC300]' : 'border-zinc-800 text-white'}`}>
+                    <option value="">{f.label}</option>
+                    {values.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                );
+              })}
+            </div>
+          );
+        })()}
 
         {/* Tyres: size picker right under the sections (only sizes that are in stock) */}
         {showTyreFilters && (

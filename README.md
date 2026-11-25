@@ -1,20 +1,48 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Форсаж — інтернет-магазин (forsage-tires.com)
 
-# Run and deploy your AI Studio app
+Шини, диски, акумулятори та автотовари. Джерело товарів, цін і залишків — програма магазину; сайт отримує зміни кожні 2 хвилини.
 
-This contains everything you need to run your app locally.
+## З чого складається
+| Частина | Де | Що робить |
+|---|---|---|
+| Вітрина та адмінка | React + Vite, хостинг **Vercel** (`App.tsx`, `components/`) | сайт для покупців і адмінка `/admin` |
+| Сторінки для Google | `api/*.js` (Vercel Functions) | товар `/p/…`, розділи `/katalog/…`, статті, міста, `sitemap.xml`, фіди Google / Hotline / Prom |
+| База даних | **Supabase** (Postgres), проєкт `zzxueclhkhvwdmxflmyx` | товари `tyres`, розділи `product_categories`, замовлення `tyre_orders`, налаштування `settings` |
+| Серверні функції | `supabase/functions/*` (Deno) | обмін з програмою, Telegram-бот, Фото ШІ, SEO ШІ, резервні копії, превʼю фото |
+| Фонові задачі | `pg_cron` у базі | див. нижче |
 
-View your app in AI Studio: https://ai.studio/apps/d493cb87-d278-4cb4-a10b-33fec8cb2737
+## Фонові задачі (pg_cron)
+| Задача | Коли | Що робить |
+|---|---|---|
+| `program-sync` | кожні 2 хв | забирає зміни з програми (`program-sync`), журнал — `private.sync_log` |
+| `program-sync-full-reset` | щоночі | повна перевірка: товари, яких немає в програмі, ховаються (із захистом від «порожньої» вигрузки) |
+| `daily-backup` | щоночі | копії таблиць у схемі `backups` (14 днів) |
+| `backup-export` | щоночі | копія даних у приватне сховище `backups` (30 днів) |
+| `health-watch` | щогодини | перевірка стану; при проблемі — повідомлення власнику в Telegram |
+| `telegram-daily` | 20:00 | підсумок дня в Telegram + стан сайту |
+| `seo-ai-auto` | кожні 10 хв | заповнює SEO, лише якщо в адмінці вибрано режим «ШІ» |
+| `make-thumbs` | щохвилини | робить маленькі фото для списків, коли їх немає |
+| `cleanup-old` | щонеділі | чистить стару статистику та журнали |
+| `photo-finder` | під час пошуку фото | створюється й видаляється сама |
 
-## Run Locally
+## Безпека
+- Секрети (ключ обміну, токен бота, ключі ШІ) — лише в базі (`private.integration_secrets`, `ai_api_keys`), не в коді.
+- Замовлення: ціни й назви перераховуються базою з каталогу (`private.tyre_orders_sanitize`), є обмеження від спаму.
+- Закупівельні ціни на сайт не передаються.
 
-**Prerequisites:**  Node.js
+## Розробка
+```bash
+npm install
+npm run dev        # локально
+npm run lint       # перевірка типів
+npm test           # швидкі тести логіки (tests/unit.test.ts)
+npm run build
+node tests/smoke.mjs https://www.forsage-tires.com   # перевірка живого сайту
+```
+GitHub Actions (`.github/workflows/checks.yml`): на кожен pull request — типи, тести, збірка; після кожного виходу на сайт — перевірка живого сайту.
 
+Зміни бази записуються в `supabase/migrations/` (файл-нотатка з датою), повні тексти функцій — у самій базі.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Документи
+- `docs/admin-guide.md` — інструкція для власника (що де в адмінці, що робити, якщо щось не так)
+- `docs/program-site-integration.md` — як програма передає товари на сайт

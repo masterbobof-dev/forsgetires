@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabaseClient';
 import { Search, Globe, Save, RefreshCw, CheckCircle, AlertTriangle, Info, BarChart, Image as ImageIcon, Link2, Upload, Loader2, Edit2, LayoutGrid, List, CheckSquare, X, Wand2, FileCode } from 'lucide-react';
 import { TyreProduct } from '../../types';
+import SeoProPanel, { SEO_VIEWS, type SeoView } from './SeoProPanel';
 import { generatePlainDescription, parseJsonFromAiText, normalizeProviderId } from '../../aiSeoClient';
 import type { AIProviderId } from '../../aiTypes';
 
@@ -11,7 +12,7 @@ const SeoTab: React.FC = () => {
   const [uploadingImage, setUploadingImage] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
-  const [activeTab, setActiveTab] = useState<'general' | 'products'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'products' | SeoView>('health');
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
   const [aiProvider, setAiProvider] = useState<AIProviderId>('gemini');
   const [products, setProducts] = useState<TyreProduct[]>([]);
@@ -303,22 +304,16 @@ const SeoTab: React.FC = () => {
   return (
     <div className="animate-in fade-in space-y-8 pb-20">
       {/* Tab Switcher */}
-      <div className="flex bg-zinc-900 p-1 rounded-xl border border-zinc-800 w-fit">
-        <button 
-          onClick={() => setActiveTab('general')}
-          className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${activeTab === 'general' ? 'bg-[#FFC300] text-black shadow-lg' : 'text-zinc-500 hover:text-white'}`}
-        >
-          Загальне SEO
-        </button>
-        <button 
-          onClick={() => setActiveTab('products')}
-          className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${activeTab === 'products' ? 'bg-[#FFC300] text-black shadow-lg' : 'text-zinc-500 hover:text-white'}`}
-        >
-          SEO Товарів
-        </button>
+      <div className="flex flex-wrap gap-1 bg-zinc-900 p-1 rounded-xl border border-zinc-800">
+        {[...SEO_VIEWS, { id: 'general', label: 'Сайт загалом' }, { id: 'products', label: 'Товар вручну' }].map(t => (
+          <button key={t.id} onClick={() => setActiveTab(t.id as any)}
+            className={`px-3 py-2 rounded-lg font-bold text-xs sm:text-sm transition-all ${activeTab === t.id ? 'bg-[#FFC300] text-black shadow-lg' : 'text-zinc-400 hover:text-white'}`}>
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {activeTab === 'general' ? (
+      {activeTab !== 'general' && activeTab !== 'products' ? <SeoProPanel view={activeTab} onOpen={(v) => setActiveTab(v as any)} /> : activeTab === 'general' ? (
         <>
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>

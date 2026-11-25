@@ -57,8 +57,8 @@
       "destination": "/app.html"
     },
     {
-      "source": "/((?!api/|assets/).*)",
-      "destination": "/api/page?path=/404"
+      "source": "/:from((?!api/|assets/).*)",
+      "destination": "/api/page?path=/404&from=/:from"
     }
   ],
   "redirects": [

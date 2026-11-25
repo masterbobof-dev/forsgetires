@@ -2,7 +2,7 @@
 // page's own <title>, description, canonical link and readable text already in the HTML,
 // so Google sees real content without running JavaScript.
 import { SITE_URL, SHOP_NAME, rest, escapeXml as esc, productPath, parsePrice, slugify } from './_shop.js';
-import { loadAppHtml, setHead, addJsonLd, setRootContent } from './_html.js';
+import { loadAppHtml, setHead, addJsonLd, setRootContent, siteSettings, applySite, findRedirect } from './_html.js';
 import { CITIES, cityFromPath, cityPath, cityTexts } from './_cities.js';
 import { catPath, catSlugFrom } from './_paths.js';
 
@@ -51,7 +51,7 @@ const PRODUCT_FIELDS = 'id,title,slug,price,image_url';
 
 async function build(pathname, query) {
   let cats = [];
-  try { cats = await rest('product_categories?select=id,name,slug,parent_id,kind,description,seo_title,seo_description&is_active=eq.true&order=sort_order'); } catch { /* ignore */ }
+  try { cats = await rest('product_categories?select=id,name,slug,parent_id,kind,description,seo_title,seo_description,noindex&is_active=eq.true&order=sort_order'); } catch { /* ignore */ }
   // only categories with goods in stock (same as the site menu), biggest first
   try {
     const counts = await rest('rpc/category_counts');
@@ -151,6 +151,7 @@ async function build(pathname, query) {
     const name = parent ? `${parent.name} — ${cat.name}` : cat.name;
     const kids = cats.filter((c) => c.parent_id === cat.id);
     return {
+      noindex: !!cat.noindex,
       title: cat.seo_title || `${name} — купити в ${CITY}, ціни | ${SHOP_NAME}`,
       description: (cat.seo_description || cat.description || `${name} в інтернет-магазині «${SHOP_NAME}». ${DELIVERY}`).slice(0, 300),
       url: SITE_URL + catPath(cat.slug),
@@ -188,6 +189,12 @@ export default async function handler(req, res) {
   let status = 200;
   try {
     const page = await build(pathname, req.query);
+    if (page.status === 404 || page.noindex) {
+      const asked = String(req.query.path ?? '') === '/404' ? String(req.query.from || '') : pathname;
+      const to = await findRedirect(rest, String(asked).replace(/\/+$/, '') || '/');
+      if (to) { res.setHeader('Location', to); res.setHeader('Cache-Control', 'public, s-maxage=300'); return res.status(301).end(); }
+    }
+    html = applySite(html, await siteSettings(rest));
     status = page.status || 200;
     if (!page.keepHead) html = setHead(html, page);
     if (page.noindex) html = html.replace(/<meta name="robots"[^>]*>/, '<meta name="robots" content="noindex, follow" />');

@@ -839,7 +839,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
 
         {/* Batteries / oils / wheels: the main characteristics right under the sections */}
         {!showTyreFilters && preset && (() => {
-          const fields = preset.fields.filter(f => f.filter !== 'none' && f.key !== 'size' && f.key !== 'voltage')
+          const fields = preset.fields.filter(f => f.filter !== 'none' && !(preset.id === 'batteries' && (f.key === 'size' || f.key === 'voltage')))
             .map(f => ({ f, values: f.options ? f.options.filter(o => (attrValues[f.key] || []).includes(o.value)) : (attrValues[f.key] || []).map(v => ({ value: v, label: f.unit ? `${v} ${f.unit}` : v })) }))
             .filter(x => x.values.length > 1 || attrFilters[x.f.key]);
           if (!fields.length) return null;

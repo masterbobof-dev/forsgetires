@@ -6,7 +6,7 @@
 import { ProductCategory, getRootOf } from './categories';
 import type { TyreProduct } from './types';
 
-export type FilterPresetId = 'batteries' | 'wheels' | 'oils';
+export type FilterPresetId = 'batteries' | 'wheels' | 'oils' | 'lamps' | 'wipers' | 'coolant' | 'brakefluid' | 'fuses' | 'filters' | 'belts';
 
 export interface AttrOption { value: string; label: string; short?: string }
 
@@ -97,6 +97,80 @@ export const FILTER_PRESETS: Record<FilterPresetId, FilterPreset> = {
       { key: 'approval', label: 'Допуск', type: 'text', placeholder: 'VW 502.00', filter: 'select', hint: 'Береться з назви товару або з програми' },
     ],
   },
+  lamps: {
+    id: 'lamps',
+    label: 'Лампочки (цоколь, напруга, потужність, тип)',
+    fields: [
+      { key: 'lamp_base', label: 'Цоколь / тип', type: 'text', placeholder: 'H7', filter: 'select', onCard: true, hint: 'H1, H4, H7, W5W, P21W…' },
+      { key: 'lamp_tech', label: 'Вид лампи', type: 'select', filter: 'select', onCard: true, options: [
+        { value: 'halogen', label: 'Галогенова', short: 'Галоген' }, { value: 'led', label: 'LED (світлодіодна)', short: 'LED' },
+        { value: 'xenon', label: 'Ксенонова', short: 'Ксенон' }, { value: 'bulb', label: 'Звичайна', short: 'Звичайна' }] },
+      { key: 'voltage', label: 'Напруга', type: 'select', filter: 'select', onCard: true, options: opts(['12', '24', '6'], 'V') },
+      { key: 'power', label: 'Потужність', type: 'text', unit: 'W', placeholder: '55', filter: 'select', onCard: true },
+      { key: 'color_temp', label: 'Колір світла', type: 'number', unit: 'K', placeholder: '6000', filter: 'none' },
+    ],
+  },
+  wipers: {
+    id: 'wipers',
+    label: 'Щітки склоочисника (довжина, тип)',
+    fields: [
+      { key: 'length', label: 'Довжина', type: 'text', unit: 'мм', placeholder: '500', filter: 'select', onCard: true },
+      { key: 'wiper_type', label: 'Тип', type: 'select', filter: 'select', onCard: true, options: [
+        { value: 'flat', label: 'Безкаркасна', short: 'Безкаркасна' }, { value: 'frame', label: 'Каркасна', short: 'Каркасна' }, { value: 'hybrid', label: 'Гібридна', short: 'Гібридна' }] },
+      { key: 'pack', label: 'Комплект', type: 'select', filter: 'none', onCard: true, options: [{ value: 'kit', label: 'Комплект (2 шт)', short: 'Комплект' }] },
+    ],
+  },
+  coolant: {
+    id: 'coolant',
+    label: 'Охолоджуюча рідина (стандарт, колір, обʼєм)',
+    fields: [
+      { key: 'coolant_kind', label: 'Вид', type: 'select', filter: 'select', options: [
+        { value: 'ready', label: 'Антифриз готовий', short: 'Готовий' }, { value: 'concentrate', label: 'Концентрат', short: 'Концентрат' },
+        { value: 'tosol', label: 'Тосол', short: 'Тосол' }, { value: 'water', label: 'Дистильована вода', short: 'Вода' }] },
+      { key: 'coolant_std', label: 'Стандарт', type: 'text', placeholder: 'G12+', filter: 'select', onCard: true },
+      { key: 'color', label: 'Колір', type: 'select', filter: 'select', onCard: true, options: [
+        { value: 'red', label: 'Червоний' }, { value: 'green', label: 'Зелений' }, { value: 'blue', label: 'Синій' },
+        { value: 'yellow', label: 'Жовтий' }, { value: 'violet', label: 'Фіолетовий' }, { value: 'orange', label: 'Помаранчевий' }] },
+      { key: 'volume', label: 'Обʼєм', type: 'number', unit: 'л', placeholder: '5', filter: 'select', onCard: true },
+    ],
+  },
+  brakefluid: {
+    id: 'brakefluid',
+    label: 'Гальмівна рідина (клас DOT, обʼєм)',
+    fields: [
+      { key: 'dot', label: 'Клас', type: 'text', placeholder: 'DOT 4', filter: 'select', onCard: true },
+      { key: 'volume', label: 'Обʼєм', type: 'number', unit: 'л', placeholder: '1', filter: 'select', onCard: true },
+    ],
+  },
+  fuses: {
+    id: 'fuses',
+    label: 'Запобіжники (струм, тип)',
+    fields: [
+      { key: 'fuse_type', label: 'Тип', type: 'select', filter: 'select', onCard: true, options: [
+        { value: 'standard', label: 'Плоский євро', short: 'Євро' }, { value: 'mini', label: 'Міні', short: 'Міні' }, { value: 'micro', label: 'Супер міні', short: 'Супер міні' },
+        { value: 'maxi', label: 'Максі', short: 'Максі' }, { value: 'cartridge', label: 'Картриджний', short: 'Картридж' }, { value: 'old', label: 'Старого зразка', short: 'Старий' }] },
+      { key: 'amp', label: 'Струм', type: 'number', unit: 'A', placeholder: '15', filter: 'select', onCard: true },
+    ],
+  },
+  filters: {
+    id: 'filters',
+    label: 'Фільтри (вид фільтра)',
+    fields: [
+      { key: 'filter_type', label: 'Вид фільтра', type: 'select', filter: 'chips', onCard: true, options: [
+        { value: 'oil', label: 'Масляний', short: 'Масляний' }, { value: 'air', label: 'Повітряний', short: 'Повітряний' },
+        { value: 'cabin', label: 'Салону', short: 'Салону' }, { value: 'fuel', label: 'Паливний', short: 'Паливний' }, { value: 'gas', label: 'Газовий (ГБО)', short: 'ГБО' }] },
+    ],
+  },
+  belts: {
+    id: 'belts',
+    label: 'Ремені та ролики (вид, розмір)',
+    fields: [
+      { key: 'belt_type', label: 'Вид', type: 'select', filter: 'chips', onCard: true, options: [
+        { value: 'timing', label: 'Ремінь ГРМ', short: 'ГРМ' }, { value: 'poly', label: 'Ремінь поліклиновий', short: 'Поліклиновий' },
+        { value: 'roller', label: 'Ролик', short: 'Ролик' }, { value: 'tensioner', label: 'Натягувач', short: 'Натягувач' }, { value: 'other', label: 'Інший ремінь', short: 'Ремінь' }] },
+      { key: 'belt_size', label: 'Розмір', type: 'text', placeholder: '6PK1198', filter: 'select', onCard: true },
+    ],
+  },
 };
 
 export const PRESET_OPTIONS: { value: '' | FilterPresetId; label: string }[] = [
@@ -104,6 +178,7 @@ export const PRESET_OPTIONS: { value: '' | FilterPresetId; label: string }[] = [
   { value: 'batteries', label: FILTER_PRESETS.batteries.label },
   { value: 'wheels', label: FILTER_PRESETS.wheels.label },
   { value: 'oils', label: FILTER_PRESETS.oils.label },
+  ...(['lamps', 'wipers', 'coolant', 'brakefluid', 'fuses', 'filters', 'belts'] as FilterPresetId[]).map(id => ({ value: id, label: FILTER_PRESETS[id].label })),
 ];
 
 /** The preset of a category: its own, or inherited from the top-level category. */

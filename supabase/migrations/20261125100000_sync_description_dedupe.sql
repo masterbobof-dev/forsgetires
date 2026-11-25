@@ -1,0 +1,5 @@
+-- Applied live on 2026-11-25:
+-- 1) private.program_sync_apply: a product's "description" from the program payload is written to tyres.description
+--    (the program's text wins; an empty value keeps the site's own text).
+-- 2) Old-site tyres that were entered several times with the same title: one card is kept (with a photo, then the cheapest),
+--    the others are hidden (in_stock = false, photo_search_error = 'hidden duplicate'). Program products are not touched.

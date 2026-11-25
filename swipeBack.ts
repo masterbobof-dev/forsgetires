@@ -20,16 +20,18 @@ export const installSwipeBack = () => {
     }
     return false;
   };
-  let sx = 0, sy = 0, st = 0, ok = false;
+  let sx = 0, sy = 0, st = 0, ok = false, lastBack = 0;
+  window.addEventListener('popstate', () => { lastBack = Date.now(); });
   window.addEventListener('touchstart', e => {
     const t = e.touches[0];
-    ok = e.touches.length === 1 && !scrollsSideways(e.target as HTMLElement);
+    // the very edge of the screen belongs to the phone's own "back" gesture — reacting too would go back twice (the page blinks)
+    ok = e.touches.length === 1 && t.clientX > 32 && t.clientX < window.innerWidth - 32 && !scrollsSideways(e.target as HTMLElement);
     sx = t.clientX; sy = t.clientY; st = Date.now();
   }, { passive: true });
   window.addEventListener('touchend', e => {
     if (!ok) return;
     const t = e.changedTouches[0];
     const dx = t.clientX - sx, dy = Math.abs(t.clientY - sy);
-    if (dx > 90 && dy < 45 && dx > dy * 2.5 && Date.now() - st < 600 && depth() > 0) window.history.back();
+    if (dx > 90 && dy < 45 && dx > dy * 2.5 && Date.now() - st < 600 && depth() > 0 && Date.now() - lastBack > 700) window.history.back();
   }, { passive: true });
 };

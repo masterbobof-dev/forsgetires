@@ -213,3 +213,19 @@ Body: { "action": "<назва дії>", ...параметри }
 
 ### Статті й сторінки
 Як і раніше: `pages.list`, `pages.upsert`, `pages.delete` (статті та інфо-сторінки доставка/гарантія/про нас/контакти/FAQ).
+
+## Доповнення 6. Рекомендовані товари обирає програма
+
+Рекомендовані товари показуються на головній у блоці «Рекомендуємо / Хіти та акції» і першими в порядку «Рекомендовані» в кожному розділі.
+
+Два способи (будь-який):
+
+1. **В експорті каталогу** (`site_catalog_export`): поле `recommended: true | false` у товару. Якщо поля немає — сайт нічого не змінює.
+2. **Через шлюз** `site-api`:
+   - `products.recommended.list` → список рекомендованих: `id, program_product_id, supplier_offer_id, title, price, in_stock`.
+   - `products.recommended.set` `{ program_product_ids?: uuid[], supplier_offer_ids?: string[], ids?: number[], on?: true|false, replace?: true }`
+     - `on: false` — прибрати з рекомендованих;
+     - `replace: true` — рекомендованими стають рівно ці товари, решта знімається.
+     - Відповідь: `{ changed, not_found, recommended_total }`.
+
+Партнерські товари (GPL / Omega) теж можна рекомендувати — через `supplier_offer_ids` (= external_id пропозиції).

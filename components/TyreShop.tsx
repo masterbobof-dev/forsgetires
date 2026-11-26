@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import { TyreProduct, CartItem } from '../types';
 import { useCategories, getRootOf, getRootCategories, getChildren, isTyreProduct, getCategoryIcon } from '../categories';
 import { getPresetForCategory, getPresetForProduct, getCardChips } from '../productAttributes';
@@ -236,6 +236,17 @@ const TyreShop: React.FC<TyreShopProps> = ({
   const cartTotal = useMemo(() => cartItems.reduce((a,b) => a + (safeParsePrice(b.price)*b.quantity), 0), [cartItems]);
   /** the home page as such: all goods, nothing searched or filtered */
   const isHome = activeCategory === 'all' && !debouncedSearch.trim() && activeFilterCount === 0 && !openingSection;
+  // typing a search on the home page: the showcase above the search field goes away, so the page would jump —
+  // the search field is kept at the top of the screen instead
+  const wasHome = useRef(isHome);
+  useLayoutEffect(() => {
+    if (wasHome.current && !isHome && debouncedSearch.trim()) {
+      const el = listTopRef.current;
+      const top = el?.getBoundingClientRect().top ?? 0;
+      if (el && (top < 0 || top > window.innerHeight * 0.6)) el.scrollIntoView({ block: 'start' });
+    }
+    wasHome.current = isHome;
+  }, [isHome]); // eslint-disable-line react-hooks/exhaustive-deps
   const slideClass = slideDir === 1 ? 'slide-in-from-right-8' : slideDir === -1 ? 'slide-in-from-left-8' : 'slide-in-from-bottom-4';
 
   const filterPanel = (

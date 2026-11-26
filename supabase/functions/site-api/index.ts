@@ -113,6 +113,28 @@ const actions: Record<string, (p: any) => Promise<unknown>> = {
   'reviews.moderate': async (p) => check(await db.from('product_reviews').update({ approved: !!p.approved, ...(p.admin_reply !== undefined ? { admin_reply: p.admin_reply } : {}) }).eq('id', need(p.id, 'id')).select('id, approved').single()),
   'reviews.delete': async (p) => { check(await db.from('product_reviews').delete().eq('id', need(p.id, 'id'))); return { deleted: p.id }; },
 
+  // ---------- recommended goods (chosen in the program) ----------
+  // shown in «Рекомендуємо» on the home page and first in the «Рекомендовані» order of every section
+  'products.recommended.list': async () =>
+    check(await db.from('tyres').select('id, program_product_id, supplier_offer_id, title, price, in_stock').eq('is_hot', true).order('title')),
+  // { program_product_ids?: uuid[], supplier_offer_ids?: string[], ids?: number[], on?: true|false, replace?: true }
+  // replace: true = exactly this list is recommended, everything else is not
+  'products.recommended.set': async (p) => {
+    const pids: string[] = Array.isArray(p.program_product_ids) ? p.program_product_ids.map(String) : [];
+    const sids: string[] = Array.isArray(p.supplier_offer_ids) ? p.supplier_offer_ids.map(String) : [];
+    const ids: number[] = Array.isArray(p.ids) ? p.ids.map(Number).filter(Number.isFinite) : [];
+    if (!pids.length && !sids.length && !ids.length && !p.replace) fail('Вкажіть program_product_ids, supplier_offer_ids або ids');
+    const on = p.on !== false;
+    const found = new Set<number>(ids);
+    if (pids.length) for (const r of check(await db.from('tyres').select('id').in('program_product_id', pids)) as any[]) found.add(r.id);
+    if (sids.length) for (const r of check(await db.from('tyres').select('id').in('supplier_offer_id', sids)) as any[]) found.add(r.id);
+    const list = [...found];
+    if (p.replace) check(await db.from('tyres').update({ is_hot: false }).eq('is_hot', true).not('id', 'in', `(${list.join(',') || 0})`));
+    if (list.length) check(await db.from('tyres').update({ is_hot: p.replace ? true : on }).in('id', list));
+    const { count } = await db.from('tyres').select('id', { count: 'exact', head: true }).eq('is_hot', true);
+    return { changed: list.length, not_found: pids.length + sids.length + ids.length - list.length, recommended_total: count };
+  },
+
   // ---------- product fields for the site ----------
   'products.site_fields.get': async (p) => {
     const r: any = await productByProgramId(p.program_product_id);

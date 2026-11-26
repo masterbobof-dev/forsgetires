@@ -29,23 +29,12 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
   const [mobileCatalog, setMobileCatalog] = useState(false);
   // breadcrumb "Каталог" opens the full catalogue menu
   useEffect(() => {
-    const open = () => { if (window.innerWidth < 768) return; { window.scrollTo({ top: 0, behavior: 'smooth' }); setCatalogOpen(true); } };
+    const open = () => { if (window.innerWidth < 768) return; setCatalogOpen(true); };
     window.addEventListener('open-catalog', open);
     return () => window.removeEventListener('open-catalog', open);
   }, []);
-  const catalogRef = useRef<HTMLDivElement>(null);
   const { categories } = useCategories();
   const roots = getRootCategories(categories);
-
-  // close the catalog dropdown on outside click / Esc
-  useEffect(() => {
-    if (!catalogOpen) return;
-    const onDown = (e: MouseEvent) => { if (!catalogRef.current?.contains(e.target as Node)) setCatalogOpen(false); };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setCatalogOpen(false); };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
-  }, [catalogOpen]);
 
   const goCategory = (slug: string) => (e: React.MouseEvent) => {
     setCatalogOpen(false);
@@ -171,7 +160,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
 
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-6">
-            <div ref={catalogRef} className="relative">
+            <div className="relative">
               <button
                 onClick={() => setCatalogOpen(o => !o)}
                 aria-expanded={catalogOpen}
@@ -179,18 +168,6 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
               >
                 <LayoutGrid size={18} /> Каталог <ChevronDown size={16} className={`transition-transform ${catalogOpen ? 'rotate-180' : ''}`} />
               </button>
-              {catalogOpen && (
-                <div className="fixed left-1/2 -translate-x-1/2 mt-4 w-[min(1120px,calc(100vw-2rem))] bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-4 animate-in fade-in slide-in-from-top-2 duration-200"
-                  style={{ top: 'var(--header-h, 72px)' }}>
-                  <CatalogMenu categories={categories} onPick={goCategory} hrefFor={catPath} onClose={() => setCatalogOpen(false)} />
-                  <div className="mt-3 pt-3 border-t border-zinc-800 flex flex-wrap gap-x-5 gap-y-1">
-                    <a href="/forum" onClick={(e) => { setCatalogOpen(false); linkClick('/forum')(e); }} className="text-xs font-bold text-[#FFC300] hover:text-white transition-colors">Форум</a>
-                    {infoLinks.map(([href, label]) => (
-                      <a key={href} href={href} onClick={(e) => { setCatalogOpen(false); linkClick(href)(e); }} className="text-xs text-zinc-400 hover:text-[#FFC300] transition-colors">{label}</a>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
             <a href="/forum" onClick={linkClick('/forum')} className="hidden xl:inline text-sm lg:text-base font-bold uppercase tracking-wide text-zinc-300 hover:text-[#FFC300] transition-colors">Форум</a>
@@ -296,7 +273,17 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
           </nav>
         </div>
       )}
-      {mobileCatalog && <CatalogMenu mobile categories={categories} onPick={goCategory} hrefFor={catPath} onClose={() => setMobileCatalog(false)} />}
+      {(catalogOpen || mobileCatalog) && (
+        <CatalogMenu categories={categories} onPick={goCategory} hrefFor={catPath} onClose={() => { setCatalogOpen(false); setMobileCatalog(false); }}
+          footer={(
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+              <a href="/forum" onClick={(e) => { setCatalogOpen(false); setMobileCatalog(false); linkClick('/forum')(e); }} className="text-xs font-bold text-[#FFC300] hover:text-white">Форум</a>
+              {infoLinks.map(([href, label]) => (
+                <a key={href} href={href} onClick={(e) => { setCatalogOpen(false); setMobileCatalog(false); linkClick(href)(e); }} className="text-xs text-zinc-400 hover:text-[#FFC300]">{label}</a>
+              ))}
+            </div>
+          )} />
+      )}
     </header>
   );
 };

@@ -1,5 +1,5 @@
 import { parseAttrRange } from '../shopUtils';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../../../supabaseClient';
 import type { TyreProduct } from '../../../types';
 import { type ProductCategory, buildCategoryFilter } from '../../../categories';
@@ -43,8 +43,17 @@ export const useProductList = (q: ProductListParams) => {
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
+  // every new search / section gets a number: an older answer that comes back late is thrown away
+  // (otherwise the list jumps: first the results of "фі", then of "фільтр")
+  const reqNo = useRef(0);
+  const attrFiltersKey = JSON.stringify(q.attrFilters);
+  const paramsKey = [q.categoriesLoading, q.activeCategory, q.activeSort, q.enableStockQty, q.filterBrand, q.filterRadius, q.filterWidth, q.filterHeight,
+    q.filterSeason, q.showOnlyInStock, q.debouncedSearch, q.priorityProductId, attrFiltersKey, q.promosReady].join('|');
+  const [loadedKey, setLoadedKey] = useState('');
 
   const fetchTyres = async (pageIndex: number, isRefresh = false) => {
+    const my = isRefresh ? ++reqNo.current : reqNo.current;
+    const key = paramsKey;
     try {
       if (isRefresh) setLoading(true); else setLoadingMore(true);
       const from = pageIndex * PAGE_SIZE, to = from + PAGE_SIZE - 1;
@@ -83,14 +92,15 @@ export const useProductList = (q: ProductListParams) => {
       // real stock first, old "on order" tyres after it
       query = query.order('on_order', { ascending: true });
       if (q.activeSort === 'recommended' || q.activeSort === 'with_photo') {
-        // what is nice to buy first: with a photo, hits, then the newest
-        query = query.order('has_photo', { ascending: false }).order('is_hot', { ascending: false }).order('in_stock', { ascending: false }).order('created_at', { ascending: false });
+        // what is nice to buy first: recommended in the program (is_hot), with a photo, then the newest
+        query = query.order('is_hot', { ascending: false }).order('has_photo', { ascending: false }).order('in_stock', { ascending: false }).order('created_at', { ascending: false });
       } else {
         const sorts = { price_asc: 'price_num', price_desc: 'price_num', newest: 'created_at', oldest: 'created_at', no_photo: 'created_at' };
         query = query.order('in_stock', { ascending: false }).order((sorts as any)[q.activeSort] || 'created_at', { ascending: ['price_asc', 'oldest'].includes(q.activeSort) });
       }
 
       const { data, error, count } = await query.range(from, to);
+      if (my !== reqNo.current) return;
       if (error) throw error;
       if (data) {
         let processed = data.map(q.prepare);
@@ -117,11 +127,11 @@ export const useProductList = (q: ProductListParams) => {
         setHasMore(data.length === PAGE_SIZE);
         if (count !== null) setTotalCount(count);
       }
-    } catch (error) { console.error(error); } finally { setLoading(false); setLoadingMore(false); }
+      if (isRefresh) setLoadedKey(key);
+    } catch (error) { console.error(error); if (isRefresh && my === reqNo.current) setLoadedKey(key); } finally { if (my === reqNo.current) { setLoading(false); setLoadingMore(false); } }
   };
 
   // a new section, filter, sorting or search → the list is loaded again from its first page
-  const attrFiltersKey = JSON.stringify(q.attrFilters);
   useEffect(() => {
     if (q.categoriesLoading || !q.promosReady) return;
     setPage(0);
@@ -134,5 +144,6 @@ export const useProductList = (q: ProductListParams) => {
     if (q.activeCategory === 'fav' && !q.categoriesLoading) fetchTyres(0, true);
   }, [q.favoriteIds.join(',')]);
 
-  return { tyres, loading, loadingMore, hasMore, totalCount, loadMore: () => fetchTyres(page + 1) };
+  // until the answer for the current search/section comes, the old list is not shown (it flashed for a moment before)
+  return { tyres, loading: loading || loadedKey !== paramsKey, loadingMore, hasMore, totalCount, loadMore: () => fetchTyres(page + 1) };
 };

@@ -109,7 +109,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
     ['/dostavka-i-oplata', 'Доставка і оплата'],
     ['/garantiya-i-povernennya', 'Гарантія і повернення'],
     ['/faq', 'Поширені питання'],
-    ['/statti', 'Корисні статті'],
+    ['/statti', 'Корисні поради'],
     ['/kontakty', 'Контакти'],
   ];
 
@@ -185,6 +185,9 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
                 </div>
               )}
             </div>
+
+            {/* useful tips (articles) — a visible link, for buyers and for Google */}
+            <a href="/statti" onClick={linkClick('/statti')} className="text-sm lg:text-base font-bold uppercase tracking-wide text-zinc-300 hover:text-[#FFC300] transition-colors">Поради</a>
 
             <button
               onClick={openCart}

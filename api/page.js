@@ -110,6 +110,16 @@ async function build(pathname, query) {
     };
   }
 
+  // --- legal pages (the text itself is shown by the website; here: own title and address for Google) ---
+  const LEGAL = {
+    '/oferta': ['Публічна оферта', `Умови купівлі товарів в інтернет-магазині «${SHOP_NAME}»: оформлення замовлення, оплата, доставка, повернення.`],
+    '/privacy': ['Політика конфіденційності', `Як інтернет-магазин «${SHOP_NAME}» збирає, зберігає та захищає персональні дані покупців.`],
+  };
+  if (LEGAL[pathname]) {
+    const [t, d] = LEGAL[pathname];
+    return { title: `${t} — інтернет-магазин ${SHOP_NAME}`, description: d, url: SITE_URL + pathname, content: `<h1>${esc(t)}</h1><p>${esc(d)}</p>${navBlock(cats)}` };
+  }
+
   // --- info pages ---
   if (INFO[pathname]) {
     const i = INFO[pathname];

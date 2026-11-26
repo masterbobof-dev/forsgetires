@@ -42,7 +42,7 @@ const Footer: React.FC<{ onNavigate?: (v: ViewState) => void }> = ({ onNavigate 
               ['delivery', '/dostavka-i-oplata', 'Доставка і оплата'],
               ['warranty', '/garantiya-i-povernennya', 'Гарантія і повернення'],
               ['faq', '/faq', 'Поширені питання'],
-              ['articles', '/statti', 'Корисні статті'],
+              ['articles', '/statti', 'Корисні поради'],
               ['about', '/pro-nas', 'Про магазин'],
               ['contacts', '/kontakty', 'Контакти'],
             ] as [ViewState, string, string][]).map(([v, href, label]) => (

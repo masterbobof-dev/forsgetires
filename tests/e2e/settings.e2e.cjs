@@ -57,7 +57,7 @@ const keys = async (browser, url) => {
   });
 
   await step(shop, S, 'staff access', async () => {
-    await ui.click(part(page, 'Менеджер / Доступ'));
+    await ui.click(part(page, 'Адміністратор / Доступ'));
     await until(async () => assert.equal(await page.getByPlaceholder('manager@forsage.com').inputValue(), 'manager@test.ua'));
     assert.equal(await page.getByText('Пароль буде оновлено').count(), 0);
     await ui.fill(page.getByPlaceholder('Введіть новий пароль, щоб змінити...'), 'Secret123');
@@ -263,7 +263,7 @@ const phone = async (browser, url) => {
   for (const [name, title, mark] of [
     ['contacts', 'Контакти', 'Контактна Інформація'],
     ['keys', 'API Ключі', 'Безпека та Ключі'],
-    ['staff access', 'Менеджер / Доступ', 'Вхід для Менеджера'],
+    ['staff access', 'Адміністратор / Доступ', 'Вхід для адміністратора'],
     ['stock and import', 'Склад / Імпорт', 'Розумне завантаження фото'],
   ]) {
     await step(shop, S, name, async () => {

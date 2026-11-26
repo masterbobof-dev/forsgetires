@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { catPath } from '../api/_paths.js';
 import Logo from './Logo';
 import { ViewState } from '../types';
-import { Menu, X, Phone, User, ShoppingBag, ChevronDown, Flame, LayoutGrid, Lock, MessagesSquare } from 'lucide-react';
+import { Menu, X, Phone, User, ShoppingCart, ChevronDown, LayoutGrid, MessagesSquare } from 'lucide-react';
 import { useCategories, getRootCategories, getChildren, getCategoryIcon } from '../categories';
 import { linkClick } from '../navigation';
 import CatalogMenu from './CatalogMenu';
@@ -18,9 +19,11 @@ interface HeaderProps {
   /** a staff member is signed in: the button leads to the admin panel */
   isStaff?: boolean;
   cartCount?: number;
+  /** the "F" of the logo: the hidden way into the admin panel */
+  onLogoAdmin?: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountClick, isLoggedIn = false, isStaff = false, cartCount = 0 }) => {
+const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountClick, isLoggedIn = false, isStaff = false, cartCount = 0, onLogoAdmin }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [mobileCatalog, setMobileCatalog] = useState(false);
@@ -75,6 +78,13 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
     link2: PHONE_LINK_2,
   });
 
+  // the phone menu closes when the page changes (also by the browser's back button)
+  useEffect(() => {
+    const close = () => setIsMenuOpen(false);
+    window.addEventListener('popstate', close);
+    return () => window.removeEventListener('popstate', close);
+  }, []);
+
   // Close mobile menu on resize to desktop
   useEffect(() => {
     const handleResize = () => { if (window.innerWidth >= 768) setIsMenuOpen(false); };
@@ -102,14 +112,10 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const navItems: { label: string; view: ViewState }[] = [
-    { label: 'Каталог товарів', view: 'home' },
-  ];
   const infoLinks: [string, string][] = [
     ['/dostavka-i-oplata', 'Доставка і оплата'],
     ['/garantiya-i-povernennya', 'Гарантія і повернення'],
     ['/faq', 'Поширені питання'],
-    ['/statti', 'Корисні поради'],
     ['/kontakty', 'Контакти'],
   ];
 
@@ -123,13 +129,18 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
       <div className="max-w-7xl mx-auto px-3 md:px-4 py-2 md:py-3 flex items-center justify-between gap-2">
 
         {/* Logo & Brand */}
+        <div className="flex items-center gap-2 md:gap-4 min-w-0">
+        {/* the "F": the way into the admin panel (owner and the administrators set in the settings) */}
+        <button type="button" onClick={() => { setIsMenuOpen(false); onLogoAdmin ? onLogoAdmin() : handleNavClick('home'); }} aria-label="Вхід для адміністратора"
+          className="rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC300] focus-visible:ring-offset-2 focus-visible:ring-offset-black">
+          <Logo />
+        </button>
         <button
           type="button"
           onClick={() => handleNavClick('home')}
-          className="flex items-center gap-2 md:gap-4 text-left rounded-lg min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC300] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+          className="flex items-center text-left rounded-lg min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC300] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
           aria-label="На головну"
         >
-          <Logo />
           <span className="hidden min-[360px]:flex flex-col group min-w-0 overflow-hidden pr-1">
             <span className="font-black text-lg sm:text-2xl md:text-3xl tracking-wide text-white italic -skew-x-12 group-hover:text-[#FFC300] transition-colors">
               ФОРСАЖ
@@ -139,6 +150,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
             </span>
           </span>
         </button>
+        </div>
 
         {/* Right Side */}
         <div className="flex items-center gap-6">
@@ -160,9 +172,9 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
             <button
               onClick={() => onAccountClick?.()}
               className={`flex items-center gap-2 text-sm font-bold transition-colors px-3 py-2 rounded-xl hover:bg-zinc-800/60 ${currentView === 'account' ? 'text-[#FFC300]' : 'text-zinc-300 hover:text-[#FFC300]'}`}
-              aria-label={isStaff ? 'Адмін-панель' : isLoggedIn ? 'Мій кабінет' : 'Увійти'}
+              aria-label={isLoggedIn || isStaff ? 'Мій кабінет' : 'Увійти'}
             >
-              {isStaff ? <><Lock size={18} className="text-[#FFC300]" /> Адмінка</> : <><User size={18} /> {isLoggedIn ? 'Кабінет' : 'Увійти'}</>}
+              <User size={18} /> {isLoggedIn || isStaff ? 'Кабінет' : 'Увійти'}
             </button>
 
             <div ref={catalogRef} className="relative">
@@ -187,8 +199,6 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
               )}
             </div>
 
-            {/* useful tips (articles) — a visible link, for buyers and for Google */}
-            <a href="/statti" onClick={linkClick('/statti')} className="hidden xl:inline text-sm lg:text-base font-bold uppercase tracking-wide text-zinc-300 hover:text-[#FFC300] transition-colors">Поради</a>
             <a href="/forum" onClick={linkClick('/forum')} className="hidden xl:inline text-sm lg:text-base font-bold uppercase tracking-wide text-zinc-300 hover:text-[#FFC300] transition-colors">Форум</a>
 
             <button
@@ -196,7 +206,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
               className="relative flex items-center gap-2 bg-[#FFC300] hover:bg-white text-black font-black text-xs uppercase tracking-wide px-3 py-2 rounded-xl transition-colors active:scale-95"
               aria-label="Кошик"
             >
-              <ShoppingBag size={16} /> Кошик
+              <ShoppingCart size={16} /> Кошик
               {cartCount > 0 && (
                 <span key={cartCount} className="min-w-[18px] h-[18px] px-1 bg-black text-[#FFC300] text-[11px] font-black rounded-full flex items-center justify-center animate-in zoom-in duration-200">
                   {cartCount > 99 ? '99+' : cartCount}
@@ -209,24 +219,16 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
           <div className="flex items-center gap-1.5 md:hidden shrink-0">
             {/* Cart badge — mobile */}
             <button
-              onClick={openCart}
-              className="relative w-9 h-9 flex items-center justify-center text-zinc-300 hover:text-[#FFC300] transition-colors"
+              onClick={() => { setIsMenuOpen(false); openCart(); }}
+              className="relative h-9 pl-2.5 pr-3 flex items-center gap-1.5 rounded-xl border-2 border-[#FFC300] text-[#FFC300] font-black text-[11px] uppercase active:scale-95 transition-transform"
               aria-label="Кошик"
             >
-              <ShoppingBag size={20} />
+              <ShoppingCart size={17} /> <span className="hidden min-[340px]:inline">Кошик</span>
               {cartCount > 0 && (
-                <span key={`mob-${cartCount}`} className="absolute top-0 right-0 min-w-[16px] h-4 px-0.5 bg-[#FFC300] text-black text-[10px] font-black rounded-full flex items-center justify-center animate-in zoom-in duration-200">
+                <span key={`mob-${cartCount}`} className="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 bg-[#FFC300] text-black text-[10px] font-black rounded-full flex items-center justify-center animate-in zoom-in duration-200">
                   {cartCount > 99 ? '99+' : cartCount}
                 </span>
               )}
-            </button>
-
-            <button
-              onClick={() => onAccountClick?.()}
-              className={`hidden min-[420px]:flex w-9 h-9 items-center justify-center transition-colors ${isLoggedIn || isStaff ? 'text-[#FFC300]' : 'text-zinc-300 hover:text-[#FFC300]'}`}
-              aria-label={isStaff ? 'Адмін-панель' : isLoggedIn ? 'Мій кабінет' : 'Увійти'}
-            >
-              {isStaff ? <Lock size={20} /> : <User size={20} />}
             </button>
 
             <a
@@ -251,53 +253,30 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
       </div>
 
       {/* Mobile Dropdown */}
+      {/* a tap anywhere outside the menu closes it (put into <body>: the header's blur would trap a fixed layer) */}
+      {isMenuOpen && createPortal(
+        <div className="md:hidden fixed inset-0 z-40 bg-black/60" onClick={() => setIsMenuOpen(false)} aria-hidden="true" />,
+        document.body,
+      )}
       {isMenuOpen && (
         <div className="md:hidden absolute top-full left-0 w-full max-h-[calc(100dvh-var(--header-h,64px))] overflow-y-auto overscroll-contain bg-zinc-900 border-b border-white/10 shadow-2xl animate-in slide-in-from-top-2 duration-200">
-          <div className="bg-black/50 p-4 border-b border-white/5 flex flex-col items-center gap-3">
-            <a href={phones.link1} className="flex items-center gap-2 text-[#FFC300] font-bold text-lg">
-              <Phone size={18} /> {phones.p1}
+          <div className="bg-black/50 px-4 py-3 border-b border-white/5 flex flex-wrap justify-center gap-x-5 gap-y-1">
+            <a href={phones.link1} className="flex items-center gap-2 text-[#FFC300] font-bold">
+              <Phone size={16} /> {phones.p1}
             </a>
-            <a href={phones.link2} className="flex items-center gap-2 text-white font-bold text-lg">
-              <Phone size={18} /> {phones.p2}
+            <a href={phones.link2} className="flex items-center gap-2 text-white font-bold">
+              <Phone size={16} /> {phones.p2}
             </a>
           </div>
 
           <nav className="flex flex-col p-4 gap-1">
             <button
               onClick={() => { onAccountClick?.(); setIsMenuOpen(false); }}
-              className="text-xl font-black uppercase italic tracking-wider text-left py-3 border-b border-white/5 text-zinc-300 hover:text-[#FFC300] flex items-center gap-2 transition-colors"
+              className="text-base font-black uppercase tracking-wide text-left py-2.5 border-b border-white/5 text-zinc-300 hover:text-[#FFC300] flex items-center gap-2 transition-colors"
             >
-              {isStaff ? <><Lock size={20} className="text-[#FFC300]" /> Адмін-панель</> : <><User size={20} /> {isLoggedIn ? 'Мій кабінет' : 'Увійти / Реєстрація'}</>}
+<User size={20} /> {isLoggedIn || isStaff ? 'Мій кабінет' : 'Увійти / Реєстрація'}
             </button>
 
-            {navItems.map((item) => (
-              <button
-                key={item.view}
-                onClick={() => handleNavClick(item.view)}
-                className={`text-xl font-black uppercase italic tracking-wider text-left py-3 border-b border-white/5 flex items-center gap-2 transition-colors ${
-                  currentView === item.view
-                    ? 'text-[#FFC300]'
-                    : 'text-zinc-300 hover:text-white'
-                }`}
-              >
-                {/* Cart badge in mobile menu */}
-                {item.view === 'home' ? (
-                  <span className="relative">
-                    <ShoppingBag size={20} />
-                    {cartCount > 0 && (
-                      <span key={`mmob-${cartCount}`} className="absolute -top-2 -right-2 min-w-[16px] h-4 px-0.5 bg-[#FFC300] text-black text-[10px] font-black rounded-full flex items-center justify-center animate-in zoom-in duration-200">
-                        {cartCount > 99 ? '99+' : cartCount}
-                      </span>
-                    )}
-                  </span>
-                ) : null}
-                {item.label}
-                {/* Active dot indicator */}
-                {currentView === item.view && (
-                  <span className="ml-auto w-2 h-2 rounded-full bg-[#FFC300]" />
-                )}
-              </button>
-            ))}
             <button onClick={() => { setIsMenuOpen(false); setMobileCatalog(true); }}
               className="my-3 flex items-center gap-3 rounded-2xl bg-[#FFC300] text-black px-4 py-3.5 font-black uppercase">
               <LayoutGrid size={20} /> Каталог товарів <span className="ml-auto text-xs font-bold normal-case opacity-70">{roots.length} розділів</span>
@@ -307,11 +286,12 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
               className="mb-2 flex items-center gap-3 rounded-2xl border border-[#FFC300]/40 bg-zinc-800 text-white px-4 py-3.5 font-black uppercase">
               <MessagesSquare size={20} className="text-[#FFC300]" /> Форум автомобілістів <span className="ml-auto text-xs font-bold normal-case text-zinc-400">питання й поради</span>
             </a>
-            <div className="flex flex-col py-2">
+            <div className="grid grid-cols-2 gap-x-3 py-1">
               {infoLinks.map(([href, label]) => (
-                <a key={href} href={href} onClick={(e) => { setIsMenuOpen(false); linkClick(href)(e); }} className="py-2 text-zinc-400 hover:text-white font-bold">{label}</a>
+                <a key={href} href={href} onClick={(e) => { setIsMenuOpen(false); linkClick(href)(e); }} className="py-2 text-sm text-zinc-400 hover:text-white font-bold">{label}</a>
               ))}
             </div>
+            <button onClick={() => setIsMenuOpen(false)} className="mt-2 h-11 rounded-xl border border-zinc-700 text-zinc-300 font-bold text-sm flex items-center justify-center gap-2"><X size={16} /> Закрити меню</button>
           </nav>
         </div>
       )}

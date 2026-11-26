@@ -53,7 +53,7 @@ const SettingsTab: React.FC = () => {
            <div className="bg-zinc-950 rounded-2xl p-2 border border-zinc-800 space-y-1">
                <NavButton id="general" label="Контакти" icon={Smartphone} />
                <NavButton id="security" label="API Ключі" icon={Shield} />
-               <NavButton id="manager" label="Менеджер / Доступ" icon={UserCog} />
+               <NavButton id="manager" label="Адміністратор / Доступ" icon={UserCog} />
                <NavButton id="suppliers" label="Постачальники" icon={Briefcase} />
                <NavButton id="system" label="Склад / Імпорт" icon={LayoutGrid} />
            </div>

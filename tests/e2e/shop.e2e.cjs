@@ -607,6 +607,15 @@ const phone = async (browser, url) => {
     assert.ok(overflow <= 1, `the page must not scroll sideways (overflow ${overflow}px)`);
   });
 
+  await step(shop, S, 'menu closes with a tap outside', async () => {
+    await ui.click(page.getByRole('button', { name: 'Відкрити меню' }));
+    await until(async () => assert.ok(await page.getByText('Форум автомобілістів').isVisible()));
+    assert.equal(await page.getByText('Корисні поради').count(), 0, 'no "useful tips" link any more');
+    await page.mouse.click(200, 620);
+    await until(async () => assert.equal(await page.getByText('Форум автомобілістів').count(), 0));
+    assert.ok(await page.getByRole('button', { name: 'Кошик' }).getByText('Кошик').isVisible(), 'the cart button says "Кошик"');
+  });
+
   await step(shop, S, 'sections list', async () => {
     await ui.click(page.getByRole('button', { name: /усі категорії/ }));
     await ui.click(page.getByRole('button', { name: 'Акумулятори', exact: true }));

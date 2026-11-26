@@ -22,8 +22,8 @@ const QuickOrderModal: React.FC<QuickOrderModalProps> = ({ product, phone, setPh
         <div className="bg-[#FFC300]/10 p-4 rounded-full text-[#FFC300] mb-2">
           <Phone size={32} strokeWidth={2.5}/>
         </div>
-        <h3 className="text-xl font-black text-white uppercase tracking-tight">{product.on_order ? "Дізнатися ціну" : "Купити в 1 клік"}</h3>
-        <p className="text-zinc-500 text-sm">{product.on_order ? 'Залиште номер — менеджер зателефонує і скаже ціну та термін постачання.' : 'Введіть ваш номер телефону, і ми зателефонуємо вам для оформлення замовлення.'}</p>
+        <h3 className="text-xl font-black text-white uppercase tracking-tight">{product.on_order && !product.supplier_offer_id ? "Дізнатися ціну" : "Купити в 1 клік"}</h3>
+        <p className="text-zinc-500 text-sm">{product.on_order && !product.supplier_offer_id ? 'Залиште номер — менеджер зателефонує і скаже ціну та термін постачання.' : 'Введіть ваш номер телефону, і ми зателефонуємо вам для оформлення замовлення.'}</p>
 
         <div className="w-full mt-4">
           <p className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest mb-2 text-left">Ваш телефон</p>

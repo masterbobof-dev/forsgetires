@@ -12,7 +12,7 @@ async function render(req, res) {
   let product = null;
   if (id) {
     try {
-      const rows = await rest(`tyres?id=eq.${id}&select=id,title,description,seo_title,seo_description,price,old_price,manufacturer,category_id,image_url,gallery,in_stock,radius,season,slug,catalog_number,on_order,stock_quantity,program_product_id`);
+      const rows = await rest(`tyres?id=eq.${id}&select=id,title,description,seo_title,seo_description,price,old_price,manufacturer,category_id,image_url,gallery,in_stock,radius,season,slug,catalog_number,on_order,stock_quantity,program_product_id,supplier_offer_id,lead_days`);
       product = rows[0] || null;
     } catch (e) {
       if (e instanceof DbUnavailable) throw e; // busy database is not "not found": answered with 503 below
@@ -33,7 +33,10 @@ async function render(req, res) {
 
   const url = `${SITE_URL}${productPath(product)}`;
   const price = parsePrice(product.price);
-  const onOrder = !!product.on_order;
+  // partner offers are on order but with a real retail price and delivery days
+  const partner = !!product.on_order && !!product.supplier_offer_id;
+  const onOrder = !!product.on_order && !partner;
+  const leadText = partner ? `доставка ${product.lead_days ? `${product.lead_days} дн.` : 'кілька днів'}` : '';
   // admin templates (SEO tab): own section's template first, then the general one
   let cats = [];
   try { cats = await rest('product_categories?select=id,parent_id,name,noindex'); } catch (e) { if (e instanceof DbUnavailable) throw e; /* none */ }
@@ -42,10 +45,10 @@ async function render(req, res) {
   const vars = { 'назва': product.title, 'бренд': product.manufacturer || '', 'ціна': onOrder ? '' : String(price), 'артикул': product.catalog_number || '', 'категорія': chain[0]?.name || '', 'розділ': chain[chain.length - 1]?.name || '', 'місто': 'Синельникове', 'магазин': SHOP_NAME };
   const tplTitle = tpl('title') && fillTemplate(tpl('title'), vars);
   const tplDesc = tpl('desc') && fillTemplate(tpl('desc'), vars);
-  const title = product.seo_title || tplTitle || (onOrder ? `${product.title} — під замовлення | ${SHOP_NAME}` : `${product.title} — ціна ${price} грн | ${SHOP_NAME}`);
+  const title = product.seo_title || tplTitle || (onOrder ? `${product.title} — під замовлення | ${SHOP_NAME}` : `${product.title} — ціна ${price} грн${partner ? ', під замовлення' : ''} | ${SHOP_NAME}`);
   const season = SEASON_UA[product.season] ? `${SEASON_UA[product.season]} шина. ` : '';
   const description = (product.seo_description || tplDesc || stripHtml(product.description) ||
-    (onOrder ? `${product.title} — під замовлення, ціну і термін постачання уточнюйте у менеджера. ` : `${season}Купити ${product.title} за ${price} грн. `) + `Самовивіз у Синельниковому або доставка Новою Поштою по Україні.`).slice(0, 300);
+    (onOrder ? `${product.title} — під замовлення, ціну і термін постачання уточнюйте у менеджера. ` : `${season}Купити ${product.title} за ${price} грн${partner ? ` (під замовлення, ${leadText})` : ''}. `) + `Самовивіз у Синельниковому або доставка Новою Поштою по Україні.`).slice(0, 300);
   const image = product.image_url || `${SITE_URL}/og.jpg`;
 
   html = html.replace(/<title>[\s\S]*?<\/title>/, `<title>${esc(title)}</title>`);
@@ -78,7 +81,7 @@ async function render(req, res) {
       url,
       priceCurrency: 'UAH',
       price,
-      availability: product.in_stock === false ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock',
+      availability: product.in_stock === false ? 'https://schema.org/OutOfStock' : partner ? 'https://schema.org/BackOrder' : 'https://schema.org/InStock',
       itemCondition: 'https://schema.org/NewCondition',
       seller: { '@type': 'Organization', name: SHOP_NAME },
       // the same terms as on the "Гарантія і повернення" page: return within 14 days
@@ -117,7 +120,7 @@ async function render(req, res) {
     ? `<h2>Схожі товари</h2><ul>${related.slice(0, 10).map((p) => `<li><a href="${esc(productPath(p))}">${esc(p.title)}</a>${p.on_order ? ' — під замовлення' : ` — ${parsePrice(p.price)} грн`}</li>`).join('')}</ul>`
     : '';
   const crumbs = [...chain].reverse().map((c) => esc(c.name)).join(' › ');
-  html = setRootContent(html, `${crumbs ? `<nav>${crumbs}</nav>` : ''}<h1>${esc(product.title)}</h1><p>${onOrder ? 'Під замовлення — ціну і термін уточнюйте у менеджера' : `Ціна: ${price} грн${product.in_stock === false ? ' (немає в наявності)' : ''}`}</p><p>${esc(description)}</p>${relatedHtml}<p><a href="/">Каталог товарів</a></p>`);
+  html = setRootContent(html, `${crumbs ? `<nav>${crumbs}</nav>` : ''}<h1>${esc(product.title)}</h1><p>${onOrder ? 'Під замовлення — ціну і термін уточнюйте у менеджера' : `Ціна: ${price} грн${product.in_stock === false ? ' (немає в наявності)' : partner ? ` — під замовлення, ${leadText}` : ''}`}</p><p>${esc(description)}</p>${relatedHtml}<p><a href="/">Каталог товарів</a></p>`);
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=86400');

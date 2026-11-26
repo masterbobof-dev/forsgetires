@@ -103,7 +103,8 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
   if (!product) return null;
 
   const isOutOfStock = product.in_stock === false;
-  const onOrder = !!product.on_order;
+  const partner = !!product.on_order && !!product.supplier_offer_id;
+  const onOrder = !!product.on_order && !partner;
   const stockQty = product.program_product_id && typeof product.stock_quantity === 'number' ? product.stock_quantity : null;
   const priceNum = parseFloat(product.price || '0');
   const oldPriceNum = parseFloat(product.old_price || '0');
@@ -116,8 +117,8 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
   const go = (dir: number) => setPhotoIdx(i => (i + dir + photos.length) % photos.length);
   const tyreIndex = product.width ? parseTyreIndex(product.title) : null;
 
-  const availability = isOutOfStock ? 'Немає в наявності' : onOrder ? 'Під замовлення' : stockQty !== null && stockQty > 0 ? `В наявності: ${stockQty > 10 ? '>10' : stockQty} шт` : 'В наявності';
-  const availabilityCls = isOutOfStock ? 'text-red-500' : onOrder ? 'text-amber-400' : 'text-emerald-500';
+  const availability = isOutOfStock ? 'Немає в наявності' : onOrder ? 'Під замовлення' : partner ? `Під замовлення · доставка ${product.lead_days ? `${product.lead_days} дн.` : 'кілька днів'}` : stockQty !== null && stockQty > 0 ? `В наявності: ${stockQty > 10 ? '>10' : stockQty} шт` : 'В наявності';
+  const availabilityCls = isOutOfStock ? 'text-red-500' : onOrder || partner ? 'text-amber-400' : 'text-emerald-500';
   const hasSpecs = !!(preset && product.attributes && preset.fields.some(f => formatAttr(f, product.attributes?.[f.key])));
   const recent = getRecent().filter(t => t.id !== product.id).slice(0, 8);
 
@@ -137,8 +138,8 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
           <p className="px-2.5 pt-2 text-[11px] font-bold text-white line-clamp-2 min-h-[2.6em] leading-snug">{t.title} {t.radius}</p>
         </button>
         <div className="px-2.5 pb-2.5 pt-1.5 flex items-center justify-between gap-1">
-          <span className="text-sm font-black text-[#FFC300]">{t.on_order ? <span className="text-[11px] text-amber-400">Під замовлення</span> : <>{formatPrice(t.price)} <span className="text-[10px] text-zinc-500 font-normal">грн</span></>}</span>
-          {!t.on_order && <button onClick={withFull(t, addToCart)} aria-label="У кошик" className="w-8 h-8 shrink-0 rounded-lg bg-[#FFC300] hover:bg-white text-black flex items-center justify-center"><ShoppingCart size={15} /></button>}
+          <span className="text-sm font-black text-[#FFC300]">{t.on_order && !t.supplier_offer_id ? <span className="text-[11px] text-amber-400">Під замовлення</span> : <>{formatPrice(t.price)} <span className="text-[10px] text-zinc-500 font-normal">грн</span></>}</span>
+          {(!t.on_order || t.supplier_offer_id) && <button onClick={withFull(t, addToCart)} aria-label="У кошик" className="w-8 h-8 shrink-0 rounded-lg bg-[#FFC300] hover:bg-white text-black flex items-center justify-center"><ShoppingCart size={15} /></button>}
         </div>
       </div>
     );
@@ -364,7 +365,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                     </span>
                     <span className="min-w-0">
                       <span className="block text-[11px] text-white font-bold line-clamp-2 leading-tight">{t.title}</span>
-                      <span className="block text-[11px] text-[#FFC300] font-black mt-0.5">{t.on_order ? 'Під замовлення' : formatPrice(t.price)}</span>
+                      <span className="block text-[11px] text-[#FFC300] font-black mt-0.5">{t.on_order && !t.supplier_offer_id ? 'Під замовлення' : formatPrice(t.price)}</span>
                     </span>
                   </button>
                 ))}

@@ -29,7 +29,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
   const [imgBroken, setImgBroken] = useState(false); // a photo that does not open → the yellow icon instead of a "?"
   const hasImg = !!tyre.image_url && !imgBroken;
   const isOutOfStock = tyre.in_stock === false;
-  const onOrder = !!tyre.on_order;
+  // "ask for the price" goods; partner offers are on order too, but with a known price and delivery days
+  const partner = !!tyre.on_order && !!tyre.supplier_offer_id;
+  const onOrder = !!tyre.on_order && !partner;
   // own stock from the shop program: real quantity
   const stockQty = tyre.program_product_id && typeof tyre.stock_quantity === 'number' ? tyre.stock_quantity : null;
   const priceNum = parseFloat(tyre.price || '0');
@@ -185,8 +187,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
             )}
           </div>
 
-          {onOrder ? (
-            <p className="flex items-center gap-1.5 text-[11px] font-bold text-amber-400 mb-2"><Clock size={13} /> Під замовлення</p>
+          {onOrder || partner ? (
+            <p className="flex items-center gap-1.5 text-[11px] font-bold text-amber-400 mb-2"><Clock size={13} /> Під замовлення{partner && tyre.lead_days ? ` · ${tyre.lead_days} дн.` : ''}</p>
           ) : stockQty !== null && stockQty > 0 ? (
             <p className="flex items-center gap-1.5 text-[11px] font-bold text-green-400 mb-2">
               <span className="w-1.5 h-1.5 rounded-full bg-green-400" /> В наявності: {stockQty > 10 ? '>10' : stockQty} шт

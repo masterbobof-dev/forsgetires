@@ -71,8 +71,8 @@ export const useCheckout = ({ userId, userEmail, cartItems, onCartChange, novaPo
           status: 'new',
           user_id: userId || null,
           customer_email: userEmail || null,
-          items: [{ id: quickOrderProduct.id, title: quickOrderProduct.title, quantity: 1, price: quickOrderProduct.on_order ? '0' : quickOrderProduct.price }],
-          ...(quickOrderProduct.on_order ? { comment: 'Запит ціни і терміну постачання (товар під замовлення)' } : {}),
+          items: [{ id: quickOrderProduct.id, title: quickOrderProduct.title, quantity: 1, price: quickOrderProduct.on_order && !quickOrderProduct.supplier_offer_id ? '0' : quickOrderProduct.price }],
+          ...(quickOrderProduct.on_order && !quickOrderProduct.supplier_offer_id ? { comment: 'Запит ціни і терміну постачання (товар під замовлення)' } : {}),
       }]);
       if (error) throw error;
       logAnalyticsEvent('purchase', String(quickOrderProduct.id), quickOrderProduct.title, undefined, safeParsePrice(quickOrderProduct.price));
@@ -100,7 +100,7 @@ export const useCheckout = ({ userId, userEmail, cartItems, onCartChange, novaPo
           payment_method: paymentMethod,
           user_id: userId || null,
           customer_email: userEmail || null,
-          items: items.map(i => ({ id: i.id, title: i.title, quantity: i.quantity, price: i.on_order ? '0' : i.price }))
+          items: items.map(i => ({ id: i.id, title: i.title, quantity: i.quantity, price: i.on_order && !i.supplier_offer_id ? '0' : i.price }))
       }]);
       if (error) throw error;
       logAnalyticsEvent('purchase', items.map(i => i.id).join(','), `${items.length} товар(и)`, undefined,

@@ -64,7 +64,11 @@
       "destination": "/api/page?path=/:city"
     },
     {
-      "source": "/:app(admin|account|oferta|privacy)",
+      "source": "/:legal(oferta|privacy)",
+      "destination": "/api/page?path=/:legal"
+    },
+    {
+      "source": "/:app(admin|account)",
       "destination": "/app.html"
     },
     {

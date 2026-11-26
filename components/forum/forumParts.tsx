@@ -106,10 +106,14 @@ export const SectionSelect: React.FC<{ sections: ForumSection[]; value: string; 
 );
 
 /** Photos of a message: add (up to 6, shrunk on the phone before upload) and remove. */
-export const PhotoPicker: React.FC<{ userId: string; images: string[]; onChange: (urls: string[]) => void; onBusy?: (b: boolean) => void; onError?: (m: string) => void; max?: number }> = ({ userId, images, onChange, onBusy, onError, max = 6 }) => {
+export const PhotoPicker: React.FC<{
+  userId: string; images: string[]; onChange: (urls: string[]) => void; onBusy?: (b: boolean) => void; onError?: (m: string) => void; max?: number;
+  /** filled with the "add these files" function, for photos pasted from the clipboard into the form */
+  addRef?: React.MutableRefObject<((files: File[]) => void) | null>;
+}> = ({ userId, images, onChange, onBusy, onError, max = 6, addRef }) => {
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
-  const add = async (files: FileList | null) => {
+  const add = async (files: File[] | FileList | null) => {
     if (!files?.length) return;
     setBusy(true); onBusy?.(true);
     let list = images;
@@ -122,6 +126,7 @@ export const PhotoPicker: React.FC<{ userId: string; images: string[]; onChange:
     } catch { onError?.('Не вдалося завантажити фото. Спробуйте інше (JPG або PNG).'); }
     setBusy(false); onBusy?.(false);
   };
+  if (addRef) addRef.current = (files) => { add(files); };
   return (
     <div className="flex flex-wrap items-center gap-2">
       {images.map(u => (
@@ -155,6 +160,12 @@ export const MessageForm: React.FC<{
   const [photoBusy, setPhotoBusy] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const addPhotos = useRef<((files: File[]) => void) | null>(null);
+  // a picture pasted from the clipboard (Ctrl+V, «Вставити» on the phone) becomes a photo of the message
+  const onPaste = (e: React.ClipboardEvent) => {
+    const files = Array.from(e.clipboardData?.items || []).filter(i => i.kind === 'file' && i.type.startsWith('image/')).map(i => i.getAsFile()).filter((f): f is File => !!f);
+    if (files.length) { e.preventDefault(); addPhotos.current?.(files); }
+  };
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
     if (topic && title.trim().length < 5) return setError('Напишіть заголовок (хоча б 5 літер).');
@@ -167,7 +178,7 @@ export const MessageForm: React.FC<{
     setSending(false);
   };
   return (
-    <form onSubmit={send} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 md:p-5 space-y-3">
+    <form onSubmit={send} onPaste={onPaste} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 md:p-5 space-y-3">
       {topic && <>
         <input value={title} onChange={e => setTitle(e.target.value)} maxLength={150} placeholder="Заголовок теми, напр. «Які шини взяти на Ланос?»"
           className="w-full h-12 bg-black border border-zinc-700 rounded-xl px-4 text-white font-bold outline-none focus:border-[#FFC300]" />
@@ -176,7 +187,7 @@ export const MessageForm: React.FC<{
       <textarea value={body} onChange={e => setBody(e.target.value)} rows={topic ? 7 : 4} maxLength={topic ? 10000 : 5000}
         placeholder={topic ? 'Опишіть питання або поділіться порадою' : 'Ваша відповідь'}
         className="w-full bg-black border border-zinc-700 rounded-xl p-4 text-white outline-none focus:border-[#FFC300]" />
-      <PhotoPicker userId={userId} images={images} onChange={setImages} onBusy={setPhotoBusy} onError={setError} />
+      <PhotoPicker userId={userId} images={images} onChange={setImages} onBusy={setPhotoBusy} onError={setError} addRef={addPhotos} />
       {allowPin && topic && (
         <label className="flex items-center gap-2 text-sm text-zinc-300"><input type="checkbox" checked={pinned} onChange={e => setPinned(e.target.checked)} className="accent-[#FFC300]" /> Закріпити вгорі розділу</label>
       )}

@@ -6,6 +6,8 @@ import { TyreProduct } from '../../types';
 import { parseTyreIndex, describeTyreIndex } from '../../tyreIndex';
 
 interface ProductCardProps {
+  /** one of the first cards on screen: load its photo at once (Google measures how fast it appears) */
+  priority?: boolean;
   tyre: TyreProduct;
   onClick: () => void;
   onAddToCart: (e: React.MouseEvent) => void;
@@ -23,7 +25,7 @@ interface ProductCardProps {
   placeholderIcon?: React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 }
 
-const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, onQuickOrder, formatPrice, chips = [], isFavorite, onToggleFavorite, isCompared, onToggleCompare, showStock = false, placeholderIcon: PlaceholderIcon }) => {
+const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, onQuickOrder, formatPrice, chips = [], isFavorite, onToggleFavorite, isCompared, onToggleCompare, showStock = false, placeholderIcon: PlaceholderIcon, priority = false }) => {
   const [imgBroken, setImgBroken] = useState(false); // a photo that does not open → the yellow icon instead of a "?"
   const hasImg = !!tyre.image_url && !imgBroken;
   const isOutOfStock = tyre.in_stock === false;
@@ -59,7 +61,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
               src={tyre.image_thumb_url || tyre.image_url} 
               className="w-full h-full object-contain p-3 sm:p-4 mix-blend-multiply transition-transform duration-700 group-hover:scale-105" 
               alt={altText}
-              loading="lazy"
+              loading={priority ? 'eager' : 'lazy'}
+              fetchPriority={priority ? 'high' : 'auto'}
               decoding="async"
               width={400}
               height={500}

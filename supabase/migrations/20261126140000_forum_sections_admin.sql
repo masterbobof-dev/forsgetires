@@ -1,0 +1,4 @@
+-- Applied to the database through the Supabase tools (migrations forum_sections_admin, forum_before_update_invoker, forum_own):
+-- forum_sections (sections + subsections, staff edit), topics.category -> forum_sections.slug,
+-- is_locked / edited_at, staff delete, authors edit their own text/photos (trigger private.forum_before_update
+-- keeps every other field), reply counter on delete, no replies in closed topics, rpc forum_own(p_topic).

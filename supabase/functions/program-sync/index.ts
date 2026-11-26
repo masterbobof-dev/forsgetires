@@ -6,7 +6,10 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 const PROGRAM_URL = 'https://zuhanlspejgizjbwbnda.supabase.co';
 // Public "anon" key of the program project: by itself it can only call the export with a valid token.
 const PROGRAM_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp1aGFubHNwZWpnaXpqYndibmRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNzAyOTEsImV4cCI6MjA5Mzc0NjI5MX0.3FZJmqq-0eWjGqhvVTl3yAVIoOBuMN2g-lR3E5Fxr2U';
-const PAGE = 1000;
+// products per database write; a busy (small) database can't write 1000 at once in time,
+// so start with 200 and halve on a timeout instead of failing and retrying the same big page forever
+const FIRST_PAGE = 200;
+const MIN_PAGE = 25;
 const TIME_BUDGET_MS = 100_000;
 
 const site = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
@@ -22,20 +25,24 @@ Deno.serve(async (req) => {
   let cursorAt: string = state.cursor_at;
   let cursorId: string = state.cursor_id;
   let total = 0, inserted = 0, updated = 0, pages = 0;
+  let page = FIRST_PAGE;
 
   try {
     while (Date.now() - started < TIME_BUDGET_MS) {
       const res = await fetch(`${PROGRAM_URL}/rest/v1/rpc/site_catalog_export`, {
         method: 'POST',
         headers: { apikey: PROGRAM_ANON_KEY, Authorization: `Bearer ${PROGRAM_ANON_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ p_token: state.token, p_since: cursorAt, p_after_id: cursorId, p_limit: PAGE }),
+        body: JSON.stringify({ p_token: state.token, p_since: cursorAt, p_after_id: cursorId, p_limit: page }),
       });
       if (!res.ok) throw new Error(`program ${res.status}: ${(await res.text()).slice(0, 300)}`);
       const payload = await res.json();
       const products: { id: string; updated_at: string }[] = payload.products || [];
       // categories only need to be sent with the first page of a run
       const { data: stats, error } = await site.rpc('program_sync_apply', { payload: pages === 0 ? payload : { products } });
-      if (error) throw new Error(`apply: ${error.message}`);
+      if (error) {
+        if (/timeout/i.test(error.message) && page > MIN_PAGE) { page = Math.max(MIN_PAGE, Math.floor(page / 2)); continue; }
+        throw new Error(`apply: ${error.message}`);
+      }
       pages++;
       total += products.length; inserted += stats?.inserted || 0; updated += stats?.updated || 0;
       if (products.length) {
@@ -43,7 +50,7 @@ Deno.serve(async (req) => {
         cursorId = products[products.length - 1].id;
         await site.rpc('program_sync_save', { p_cursor_at: cursorAt, p_cursor_id: cursorId, p_count: products.length, p_error: null });
       }
-      if (products.length < PAGE) break;
+      if (products.length < page) break;
     }
     if (!total) await site.rpc('program_sync_save', { p_cursor_at: null, p_cursor_id: null, p_count: 0, p_error: null });
     // Full pass finished (nightly reset): products not seen since the reset were deleted in the program -> hide them

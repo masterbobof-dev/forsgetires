@@ -132,6 +132,11 @@ const CategoryNav: React.FC<CategoryNavProps> = ({ categories, active, onChange,
                     const hasKids = getChildren(categories, r.id).length > 0;
                     return tile(r.id, getCategoryIcon(r.icon), r.name, activeRoot?.id === r.id, () => hasKids ? setDrill(r.id) : pick(r.id), '', hasKids);
                   })}
+                  {/* the biggest subsections right here, so there are at least 12 tiles (the program has 100+ sections) */}
+                  {categories.filter(c => c.parent_id && (c.available || 0) > 0)
+                    .sort((a, b) => (b.available || 0) - (a.available || 0))
+                    .slice(0, Math.max(0, 12 - roots.length))
+                    .map(k => tile(`p${k.id}`, getCategoryIcon(k.icon || roots.find(r => r.id === k.parent_id)?.icon), k.name, active === k.id, () => pick(k.id)))}
                   {items.filter(i => i.hot).map(i => tile(i.id, i.icon, i.label, i.on, () => pick(i.sel), i.on ? '' : '!bg-red-500/10 !border-red-500/30 !text-red-400'))}
                   {active !== 'all' && tile('all', Grid, 'Усі товари', false, () => pick('all'))}
                 </div>

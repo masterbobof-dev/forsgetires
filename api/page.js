@@ -1,7 +1,7 @@
 // Home, category (?c=slug), article and info pages: serves the normal website with the
 // page's own <title>, description, canonical link and readable text already in the HTML,
 // so Google sees real content without running JavaScript.
-import { SITE_URL, SHOP_NAME, rest, escapeXml as esc, productPath, parsePrice, slugify } from './_shop.js';
+import { SITE_URL, SHOP_NAME, rest, escapeXml as esc, productPath, parsePrice, slugify, sendUnavailable, DbUnavailable } from './_shop.js';
 import { loadAppHtml, setHead, addJsonLd, setRootContent, siteSettings, applySite, findRedirect } from './_html.js';
 import { CITIES, cityFromPath, cityPath, cityTexts } from './_cities.js';
 import { catPath, catSlugFrom } from './_paths.js';
@@ -52,14 +52,14 @@ const PRODUCT_FIELDS = 'id,title,slug,price,image_url';
 async function build(pathname, query) {
   let cats = [];
   let allCats = [];
-  try { cats = allCats = await rest('product_categories?select=id,name,slug,parent_id,kind,description,seo_title,seo_description,noindex&is_active=eq.true&order=sort_order'); } catch { /* ignore */ }
+  try { cats = allCats = await rest('product_categories?select=id,name,slug,parent_id,kind,description,seo_title,seo_description,noindex&is_active=eq.true&order=sort_order'); } catch (e) { if (e instanceof DbUnavailable) throw e; /* ignore */ }
   // only categories with goods in stock (same as the site menu), biggest first
   try {
     const counts = await rest('rpc/category_counts');
     const own = new Map(counts.map((r) => [Number(r.category_id), Number(r.n)]));
     const total = (c) => (own.get(c.id) || 0) + cats.filter((k) => k.parent_id === c.id).reduce((s, k) => s + total(k), 0);
     cats = cats.map((c) => ({ ...c, available: total(c) })).filter((c) => c.available > 0).sort((a, b) => b.available - a.available);
-  } catch { /* keep all */ }
+  } catch (e) { if (e instanceof DbUnavailable) throw e; /* keep all */ }
 
   // --- an address that does not exist ---
   if (pathname === '/404') {
@@ -94,7 +94,7 @@ async function build(pathname, query) {
   const city = cityFromPath(pathname);
   if (city) {
     const t = cityTexts(city);
-    const hits = await rest(`tyres?select=${PRODUCT_FIELDS}&in_stock=not.is.false&on_order=is.false&has_photo=is.true&order=stock_quantity.desc&limit=24`).catch(() => []);
+    const hits = await rest(`tyres?select=${PRODUCT_FIELDS}&in_stock=not.is.false&on_order=is.false&has_photo=is.true&order=stock_quantity.desc&limit=24`).catch((e) => { if (e instanceof DbUnavailable) throw e; return []; });
     const subs = cats.filter((c) => c.parent_id).slice(0, 30);
     return {
       title: t.title, description: t.description, url: SITE_URL + cityPath(city),
@@ -115,7 +115,7 @@ async function build(pathname, query) {
     const i = INFO[pathname];
     // text edited in the shop program (site_pages) replaces the built-in summary
     const slug = { '/dostavka-i-oplata': 'delivery', '/garantiya-i-povernennya': 'warranty', '/pro-nas': 'about', '/kontakty': 'contacts', '/faq': 'faq' }[pathname];
-    const custom = (await rest(`site_pages?slug=eq.${slug}&select=title,content`).catch(() => []))[0];
+    const custom = (await rest(`site_pages?slug=eq.${slug}&select=title,content`).catch((e) => { if (e instanceof DbUnavailable) throw e; return []; }))[0];
     if (custom) {
       return {
         title: `${custom.title} — інтернет-магазин ${SHOP_NAME}`, description: excerpt(custom.content), url: SITE_URL + pathname,
@@ -171,8 +171,8 @@ async function build(pathname, query) {
 
   // --- home ---
   const [hot, articles] = await Promise.all([
-    rest(`tyres?select=${PRODUCT_FIELDS}&is_hot=eq.true&in_stock=not.is.false&order=created_at.desc&limit=24`).catch(() => []),
-    rest('articles?select=id,title&order=created_at.desc&limit=6').catch(() => []),
+    rest(`tyres?select=${PRODUCT_FIELDS}&is_hot=eq.true&in_stock=not.is.false&order=created_at.desc&limit=24`).catch((e) => { if (e instanceof DbUnavailable) throw e; return []; }),
+    rest('articles?select=id,title&order=created_at.desc&limit=6').catch((e) => { if (e instanceof DbUnavailable) throw e; return []; }),
   ]);
   return {
     url: `${SITE_URL}/`, keepHead: true,
@@ -189,6 +189,7 @@ export default async function handler(req, res) {
   const pathname = (String(req.query.path ?? url.pathname) || '/').replace(/\/+$/, '') || '/';
   let html = await loadAppHtml(req);
   let status = 200;
+  let failed = false;
   try {
     const page = await build(pathname, req.query);
     if (page.status === 404 || page.noindex) {
@@ -207,7 +208,10 @@ export default async function handler(req, res) {
     if (page.content) html = setRootContent(html, page.content);
   } catch (e) {
     console.error('page render failed', e);
+    failed = true;
   }
+  // database busy: the shop still works in the browser; tell Google "come back later", don't cache
+  if (failed) return sendUnavailable(res, html, 'text/html; charset=utf-8');
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=86400');
   return res.status(status).send(html);

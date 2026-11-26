@@ -1,6 +1,6 @@
 // Always-fresh sitemap.xml built from Supabase: home, categories, legal pages and
 // every product in stock (/p/<id>-<slug>). Served at /sitemap.xml via vercel.json.
-import { SITE_URL, rest, restAll, escapeXml, productPath, slugify } from './_shop.js';
+import { SITE_URL, rest, restAll, escapeXml, productPath, slugify, sendUnavailable, DbUnavailable } from './_shop.js';
 import { CITIES, cityPath } from './_cities.js';
 
 const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : undefined);
@@ -12,7 +12,7 @@ const urlTag = (loc, { lastmod, changefreq, priority }) =>
 export default async function handler(req, res) {
   try {
     let categories = [];
-    try { categories = await rest('product_categories?select=slug&is_active=eq.true&noindex=is.false&order=sort_order'); } catch { /* table missing */ }
+    try { categories = await rest('product_categories?select=slug&is_active=eq.true&noindex=is.false&order=sort_order'); } catch (e) { if (e instanceof DbUnavailable) throw e; /* table missing */ }
     const products = await restAll('tyres?select=id,title,slug,created_at&in_stock=not.is.false&order=id');
 
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
@@ -23,7 +23,7 @@ export default async function handler(req, res) {
     for (const c of CITIES) xml += urlTag(SITE_URL + cityPath(c), { changefreq: 'weekly', priority: c.home ? '0.9' : '0.7' });
     xml += urlTag(`${SITE_URL}/statti`, { changefreq: 'weekly', priority: '0.6' });
     let articles = [];
-    try { articles = await rest('articles?select=id,title,created_at&order=id'); } catch { /* no articles */ }
+    try { articles = await rest('articles?select=id,title,created_at&order=id'); } catch (e) { if (e instanceof DbUnavailable) throw e; /* no articles */ }
     for (const a of articles) xml += urlTag(`${SITE_URL}/statti/${a.id}-${slugify(String(a.title).replace(/[^\p{L}\p{N}\s-]/gu, ' '))}`, { lastmod: day(a.created_at), changefreq: 'monthly', priority: '0.6' });
     xml += urlTag(`${SITE_URL}/oferta`, { changefreq: 'yearly', priority: '0.2' });
     xml += urlTag(`${SITE_URL}/privacy`, { changefreq: 'yearly', priority: '0.2' });
@@ -34,7 +34,8 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
     res.status(200).send(xml);
   } catch (err) {
-    res.status(500).setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.send(`Sitemap error: ${err.message}`);
+    console.error('sitemap failed', err);
+    // 503 + Retry-After: Google keeps the previous sitemap and comes back later
+    return sendUnavailable(res, `Sitemap temporarily unavailable: ${err.message}`);
   }
 }

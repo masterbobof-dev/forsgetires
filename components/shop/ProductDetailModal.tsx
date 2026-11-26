@@ -131,9 +131,9 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
     const img = t.image_thumb_url || t.image_url;
     const Icon = iconFor ? iconFor(t) : undefined;
     return (
-      <div key={t.id} className="snap-start shrink-0 w-[112px] md:w-[172px] bg-zinc-950 border border-zinc-800 hover:border-zinc-600 rounded-2xl overflow-hidden flex flex-col transition-colors">
+      <div key={t.id} className="snap-start shrink-0 w-[104px] md:w-[150px] bg-zinc-950 border border-zinc-800 hover:border-zinc-600 rounded-2xl overflow-hidden flex flex-col transition-colors">
         <button onClick={openItem(t)} className="text-left flex-1 outline-none focus:outline-none [-webkit-tap-highlight-color:transparent]">
-          <div className={`relative aspect-square flex items-center justify-center ${img ? 'bg-white' : ''}`}>
+          <div className={`relative h-20 md:h-28 flex items-center justify-center ${img ? 'bg-white' : ''}`}>
             {img ? <img src={img} alt={t.title} loading="lazy" className="w-full h-full object-contain p-2" /> : <NoPhoto icon={Icon} size={26} />}
             {badge && <span className={`absolute top-1.5 left-1.5 text-[9px] ${badge.cls} font-black uppercase px-1.5 py-0.5 rounded`}>{badge.label}</span>}
           </div>
@@ -160,7 +160,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
             {img ? <img src={img} alt="" loading="lazy" className="w-full h-full object-contain p-0.5" /> : <NoPhoto icon={Icon} size={18} />}
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-xs font-bold text-white leading-snug line-clamp-2">{t.title}</span>
+            <span className="text-xs font-bold text-white leading-snug line-clamp-2 break-words">{t.title}</span>
             <span className="flex flex-wrap items-center gap-x-2 text-[10px] font-bold mt-0.5">
               {badge && <span className={`${badge.cls} px-1 rounded uppercase`}>{badge.label}</span>}
               <span className={t.on_order ? 'text-amber-400' : 'text-emerald-400'}>{t.on_order ? `під замовлення${t.lead_days ? ` · ${t.lead_days} дн.` : ''}` : 'в наявності'}</span>

@@ -18,7 +18,7 @@ const ATTR_LABELS = {
   size: ['Розміри (Д×Ш×В), мм', ''], voltage: ['Напруга', ' V'],
   diameter: ['Діаметр', ''], pcd: ['PCD', ''], width: ['Ширина', ' J'], et: ['Виліт ET', ''], dia: ['DIA', ' мм'], type: ['Тип диска', ''],
 };
-const ATTR_VALUES = { right: 'Плюс праворуч', left: 'Плюс ліворуч', euro: 'Європа', asia: 'Азія', alloy: 'Литий', steel: 'Сталевий', forged: 'Кований' };
+const ATTR_VALUES = { right: 'R+ (плюс праворуч)', left: 'L+ (плюс ліворуч)', euro: 'Європа', asia: 'Азія', alloy: 'Литий', steel: 'Сталевий', forged: 'Кований' };
 
 const loadData = async () => {
   let categories = [];

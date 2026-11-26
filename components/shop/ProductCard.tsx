@@ -13,7 +13,7 @@ interface ProductCardProps {
   onAddToCart: (e: React.MouseEvent) => void;
   onQuickOrder?: (tyre: TyreProduct) => void;
   formatPrice: (p: string | undefined) => string;
-  /** characteristic badges, e.g. "60 Ah", "+ праворуч", "R16" */
+  /** characteristic badges, e.g. "60 Ah", "R+", "R16" */
   chips?: string[];
   isFavorite?: boolean;
   onToggleFavorite?: () => void;

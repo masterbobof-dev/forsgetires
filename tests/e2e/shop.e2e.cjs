@@ -134,9 +134,9 @@ const catalogue = async (browser, url) => {
     await expectCards(page, 1);
     await ui.select(page.locator('select[aria-label="Ємність"]'), '');
     await expectCards(page, 4);
-    await ui.click(page.locator('aside').getByRole('button', { name: /Плюс ліворуч/ }));
+    await ui.click(page.locator('aside').getByRole('button', { name: /L\+ \(плюс ліворуч\)/ }));
     await expectCards(page, 1);
-    await ui.click(page.locator('aside').getByRole('button', { name: /Плюс ліворуч/ }));
+    await ui.click(page.locator('aside').getByRole('button', { name: /L\+ \(плюс ліворуч\)/ }));
     await expectCards(page, 4);
   });
 
@@ -616,7 +616,7 @@ const phone = async (browser, url) => {
   await step(shop, S, 'filters sheet', async () => {
     await ui.click(page.getByRole('button', { name: 'Фільтри', exact: true }));
     const sheet = page.getByRole('dialog', { name: 'Фільтри' });
-    await ui.click(sheet.getByRole('button', { name: /Плюс ліворуч/ }));
+    await ui.click(sheet.getByRole('button', { name: /L\+ \(плюс ліворуч\)/ }));
     await until(async () => assert.ok(await sheet.getByRole('button', { name: 'Показати 1 товарів' }).isVisible()));
     await ui.click(sheet.getByRole('button', { name: 'Показати 1 товарів' }));
     await expectCards(page, 1);

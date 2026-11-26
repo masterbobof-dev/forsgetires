@@ -3,6 +3,8 @@ import React, { useEffect, useState } from 'react';
 import { formatUaPhone } from '../phone';
 import { User, Phone, MapPin, Package, LogOut, Save, Loader2, Key, CheckCircle2, ShoppingBag, ArrowLeft, Truck } from 'lucide-react';
 import { supabase } from '../supabaseClient';
+import { fetchMe, fetchUnread, userPath, messagesPath } from '../forum';
+import { linkClick } from '../navigation';
 import NovaPoshtaPicker from './NovaPoshtaPicker';
 import type { AuthState } from '../useAuth';
 
@@ -25,6 +27,25 @@ export const ORDER_STATUS: Record<string, { label: string; cls: string }> = {
   shipped: { label: 'Відправлено', cls: 'bg-purple-500/10 text-purple-400 border-purple-500/30' },
   completed: { label: 'Виконано', cls: 'bg-zinc-700/40 text-zinc-300 border-zinc-600/50' },
   cancelled: { label: 'Скасовано', cls: 'bg-red-500/10 text-red-400 border-red-500/30' },
+};
+
+/** The person's forum profile: garage with cars, friends, private messages. */
+const ForumProfileLink: React.FC = () => {
+  const [pid, setPid] = useState<number | null>(null);
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    fetchMe().then(m => setPid(m?.pid || null), () => undefined);
+    fetchUnread().then(setUnread, () => undefined);
+  }, []);
+  if (!pid) return null;
+  return (
+    <div className="md:col-span-2 grid grid-cols-2 gap-2">
+      <a href={userPath(pid)} onClick={linkClick(userPath(pid))} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 hover:border-[#FFC300] rounded-2xl p-4 text-white font-bold text-sm">🚗 Мій профіль і гараж</a>
+      <a href={messagesPath()} onClick={linkClick(messagesPath())} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 hover:border-[#FFC300] rounded-2xl p-4 text-white font-bold text-sm">
+        ✉️ Повідомлення{unread > 0 && <span className="ml-auto min-w-6 h-6 px-1.5 rounded-full bg-[#FFC300] text-black text-xs font-black flex items-center justify-center">{unread}</span>}
+      </a>
+    </div>
+  );
 };
 
 /** A forum moderator gets a button to the forum part of the admin panel. */
@@ -182,6 +203,7 @@ const AccountPage: React.FC<{ auth: AuthState; onBack: () => void }> = ({ auth, 
       ) : (
         <div className="grid md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
           <ForumModLink />
+          <ForumProfileLink />
           <div className="md:col-span-2 bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
             <h2 className="text-xs font-black uppercase tracking-widest text-zinc-400">Значок на форумі</h2>
             <p className="text-zinc-500 text-xs">Показується біля ваших повідомлень на форумі: оберіть прикольну іконку або поставте своє фото.</p>

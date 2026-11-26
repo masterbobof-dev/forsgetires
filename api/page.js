@@ -137,6 +137,12 @@ async function build(pathname, query) {
           + `<ul>${topics.map((t) => `<li>${link(forumPath(t), t.title)} — ${t.replies_count} відп.</li>`).join('')}</ul>${navBlock(cats)}`,
       };
     }
+    // people's profiles and private messages: shown by the website itself, not for search engines
+    if (/^\/forum\/(user-\d+|messages)\/?$/.test(pathname)) {
+      const msgs = pathname.startsWith('/forum/messages');
+      return { noindex: true, title: `${msgs ? 'Повідомлення' : 'Профіль учасника'} — форум «${SHOP_NAME}»`, description: 'Форум автомобілістів магазину «Форсаж»: профілі учасників, гараж, особисті повідомлення.', url: SITE_URL + pathname,
+        content: `<h1>${msgs ? 'Повідомлення' : 'Профіль учасника форуму'}</h1><p>${link('/forum', 'Усі теми форуму')}</p>` };
+    }
     const t = m && (await rest(`forum_topics?select=id,title,body,category,author_name,is_shop,images,created_at,replies_count&id=eq.${m[1]}&is_hidden=is.false`))[0];
     if (!t) return { status: 404, noindex: true, title: `Тему не знайдено | ${SHOP_NAME}`, description: 'Форум магазину «Форсаж».', url: SITE_URL + '/forum', content: `<h1>Тему не знайдено</h1><p>${link('/forum', 'Усі теми форуму')}</p>` };
     const posts = await rest(`forum_posts?select=author_name,body,created_at&topic_id=eq.${t.id}&is_hidden=is.false&order=created_at&limit=200`);

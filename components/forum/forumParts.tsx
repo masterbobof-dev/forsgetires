@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ImagePlus, Loader2, X, Send, Store, Camera } from 'lucide-react';
-import { uploadForumImage, rootSections, childSections, AVATAR_ICONS, uploadAvatar, saveMyAvatar, fetchMyAvatar, type ForumSection } from '../../forum';
+import { uploadForumImage, rootSections, childSections, AVATAR_ICONS, uploadAvatar, saveMyAvatar, fetchMyAvatar, userPath, type ForumSection } from '../../forum';
+import { linkClick } from '../../navigation';
 
 export const when = (iso: string) => new Date(iso).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' });
 export const whenShort = (iso: string) => new Date(iso).toLocaleDateString('uk-UA', { day: 'numeric', month: 'short' });
@@ -29,15 +30,18 @@ export const Avatar: React.FC<{ name: string; avatar?: string | null; shop?: boo
   if (shop) return <span style={style} className="shrink-0 rounded-full bg-[#FFC300] text-black font-black flex items-center justify-center" aria-hidden>F</span>;
   if (avatar?.startsWith('emoji:')) return <span style={style} className="shrink-0 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center leading-none" aria-hidden>{avatar.slice(6)}</span>;
   if (avatar?.startsWith('https://')) return <img src={avatar} alt="" style={style} className="shrink-0 rounded-full object-cover border border-zinc-700" loading="lazy" />;
-  const color = AVATAR_COLORS[[...name].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS.length];
-  return <span style={{ ...style, fontSize: size * 0.42 }} className={`shrink-0 rounded-full ${color} text-white font-black flex items-center justify-center`} aria-hidden>{(name.trim()[0] || '?').toUpperCase()}</span>;
+  const n = name || '?';
+  const color = AVATAR_COLORS[[...n].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS.length];
+  return <span style={{ ...style, fontSize: size * 0.42 }} className={`shrink-0 rounded-full ${color} text-white font-black flex items-center justify-center`} aria-hidden>{(n.trim()[0] || '?').toUpperCase()}</span>;
 };
 
-export const Author: React.FC<{ name: string; shop: boolean; date: string; edited?: string | null; avatar?: string | null }> = ({ name, shop, date, edited, avatar }) => (
+export const Author: React.FC<{ name: string; shop: boolean; date: string; edited?: string | null; avatar?: string | null; pid?: number | null }> = ({ name, shop, date, edited, avatar, pid }) => (
   <div className="flex items-center gap-2.5">
-    <Avatar name={name} avatar={avatar} shop={shop} />
+    {pid && !shop ? <a href={userPath(pid)} onClick={linkClick(userPath(pid))} aria-label={`Профіль: ${name}`}><Avatar name={name} avatar={avatar} shop={shop} /></a> : <Avatar name={name} avatar={avatar} shop={shop} />}
     <div className="flex flex-wrap items-center gap-x-2 text-xs text-zinc-500 min-w-0">
-      <span className={`font-bold flex items-center gap-1 ${shop ? 'text-[#FFC300]' : 'text-zinc-200'}`}>{shop && <Store size={13} />}{name}</span>
+      {pid && !shop
+        ? <a href={userPath(pid)} onClick={linkClick(userPath(pid))} className="font-bold text-zinc-200 hover:text-[#FFC300] underline-offset-2 hover:underline">{name}</a>
+        : <span className={`font-bold flex items-center gap-1 ${shop ? 'text-[#FFC300]' : 'text-zinc-200'}`}>{shop && <Store size={13} />}{name}</span>}
       <span>· {when(date)}</span>
       {edited && <span className="italic">· змінено</span>}
     </div>
@@ -102,7 +106,7 @@ export const SectionSelect: React.FC<{ sections: ForumSection[]; value: string; 
 );
 
 /** Photos of a message: add (up to 6, shrunk on the phone before upload) and remove. */
-export const PhotoPicker: React.FC<{ userId: string; images: string[]; onChange: (urls: string[]) => void; onBusy?: (b: boolean) => void; onError?: (m: string) => void }> = ({ userId, images, onChange, onBusy, onError }) => {
+export const PhotoPicker: React.FC<{ userId: string; images: string[]; onChange: (urls: string[]) => void; onBusy?: (b: boolean) => void; onError?: (m: string) => void; max?: number }> = ({ userId, images, onChange, onBusy, onError, max = 6 }) => {
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const add = async (files: FileList | null) => {
@@ -110,7 +114,7 @@ export const PhotoPicker: React.FC<{ userId: string; images: string[]; onChange:
     setBusy(true); onBusy?.(true);
     let list = images;
     try {
-      for (const f of Array.from(files).slice(0, 6 - images.length)) {
+      for (const f of Array.from(files).slice(0, max - images.length)) {
         const url = await uploadForumImage(f, userId);
         list = [...list, url];
         onChange(list);
@@ -128,9 +132,9 @@ export const PhotoPicker: React.FC<{ userId: string; images: string[]; onChange:
         </span>
       ))}
       <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={e => { add(e.target.files); e.target.value = ''; }} />
-      <button type="button" disabled={busy || images.length >= 6} onClick={() => fileRef.current?.click()}
+      <button type="button" disabled={busy || images.length >= max} onClick={() => fileRef.current?.click()}
         className="h-11 px-4 rounded-xl border border-zinc-700 text-zinc-300 text-sm font-bold flex items-center gap-2 disabled:opacity-40">
-        {busy ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />} Фото {images.length ? `(${images.length}/6)` : ''}
+        {busy ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />} Фото {images.length ? `(${images.length}/${max})` : ''}
       </button>
     </div>
   );

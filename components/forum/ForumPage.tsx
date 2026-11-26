@@ -1,16 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import {
-  ArrowLeft, MessageSquare, Plus, Pin, Eye, Loader2, EyeOff, Lock, Unlock, Pencil, Trash2, ChevronRight, Search, MessagesSquare, Reply, CornerDownRight,
+  ArrowLeft, MessageSquare, Plus, Pin, Eye, Loader2, EyeOff, Lock, Unlock, Pencil, Trash2, ChevronRight, Search, MessagesSquare, Reply, CornerDownRight, UserRound, MessageCircle,
 } from 'lucide-react';
 import type { AuthState } from '../../useAuth';
 import { linkClick, navigateTo } from '../../navigation';
 import { supabase } from '../../supabaseClient';
 import {
   forumPath, forumRoute, fetchSections, fetchSectionStats, fetchTopics, fetchTopic, createTopic, createPost, updateTopic, updatePost,
-  deleteTopic, deletePost, fetchOwnIds, postTree, rootSections, childSections, sectionChain, sectionSlugs, sectionName,
+  deleteTopic, deletePost, fetchOwnIds, postTree, fetchMe, fetchUnread, userPath, messagesPath, rootSections, childSections, sectionChain, sectionSlugs, sectionName,
   type ForumSection, type ForumTopic, type ForumPost,
 } from '../../forum';
 import { Body, Photos, Author, Avatar, AvatarPicker, MessageForm, when, whenShort } from './forumParts';
+import { ProfileView, MessagesView } from './ForumPeople';
 
 const sectionHref = (slug: string) => `/forum?c=${slug}`;
 
@@ -88,17 +89,30 @@ const ForumPage: React.FC<{ auth: AuthState; isStaff: boolean; onBack: () => voi
   const [own, setOwn] = useState<{ topic: boolean; posts: Set<number> }>({ topic: false, posts: new Set() });
   const [editing, setEditing] = useState<'topic' | number | null>(null);
   const [replyTo, setReplyTo] = useState<number | null>(null);
+  const [qs, setQs] = useState(() => window.location.search);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const userId = auth.session?.user?.id as string | undefined;
+  // my profile number and unread private messages (top bar)
+  const [myPid, setMyPid] = useState<number | null>(null);
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    if (!userId) { setMyPid(null); setUnread(0); return; }
+    fetchMe().then(m => setMyPid(m?.pid || null), () => undefined);
+    const tick = () => fetchUnread().then(setUnread, () => undefined);
+    tick();
+    const t = setInterval(() => { if (document.visibilityState === 'visible') tick(); }, 30000);
+    window.addEventListener('forum-unread', tick);
+    return () => { clearInterval(t); window.removeEventListener('forum-unread', tick); };
+  }, [userId]);
   useEffect(() => {
     if (!userId || staff) { setMod(false); return; }
     supabase.rpc('is_forum_mod').then(({ data }) => setMod(data === true), () => undefined);
   }, [userId, staff]);
 
   useEffect(() => {
-    const onPop = () => { setRoute(forumRoute()); setSection(new URLSearchParams(window.location.search).get('c')); };
+    const onPop = () => { setRoute(forumRoute()); setSection(new URLSearchParams(window.location.search).get('c')); setQs(window.location.search); };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
@@ -109,7 +123,9 @@ const ForumPage: React.FC<{ auth: AuthState; isStaff: boolean; onBack: () => voi
     try {
       const all = await fetchSections();
       setSections(all);
-      if (typeof route === 'number') {
+      if (route === 'messages' || (route && typeof route === 'object')) {
+        // profile and messages load themselves
+      } else if (typeof route === 'number') {
         const r = await fetchTopic(route, !quiet);
         setTopic(r.topic); setPosts(r.posts);
         setOwn(await fetchOwnIds(userId, route));
@@ -164,7 +180,11 @@ const ForumPage: React.FC<{ auth: AuthState; isStaff: boolean; onBack: () => voi
   );
 
   let content: React.ReactNode;
-  if (route === 'new') {
+  if (route && typeof route === 'object') {
+    content = <ProfileView pid={route.user} userId={userId} onLogin={() => auth.openAuthModal('login')} />;
+  } else if (route === 'messages') {
+    content = <MessagesView key={qs} userId={userId} onLogin={() => auth.openAuthModal('login')} />;
+  } else if (route === 'new') {
     const pre = new URLSearchParams(window.location.search).get('c') || undefined;
     content = (
       <>
@@ -195,7 +215,7 @@ const ForumPage: React.FC<{ auth: AuthState; isStaff: boolean; onBack: () => voi
               {topic.is_hidden && <span className="flex items-center gap-1 text-red-400"><EyeOff size={12} /> Приховано</span>}
             </div>
             <h1 className="text-xl md:text-3xl font-black text-white mb-3 break-words">{topic.title}</h1>
-            <Author name={topic.author_name} shop={topic.is_shop} date={topic.created_at} edited={topic.edited_at} avatar={topic.author_avatar} />
+            <Author name={topic.author_name} shop={topic.is_shop} date={topic.created_at} edited={topic.edited_at} avatar={topic.author_avatar} pid={topic.author_pid} />
             <div className="mt-4"><Body text={topic.body} /></div>
             <Photos urls={topic.images} />
             {(isStaff || own.topic) && (
@@ -220,7 +240,7 @@ const ForumPage: React.FC<{ auth: AuthState; isStaff: boolean; onBack: () => voi
             ) : (
               <div id={`post-${p.id}`} className={`border rounded-2xl p-4 ${p.is_shop ? 'bg-[#FFC300]/5 border-[#FFC300]/30' : 'bg-zinc-900/60 border-zinc-800'} ${p.is_hidden ? 'opacity-50' : ''}`}>
                 {parent && <p className="text-[11px] text-zinc-500 mb-1 flex items-center gap-1"><CornerDownRight size={12} /> у відповідь {parent.author_name}</p>}
-                <Author name={p.author_name} shop={p.is_shop} date={p.created_at} edited={p.edited_at} avatar={p.author_avatar} />
+                <Author name={p.author_name} shop={p.is_shop} date={p.created_at} edited={p.edited_at} avatar={p.author_avatar} pid={p.author_pid} />
                 <div className="mt-2"><Body text={p.body} /></div>
                 <Photos urls={p.images} />
                 <div className="flex flex-wrap gap-2 mt-3">
@@ -324,9 +344,19 @@ const ForumPage: React.FC<{ auth: AuthState; isStaff: boolean; onBack: () => voi
     );
   }
 
+  const peopleBar = userId && (
+    <div className="flex flex-wrap gap-2 justify-end -mt-2 mb-4">
+      {myPid && <a href={userPath(myPid)} onClick={linkClick(userPath(myPid))} className="h-9 px-3 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-200 text-xs font-bold flex items-center gap-1.5 hover:border-[#FFC300]"><UserRound size={14} /> Мій профіль і гараж</a>}
+      <a href={messagesPath()} onClick={linkClick(messagesPath())} className="h-9 px-3 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-200 text-xs font-bold flex items-center gap-1.5 hover:border-[#FFC300]">
+        <MessageCircle size={14} /> Повідомлення{unread > 0 && <span className="min-w-5 h-5 px-1 rounded-full bg-[#FFC300] text-black text-[11px] font-black flex items-center justify-center">{unread}</span>}
+      </a>
+    </div>
+  );
+
   return (
     <div className="max-w-4xl mx-auto w-full px-3 md:px-4 py-6 md:py-10 min-h-screen">
       {back}
+      {peopleBar}
       {content}
     </div>
   );

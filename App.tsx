@@ -48,6 +48,8 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewState>(() => viewFromPath(window.location.pathname));
   const [shopInitialProduct, setShopInitialProduct] = useState<TyreProduct | null>(null);
   const [isStaff, setIsStaff] = useState<boolean | null>(null);
+  /** a forum moderator: a customer who may open the forum part of the admin panel */
+  const [isForumMod, setIsForumMod] = useState(false);
 
   // Cart state - lifted to App level for header badge
   const [cartItems, setCartItems] = useState<CartItem[]>(() => {
@@ -111,9 +113,16 @@ const App: React.FC = () => {
 
   // Is the signed-in user a staff member (admin / manager)? Customers never see the admin panel.
   useEffect(() => {
-    if (!auth.session) { setIsStaff(false); return; }
+    if (!auth.session) { setIsStaff(false); setIsForumMod(false); return; }
     setIsStaff(null);
-    supabase.rpc('is_staff').then(({ data, error }) => setIsStaff(!error && data === true));
+    supabase.rpc('is_staff').then(async ({ data, error }) => {
+      const staff = !error && data === true;
+      if (!staff) {
+        const { data: mod } = await supabase.rpc('is_forum_mod');
+        setIsForumMod(mod === true);
+      }
+      setIsStaff(staff);
+    });
   }, [auth.session?.user?.id]);
 
   useEffect(() => {
@@ -207,7 +216,7 @@ const App: React.FC = () => {
         if (!auth.sessionLoaded) return <PageLoader />;
         if (!auth.session) return <StaffLogin auth={auth} onBack={goHome} />;
         if (isStaff === null) return <PageLoader />;
-        if (!isStaff) {
+        if (!isStaff && !isForumMod) {
           return (
             <div className="min-h-screen flex flex-col items-center justify-center p-4 text-center gap-4">
               <ShieldAlert size={48} className="text-red-500" />

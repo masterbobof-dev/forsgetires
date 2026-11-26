@@ -10,6 +10,7 @@ import { Article, fetchArticles, articlePath, articleExcerpt } from '../../artic
 import { linkClick } from '../../navigation';
 import { Stars } from '../shop/ProductReviews';
 import SizeGuideModal from './SizeGuideModal';
+import VehiclePicker from './VehiclePicker';
 import { getRecent } from '../../recentlyViewed';
 
 interface Props {
@@ -18,6 +19,10 @@ interface Props {
   sizeOptions: { widths: string[]; heights: string[]; radii: string[] };
   onPickCategory: (id: number | 'hot') => void;
   onSizeSearch: (w: string, h: string, r: string) => void;
+  /** open a section with characteristic filters (car picker: batteries, wheels) */
+  onAttrSearch?: (categoryId: number, attrs: Record<string, string>) => void;
+  /** search all goods by text (car picker: a tyre size, including goods on order) */
+  onSearchText?: (q: string) => void;
   onOpenProduct: (p: TyreProduct) => void;
   formatPrice: (p: string | undefined) => string;
   prepare: (p: TyreProduct) => TyreProduct;
@@ -32,7 +37,9 @@ const BENEFITS = [
 
 const selectCls = 'w-full bg-black border border-zinc-700 rounded-xl px-3 py-3 text-white font-bold text-sm outline-none focus:border-[#FFC300] appearance-none';
 
-const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPickCategory, onSizeSearch, onOpenProduct, formatPrice, prepare }) => {
+const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPickCategory, onSizeSearch, onAttrSearch, onSearchText, onOpenProduct, formatPrice, prepare }) => {
+  const batteryRoot = categories.find(c => !c.parent_id && c.filter_preset === 'batteries');
+  const wheelRoot = categories.find(c => !c.parent_id && c.filter_preset === 'wheels');
   const [w, setW] = useState('');
   const [h, setH] = useState('');
   const [r, setR] = useState('');
@@ -85,6 +92,9 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
 
   const sections: Record<HomeBlockType, React.ReactNode> = {
     banners: banners.length > 0 ? <BannerSlider banners={banners} linkTo={linkTo} /> : null,
+    car_search: <VehiclePicker onTyreSize={onSearchText ? (w, h, r) => onSearchText(`${w}/${h} ${r}`) : onSizeSearch}
+      onBattery={batteryRoot && onAttrSearch ? (attrs) => onAttrSearch(batteryRoot.id, attrs) : undefined}
+      onWheels={wheelRoot && onAttrSearch ? (attrs) => onAttrSearch(wheelRoot.id, attrs) : undefined} />,
     size_search: categories.some(c => c.kind === 'tyre') && <>
       {/* Quick size search */}
       <section className="bg-gradient-to-br from-zinc-900 to-zinc-950 border border-zinc-800 rounded-3xl p-4 md:p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">

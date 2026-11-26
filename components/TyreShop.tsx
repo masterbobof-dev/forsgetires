@@ -268,6 +268,8 @@ const TyreShop: React.FC<TyreShopProps> = ({
               filters.setFilterWidth(w); filters.setFilterHeight(h); filters.setFilterRadius(r);
               scrollToList();
             }}
+            onAttrSearch={(id, attrs) => { changeCategory(id); filters.setAttrFilters(attrs); scrollToList(); }}
+            onSearchText={(q) => { changeCategory('all'); filters.setSearchQuery(q); scrollToList(); }}
             onOpenProduct={(p) => openProduct(p)}
             formatPrice={formatPrice}
             prepare={prepare}

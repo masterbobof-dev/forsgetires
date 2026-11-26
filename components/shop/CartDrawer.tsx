@@ -38,7 +38,7 @@ interface CartDrawerProps {
   formatPrice: (p: string | undefined) => string;
 }
 
-const priceOf = (i: CartItem) => (i.on_order ? 0 : parseFloat(String(i.price || '0').replace(/[^\d.]/g, '')) || 0);
+const priceOf = (i: CartItem) => (i.on_order && !i.supplier_offer_id ? 0 : parseFloat(String(i.price || '0').replace(/[^\d.]/g, '')) || 0);
 const money = (n: number) => n.toLocaleString('uk-UA', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
 /** Availability of a cart line, like on the product card. */
@@ -68,7 +68,7 @@ const CartDrawer: React.FC<CartDrawerProps> = (props) => {
   const selected = props.cart.filter(i => !off.has(i.id));
   const total = selected.reduce((a, i) => a + priceOf(i) * i.quantity, 0);
   const pieces = selected.reduce((a, i) => a + i.quantity, 0);
-  const hasOnOrder = selected.some(i => i.on_order);
+  const hasOnOrder = selected.some(i => i.on_order && !i.supplier_offer_id);
   const allOn = off.size === 0;
   const toggle = (id: number) => setOff(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const back = () => (step === 'checkout' ? setStep('cart') : props.onClose());

@@ -68,6 +68,8 @@ export interface TyreProduct {
   on_order?: boolean;
   /** delivery time in days from the shop program, e.g. "3" or "3-5" */
   lead_days?: string | null;
+  /** a partner's offer (GPL, Omega) from the program: on order, but with a real retail price and delivery days */
+  supplier_offer_id?: string | null;
 
   // Cart Logic
   quantity?: number;

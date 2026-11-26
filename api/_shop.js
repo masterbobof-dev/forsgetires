@@ -69,6 +69,12 @@ export const slugify = (text) =>
   String(text || '').toLowerCase().split('').map((ch) => TRANSLIT[ch] ?? ch).join('')
     .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 70);
 
+/** Same as forumPath() in forum.ts on the website. */
+export const forumPath = (t) => {
+  const s = slugify(t.title).slice(0, 60);
+  return `/forum/${t.id}${s ? `-${s}` : ''}`;
+};
+
 /** Same as productPath() in productUrl.ts on the website. */
 export const productPath = (p) => {
   const slug = slugify(p.slug || p.title);

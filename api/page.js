@@ -1,7 +1,7 @@
 // Home, category (?c=slug), article and info pages: serves the normal website with the
 // page's own <title>, description, canonical link and readable text already in the HTML,
 // so Google sees real content without running JavaScript.
-import { SITE_URL, SHOP_NAME, rest, escapeXml as esc, productPath, parsePrice, slugify, sendUnavailable, DbUnavailable } from './_shop.js';
+import { SITE_URL, SHOP_NAME, rest, escapeXml as esc, productPath, parsePrice, slugify, sendUnavailable, DbUnavailable, forumPath } from './_shop.js';
 import { loadAppHtml, setHead, addJsonLd, setRootContent, siteSettings, applySite, findRedirect } from './_html.js';
 import { CITIES, cityFromPath, cityPath, cityTexts } from './_cities.js';
 import { catPath, catSlugFrom } from './_paths.js';
@@ -107,6 +107,44 @@ async function build(pathname, query) {
         + `<h2>Питання та відповіді</h2>${t.faq.map((f) => `<h3>${esc(f.q)}</h3><p>${esc(f.a)}</p>`).join('')}`
         + `<h2>Доставляємо також</h2><ul>${CITIES.filter((c) => c.slug !== city.slug).map((c) => `<li>${link(cityPath(c), `Автозапчастини в ${c.in}`)}</li>`).join('')}</ul>`
         + navBlock(cats),
+    };
+  }
+
+  // --- forum ---
+  if (pathname === '/forum' || pathname.startsWith('/forum/')) {
+    const FORUM_CATS = { shyny: 'Шини', dysky: 'Диски', akb: 'Акумулятори', remont: 'Ремонт і обслуговування', masla: 'Масла і рідини', inshe: 'Інше' };
+    const m = pathname.match(/^\/forum\/(\d+)/);
+    if (pathname === '/forum') {
+      const c = FORUM_CATS[query.c] ? String(query.c) : '';
+      const topics = await rest(`forum_topics?select=id,title,category,author_name,replies_count,last_reply_at&is_hidden=is.false${c ? `&category=eq.${c}` : ''}&order=is_pinned.desc,last_reply_at.desc&limit=100`);
+      const name = c ? `Форум: ${FORUM_CATS[c].toLowerCase()}` : 'Форум автомобілістів';
+      return {
+        title: `${name} — поради про шини, диски, акумулятори і ремонт | ${SHOP_NAME}`,
+        description: 'Питання і відповіді водіїв та фахівців магазину «Форсаж»: вибір шин і дисків, акумулятори, масла, ремонт і обслуговування авто.',
+        url: SITE_URL + '/forum' + (c ? `?c=${c}` : ''),
+        content: `<h1>${esc(name)}</h1><ul>${Object.entries(FORUM_CATS).map(([k, v]) => `<li>${link(`/forum?c=${k}`, v)}</li>`).join('')}</ul>`
+          + `<ul>${topics.map((t) => `<li>${link(forumPath(t), t.title)} — ${t.replies_count} відп.</li>`).join('')}</ul>${navBlock(cats)}`,
+      };
+    }
+    const t = m && (await rest(`forum_topics?select=id,title,body,category,author_name,is_shop,images,created_at,replies_count&id=eq.${m[1]}&is_hidden=is.false`))[0];
+    if (!t) return { status: 404, noindex: true, title: `Тему не знайдено | ${SHOP_NAME}`, description: 'Форум магазину «Форсаж».', url: SITE_URL + '/forum', content: `<h1>Тему не знайдено</h1><p>${link('/forum', 'Усі теми форуму')}</p>` };
+    const posts = await rest(`forum_posts?select=author_name,body,created_at&topic_id=eq.${t.id}&is_hidden=is.false&order=created_at&limit=200`);
+    const url = SITE_URL + forumPath(t);
+    return {
+      title: `${t.title} — форум «${SHOP_NAME}»`,
+      description: excerpt(t.body),
+      url, image: t.images?.[0],
+      crumbs: [{ name: 'Форум', url: SITE_URL + '/forum' }, { name: FORUM_CATS[t.category] || 'Інше', url: `${SITE_URL}/forum?c=${t.category}` }],
+      ld: {
+        '@context': 'https://schema.org', '@type': 'DiscussionForumPosting', headline: t.title, text: t.body.slice(0, 5000), url,
+        datePublished: t.created_at, author: { '@type': t.is_shop ? 'Organization' : 'Person', name: t.author_name },
+        ...(t.images?.length ? { image: t.images } : {}),
+        interactionStatistic: { '@type': 'InteractionCounter', interactionType: 'https://schema.org/CommentAction', userInteractionCount: t.replies_count },
+        comment: posts.slice(0, 50).map((p) => ({ '@type': 'Comment', text: p.body.slice(0, 2000), datePublished: p.created_at, author: { '@type': 'Person', name: p.author_name } })),
+      },
+      content: `<nav>${link('/forum', 'Форум')} › ${link(`/forum?c=${t.category}`, FORUM_CATS[t.category] || 'Інше')}</nav><h1>${esc(t.title)}</h1>${paragraphs(t.body)}`
+        + (posts.length ? `<h2>Відповіді</h2>${posts.map((p) => `<div><p><b>${esc(p.author_name)}</b></p>${paragraphs(p.body)}</div>`).join('')}` : '')
+        + `<p>${link('/forum', 'Усі теми форуму')}</p>`,
     };
   }
 

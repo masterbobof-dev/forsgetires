@@ -1,6 +1,6 @@
 // Always-fresh sitemap.xml built from Supabase: home, categories, legal pages and
 // every product in stock (/p/<id>-<slug>). Served at /sitemap.xml via vercel.json.
-import { SITE_URL, rest, restAll, escapeXml, productPath, slugify, sendUnavailable, DbUnavailable } from './_shop.js';
+import { SITE_URL, rest, restAll, escapeXml, productPath, slugify, sendUnavailable, DbUnavailable, forumPath } from './_shop.js';
 import { CITIES, cityPath } from './_cities.js';
 
 const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : undefined);
@@ -25,6 +25,10 @@ export default async function handler(req, res) {
     let articles = [];
     try { articles = await rest('articles?select=id,title,created_at&order=id'); } catch (e) { if (e instanceof DbUnavailable) throw e; /* no articles */ }
     for (const a of articles) xml += urlTag(`${SITE_URL}/statti/${a.id}-${slugify(String(a.title).replace(/[^\p{L}\p{N}\s-]/gu, ' '))}`, { lastmod: day(a.created_at), changefreq: 'monthly', priority: '0.6' });
+    xml += urlTag(`${SITE_URL}/forum`, { changefreq: 'daily', priority: '0.6' });
+    let topics = [];
+    try { topics = await rest('forum_topics?select=id,title,last_reply_at&is_hidden=is.false&order=id'); } catch (e) { if (e instanceof DbUnavailable) throw e; /* no forum */ }
+    for (const t of topics) xml += urlTag(SITE_URL + forumPath(t), { lastmod: day(t.last_reply_at), changefreq: 'weekly', priority: '0.5' });
     xml += urlTag(`${SITE_URL}/oferta`, { changefreq: 'yearly', priority: '0.2' });
     xml += urlTag(`${SITE_URL}/privacy`, { changefreq: 'yearly', priority: '0.2' });
     for (const p of products) xml += urlTag(SITE_URL + productPath(p), { lastmod: day(p.created_at), changefreq: 'weekly', priority: '0.7' });

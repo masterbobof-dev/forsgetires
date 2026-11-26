@@ -64,6 +64,14 @@
       "destination": "/api/page?path=/:city"
     },
     {
+      "source": "/forum",
+      "destination": "/api/page?path=/forum"
+    },
+    {
+      "source": "/forum/:topic",
+      "destination": "/api/page?path=/forum/:topic"
+    },
+    {
       "source": "/:legal(oferta|privacy)",
       "destination": "/api/page?path=/:legal"
     },

@@ -2,7 +2,7 @@ import React from 'react';
 import { UserCog, UserCheck, Eye, EyeOff } from 'lucide-react';
 import type { SettingsForm } from './useSettingsForm';
 
-/** Part "Менеджер / Доступ": the manager's sign-in and the e-mail of the service employee. */
+/** Part "Адміністратор / Доступ": the manager's sign-in and the e-mail of the service employee. */
 const AccessPanel: React.FC<{ form: SettingsForm }> = ({ form }) => {
   const {
     managerEmail, setManagerEmail, managerPassword, setManagerPassword, showManagerPassword, setShowManagerPassword, serviceEmail, setServiceEmail,
@@ -14,14 +14,14 @@ const AccessPanel: React.FC<{ form: SettingsForm }> = ({ form }) => {
 
         <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 space-y-4">
               <label className="block text-[#FFC300] text-xs font-bold uppercase mb-2 flex items-center gap-2">
-                  <UserCheck size={16}/> Вхід для Менеджера
+                  <UserCheck size={16}/> Вхід для адміністратора
               </label>
               <p className="text-zinc-400 text-sm">
-                  Менеджер матиме доступ до товарів, замовлень, маркетингу та статистики, але <strong>НЕ зможе</strong> бачити налаштування (API ключі) та імпортувати/експортувати базу даних.
+                  Вкажіть e-mail і пароль — людина заходить через літеру <strong>F</strong> у логотипі сайту. Вона бачить замовлення, товари, форум, маркетинг і статистику, але <strong>НЕ бачить</strong> налаштувань (ключі, доступи).
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                      <label className="block text-zinc-400 text-[10px] font-bold uppercase mb-1">Email Менеджера</label>
+                      <label className="block text-zinc-400 text-[10px] font-bold uppercase mb-1">Email адміністратора</label>
                       <input 
                           type="email" 
                           value={managerEmail} 
@@ -31,7 +31,7 @@ const AccessPanel: React.FC<{ form: SettingsForm }> = ({ form }) => {
                       />
                   </div>
                   <div>
-                      <label className="block text-zinc-400 text-[10px] font-bold uppercase mb-1">Новий Пароль Менеджера (опціонально)</label>
+                      <label className="block text-zinc-400 text-[10px] font-bold uppercase mb-1">Новий пароль (щоб змінити)</label>
                       <div className="relative">
                           <input 
                               type={showManagerPassword ? "text" : "password"} 

@@ -276,6 +276,7 @@ const App: React.FC = () => {
           isLoggedIn={!!auth.session && isStaff === false}
           isStaff={!!auth.session && isStaff === true}
           cartCount={cartCount}
+          onLogoAdmin={() => navigate('admin')}
         />
       )}
 

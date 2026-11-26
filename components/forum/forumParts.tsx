@@ -1,6 +1,6 @@
-import React, { useRef, useState } from 'react';
-import { ImagePlus, Loader2, X, Send, Store } from 'lucide-react';
-import { uploadForumImage, rootSections, childSections, type ForumSection } from '../../forum';
+import React, { useEffect, useRef, useState } from 'react';
+import { ImagePlus, Loader2, X, Send, Store, Camera } from 'lucide-react';
+import { uploadForumImage, rootSections, childSections, AVATAR_ICONS, uploadAvatar, saveMyAvatar, fetchMyAvatar, type ForumSection } from '../../forum';
 
 export const when = (iso: string) => new Date(iso).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' });
 export const whenShort = (iso: string) => new Date(iso).toLocaleDateString('uk-UA', { day: 'numeric', month: 'short' });
@@ -22,13 +22,71 @@ export const Photos: React.FC<{ urls: string[] }> = ({ urls }) => urls.length ? 
   </div>
 ) : null;
 
-export const Author: React.FC<{ name: string; shop: boolean; date: string; edited?: string | null }> = ({ name, shop, date, edited }) => (
-  <div className="flex flex-wrap items-center gap-x-2 text-xs text-zinc-500">
-    <span className={`font-bold flex items-center gap-1 ${shop ? 'text-[#FFC300]' : 'text-zinc-300'}`}>{shop && <Store size={13} />}{name}</span>
-    <span>· {when(date)}</span>
-    {edited && <span className="italic">· змінено</span>}
+const AVATAR_COLORS = ['bg-sky-600', 'bg-emerald-600', 'bg-violet-600', 'bg-rose-600', 'bg-amber-600', 'bg-teal-600', 'bg-indigo-600', 'bg-pink-600'];
+/** Round picture of an author: the shop's logo, a chosen icon, an own photo, or the first letter of the name. */
+export const Avatar: React.FC<{ name: string; avatar?: string | null; shop?: boolean; size?: number }> = ({ name, avatar, shop, size = 36 }) => {
+  const style = { width: size, height: size, fontSize: size * 0.5 };
+  if (shop) return <span style={style} className="shrink-0 rounded-full bg-[#FFC300] text-black font-black flex items-center justify-center" aria-hidden>F</span>;
+  if (avatar?.startsWith('emoji:')) return <span style={style} className="shrink-0 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center leading-none" aria-hidden>{avatar.slice(6)}</span>;
+  if (avatar?.startsWith('https://')) return <img src={avatar} alt="" style={style} className="shrink-0 rounded-full object-cover border border-zinc-700" loading="lazy" />;
+  const color = AVATAR_COLORS[[...name].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS.length];
+  return <span style={{ ...style, fontSize: size * 0.42 }} className={`shrink-0 rounded-full ${color} text-white font-black flex items-center justify-center`} aria-hidden>{(name.trim()[0] || '?').toUpperCase()}</span>;
+};
+
+export const Author: React.FC<{ name: string; shop: boolean; date: string; edited?: string | null; avatar?: string | null }> = ({ name, shop, date, edited, avatar }) => (
+  <div className="flex items-center gap-2.5">
+    <Avatar name={name} avatar={avatar} shop={shop} />
+    <div className="flex flex-wrap items-center gap-x-2 text-xs text-zinc-500 min-w-0">
+      <span className={`font-bold flex items-center gap-1 ${shop ? 'text-[#FFC300]' : 'text-zinc-200'}`}>{shop && <Store size={13} />}{name}</span>
+      <span>· {when(date)}</span>
+      {edited && <span className="italic">· змінено</span>}
+    </div>
   </div>
 );
+
+/** Choose a fun icon or put an own photo; saved in the person's profile and shown on all their forum messages. */
+export const AvatarPicker: React.FC<{ userId: string; name: string; onSaved?: (a: string | null) => void }> = ({ userId, name, onSaved }) => {
+  const [current, setCurrent] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { fetchMyAvatar(userId).then(setCurrent, () => undefined); }, [userId]);
+  const save = async (a: string | null) => {
+    setBusy(true); setError('');
+    try { await saveMyAvatar(userId, a); setCurrent(a); onSaved?.(a); setOpen(false); } catch { setError('Не вдалося зберегти. Спробуйте ще раз.'); }
+    setBusy(false);
+  };
+  const photo = async (f?: File) => {
+    if (!f) return;
+    setBusy(true); setError('');
+    try { await save(await uploadAvatar(f, userId)); } catch { setError('Не вдалося завантажити фото. Спробуйте інше (JPG або PNG).'); setBusy(false); }
+  };
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        <Avatar name={name} avatar={current} size={52} />
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setOpen(!open)} className="h-9 px-3 rounded-lg border border-zinc-700 text-zinc-200 text-xs font-bold hover:border-[#FFC300]">Обрати значок</button>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={e => { photo(e.target.files?.[0]); e.target.value = ''; }} />
+          <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} className="h-9 px-3 rounded-lg border border-zinc-700 text-zinc-200 text-xs font-bold hover:border-[#FFC300] flex items-center gap-1.5 disabled:opacity-50">
+            {busy ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />} Своє фото
+          </button>
+          {current && <button type="button" disabled={busy} onClick={() => save(null)} className="h-9 px-3 rounded-lg text-zinc-500 text-xs font-bold hover:text-white">Прибрати</button>}
+        </div>
+      </div>
+      {open && (
+        <div className="grid grid-cols-6 sm:grid-cols-10 gap-2">
+          {AVATAR_ICONS.map(e => (
+            <button key={e} type="button" disabled={busy} onClick={() => save(`emoji:${e}`)} aria-label={`Значок ${e}`}
+              className={`aspect-square rounded-full text-2xl flex items-center justify-center border ${current === `emoji:${e}` ? 'border-[#FFC300] bg-[#FFC300]/10' : 'border-zinc-700 bg-zinc-800 hover:border-zinc-500'}`}>{e}</button>
+          ))}
+        </div>
+      )}
+      {error && <p className="text-sm text-red-400">{error}</p>}
+    </div>
+  );
+};
 
 /** Choose a section: subsections are grouped under their section. */
 export const SectionSelect: React.FC<{ sections: ForumSection[]; value: string; onChange: (slug: string) => void; className?: string }> = ({ sections, value, onChange, className }) => (

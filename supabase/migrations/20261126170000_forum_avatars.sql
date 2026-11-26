@@ -1,0 +1,2 @@
+-- Applied through the Supabase tools (migration forum_avatars): customer_profiles.avatar ("emoji:…" or own photo in
+-- the forum storage), forum_topics/posts.author_avatar filled on insert and kept in step when the picture changes.

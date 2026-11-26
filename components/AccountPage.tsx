@@ -1,3 +1,4 @@
+import { AvatarPicker } from './forum/forumParts';
 import React, { useEffect, useState } from 'react';
 import { formatUaPhone } from '../phone';
 import { User, Phone, MapPin, Package, LogOut, Save, Loader2, Key, CheckCircle2, ShoppingBag, ArrowLeft, Truck } from 'lucide-react';
@@ -168,6 +169,11 @@ const AccountPage: React.FC<{ auth: AuthState; onBack: () => void }> = ({ auth, 
         )
       ) : (
         <div className="grid md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="md:col-span-2 bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
+            <h2 className="text-xs font-black uppercase tracking-widest text-zinc-400">Значок на форумі</h2>
+            <p className="text-zinc-500 text-xs">Показується біля ваших повідомлень на форумі: оберіть прикольну іконку або поставте своє фото.</p>
+            <AvatarPicker userId={user.id} name={profile.full_name || user.email || '?'} />
+          </div>
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
             <h2 className="text-xs font-black uppercase tracking-widest text-zinc-400">Контакти та доставка</h2>
             <p className="text-zinc-500 text-xs">Ці дані підставляться при оформленні замовлення.</p>

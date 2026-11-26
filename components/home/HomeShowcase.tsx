@@ -25,6 +25,8 @@ interface Props {
   onAttrSearch?: (categoryId: number, attrs: Record<string, string>) => void;
   /** search all goods by text (car picker: a tyre size, including goods on order) */
   onSearchText?: (q: string) => void;
+  /** open a section and search in it (hubcaps of a wheel size) */
+  onSectionSearch?: (categoryId: number, q: string) => void;
   onOpenProduct: (p: TyreProduct) => void;
   formatPrice: (p: string | undefined) => string;
   prepare: (p: TyreProduct) => TyreProduct;
@@ -39,7 +41,7 @@ const BENEFITS = [
 
 const selectCls = 'w-full bg-black border border-zinc-700 rounded-xl px-3 py-3 text-white font-bold text-sm outline-none focus:border-[#FFC300] appearance-none';
 
-const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPickCategory, onSizeSearch, onAttrSearch, onSearchText, onOpenProduct, formatPrice, prepare }) => {
+const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPickCategory, onSizeSearch, onAttrSearch, onSearchText, onSectionSearch, onOpenProduct, formatPrice, prepare }) => {
   const batteryRoot = categories.find(c => !c.parent_id && c.filter_preset === 'batteries');
   const wheelRoot = categories.find(c => !c.parent_id && c.filter_preset === 'wheels');
   const hubcaps = categories.find(c => c.slug === 'dysky-kovpaky');
@@ -111,7 +113,7 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
     car_search: <VehiclePicker onTyreSize={onSearchText ? (w, h, r) => onSearchText(`${w}/${h} ${r}`) : onSizeSearch}
       onBattery={batteryRoot && onAttrSearch ? (attrs) => onAttrSearch(batteryRoot.id, attrs) : undefined}
       onWheels={wheelRoot && onAttrSearch ? (attrs) => onAttrSearch(wheelRoot.id, attrs) : undefined}
-      onHubcaps={hubcaps && onAttrSearch ? () => onAttrSearch(hubcaps.id, {}) : undefined}
+      onHubcaps={hubcaps && onSectionSearch ? (r) => onSectionSearch(hubcaps.id, r) : undefined}
       phone={shopPhone} phoneLink={shopPhoneLink} />,
     size_search: categories.some(c => c.kind === 'tyre') && <>
       {/* Quick size search */}

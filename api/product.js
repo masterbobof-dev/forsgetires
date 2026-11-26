@@ -99,7 +99,25 @@ async function render(req, res) {
   } catch (e) { if (e instanceof DbUnavailable) throw e; /* no reviews table yet */ }
   if (onOrder || !(price > 0)) delete ld.offers; // price is confirmed by the manager / no price: Google rejects a 0 price
   html = html.replace('</head>', `    <script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>\n  </head>`);
-  html = setRootContent(html, `<h1>${esc(product.title)}</h1><p>${onOrder ? 'Під замовлення — ціну і термін уточнюйте у менеджера' : `Ціна: ${price} грн${product.in_stock === false ? ' (немає в наявності)' : ''}`}</p><p>${esc(description)}</p><p><a href="/">Каталог товарів</a></p>`);
+  // links for Google (and people without JavaScript): the same tyre size from other brands, then the same section
+  let related = [];
+  try {
+    const size = (product.title || '').match(/(\d{3})[\/\s](\d{2})\D{0,3}R?\s?(\d{2}(?:[.,]5)?C?)/i);
+    if (size) {
+      const like = encodeURIComponent(`*${size[1]}/${size[2]}*`);
+      related = await rest(`tyres?select=id,title,slug,price,manufacturer,on_order&title=ilike.${like}&id=neq.${product.id}&in_stock=not.is.false&order=on_order.asc,stock_quantity.desc&limit=12`);
+      if (product.radius) related = related.filter((p) => !p.title.match(/R\s?\d{2}/i) || p.title.replace(/\s/g, '').toUpperCase().includes(String(product.radius).replace(/\s/g, '').toUpperCase()));
+    }
+    if (related.length < 4 && product.category_id) {
+      const more = await rest(`tyres?select=id,title,slug,price,manufacturer,on_order&category_id=eq.${product.category_id}&id=neq.${product.id}&in_stock=not.is.false&order=on_order.asc,stock_quantity.desc&limit=8`);
+      related = [...related, ...more.filter((m) => !related.some((r) => r.id === m.id))];
+    }
+  } catch (e) { if (e instanceof DbUnavailable) throw e; /* no links */ }
+  const relatedHtml = related.length
+    ? `<h2>Схожі товари</h2><ul>${related.slice(0, 10).map((p) => `<li><a href="${esc(productPath(p))}">${esc(p.title)}</a>${p.on_order ? ' — під замовлення' : ` — ${parsePrice(p.price)} грн`}</li>`).join('')}</ul>`
+    : '';
+  const crumbs = [...chain].reverse().map((c) => esc(c.name)).join(' › ');
+  html = setRootContent(html, `${crumbs ? `<nav>${crumbs}</nav>` : ''}<h1>${esc(product.title)}</h1><p>${onOrder ? 'Під замовлення — ціну і термін уточнюйте у менеджера' : `Ціна: ${price} грн${product.in_stock === false ? ' (немає в наявності)' : ''}`}</p><p>${esc(description)}</p>${relatedHtml}<p><a href="/">Каталог товарів</a></p>`);
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=86400');

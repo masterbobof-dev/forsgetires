@@ -93,7 +93,7 @@ const VehiclePicker: React.FC<{
 
   const batteryText = car && car.battery_ah_min
     ? <>Акумулятор: <b className="text-white">{car.battery_ah_min === car.battery_ah_max ? car.battery_ah_min : `${car.battery_ah_min}–${car.battery_ah_max}`} Ah</b>
-      {car.battery_polarity ? `, ${car.battery_polarity === 'right' ? 'плюс праворуч' : 'плюс ліворуч'}` : ''}
+      {car.battery_polarity ? `, ${car.battery_polarity === 'right' ? 'R+ (плюс праворуч)' : 'L+ (плюс ліворуч)'}` : ''}
       {car.battery_body ? `, корпус ${car.battery_body === 'euro' ? 'Європа' : 'Азія'}` : ''}</>
     : <>Акумулятор: залежить від версії авто — підкажемо телефоном</>;
 

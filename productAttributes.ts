@@ -51,8 +51,8 @@ export const FILTER_PRESETS: Record<FilterPresetId, FilterPreset> = {
         key: 'polarity', label: 'Полярність', type: 'select', filter: 'chips', onCard: true,
         hint: 'Де знаходиться «+», якщо дивитися на клеми спереду',
         options: [
-          { value: 'right', label: 'Плюс праворуч (−  +)', short: '+ праворуч' },
-          { value: 'left', label: 'Плюс ліворуч (+  −)', short: '+ ліворуч' },
+          { value: 'right', label: 'R+ (плюс праворуч)', short: 'R+' },
+          { value: 'left', label: 'L+ (плюс ліворуч)', short: 'L+' },
         ],
       },
       {
@@ -277,7 +277,7 @@ export const getPresetForCategory = (all: ProductCategory[], cat?: ProductCatego
 export const getPresetForProduct = (all: ProductCategory[], p: Pick<TyreProduct, 'category_id'>): FilterPreset | null =>
   getPresetForCategory(all, all.find(c => c.id === p.category_id));
 
-/** Human readable value, e.g. "60 Ah", "+ праворуч", "R16". */
+/** Human readable value, e.g. "60 Ah", "R+", "R16". */
 export const formatAttr = (field: AttrField, raw: unknown, short = false): string => {
   const value = raw === null || raw === undefined ? '' : String(raw).trim();
   if (!value) return '';

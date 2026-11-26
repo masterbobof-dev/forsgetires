@@ -118,8 +118,8 @@ const VehiclesPanel: React.FC = () => {
               <label className="block text-zinc-400 text-xs font-bold uppercase mb-1">АКБ: полярність</label>
               <select value={form.polarity} onChange={e => setForm({ ...form, polarity: e.target.value })} className={inputCls}>
                 <option value="">не вказано</option>
-                <option value="right">зворотна (+ праворуч)</option>
-                <option value="left">пряма (+ ліворуч)</option>
+                <option value="right">R+ (плюс праворуч)</option>
+                <option value="left">L+ (плюс ліворуч)</option>
               </select>
             </div>
             <div>

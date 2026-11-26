@@ -129,7 +129,8 @@ export default async function handler(req, res) {
   try {
     const xml = build(await loadData());
     res.setHeader('Content-Type', 'application/xml; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+    // the CDN keeps the last good copy for a week: if the database is down, Google still gets it (a 503 is never cached)
+    res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=604800');
     return res.status(200).send(xml);
   } catch (err) {
     console.error('feed failed', err);

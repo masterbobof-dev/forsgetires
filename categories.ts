@@ -82,10 +82,11 @@ const sortCats = (a: ProductCategory, b: ProductCategory) =>
  * Shop pages show only categories that have goods in stock (with their subcategories),
  * the biggest first. If the counts can't be loaded, all categories are shown.
  */
-let countsCache: Promise<{ category_id: number; n: number; with_photo: number }[] | null> | null = null;
+type CountRow = { category_id: number; n: number; with_photo: number };
+let countsCache: Promise<CountRow[] | null> | null = null;
+const loadCounts = (): Promise<CountRow[] | null> => (countsCache ??= Promise.resolve(supabase.rpc('category_counts')).then(({ data, error }) => (error ? null : (data as any[]))).catch(() => null));
 const withAvailability = async (list: ProductCategory[]): Promise<ProductCategory[]> => {
-  countsCache ??= Promise.resolve(supabase.rpc('category_counts')).then(({ data, error }) => (error ? null : (data as any[]))).catch(() => null);
-  const rows = await countsCache;
+  const rows = await loadCounts();
   if (!rows) return list;
   const own = new Map(rows.map(r => [Number(r.category_id), r]));
   const total = (c: ProductCategory, seen = new Set<number>()): [number, number] => {
@@ -117,6 +118,8 @@ export const useCategories = (opts: { includeInactive?: boolean } = {}) => {
 
   const reload = useCallback(async () => {
     setLoading(true);
+    // the shop needs both the sections and their counts: ask for them at the same time, not one after another
+    if (!opts.includeInactive) loadCounts();
     const { data, error } = await supabase.from('product_categories').select('*');
     if (error || !data) {
       setCategories(FALLBACK_CATEGORIES);

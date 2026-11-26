@@ -64,7 +64,8 @@ const TopicRow: React.FC<{ t: ForumTopic; all: ForumSection[]; showSection?: boo
         <span className={`flex items-center gap-1.5 ${t.is_shop ? 'text-[#FFC300] font-bold' : ''}`}><Avatar name={t.author_name} avatar={t.author_avatar} shop={t.is_shop} size={20} />{t.author_name}</span>
         <span className="flex items-center gap-1"><MessageSquare size={13} /> {t.replies_count}</span>
         <span className="flex items-center gap-1"><Eye size={13} /> {t.views}</span>
-        <span>{when(t.last_reply_at)}</span>
+        <span title="Дата публікації">📅 {when(t.created_at)}</span>
+        {t.replies_count > 0 && t.last_reply_at > t.created_at && <span>остання відповідь {when(t.last_reply_at)}</span>}
       </div>
     </a>
   </li>

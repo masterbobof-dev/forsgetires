@@ -42,8 +42,8 @@ export const Author: React.FC<{ name: string; shop: boolean; date: string; edite
       {pid && !shop
         ? <a href={userPath(pid)} onClick={linkClick(userPath(pid))} className="font-bold text-zinc-200 hover:text-[#FFC300] underline-offset-2 hover:underline">{name}</a>
         : <span className={`font-bold flex items-center gap-1 ${shop ? 'text-[#FFC300]' : 'text-zinc-200'}`}>{shop && <Store size={13} />}{name}</span>}
-      <span>· {when(date)}</span>
-      {edited && <span className="italic">· змінено</span>}
+      <span>· опубліковано {when(date)}</span>
+      {edited && <span className="italic">· оновлено {when(edited)}</span>}
     </div>
   </div>
 );

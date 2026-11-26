@@ -249,7 +249,7 @@ const Local: React.FC = () => {
     <div className={box}>
       <div className="text-white font-black text-lg">Магазин для Google Карт</div>
       <p className={hint}>Години роботи та рік відкриття потрапляють у дані для Google (у пошуку і на картах). Адреса й телефони вже вказані.</p>
-      <label className="flex items-center gap-2 text-sm text-zinc-300"><input type="checkbox" checked={allDay} onChange={e => (e.target.checked ? s.set('seo_hours', 'Mo-Su 00:00-23:59') : setH('Mo-Su', '08:00', '18:00'))} /> Працюємо цілодобово</label>
+      <label className="flex items-center gap-2 text-sm text-zinc-300"><input type="checkbox" checked={allDay} onChange={e => (e.target.checked ? s.set('seo_hours', 'Mo-Su 00:00-23:59') : setH('Mo-Su', '08:00', '19:00'))} /> Працюємо цілодобово</label>
       {!allDay && (
         <div className="grid grid-cols-3 gap-2">
           <div><label className={lbl}>Дні</label><select className={input} value={days} onChange={e => setH(e.target.value, from, to)}>{Object.entries(DAYS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>

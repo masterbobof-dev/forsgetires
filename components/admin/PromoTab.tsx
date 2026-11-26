@@ -258,7 +258,7 @@ const PromoTab: React.FC = () => {
                         <label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Рядок 2 (Білий)</label>
                         <input 
                             type="text" value={heroSubtitle} onChange={(e) => setHeroSubtitle(e.target.value)} 
-                            placeholder="В М. СИНЕЛЬНИКОВЕ (24/7)"
+                            placeholder="В М. СИНЕЛЬНИКОВЕ"
                             className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-black uppercase text-lg"
                         />
                     </div>

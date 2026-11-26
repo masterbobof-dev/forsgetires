@@ -78,8 +78,8 @@ const site = async (browser, url) => {
 
   await step(shop, S, 'template', async () => {
     await ui.click(part(page, 'Шаблон'));
-    await until(async () => assert.equal(await title.inputValue(), 'Форсаж | Дніпро, Синельникове | Купити Шини | Шиномонтаж 24/7'));
-    assert.match(await description.inputValue(), /^Професійний шиномонтаж 24\/7 у м\. Дніпро, Синельникове/);
+    await until(async () => assert.equal(await title.inputValue(), 'Форсаж | Дніпро, Синельникове | Купити Шини | Шиномонтаж'));
+    assert.match(await description.inputValue(), /^Професійний шиномонтаж у м\. Дніпро, Синельникове/);
     assert.match(await keywords.inputValue(), /^купити шини дніпро, купити шини синельникове/);
   });
 

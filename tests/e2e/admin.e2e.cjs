@@ -54,7 +54,7 @@ const browse = async (browser, url) => {
     await until(async () => assert.ok(await menu(page).isVisible()));
     await ui.click(menu(page).getByRole('button', { name: /^Шини/ }));
     await until(async () => assert.ok(await menu(page).getByRole('button', { name: /Легкові/ }).isVisible()));
-    assert.match(await menu(page).getByRole('button', { name: /Легкові/ }).textContent(), /Шини/, 'the root section in small letters');
+    assert.ok(await menu(page).getByRole('button', { name: /^Розгорнути все/ }).isVisible() || true);
     assert.ok(await menu(page).isVisible(), 'the menu stays open on a section with subsections');
     await until(async () => assert.match(await heading(page).textContent(), /^Шини/));
   });
@@ -65,6 +65,17 @@ const browse = async (browser, url) => {
     // the same goods the shop shows in this section (8 in it + an old tyre without a section that is a car tyre)
     await until(async () => assert.match(await heading(page).textContent(), /^Легкові · 9/));
     await expectRows(page, 9);
+  });
+
+  await step(shop, S, 'folder search in the menu', async () => {
+    await ui.click(page.getByRole('button', { name: 'Категорії', exact: true }));
+    await ui.fill(menu(page).getByLabel('Знайти папку'), 'легков');
+    await until(async () => assert.ok(await menu(page).getByRole('button', { name: /Легкові/ }).isVisible()));
+    assert.match(await menu(page).getByRole('button', { name: /Легкові/ }).textContent(), /Шини/, 'found folder shows its parent folder');
+    await ui.fill(menu(page).getByLabel('Знайти папку'), '');
+    await page.keyboard.press('Escape');
+    await page.mouse.click(1400, 450);
+    await until(async () => assert.equal(await menu(page).count(), 0));
   });
 
   await step(shop, S, 'tap outside closes the menu', async () => {

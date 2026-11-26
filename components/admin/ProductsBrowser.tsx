@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Menu, Folder, FolderOpen, Equal, Search, X, Loader2, Image as ImageIcon, Copy, ExternalLink, FileSpreadsheet, ChevronRight, Settings2, Package, ArrowUpDown,
+  Menu, Folder, FolderOpen, Search, X, Loader2, Image as ImageIcon, Copy, ExternalLink, FileSpreadsheet, ChevronRight, Settings2, Package, ArrowUpDown,
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useCategories, getRootCategories, getChildren, buildCategoryFilter, type ProductCategory } from '../../categories';
@@ -53,7 +53,17 @@ const ProductsBrowser: React.FC = () => {
   const [totalsKey, setTotalsKey] = useState(0);
   const total = useTotals(categories, totalsKey);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [openRoot, setOpenRoot] = useState<number | null>(null);
+  // folders opened in the tree (several at once, like folders in the program)
+  const [openSet, setOpenSet] = useState<Set<number>>(new Set());
+  const [folderQ, setFolderQ] = useState('');
+  // opening the menu shows the folder you are in
+  useEffect(() => {
+    if (!menuOpen || !catId) return;
+    const c = categories.find(x => x.id === catId);
+    const root = c?.parent_id ?? c?.id;
+    if (root) setOpenSet(s => new Set(s).add(root));
+  }, [menuOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  const toggleOpen = (id: number) => setOpenSet(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const [catId, setCatId] = useState<number | null>(null);
   const [search, setSearch] = useState('');
   const [q, setQ] = useState('');
@@ -154,34 +164,69 @@ const ProductsBrowser: React.FC = () => {
               <span className="font-black uppercase text-white flex items-center gap-2"><Menu size={18} className="text-[#FFC300]" /> Категорії</span>
               <button onClick={() => setMenuOpen(false)} aria-label="Закрити меню" className="w-9 h-9 rounded-lg flex items-center justify-center text-zinc-400 hover:text-white"><X size={20} /></button>
             </div>
+            <div className="px-3 pt-3 pb-2 border-b border-zinc-800 space-y-2">
+              <input value={folderQ} onChange={e => setFolderQ(e.target.value)} placeholder="Знайти папку…" aria-label="Знайти папку"
+                className="w-full h-10 bg-black border border-zinc-700 rounded-xl px-3 text-sm text-white outline-none focus:border-[#FFC300]" />
+              {!folderQ && (
+                <div className="flex gap-2 text-[11px] font-bold">
+                  <button onClick={() => setOpenSet(new Set(roots.map(r => r.id)))} className="text-zinc-400 hover:text-white">Розгорнути все</button>
+                  <span className="text-zinc-700">·</span>
+                  <button onClick={() => setOpenSet(new Set())} className="text-zinc-400 hover:text-white">Згорнути все</button>
+                </div>
+              )}
+            </div>
             <div className="flex-1 overflow-y-auto py-2">
               <button onClick={() => pick(null, true)} className={`w-full flex items-center gap-3 px-4 py-3 text-left ${!cat ? 'bg-[#FFC300]/10 text-[#FFC300]' : 'text-white hover:bg-zinc-800'}`}>
                 <Package size={20} /> <span className="flex-1 font-bold">Усі товари</span>
               </button>
-              {roots.map(r => {
+              {folderQ.trim() ? (() => {
+                // search: every folder whose name has the words, with its parent folder in small letters
+                const words = folderQ.toLowerCase().split(/\s+/).filter(Boolean);
+                const found = categories.filter(c => words.every(w => c.name.toLowerCase().includes(w)));
+                if (!found.length) return <p className="px-4 py-6 text-sm text-zinc-500">Папку не знайдено</p>;
+                return found.map(c => {
+                  const parent = c.parent_id ? categories.find(x => x.id === c.parent_id) : null;
+                  return (
+                    <button key={c.id} onClick={() => pick(c, true)}
+                      className={`w-full flex items-center gap-3 px-4 py-2.5 text-left ${catId === c.id ? 'bg-[#FFC300]/10 text-[#FFC300]' : 'text-zinc-200 hover:bg-zinc-800'}`}>
+                      <Folder size={18} className="text-[#FFC300] shrink-0" />
+                      <span className="flex-1 min-w-0"><span className="block text-sm font-bold truncate">{c.name}</span>{parent && <span className="block text-[10px] font-bold text-sky-400 truncate">{parent.name}</span>}</span>
+                      <span className="text-xs text-zinc-500">{total(c)}</span>
+                    </button>
+                  );
+                });
+              })() : roots.map(r => {
                 const kids = getChildren(categories, r.id);
-                const opened = openRoot === r.id;
+                const opened = openSet.has(r.id) && kids.length > 0;
                 const active = catId === r.id;
                 return (
                   <div key={r.id}>
-                    <button onClick={() => { if (kids.length) { setOpenRoot(opened ? null : r.id); pick(r, false); } else pick(r, true); }}
-                      className={`w-full flex items-center gap-3 px-4 py-3 text-left ${active ? 'bg-[#FFC300]/10 text-[#FFC300]' : 'text-white hover:bg-zinc-800'} ${r.is_active ? '' : 'opacity-50'}`}>
-                      {opened ? <FolderOpen size={20} className="text-[#FFC300] shrink-0" /> : <Folder size={20} className="text-[#FFC300] shrink-0" />}
-                      <span className="flex-1 font-bold truncate">{r.name}</span>
-                      <span className="text-xs text-zinc-500">{total(r)}</span>
-                      {kids.length > 0 && <ChevronRight size={16} className={`text-zinc-500 transition-transform ${opened ? 'rotate-90' : ''}`} />}
-                    </button>
-                    {opened && kids.map(k => (
-                      <button key={k.id} onClick={() => pick(k, true)}
-                        className={`w-full flex items-center gap-3 pl-10 pr-4 py-2.5 text-left ${catId === k.id ? 'bg-[#FFC300]/10 text-[#FFC300]' : 'text-zinc-200 hover:bg-zinc-800'} ${k.is_active ? '' : 'opacity-50'}`}>
-                        <Equal size={18} className="text-zinc-500 shrink-0" />
-                        <span className="flex-1 min-w-0">
-                          <span className="block text-sm font-bold truncate">{k.name}</span>
-                          <span className="block text-[10px] font-bold text-sky-400 truncate">{r.name}</span>
-                        </span>
-                        <span className="text-xs text-zinc-500">{total(k)}</span>
+                    <div className={`flex items-center ${active ? 'bg-[#FFC300]/10' : 'hover:bg-zinc-800'} ${r.is_active ? '' : 'opacity-50'}`}>
+                      <button onClick={() => { if (kids.length) { toggleOpen(r.id); pick(r, false); } else pick(r, true); }}
+                        className={`flex-1 min-w-0 flex items-center gap-3 pl-4 pr-2 py-3 text-left ${active ? 'text-[#FFC300]' : 'text-white'}`}>
+                        {opened ? <FolderOpen size={20} className="text-[#FFC300] shrink-0" /> : <Folder size={20} className="text-[#FFC300] shrink-0" />}
+                        <span className="flex-1 font-bold truncate">{r.name}</span>
+                        <span className="text-xs text-zinc-500">{total(r)}</span>
                       </button>
-                    ))}
+                      {kids.length > 0 && (
+                        <button onClick={() => toggleOpen(r.id)} aria-label={opened ? `Згорнути ${r.name}` : `Розгорнути ${r.name}`} className="w-11 h-11 flex items-center justify-center text-zinc-400 hover:text-white shrink-0">
+                          <ChevronRight size={18} className={`transition-transform ${opened ? 'rotate-90' : ''}`} />
+                        </button>
+                      )}
+                    </div>
+                    {opened && (
+                      <div className="ml-6 border-l border-zinc-700 mb-1">
+                        {kids.map(k => (
+                          <button key={k.id} onClick={() => pick(k, true)}
+                            className={`w-full flex items-center gap-2.5 pl-3 pr-4 py-2 text-left ${catId === k.id ? 'bg-[#FFC300]/10 text-[#FFC300]' : 'text-zinc-200 hover:bg-zinc-800'} ${k.is_active ? '' : 'opacity-50'}`}>
+                            <span className="w-3 border-t border-zinc-700 -ml-3 shrink-0" aria-hidden />
+                            <Folder size={16} className="text-[#FFC300]/80 shrink-0" />
+                            <span className="flex-1 min-w-0 text-sm font-bold truncate">{k.name}</span>
+                            <span className="text-xs text-zinc-500">{total(k)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}

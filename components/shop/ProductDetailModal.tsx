@@ -76,12 +76,13 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
           const { data } = await supabase.rpc('product_related', { p_id: product.id });
           if (alive && data) {
             let analogs = (data.analogs as TyreProduct[]) || [], comps = (data.companions as TyreProduct[]) || [];
-            // goods without a photo get their category icon: the list has no category, ask for it in one request
-            const noPhoto = [...analogs, ...comps].filter(t => !t.image_url && !t.image_thumb_url).map(t => t.id);
-            if (noPhoto.length) {
-              const { data: cats } = await supabase.from('tyres').select('id, category_id').in('id', noPhoto);
-              const byId = new Map(((cats as { id: number; category_id: number }[]) || []).map(c => [c.id, c.category_id]));
-              const add = (t: TyreProduct) => (byId.has(t.id) ? { ...t, category_id: byId.get(t.id) } : t);
+            // the list has light fields only: goods without a photo need their category (icon),
+            // partner offers need their id and delivery days (they show a real price) — one request for both
+            const need = [...analogs, ...comps].filter(t => (!t.image_url && !t.image_thumb_url) || t.on_order).map(t => t.id);
+            if (need.length) {
+              const { data: extra } = await supabase.from('tyres').select('id, category_id, supplier_offer_id, lead_days').in('id', need);
+              const byId = new Map(((extra as Pick<TyreProduct, 'id' | 'category_id' | 'supplier_offer_id' | 'lead_days'>[]) || []).map(c => [c.id, c]));
+              const add = (t: TyreProduct) => (byId.has(t.id) ? { ...t, ...byId.get(t.id) } : t);
               analogs = analogs.map(add); comps = comps.map(add);
             }
             if (!alive) return;
@@ -347,7 +348,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
           {companions.length > 0 && row('З цим купують', companions)}
           {loadingSimilar
             ? <div className="flex justify-center py-4"><Loader2 className="animate-spin text-zinc-500" /></div>
-            : similar.length > 0 && row(isTyre ? 'Схожі пропозиції' : 'Аналоги та інший об\'єм', similar)}
+            : similar.length > 0 && row(isTyre ? 'Схожі пропозиції' : 'Аналоги й схожі товари', similar)}
 
           <ProductReviews productId={product.id} userId={userId} userName={userName} onRequireLogin={onRequireLogin} />
 

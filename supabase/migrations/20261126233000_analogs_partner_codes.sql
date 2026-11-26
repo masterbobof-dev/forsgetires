@@ -1,0 +1,6 @@
+-- Applied to the live database on 2026-11-26 (migrations analogs_with_partner_offers + supplier_offer_codes).
+-- product_related(): analogs by cross numbers now include partner offers (on order, with a price) after own stock (limit 12);
+--   GIN index on string_to_array(search_numbers, ' ').
+-- private.offer_codes(external_id, number, name, crosses): article numbers of a partner offer — Omega's article,
+--   the article in brackets of a GPL name, and cross numbers when the program's export sends "crosses";
+--   stored in tyres.search_numbers (search + analogs). supplier_offers_apply() fills it.

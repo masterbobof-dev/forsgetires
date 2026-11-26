@@ -1,4 +1,6 @@
 
+import { safeParsePrice } from './shopUtils';
+import StockAlertForm from './StockAlertForm';
 import React, { useState, useEffect, useRef } from 'react';
 import NoPhoto from './NoPhoto';
 import { Heart, Scale, X, ShoppingCart, ZoomIn, ChevronLeft, ChevronRight, Gauge, ShieldCheck, Truck, CreditCard, Info, Snowflake, Sun, CloudSun, Ruler, Flame, Loader2, Phone, ArrowRight } from 'lucide-react';
@@ -158,6 +160,8 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
           <Phone size={18} /> Дізнатися ціну
         </button>
       )
+    ) : isOutOfStock ? (
+      <StockAlertForm productId={product.id} defaultName={userName} />
     ) : (<>
       <button disabled={isOutOfStock} onClick={() => { addToCart(product); onClose(); }}
         className={`flex-1 h-12 md:h-14 rounded-2xl font-black text-sm md:text-base flex items-center justify-center gap-2 uppercase tracking-wide transition-all active:scale-95 ${isOutOfStock ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed' : 'bg-[#FFC300] text-black hover:bg-white'}`}>
@@ -177,6 +181,10 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
       <div className="flex items-baseline gap-2 flex-wrap">
         <span className="text-2xl md:text-4xl font-black text-[#FFC300] whitespace-nowrap">{formatPrice(product.price)} <span className="text-xs md:text-sm text-white font-normal uppercase">грн</span></span>
         {hasDiscount && <span className="text-sm text-zinc-500 line-through">{formatPrice(product.old_price)} грн</span>}
+        {/* tyres are bought in sets: show the price of four at once */}
+        {isTyre && safeParsePrice(product.price) > 0 && (
+          <span className="basis-full text-xs md:text-sm text-zinc-400">Комплект 4 шт: <b className="text-white">{formatPrice(String(safeParsePrice(product.price) * 4))} грн</b></span>
+        )}
       </div>
     );
 

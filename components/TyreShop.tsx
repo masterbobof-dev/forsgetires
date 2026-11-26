@@ -332,6 +332,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
                   <div key={tyre.id} className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: `${Math.min((idx % PAGE_SIZE) * 40, 400)}ms` }}>
                     <ProductCard
                       tyre={tyre}
+                      priority={idx < 4}
                       chips={getCardChips(getPresetForProduct(categories, tyre), tyre.attributes)}
                       onClick={() => handleProductClick(tyre)}
                       onAddToCart={(e) => { e.stopPropagation(); addToCart(tyre); }}

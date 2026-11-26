@@ -40,6 +40,7 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
   const [showAllSections, setShowAllSections] = useState(false);
   const [hotIsPicked, setHotIsPicked] = useState(true);
   const [hot, setHot] = useState<TyreProduct[]>([]);
+  const [hotLoaded, setHotLoaded] = useState(false);
   const [articles, setArticles] = useState<Article[]>([]);
   const [reviews, setReviews] = useState<{ id: number; author_name: string; rating: number; body: string | null; tyres?: { title: string } | null }[]>([]);
   const roots = getRootCategories(categories);
@@ -68,6 +69,7 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
         list = [...list, ...((more as TyreProduct[]) || [])];
       }
       setHot(list.map(prepare));
+      setHotLoaded(true);
     })();
     fetchArticles(3).then(setArticles);
     supabase.from('product_reviews').select('id, author_name, rating, body, tyres(title)').eq('approved', true).order('created_at', { ascending: false }).limit(3)
@@ -158,6 +160,25 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
 
       </>,
     hits: <>
+      {/* While the hits load: an empty block of the same size, so the goods below don't jump down */}
+      {!hotLoaded && (
+        <section aria-hidden="true" className="animate-pulse">
+          <div className="flex items-center justify-between mb-3 md:mb-4">
+            <span className="text-lg md:text-2xl font-black block w-48 rounded-lg bg-zinc-900">&nbsp;</span>
+          </div>
+          <div className="flex gap-3 overflow-hidden pb-2">
+            {[0, 1, 2, 3, 4, 5].map(k => (
+              <div key={k} className="shrink-0 w-[160px] md:w-[200px] bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                <div className="aspect-square bg-zinc-800/60" />
+                <div className="p-3">
+                  <p className="text-xs min-h-[2.5em]">&nbsp;</p>
+                  <p className="mt-1 font-black">&nbsp;</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
       {/* Hits & discounts */}
       {hot.length > 0 && (
         <section>

@@ -22,7 +22,7 @@ const LocalCityPage = lazy(() => import('./components/LocalCityPage'));
 import { cityFromPath } from './api/_cities.js';
 
 const PageLoader = () => (
-  <div className="flex h-[60vh] items-center justify-center">
+  <div className="flex h-screen items-center justify-center">
     <Loader2 className="animate-spin text-[#FFC300]" size={48} />
   </div>
 );

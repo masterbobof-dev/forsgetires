@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import {
-  ArrowLeft, MessageSquare, Plus, Pin, Eye, Loader2, EyeOff, Lock, Unlock, Pencil, Trash2, ChevronRight, Search, MessagesSquare,
+  ArrowLeft, MessageSquare, Plus, Pin, Eye, Loader2, EyeOff, Lock, Unlock, Pencil, Trash2, ChevronRight, Search, MessagesSquare, Reply, CornerDownRight,
 } from 'lucide-react';
 import type { AuthState } from '../../useAuth';
 import { linkClick, navigateTo } from '../../navigation';
+import { supabase } from '../../supabaseClient';
 import {
   forumPath, forumRoute, fetchSections, fetchSectionStats, fetchTopics, fetchTopic, createTopic, createPost, updateTopic, updatePost,
-  deleteTopic, deletePost, fetchOwnIds, rootSections, childSections, sectionChain, sectionSlugs, sectionName,
+  deleteTopic, deletePost, fetchOwnIds, postTree, rootSections, childSections, sectionChain, sectionSlugs, sectionName,
   type ForumSection, type ForumTopic, type ForumPost,
 } from '../../forum';
 import { Body, Photos, Author, Avatar, AvatarPicker, MessageForm, when, whenShort } from './forumParts';
@@ -73,7 +74,10 @@ const Tool: React.FC<{ onClick: () => void; icon: React.ReactNode; label: string
   <button onClick={onClick} className={`h-9 px-3 rounded-lg border text-xs font-bold flex items-center gap-1.5 ${danger ? 'border-red-900 text-red-400 hover:bg-red-950/40' : 'border-zinc-700 text-zinc-300 hover:border-zinc-500'}`}>{icon}{label}</button>
 );
 
-const ForumPage: React.FC<{ auth: AuthState; isStaff: boolean; onBack: () => void }> = ({ auth, isStaff, onBack }) => {
+const ForumPage: React.FC<{ auth: AuthState; isStaff: boolean; onBack: () => void }> = ({ auth, isStaff: staff, onBack }) => {
+  // shop staff and forum moderators get the moderation buttons
+  const [mod, setMod] = useState(false);
+  const isStaff = staff || mod;
   const [route, setRoute] = useState(() => forumRoute());
   const [section, setSection] = useState<string | null>(() => new URLSearchParams(window.location.search).get('c'));
   const [sections, setSections] = useState<ForumSection[]>([]);
@@ -83,10 +87,15 @@ const ForumPage: React.FC<{ auth: AuthState; isStaff: boolean; onBack: () => voi
   const [posts, setPosts] = useState<ForumPost[]>([]);
   const [own, setOwn] = useState<{ topic: boolean; posts: Set<number> }>({ topic: false, posts: new Set() });
   const [editing, setEditing] = useState<'topic' | number | null>(null);
+  const [replyTo, setReplyTo] = useState<number | null>(null);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const userId = auth.session?.user?.id as string | undefined;
+  useEffect(() => {
+    if (!userId || staff) { setMod(false); return; }
+    supabase.rpc('is_forum_mod').then(({ data }) => setMod(data === true), () => undefined);
+  }, [userId, staff]);
 
   useEffect(() => {
     const onPop = () => { setRoute(forumRoute()); setSection(new URLSearchParams(window.location.search).get('c')); };
@@ -203,21 +212,33 @@ const ForumPage: React.FC<{ auth: AuthState; isStaff: boolean; onBack: () => voi
           </div>
         )}
         <h2 className="text-lg font-black uppercase pt-2">Відповіді ({posts.filter(p => !p.is_hidden).length})</h2>
-        {posts.map(p => editing === p.id && userId ? (
-          <MessageForm key={p.id} userId={userId} initial={p} submitLabel="Зберегти" onCancel={() => setEditing(null)}
-            onSubmit={v => act(() => updatePost(p.id, { body: v.body, images: v.images }))} />
-        ) : (
-          <div key={p.id} className={`border rounded-2xl p-4 ${p.is_shop ? 'bg-[#FFC300]/5 border-[#FFC300]/30' : 'bg-zinc-900/60 border-zinc-800'} ${p.is_hidden ? 'opacity-50' : ''}`}>
-            <Author name={p.author_name} shop={p.is_shop} date={p.created_at} edited={p.edited_at} avatar={p.author_avatar} />
-            <div className="mt-2"><Body text={p.body} /></div>
-            <Photos urls={p.images} />
-            {(isStaff || own.posts.has(p.id)) && (
-              <div className="flex flex-wrap gap-2 mt-3">
-                <Tool onClick={() => setEditing(p.id)} icon={<Pencil size={14} />} label="Редагувати" />
-                {isStaff && <>
-                  <Tool onClick={() => act(() => updatePost(p.id, { is_hidden: !p.is_hidden }))} icon={<EyeOff size={14} />} label={p.is_hidden ? 'Показати' : 'Сховати'} />
-                  <Tool danger onClick={() => act(() => deletePost(p.id), 'Видалити цю відповідь?')} icon={<Trash2 size={14} />} label="Видалити" />
-                </>}
+        {postTree(posts).map(({ post: p, depth, replyTo: parent }) => (
+          <div key={p.id} style={{ marginLeft: `${Math.min(depth, 3) * 14}px` }} className={depth ? 'border-l-2 border-zinc-800 pl-2 md:pl-3' : ''}>
+            {editing === p.id && userId ? (
+              <MessageForm userId={userId} initial={p} submitLabel="Зберегти" onCancel={() => setEditing(null)}
+                onSubmit={v => act(() => updatePost(p.id, { body: v.body, images: v.images }))} />
+            ) : (
+              <div id={`post-${p.id}`} className={`border rounded-2xl p-4 ${p.is_shop ? 'bg-[#FFC300]/5 border-[#FFC300]/30' : 'bg-zinc-900/60 border-zinc-800'} ${p.is_hidden ? 'opacity-50' : ''}`}>
+                {parent && <p className="text-[11px] text-zinc-500 mb-1 flex items-center gap-1"><CornerDownRight size={12} /> у відповідь {parent.author_name}</p>}
+                <Author name={p.author_name} shop={p.is_shop} date={p.created_at} edited={p.edited_at} avatar={p.author_avatar} />
+                <div className="mt-2"><Body text={p.body} /></div>
+                <Photos urls={p.images} />
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {(!topic.is_locked || isStaff) && !p.is_hidden && (
+                    <Tool onClick={() => (userId ? setReplyTo(replyTo === p.id ? null : p.id) : auth.openAuthModal('login'))} icon={<Reply size={14} />} label="Відповісти" />
+                  )}
+                  {(isStaff || own.posts.has(p.id)) && <Tool onClick={() => setEditing(p.id)} icon={<Pencil size={14} />} label="Редагувати" />}
+                  {isStaff && <>
+                    <Tool onClick={() => act(() => updatePost(p.id, { is_hidden: !p.is_hidden }))} icon={<EyeOff size={14} />} label={p.is_hidden ? 'Показати' : 'Сховати'} />
+                    <Tool danger onClick={() => act(() => deletePost(p.id), 'Видалити цю відповідь?')} icon={<Trash2 size={14} />} label="Видалити" />
+                  </>}
+                </div>
+              </div>
+            )}
+            {replyTo === p.id && userId && (
+              <div className="mt-2">
+                <MessageForm userId={userId} submitLabel={`Відповісти ${p.author_name}`} onCancel={() => setReplyTo(null)}
+                  onSubmit={async v => { await createPost({ topic_id: topic.id, body: v.body, images: v.images, parent_id: p.id }); setReplyTo(null); await load(true); }} />
               </div>
             )}
           </div>
@@ -225,7 +246,7 @@ const ForumPage: React.FC<{ auth: AuthState; isStaff: boolean; onBack: () => voi
         {topic.is_locked && !isStaff ? (
           <p className="text-center text-zinc-500 text-sm py-4 flex items-center justify-center gap-2"><Lock size={16} /> Тему закрито, нові відповіді не приймаються.</p>
         ) : !userId ? loginBox : (
-          <MessageForm userId={userId} submitLabel="Відповісти" onSubmit={async v => { await createPost({ topic_id: topic.id, body: v.body, images: v.images }); await load(true); }} />
+          <MessageForm userId={userId} submitLabel="Відповісти в тему" onSubmit={async v => { await createPost({ topic_id: topic.id, body: v.body, images: v.images }); await load(true); }} />
         )}
       </article>
     );

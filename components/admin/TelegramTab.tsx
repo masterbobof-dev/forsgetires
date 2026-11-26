@@ -6,11 +6,11 @@ import { supabase } from '../../supabaseClient';
  * Telegram bot: who gets orders in Telegram, invitations for owners / workers, bot status.
  * The bot itself is the edge function "telegram-bot".
  */
-interface TgUser { id: number; chat_id: number; name: string | null; username: string | null; role: 'owner' | 'staff'; notify: boolean; active: boolean; created_at: string }
-interface Invite { code: string; role: 'owner' | 'staff'; label: string | null; expires_at: string; used_at: string | null }
+interface TgUser { id: number; chat_id: number; name: string | null; username: string | null; role: 'owner' | 'staff' | 'forum'; notify: boolean; active: boolean; created_at: string }
+interface Invite { code: string; role: 'owner' | 'staff' | 'forum'; label: string | null; expires_at: string; used_at: string | null }
 
 const BOT_FALLBACK = 'Forsageshop_bot';
-const ROLE: Record<string, string> = { owner: 'Власник', staff: 'Працівник' };
+const ROLE: Record<string, string> = { owner: 'Власник', staff: 'Працівник', forum: 'Модератор форуму' };
 
 const call = async (body: Record<string, unknown>) => {
   const { data, error } = await supabase.functions.invoke('telegram-bot', { body });
@@ -29,7 +29,7 @@ const TelegramTab: React.FC = () => {
   const [users, setUsers] = useState<TgUser[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [label, setLabel] = useState('');
-  const [role, setRole] = useState<'staff' | 'owner'>('staff');
+  const [role, setRole] = useState<'staff' | 'owner' | 'forum'>('staff');
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState('');
   const [copied, setCopied] = useState('');
@@ -106,9 +106,10 @@ const TelegramTab: React.FC = () => {
         <div className="grid sm:grid-cols-[1fr_180px_auto] gap-2">
           <input value={label} onChange={e => setLabel(e.target.value)} placeholder="Ім'я (наприклад: Олег, менеджер)"
             className="h-11 bg-black border border-zinc-700 rounded-xl px-3 text-sm text-white outline-none focus:border-[#FFC300] min-w-0" />
-          <select value={role} onChange={e => setRole(e.target.value as 'staff' | 'owner')} className="h-11 bg-black border border-zinc-700 rounded-xl px-3 text-sm text-white outline-none focus:border-[#FFC300]">
+          <select value={role} onChange={e => setRole(e.target.value as 'staff' | 'owner' | 'forum')} className="h-11 bg-black border border-zinc-700 rounded-xl px-3 text-sm text-white outline-none focus:border-[#FFC300]">
             <option value="staff">Працівник</option>
             <option value="owner">Власник</option>
+            <option value="forum">Модератор форуму</option>
           </select>
           <button onClick={invite} disabled={!!busy} className={`${btn} h-11 bg-[#FFC300] hover:bg-white text-black`}>{busy === 'invite' ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />} Створити посилання</button>
         </div>
@@ -149,6 +150,7 @@ const TelegramTab: React.FC = () => {
                   className="h-9 bg-black border border-zinc-700 rounded-lg px-2 text-xs text-white outline-none">
                   <option value="staff">Працівник</option>
                   <option value="owner">Власник</option>
+                  <option value="forum">Модератор форуму</option>
                 </select>
                 <button onClick={() => update(u, { notify: !u.notify })} title={u.notify ? 'Сповіщення увімкнені' : 'Сповіщення вимкнені'}
                   className={`h-9 px-3 rounded-lg text-xs font-bold flex items-center gap-1.5 ${u.notify ? 'bg-green-500/15 text-green-400' : 'bg-zinc-800 text-zinc-500'}`}>

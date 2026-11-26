@@ -17,7 +17,7 @@ interface AdminPanelProps {
   onBackToSite?: () => void;
 }
 
-type AccessStatus = 'loading' | 'granted_admin' | 'granted_manager' | 'denied' | 'setup_required';
+type AccessStatus = 'loading' | 'granted_admin' | 'granted_manager' | 'granted_forum' | 'denied' | 'setup_required';
 
 // ── Reusable Confirm Dialog ────────────────────────────────────────────────
 interface ConfirmDialogProps {
@@ -124,7 +124,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
       const adminEmail = settings?.find(s => s.key === 'admin_email')?.value?.trim().toLowerCase();
       const managerEmail = settings?.find(s => s.key === 'manager_email')?.value?.trim().toLowerCase();
 
-      if (!adminEmail) {
+      // people who are not staff do not see the staff e-mails at all: check the forum moderator role first
+      const { data: mod } = (adminEmail && (email === adminEmail || email === managerEmail)) ? { data: false } : await supabase.rpc('is_forum_mod');
+      if (mod === true && email !== adminEmail && email !== managerEmail) {
+        setAccessStatus('granted_forum'); setActiveTab('forum');
+      } else if (!adminEmail) {
         setAccessStatus('setup_required');
       } else if (email === adminEmail) {
         setAccessStatus('granted_admin');
@@ -207,6 +211,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
   // ── Main Panel ─────────────────────────────────────────────────────────
   const isAdmin = accessStatus === 'granted_admin';
   const isManager = accessStatus === 'granted_manager';
+  const isForumMod = accessStatus === 'granted_forum';
 
   const getTabLabel = (tab: string) => {
     const labels: Record<string, string> = {
@@ -232,7 +237,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
     ? ['orders', 'tyres', 'reviews', 'promo', 'seo', 'articles', 'forum', 'stats', 'telegram', 'settings']
     : isManager
       ? ['orders', 'tyres', 'reviews', 'promo', 'seo', 'articles', 'forum', 'stats']
-      : [];
+      : isForumMod ? ['forum'] : [];
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white pb-20 lg:pb-6 animate-in fade-in duration-500">
@@ -344,7 +349,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
         {activeTab === 'orders' && <OrdersTab />}
         {activeTab === 'stats' && <StatsTab />}
         {activeTab === 'articles' && <ArticlesTab />}
-        {activeTab === 'forum' && <ForumTab />}
+        {activeTab === 'forum' && <ForumTab isStaff={!isForumMod} />}
         {activeTab === 'seo' && <SeoTab />}
         {activeTab === 'promo' && <PromoTab />}
         {isAdmin && activeTab === 'telegram' && <TelegramTab />}

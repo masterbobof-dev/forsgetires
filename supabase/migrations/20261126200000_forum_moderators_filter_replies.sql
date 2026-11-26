@@ -1,0 +1,11 @@
+-- Applied to the live database on 2026-11-26 (migrations forum_moderators_filter_replies + forum_clean_words).
+-- 1) forum_moderators (email): people who may only look after the forum; public.is_forum_mod() = staff or such a person.
+--    Forum rules (read hidden, moderate, delete, sections, posting into locked topics) use is_forum_mod() instead of is_staff().
+-- 2) forum_posts.parent_id: a reply to a particular message of the same topic.
+-- 3) private.forum_clean(text): swear words keep the first letter, the rest becomes stars; used by the insert/update triggers
+--    for titles and texts. Ordinary words that only look similar (бляха, мандри, себе, Сибір...) are left alone.
+-- 4) Telegram role "forum" (telegram_users / telegram_invites); new forum messages go to the bot as notify_forum
+--    (owners and forum moderators get them with Hide / Delete buttons).
+-- 5) public.forum_stats(days): topics, replies, writers, registered buyers, popular topics, most active people
+--    (forum moderators and the bot only).
+-- The full SQL is in the Supabase migration history of the project.

@@ -61,16 +61,35 @@ export const ShowMore: React.FC<{ onMore: () => void; loadingMore: boolean; show
   </div>
 );
 
-/** Folded text about the section (also read by Google). */
-export const CategoryAbout: React.FC<{ name: string; description: string }> = ({ name, description }) => (
-  <details className="mt-10 bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4 md:p-6 group">
-    <summary className="cursor-pointer font-black uppercase tracking-tight text-zinc-200 list-none flex items-center justify-between">
-      Про категорію «{name}»<ArrowDown size={16} className="group-open:rotate-180 transition-transform" />
-    </summary>
-    <div className="mt-3 space-y-2 text-sm text-zinc-400 leading-relaxed">
-      {description.split(/\n+/).filter(Boolean).map((t, i) => <p key={i}>{t}</p>)}
-    </div>
-  </details>
+/** Folded text about the section and its questions-answers (also read by Google). */
+export const CategoryAbout: React.FC<{ name: string; description: string; faq?: { q: string; a: string }[] | null }> = ({ name, description, faq }) => (
+  <>
+    {description && (
+      <details className="mt-10 bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4 md:p-6 group">
+        <summary className="cursor-pointer font-black uppercase tracking-tight text-zinc-200 list-none flex items-center justify-between">
+          Про категорію «{name}»<ArrowDown size={16} className="group-open:rotate-180 transition-transform" />
+        </summary>
+        <div className="mt-3 space-y-2 text-sm text-zinc-400 leading-relaxed">
+          {description.split(/\n+/).filter(Boolean).map((t, i) => <p key={i}>{t}</p>)}
+        </div>
+      </details>
+    )}
+    {!!faq?.length && (
+      <section className="mt-6 bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4 md:p-6">
+        <h2 className="font-black uppercase tracking-tight text-zinc-200 mb-3">Питання та відповіді</h2>
+        <div className="divide-y divide-zinc-800">
+          {faq.map((f, i) => (
+            <details key={i} className="py-3 group">
+              <summary className="cursor-pointer text-sm md:text-base font-bold text-white list-none flex items-center justify-between gap-3">
+                {f.q}<ArrowDown size={14} className="shrink-0 text-zinc-500 group-open:rotate-180 transition-transform" />
+              </summary>
+              <p className="mt-2 text-sm text-zinc-400 leading-relaxed">{f.a}</p>
+            </details>
+          ))}
+        </div>
+      </section>
+    )}
+  </>
 );
 
 /** Phones: a reminder that swiping changes the section. */

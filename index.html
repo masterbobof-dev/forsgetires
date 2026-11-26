@@ -37,7 +37,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://zzxueclhkhvwdmxflmyx.supabase.co" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800;900&display=swap" rel="stylesheet" />
+    <!-- photos come without CORS: a separate early connection for them -->
+    <link rel="preconnect" href="https://zzxueclhkhvwdmxflmyx.supabase.co" />
+    <!-- the font does not hold up the first paint: the page shows with a system font and switches when it arrives -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800;900&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800;900&display=swap" rel="stylesheet" /></noscript>
     
     <!-- Google Structured Data (JSON-LD) -->
     <script type="application/ld+json">

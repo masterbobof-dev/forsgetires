@@ -46,16 +46,19 @@ Deno.serve(async (req) => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const bytes = new Uint8Array(await res.arrayBuffer());
       if (bytes.length < 70_000) { await db.from('tyres').update({ image_thumb_url: p.image_url }).eq('id', p.id); out.same++; continue; }
+      // marked before the heavy part: if the worker is killed on this photo (too big for its limits),
+      // the mark stays and the next run skips it instead of failing on it again and again
+      await db.from('tyres').update({ thumb_error: 'не вдалося обробити (завелике фото)' }).eq('id', p.id);
       const img = await decodeAny(bytes);
       if (img.width >= img.height) img.resize(Math.min(SIDE, img.width), Image.RESIZE_AUTO); else img.resize(Image.RESIZE_AUTO, Math.min(SIDE, img.height));
       // JPEG has no transparency: put the picture on white (otherwise see-through parts turn black)
       const flat = new Image(img.width, img.height).fill(0xffffffff).composite(img);
       const jpeg = await flat.encodeJPEG(78);
-      if (jpeg.length >= bytes.length) { await db.from('tyres').update({ image_thumb_url: p.image_url }).eq('id', p.id); out.same++; continue; }
+      if (jpeg.length >= bytes.length) { await db.from('tyres').update({ image_thumb_url: p.image_url, thumb_error: null }).eq('id', p.id); out.same++; continue; }
       const path = p.image_url.split(PREFIX)[1].replace(/\.[a-z0-9]+$/i, '') + '-thumb.jpg';
       const up = await db.storage.from('galery').upload(path, jpeg, { contentType: 'image/jpeg', upsert: true, cacheControl: '31536000' });
       if (up.error) throw new Error(up.error.message);
-      await db.from('tyres').update({ image_thumb_url: db.storage.from('galery').getPublicUrl(path).data.publicUrl }).eq('id', p.id);
+      await db.from('tyres').update({ image_thumb_url: db.storage.from('galery').getPublicUrl(path).data.publicUrl, thumb_error: null }).eq('id', p.id);
       out.done++;
     } catch (e) {
       await db.from('tyres').update({ thumb_error: String(e?.message || e).slice(0, 120) }).eq('id', p.id);

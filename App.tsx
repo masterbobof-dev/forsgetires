@@ -19,6 +19,7 @@ const LegalPage = lazy(() => import('./components/LegalPage'));
 const InfoPages = lazy(() => import('./components/InfoPages'));
 const ArticlesPage = lazy(() => import('./components/ArticlesPage'));
 const LocalCityPage = lazy(() => import('./components/LocalCityPage'));
+const ForumPage = lazy(() => import('./components/forum/ForumPage'));
 import { cityFromPath } from './api/_cities.js';
 
 const PageLoader = () => (
@@ -31,11 +32,12 @@ const PageLoader = () => (
 const PATHS: Record<ViewState, string> = {
   home: '/', admin: '/admin', account: '/account', oferta: '/oferta', privacy: '/privacy', articles: '/statti',
   delivery: '/dostavka-i-oplata', warranty: '/garantiya-i-povernennya', about: '/pro-nas', contacts: '/kontakty', faq: '/faq',
-  city: '/avtozapchastyny-synelnykove',
+  city: '/avtozapchastyny-synelnykove', forum: '/forum',
 };
 const viewFromPath = (path: string): ViewState => {
   const p = path.replace(/\/+$/, '') || '/';
   if (p.startsWith('/statti/')) return 'articles';
+  if (p === '/forum' || p.startsWith('/forum/')) return 'forum';
   if (p.startsWith('/katalog/')) return 'home';
   if (cityFromPath(p)) return 'city';
   const found = (Object.entries(PATHS) as [ViewState, string][]).find(([, v]) => v === p);
@@ -227,6 +229,8 @@ const App: React.FC = () => {
         return <LegalPage doc={currentView} onBack={goHome} />;
       case 'articles':
         return <ArticlesPage onBack={goHome} />;
+      case 'forum':
+        return <ForumPage auth={auth} isStaff={!!auth.session && isStaff === true} onBack={goHome} />;
       case 'city':
         return <LocalCityPage onBack={goHome} />;
       case 'delivery':

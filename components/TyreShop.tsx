@@ -215,7 +215,10 @@ const TyreShop: React.FC<TyreShopProps> = ({
   const scrollToList = () => setTimeout(() => listTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   const cartTotal = useMemo(() => cartItems.reduce((a,b) => a + (safeParsePrice(b.price)*b.quantity), 0), [cartItems]);
   /** the home page as such: all goods, nothing searched or filtered */
-  const isHome = activeCategory === 'all' && !debouncedSearch.trim() && activeFilterCount === 0;
+  // a section's own address is being opened: while the sections load, don't flash the home page (it also
+  // fetched all the home blocks for nothing and made the page jump)
+  const openingSection = categoriesLoading && /^\/katalog\/./.test(window.location.pathname);
+  const isHome = activeCategory === 'all' && !debouncedSearch.trim() && activeFilterCount === 0 && !openingSection;
   const slideClass = slideDir === 1 ? 'slide-in-from-right-8' : slideDir === -1 ? 'slide-in-from-left-8' : 'slide-in-from-bottom-4';
 
   const filterPanel = (

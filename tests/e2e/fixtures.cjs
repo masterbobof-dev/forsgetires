@@ -113,8 +113,10 @@ const rpc = {
   category_counts: (_args, fake) => {
     const by = {};
     for (const p of fake.tables.tyres) {
-      if (!p.in_stock || p.on_order || p.category_id == null) continue;
-      const c = (by[p.category_id] ||= { category_id: p.category_id, n: 0, with_photo: 0 });
+      if (!p.in_stock || p.category_id == null) continue;
+      const c = (by[p.category_id] ||= { category_id: p.category_id, n: 0, with_photo: 0, n_all: 0 });
+      c.n_all++;
+      if (p.on_order) continue;
       c.n++; if (p.has_photo) c.with_photo++;
     }
     return Object.values(by);

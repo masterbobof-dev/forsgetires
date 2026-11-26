@@ -1,0 +1,9 @@
+-- Applied to the live database on 2026-11-26 (migration forum_people_garage_follows_messages + small follow-up fixes).
+-- forum_people (user_id, pid, about, city): public profile number for /forum/user-<pid>; topics/posts get author_pid.
+-- user_cars: the person's garage (make, model, year, engine, nickname, about, up to 12 photos); only the owner edits it,
+--   others see it through forum_profile().
+-- forum_follows (follower, followee): following; following each other = friends.
+-- forum_messages: private messages, written only through forum_send() (swear filter, 60 per hour).
+-- Functions: forum_profile, forum_people_list, forum_follow, forum_send, forum_inbox, forum_thread (marks read),
+--   forum_unread, forum_me, forum_save_me. A person without a name is shown as "Учасник N" (never the e-mail).
+-- The full SQL is in the Supabase migration history of the project.

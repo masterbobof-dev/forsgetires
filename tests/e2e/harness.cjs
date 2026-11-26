@@ -89,7 +89,7 @@ const openShop = async (browser, baseUrl, opts = {}) => {
   });
   const page = await context.newPage();
   const errors = [];
-  page.on('pageerror', (e) => errors.push(String(e.message || e)));
+  page.on('pageerror', (e) => errors.push(String(e.message || e) + (process.env.E2E_STACK ? '\n' + e.stack : '')));
   return { page, context, fake, errors, unexpected, baseUrl };
 };
 

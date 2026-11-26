@@ -10,27 +10,36 @@ export interface ForumTopic {
   id: number; created_at: string; author_name: string; is_shop: boolean; category: string;
   title: string; body: string; images: string[]; is_pinned: boolean; is_hidden: boolean; is_locked: boolean;
   replies_count: number; last_reply_at: string; views: number; edited_at: string | null; author_avatar: string | null;
+  /** public number of the author's profile (/forum/user-N); null for the shop */
+  author_pid?: number | null;
 }
 export interface ForumPost {
   id: number; topic_id: number; created_at: string; author_name: string; is_shop: boolean;
   body: string; images: string[]; is_hidden: boolean; edited_at: string | null; author_avatar: string | null;
   /** the message this one answers (null = an answer to the topic itself) */
   parent_id: number | null;
+  author_pid?: number | null;
 }
 
-const TOPIC_FIELDS = 'id, created_at, author_name, is_shop, category, title, body, images, is_pinned, is_hidden, is_locked, replies_count, last_reply_at, views, edited_at, author_avatar';
-const POST_FIELDS = 'id, topic_id, created_at, author_name, is_shop, body, images, is_hidden, edited_at, author_avatar, parent_id';
+const TOPIC_FIELDS = 'id, created_at, author_name, is_shop, category, title, body, images, is_pinned, is_hidden, is_locked, replies_count, last_reply_at, views, edited_at, author_avatar, author_pid';
+const POST_FIELDS = 'id, topic_id, created_at, author_name, is_shop, body, images, is_hidden, edited_at, author_avatar, parent_id, author_pid';
 
 export const forumPath = (t?: Pick<ForumTopic, 'id' | 'title'> | null) => {
   if (!t) return '/forum';
   const s = slugify(t.title).slice(0, 60);
   return `/forum/${t.id}${s ? `-${s}` : ''}`;
 };
-/** /forum/123-... → 123; /forum/new → 'new'; /forum → null */
-export const forumRoute = (path = window.location.pathname): number | 'new' | null => {
+/** /forum/123-... → 123; /forum/new → 'new'; /forum/messages → 'messages'; /forum/user-5 → { user: 5 }; /forum → null */
+export type ForumRoute = number | 'new' | 'messages' | { user: number } | null;
+export const forumRoute = (path = window.location.pathname): ForumRoute => {
+  const u = path.match(/^\/forum\/user-(\d+)/);
+  if (u) return { user: Number(u[1]) };
+  if (/^\/forum\/messages/.test(path)) return 'messages';
   const m = path.match(/^\/forum\/(new|\d+)/);
   return !m ? null : m[1] === 'new' ? 'new' : Number(m[1]);
 };
+export const userPath = (pid: number) => `/forum/user-${pid}`;
+export const messagesPath = (pid?: number) => `/forum/messages${pid ? `?to=${pid}` : ''}`;
 
 // --- sections ---
 let sectionsCache: Promise<ForumSection[]> | null = null;
@@ -204,5 +213,46 @@ export const fetchMyAvatar = async (userId: string) => {
 };
 export const saveMyAvatar = async (userId: string, avatar: string | null) => {
   const { error } = await supabase.from('customer_profiles').upsert({ id: userId, avatar, updated_at: new Date().toISOString() });
+  if (error) throw error;
+};
+
+// --- people: profiles, garage, following, private messages ---
+export interface PersonShort { pid: number; name: string; avatar: string | null }
+export interface Car { id: number; make: string; model: string; year: number | null; engine: string | null; nickname: string | null; about: string | null; photos: string[] }
+export interface Profile extends PersonShort {
+  about: string | null; city: string | null; joined: string; topics: number; posts: number;
+  followers: number; following: number; friends: number; is_me: boolean; i_follow: boolean; follows_me: boolean;
+  cars: Car[]; recent: { id: number; title: string; created_at: string }[];
+}
+export interface InboxRow extends PersonShort { last: string; at: string; from_me: boolean; unread: number }
+export interface Thread { with: PersonShort; messages: { id: number; body: string; at: string; mine: boolean; read: boolean }[] }
+
+const rpc = async <T,>(fn: string, args?: Record<string, unknown>): Promise<T> => {
+  const { data, error } = await supabase.rpc(fn, args);
+  if (error) throw error;
+  return data as T;
+};
+export const fetchProfile = (pid: number) => rpc<Profile | null>('forum_profile', { p_pid: pid });
+export const fetchPeople = (pid: number, kind: 'following' | 'followers' | 'friends') => rpc<PersonShort[]>('forum_people_list', { p_pid: pid, p_kind: kind });
+export const setFollow = (pid: number, on: boolean) => rpc<Profile>('forum_follow', { p_pid: pid, p_on: on });
+export const fetchMe = () => rpc<(PersonShort & { about: string | null; city: string | null }) | null>('forum_me');
+export const saveMe = (about: string, city: string) => rpc<void>('forum_save_me', { p_about: about, p_city: city });
+export const fetchInbox = () => rpc<InboxRow[]>('forum_inbox');
+export const fetchThread = (pid: number) => rpc<Thread | null>('forum_thread', { p_pid: pid });
+export const sendMessage = (pid: number, body: string) => rpc<number>('forum_send', { p_pid: pid, p_body: body });
+export const fetchUnread = () => rpc<number>('forum_unread');
+
+export const fetchMyCars = async () => {
+  const { data, error } = await supabase.from('user_cars').select('id, make, model, year, engine, nickname, about, photos').order('sort_order').order('id');
+  if (error) throw error;
+  return (data || []) as Car[];
+};
+export const saveCar = async (c: Partial<Car> & { make: string; model: string }) => {
+  const row = { make: c.make.trim(), model: c.model.trim(), year: c.year || null, engine: c.engine?.trim() || null, nickname: c.nickname?.trim() || null, about: c.about?.trim() || null, photos: c.photos || [] };
+  const { error } = c.id ? await supabase.from('user_cars').update(row).eq('id', c.id) : await supabase.from('user_cars').insert([row]);
+  if (error) throw error;
+};
+export const deleteCar = async (id: number) => {
+  const { error } = await supabase.from('user_cars').delete().eq('id', id);
   if (error) throw error;
 };

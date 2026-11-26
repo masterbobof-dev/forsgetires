@@ -9,6 +9,17 @@
   },
   "rewrites": [
     {
+      "source": "/:path((?!robots\\.txt$).*)",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(AhrefsBot|AhrefsSiteAudit|SemrushBot|SiteAuditBot|MJ12bot|DotBot|BLEXBot|DataForSeoBot|serpstatbot|Barkrowler).*"
+        }
+      ],
+      "destination": "/api/blocked"
+    },
+    {
       "source": "/sitemap.xml",
       "destination": "/api/sitemap"
     },

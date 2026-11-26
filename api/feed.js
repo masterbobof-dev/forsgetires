@@ -2,7 +2,7 @@
 //   /feeds/google.xml  — Google Merchant Center (Google Покупки)
 //   /feeds/prom.xml    — Prom.ua (YML format, also accepted by Rozetka, Epicentr and others)
 //   /feeds/hotline.xml — Hotline.ua
-import { SITE_URL, SHOP_NAME, restAll, rest, escapeXml as esc, productPath, parsePrice, stripHtml, SEASON_UA } from './_shop.js';
+import { SITE_URL, SHOP_NAME, restAll, rest, escapeXml as esc, productPath, parsePrice, stripHtml, SEASON_UA, sendUnavailable, DbUnavailable } from './_shop.js';
 
 const COMPANY = 'Інтернет-магазин Форсаж (м. Синельникове)';
 
@@ -22,7 +22,7 @@ const ATTR_VALUES = { right: 'Плюс праворуч', left: 'Плюс лів
 
 const loadData = async () => {
   let categories = [];
-  try { categories = await rest('product_categories?select=id,name,parent_id,kind,filter_preset,is_active'); } catch { /* none */ }
+  try { categories = await rest('product_categories?select=id,name,parent_id,kind,filter_preset,is_active'); } catch (e) { if (e instanceof DbUnavailable) throw e; /* none */ }
   const products = await restAll(
     'tyres?select=id,title,description,price,old_price,manufacturer,image_url,gallery,in_stock,category_id,vehicle_type,radius,season,catalog_number,attributes,slug,stock_quantity' +
     '&in_stock=not.is.false&on_order=is.false&image_url=not.is.null&order=id'
@@ -132,7 +132,8 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
     return res.status(200).send(xml);
   } catch (err) {
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    return res.status(500).send(`Feed error: ${err.message}`);
+    console.error('feed failed', err);
+    // never an empty/partial feed: marketplaces would delete the missing goods
+    return sendUnavailable(res, `Feed temporarily unavailable: ${err.message}`);
   }
 }

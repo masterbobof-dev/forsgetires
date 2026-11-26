@@ -70,6 +70,11 @@ const getGeoInfo = async () => {
     return { country: 'Unknown', city: 'Unknown' };
 };
 
+// Search/SEO robots that run the page's JavaScript (AhrefsBot, Semrush, headless browsers...).
+// Their visits are not shoppers: don't count them and don't spend the database on them.
+const IS_BOT = typeof navigator !== 'undefined'
+    && (navigator.webdriver === true || /bot|crawl|spider|slurp|headless|lighthouse/i.test(navigator.userAgent || ''));
+
 export const logAnalyticsEvent = async (
     eventType: AnalyticsEventType, 
     itemId?: string, 
@@ -77,6 +82,7 @@ export const logAnalyticsEvent = async (
     pathName?: string,
     value?: number
 ) => {
+    if (IS_BOT) return;
     trackExternal(eventType, { id: itemId, name: itemName, value, query: eventType === 'search' ? itemName : undefined });
     try {
         const device = getDeviceInfo();

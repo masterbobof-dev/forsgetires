@@ -32,6 +32,9 @@ Deno.serve(async (req) => {
       if (!res.ok) {
         const text = (await res.text()).slice(0, 300);
         if (/57014|statement timeout/i.test(text) && page > MIN_PAGE) { page = Math.max(MIN_PAGE, Math.floor(page / 2)); continue; }
+        // the program is busy right now (its 3-second limit): not a failure, the next run in 5 minutes continues
+        // from the same place. If it lasts for hours, the site's health check says so (partner goods not updated).
+        if (/57014|statement timeout/i.test(text)) return json({ ok: true, busy: true, pages, total, inserted, updated, cursorAt, ms: Date.now() - started });
         throw new Error(`program ${res.status}: ${text}`);
       }
       const offers: { external_id: string; updated_at: string }[] = (await res.json()).offers || [];

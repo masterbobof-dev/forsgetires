@@ -1,0 +1,5 @@
+-- Applied live with apply_migration; this file is the record.
+-- private.site_problems(): a line added before the js_error check —
+--   partner goods (GPL, Omega) not updated for 3+ hours → «Товари партнерів (GPL, Omega) не оновлювались N год: програма не відповідає».
+-- supplier-sync v3: a timeout of the program at the smallest page is "busy" (200, no error), so a busy program no longer
+-- counts as a failed server function.

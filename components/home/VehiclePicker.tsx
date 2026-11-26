@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Car, Battery, Disc3, CircleDot, Phone, Search, Info, X } from 'lucide-react';
+import { Car, Battery, Disc3, CircleDot, Phone, Search, Info, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { parseAttrRange } from '../shop/shopUtils';
 
@@ -11,6 +11,7 @@ export interface Vehicle {
 }
 
 const SAVED_KEY = 'forsage_my_car';
+const SAVED_NAME = 'forsage_my_car_name';
 /** Battery filter for a car: its polarity and capacity from the recommended one up to a bit bigger (smaller is not fit). */
 const batteryAttrs = (car: Vehicle): Record<string, string> => ({
   ...(car.battery_polarity ? { polarity: car.battery_polarity } : {}),
@@ -27,15 +28,17 @@ export const splitTyreSize = (s: string): [string, string, string] | null => {
   return m ? [m[1], m[2], m[3].toUpperCase()] : null;
 };
 
-/** "Підбір за авто": the make and model give factory tyre sizes, the battery and the wheel fitment. */
-const VehiclePicker: React.FC<{
+interface PickerProps {
   onTyreSize: (w: string, h: string, r: string) => void;
   onBattery?: (attrs: Record<string, string>) => void;
   onWheels?: (attrs: Record<string, string>) => void;
   /** hubcaps section (when there are no wheels to offer) */
   onHubcaps?: (radius: string) => void;
   phone?: string; phoneLink?: string;
-}> = ({ onTyreSize, onBattery, onWheels, onHubcaps, phone, phoneLink }) => {
+}
+
+/** The picker itself: the make and model give factory tyre sizes, the battery and the wheel fitment. */
+const PickerBody: React.FC<PickerProps & { onCar?: (name: string) => void }> = ({ onTyreSize, onBattery, onWheels, onHubcaps, phone, phoneLink, onCar }) => {
   const [list, setList] = useState<Vehicle[]>([]);
   const [make, setMake] = useState('');
   const [id, setId] = useState<number | ''>('');
@@ -50,13 +53,18 @@ const VehiclePicker: React.FC<{
         try {
           const saved = Number(localStorage.getItem(SAVED_KEY));
           const v = rows.find(r => r.id === saved);
-          if (v) { setMake(v.make); setId(v.id); }
+          if (v) { setMake(v.make); setId(v.id); onCar?.(`${v.make} ${v.model}`); localStorage.setItem(SAVED_NAME, `${v.make} ${v.model}`); }
         } catch { /* no storage */ }
       });
   }, []);
   const choose = (v: Vehicle | null) => {
     setMake(v?.make || ''); setId(v?.id ?? ''); setQ('');
-    try { if (v) localStorage.setItem(SAVED_KEY, String(v.id)); else localStorage.removeItem(SAVED_KEY); } catch { /* no storage */ }
+    const name = v ? `${v.make} ${v.model}` : '';
+    try {
+      if (v) { localStorage.setItem(SAVED_KEY, String(v.id)); localStorage.setItem(SAVED_NAME, name); }
+      else { localStorage.removeItem(SAVED_KEY); localStorage.removeItem(SAVED_NAME); }
+    } catch { /* no storage */ }
+    onCar?.(name);
   };
   const makes = useMemo(() => [...new Set(list.map(v => v.make))].sort((a, b) => a.localeCompare(b, 'uk')), [list]);
   const models = list.filter(v => v.make === make);
@@ -98,8 +106,7 @@ const VehiclePicker: React.FC<{
     : <>Акумулятор: залежить від версії авто — підкажемо телефоном</>;
 
   return (
-    <section className="bg-gradient-to-br from-zinc-900 to-zinc-950 border border-zinc-800 rounded-3xl p-4 md:p-6">
-      <h2 className="text-base md:text-xl font-black uppercase tracking-tight mb-3 flex items-center gap-2"><Car className="text-[#FFC300]" size={22} /> Підбір за авто</h2>
+    <div>
       <div className="relative mb-2">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
         <input value={q} onChange={e => setQ(e.target.value)} aria-label="Пошук авто" placeholder="Швидкий пошук: напр. Golf 7, Ланос, Camry"
@@ -181,7 +188,58 @@ const VehiclePicker: React.FC<{
           <p className="text-[11px] text-zinc-500 flex items-center gap-1.5"><Phone size={12} /> Комплектації бувають різні — перед покупкою звірте розмір з боковиною шини або уточніть у менеджера.</p>
         </div>
       )}
-    </section>
+    </div>
+  );
+};
+
+/**
+ * "Підбір за авто" on the home page: one compact button; the picker opens in its own window,
+ * so the home page is not crowded. Choosing tyres, a battery or wheels closes the window and shows the goods.
+ */
+const VehiclePicker: React.FC<PickerProps> = (props) => {
+  const [open, setOpen] = useState(false);
+  const [carName, setCarName] = useState(() => { try { return localStorage.getItem(SAVED_NAME) || ''; } catch { return ''; } });
+  const close = () => setOpen(false);
+  const then = <A extends unknown[]>(fn?: (...a: A) => void) => fn && ((...a: A) => { close(); fn(...a); });
+
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    window.addEventListener('keydown', onKey);
+    return () => { document.body.style.overflow = prev; window.removeEventListener('keydown', onKey); };
+  }, [open]);
+
+  return (
+    <>
+      <button onClick={() => setOpen(true)}
+        className="w-full flex items-center gap-3 text-left bg-gradient-to-br from-zinc-900 to-zinc-950 border border-zinc-800 hover:border-[#FFC300] rounded-2xl px-4 py-3 transition-colors">
+        <span className="w-11 h-11 shrink-0 rounded-xl bg-[#FFC300] text-black flex items-center justify-center"><Car size={22} /></span>
+        <span className="flex-1 min-w-0">
+          <span className="block font-black uppercase text-sm md:text-base text-white leading-tight">Підбір за авто</span>
+          <span className="block text-xs text-zinc-400 truncate">{carName ? <>Ваше авто: <b className="text-[#FFC300]">{carName}</b></> : 'Шини · Акумулятори · Диски'}</span>
+        </span>
+        <ChevronRight size={20} className="text-zinc-500 shrink-0" />
+      </button>
+      {open && (
+        <div className="fixed inset-0 z-[70] bg-black/80 backdrop-blur-sm flex items-end md:items-center justify-center animate-in fade-in duration-200" onClick={close}>
+          <div role="dialog" aria-modal="true" aria-label="Підбір за авто" onClick={e => e.stopPropagation()}
+            className="w-full md:max-w-xl h-[100dvh] md:h-auto md:max-h-[85vh] flex flex-col bg-zinc-950 md:border md:border-zinc-800 md:rounded-3xl animate-in slide-in-from-bottom-4 duration-200">
+            <div className="flex items-center gap-2 px-3 py-3 border-b border-zinc-800 shrink-0">
+              <button onClick={close} aria-label="Назад" className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 text-white flex items-center justify-center"><ChevronLeft size={20} /></button>
+              <h2 className="flex-1 font-black uppercase text-base flex items-center gap-2"><Car className="text-[#FFC300]" size={20} /> Підбір за авто</h2>
+              <button onClick={close} aria-label="Закрити" className="w-10 h-10 rounded-xl text-zinc-400 hover:text-white flex items-center justify-center"><X size={20} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 pb-10">
+              <PickerBody {...props} onCar={setCarName}
+                onTyreSize={then(props.onTyreSize)!} onBattery={then(props.onBattery)}
+                onWheels={then(props.onWheels)} onHubcaps={then(props.onHubcaps)} />
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 

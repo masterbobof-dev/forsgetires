@@ -638,6 +638,19 @@ const phone = async (browser, url) => {
     await expectCards(page, 60);
   });
 
+  await step(shop, S, 'one step up from a section', async () => {
+    await ui.click(page.getByRole('button', { name: 'На рівень вище' }));
+    await expectPath(page, '/');
+  });
+
+  await step(shop, S, 'car picker opens in its own window', async () => {
+    await ui.click(page.getByRole('button', { name: /Підбір за авто/ }));
+    const win = page.getByRole('dialog', { name: 'Підбір за авто' });
+    await until(async () => assert.ok(await win.getByRole('combobox', { name: 'Марка авто' }).isVisible()));
+    await ui.click(win.getByRole('button', { name: 'Назад' }));
+    await until(async () => assert.equal(await win.count(), 0));
+  });
+
   await step(shop, S, 'product window and buy bar', async () => {
     await ui.goto(`${url}/katalog/dysky`);
     await expectCards(page, 2);

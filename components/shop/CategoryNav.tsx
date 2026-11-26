@@ -80,13 +80,27 @@ const CategoryNav: React.FC<CategoryNavProps> = ({ categories, active, onChange,
   return (
     <div className="mb-4 md:mb-6 space-y-2">
       <div className="md:hidden" ref={boxRef}>
-        <button onClick={() => { setOpen(o => !o); setDrill(null); }} aria-expanded={open}
-          className={`${open ? 'sticky top-[60px] z-30 shadow-[0_8px_16px_-6px_rgba(0,0,0,0.9)]' : ''} w-full flex items-center gap-2.5 px-3 py-3 rounded-xl border font-black text-xs uppercase tracking-wide transition-colors bg-[#FFC300] border-[#FFC300] text-black`}>
-          <CurIcon size={17} strokeWidth={2.5} />
-          <span className="flex-1 text-left truncate">{current.id === 'all' ? 'Категорії' : current.label}</span>
-          <span className="text-[10px] font-bold opacity-70 normal-case">{open ? 'закрити' : 'усі категорії'}</span>
-          <ChevronDown size={18} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
-        </button>
+        <div className={`${open ? 'sticky top-[60px] z-30' : ''} flex gap-2`}>
+          {/* one step up: subsection -> its section -> all goods */}
+          {active !== 'all' && !open && (
+            <button onClick={() => onChange(activeCat?.parent_id ?? 'all')} aria-label="На рівень вище"
+              className="w-12 shrink-0 rounded-xl border border-zinc-700 bg-zinc-900 text-white flex items-center justify-center active:bg-zinc-800">
+              <ChevronLeft size={22} />
+            </button>
+          )}
+          <button onClick={() => { setOpen(o => !o); setDrill(activeRoot && getChildren(categories, activeRoot.id).length ? activeRoot.id : null); }} aria-expanded={open}
+            className={`${open ? 'shadow-[0_8px_16px_-6px_rgba(0,0,0,0.9)]' : ''} flex-1 min-w-0 flex items-center gap-2.5 px-3 py-2.5 min-h-[48px] rounded-xl border font-black text-xs uppercase tracking-wide transition-colors bg-[#FFC300] border-[#FFC300] text-black`}>
+            <span className="shrink-0"><CurIcon size={17} strokeWidth={2.5} /></span>
+            <span className="flex-1 min-w-0 text-left">
+              {activeCat && activeRoot && activeCat.id !== activeRoot.id && (
+                <span className="block text-[10px] font-bold opacity-60 truncate">{activeRoot.name}</span>
+              )}
+              <span className="block truncate">{current.id === 'all' ? 'Категорії' : activeCat ? activeCat.name : current.label}</span>
+            </span>
+            <span className="text-[10px] font-bold opacity-70 normal-case shrink-0">{open ? 'закрити' : 'усі категорії'}</span>
+            <ChevronDown size={18} className={`shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
         {open && (() => {
           const close = () => { setOpen(false); setDrill(null); };
           const pick = (sel: CategorySelection) => { onChange(sel); close(); };

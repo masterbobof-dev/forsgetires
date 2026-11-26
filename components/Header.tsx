@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { catPath } from '../api/_paths.js';
 import Logo from './Logo';
 import { ViewState } from '../types';
-import { Menu, X, Phone, User, ShoppingBag, ChevronDown, Flame, LayoutGrid, Lock } from 'lucide-react';
+import { Menu, X, Phone, User, ShoppingBag, ChevronDown, Flame, LayoutGrid, Lock, MessagesSquare } from 'lucide-react';
 import { useCategories, getRootCategories, getChildren, getCategoryIcon } from '../categories';
 import { linkClick } from '../navigation';
 import CatalogMenu from './CatalogMenu';
@@ -110,7 +110,6 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
     ['/garantiya-i-povernennya', 'Гарантія і повернення'],
     ['/faq', 'Поширені питання'],
     ['/statti', 'Корисні поради'],
-    ['/forum', 'Форум'],
     ['/kontakty', 'Контакти'],
   ];
 
@@ -179,6 +178,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
                   style={{ top: 'var(--header-h, 72px)' }}>
                   <CatalogMenu categories={categories} onPick={goCategory} hrefFor={catPath} onClose={() => setCatalogOpen(false)} />
                   <div className="mt-3 pt-3 border-t border-zinc-800 flex flex-wrap gap-x-5 gap-y-1">
+                    <a href="/forum" onClick={(e) => { setCatalogOpen(false); linkClick('/forum')(e); }} className="text-xs font-bold text-[#FFC300] hover:text-white transition-colors">Форум</a>
                     {infoLinks.map(([href, label]) => (
                       <a key={href} href={href} onClick={(e) => { setCatalogOpen(false); linkClick(href)(e); }} className="text-xs text-zinc-400 hover:text-[#FFC300] transition-colors">{label}</a>
                     ))}
@@ -302,6 +302,11 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
               className="my-3 flex items-center gap-3 rounded-2xl bg-[#FFC300] text-black px-4 py-3.5 font-black uppercase">
               <LayoutGrid size={20} /> Каталог товарів <span className="ml-auto text-xs font-bold normal-case opacity-70">{roots.length} розділів</span>
             </button>
+            {/* the forum right under the catalogue: people should not have to look for it */}
+            <a href="/forum" onClick={(e) => { setIsMenuOpen(false); linkClick('/forum')(e); }}
+              className="mb-2 flex items-center gap-3 rounded-2xl border border-[#FFC300]/40 bg-zinc-800 text-white px-4 py-3.5 font-black uppercase">
+              <MessagesSquare size={20} className="text-[#FFC300]" /> Форум автомобілістів <span className="ml-auto text-xs font-bold normal-case text-zinc-400">питання й поради</span>
+            </a>
             <div className="flex flex-col py-2">
               {infoLinks.map(([href, label]) => (
                 <a key={href} href={href} onClick={(e) => { setIsMenuOpen(false); linkClick(href)(e); }} className="py-2 text-zinc-400 hover:text-white font-bold">{label}</a>

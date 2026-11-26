@@ -18,13 +18,25 @@ type FormState = {
   parent_id: string;
   icon: string;
   description: string;
+  /** questions-answers as text: question on the first line, answer below, blank line between pairs */
+  faq: string;
   is_active: boolean;
   kind: 'tyre' | 'generic';
   filter_preset: string;
 };
 
 const EMPTY_FORM: FormState = {
-  name: '', slug: '', parent_id: '', icon: 'package', description: '', is_active: true, kind: 'generic', filter_preset: '',
+  name: '', slug: '', parent_id: '', icon: 'package', description: '', faq: '', is_active: true, kind: 'generic', filter_preset: '',
+};
+
+const faqToText = (faq: ProductCategory['faq']) => (faq || []).map(f => `${f.q}\n${f.a}`).join('\n\n');
+/** "Питання?\nВідповідь" blocks separated by blank lines → [{q, a}] (null when empty) */
+const textToFaq = (text: string) => {
+  const list = text.split(/\n\s*\n/).map(b => b.trim()).filter(Boolean).map(b => {
+    const [q, ...rest] = b.split('\n');
+    return { q: q.trim(), a: rest.join(' ').trim() };
+  }).filter(f => f.q && f.a);
+  return list.length ? list : null;
 };
 
 const CategoriesTab: React.FC = () => {
@@ -69,6 +81,7 @@ const CategoriesTab: React.FC = () => {
       parent_id: cat.parent_id ? String(cat.parent_id) : '',
       icon: cat.icon || 'package',
       description: cat.description || '',
+      faq: faqToText(cat.faq),
       is_active: cat.is_active,
       kind: cat.kind,
       filter_preset: cat.filter_preset || '',
@@ -94,6 +107,7 @@ const CategoriesTab: React.FC = () => {
       parent_id: parentId,
       icon: form.icon,
       description: form.description.trim() || null,
+      faq: textToFaq(form.faq),
       is_active: form.is_active,
       kind: form.kind,
       filter_preset: form.kind === 'tyre' ? null : (form.filter_preset || null),
@@ -326,6 +340,12 @@ const CategoriesTab: React.FC = () => {
             <div>
               <label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Опис (необов'язково, для SEO)</label>
               <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white text-sm" />
+            </div>
+
+            <div>
+              <label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Питання та відповіді (необов'язково)</label>
+              <textarea value={form.faq} onChange={e => setForm({ ...form, faq: e.target.value })} rows={6} placeholder={'Як підібрати акумулятор?\nПодивіться ємність і полярність старого...\n\nСкільки служить акумулятор?\nЗазвичай 4–6 років...'} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white text-sm" />
+              <p className="text-zinc-500 text-xs mt-1">Питання — у першому рядку, відповідь — нижче. Між парами залиште порожній рядок. Показується під товарами розділу.</p>
             </div>
 
             <div>

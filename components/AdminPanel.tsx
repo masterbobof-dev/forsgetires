@@ -9,6 +9,7 @@ import SeoTab from './admin/SeoTab';
 import PromoTab from './admin/PromoTab';
 import AiAssistantTab from './admin/AiAssistantTab';
 import CategoriesTab from './admin/CategoriesTab';
+import VehiclesPanel from './admin/VehiclesPanel';
 import ReviewsTab from './admin/ReviewsTab';
 import PhotoFinderTab from './admin/PhotoFinderTab';
 import SeoAiTab from './admin/SeoAiTab';
@@ -342,7 +343,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
       <main className="max-w-[1800px] mx-auto p-2 md:p-4 print:hidden">
         {isAdmin && activeTab === 'settings' && <SettingsTab />}
         {activeTab === 'tyres' && <TyresTab />}
-        {activeTab === 'categories' && <CategoriesTab />}
+        {activeTab === 'categories' && <><CategoriesTab /><VehiclesPanel /></>}
         {activeTab === 'reviews' && <ReviewsTab />}
         {activeTab === 'orders' && <OrdersTab />}
         {activeTab === 'stats' && <StatsTab />}

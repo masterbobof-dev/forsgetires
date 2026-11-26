@@ -24,6 +24,8 @@ export interface ProductCategory {
   vehicle_type?: string | null;
   /** 'batteries' | 'wheels' — which characteristic filters this category uses */
   filter_preset?: string | null;
+  /** questions and answers shown under the section (also read by Google) */
+  faq?: { q: string; a: string }[] | null;
   /** goods really available (in stock, not "on order"), including subcategories — shop pages only */
   available?: number;
   /** of them with a photo */

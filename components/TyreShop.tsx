@@ -356,8 +356,8 @@ const TyreShop: React.FC<TyreShopProps> = ({
               <ShowMore onMore={loadMore} loadingMore={loadingMore} shown={tyres.length} totalCount={totalCount} />
             )}
 
-            {activeCat?.description && !debouncedSearch && (
-              <CategoryAbout name={activeCat.name} description={activeCat.description} />
+            {(activeCat?.description || activeCat?.faq?.length) && !debouncedSearch && (
+              <CategoryAbout name={activeCat.name} description={activeCat.description || ''} faq={activeCat.faq} />
             )}
 
             <SwipeHint />

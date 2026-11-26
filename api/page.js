@@ -52,7 +52,7 @@ const PRODUCT_FIELDS = 'id,title,slug,price,image_url';
 async function build(pathname, query) {
   let cats = [];
   let allCats = [];
-  try { cats = allCats = await rest('product_categories?select=id,name,slug,parent_id,kind,description,seo_title,seo_description,noindex&is_active=eq.true&order=sort_order'); } catch (e) { if (e instanceof DbUnavailable) throw e; /* ignore */ }
+  try { cats = allCats = await rest('product_categories?select=id,name,slug,parent_id,kind,description,faq,seo_title,seo_description,noindex&is_active=eq.true&order=sort_order'); } catch (e) { if (e instanceof DbUnavailable) throw e; /* ignore */ }
   // only categories with goods in stock (same as the site menu), biggest first
   try {
     const counts = await rest('rpc/category_counts');
@@ -200,14 +200,19 @@ async function build(pathname, query) {
     const parent = cat.parent_id && (cats.find((c) => c.id === cat.parent_id) || allCats.find((c) => c.id === cat.parent_id));
     const name = parent ? `${parent.name} — ${cat.name}` : cat.name;
     const kids = cats.filter((c) => c.parent_id === cat.id);
+    const faq = Array.isArray(cat.faq) ? cat.faq.filter((f) => f && f.q && f.a) : [];
     return {
       noindex: !!cat.noindex,
       title: cat.seo_title || `${name} — купити в ${CITY}, ціни | ${SHOP_NAME}`,
       description: (cat.seo_description || cat.description || `${name} в інтернет-магазині «${SHOP_NAME}». ${DELIVERY}`).slice(0, 300),
       url: SITE_URL + catPath(cat.slug),
       crumbs: [...(parent ? [{ name: parent.name, url: SITE_URL + catPath(parent.slug) }] : []), { name: cat.name, url: SITE_URL + catPath(cat.slug) }],
-      ld: items.length ? { '@context': 'https://schema.org', '@type': 'ItemList', name, itemListElement: items.slice(0, 30).map((p, i) => ({ '@type': 'ListItem', position: i + 1, url: SITE_URL + productPath(p), name: p.title })) } : null,
-      content: `<nav>${link('/', 'Головна')}${parent ? ` › ${link(catPath(parent.slug), parent.name)}` : ''} › ${esc(cat.name)}</nav><h1>${esc(name)}</h1>${kids.length ? `<ul>${kids.map((k) => `<li>${link(catPath(k.slug), k.name)}</li>`).join('')}</ul>` : ''}${items.length ? productList(items) : '<p>Товари цієї категорії скоро з\'являться в каталозі.</p>'}${cat.description ? String(cat.description).split(/\n+/).filter(Boolean).map((t) => `<p>${esc(t)}</p>`).join('') : ''}${navBlock(cats)}`,
+      ld: (() => {
+        const list = items.length ? { '@context': 'https://schema.org', '@type': 'ItemList', name, itemListElement: items.slice(0, 30).map((p, i) => ({ '@type': 'ListItem', position: i + 1, url: SITE_URL + productPath(p), name: p.title })) } : null;
+        const qa = faq.length ? { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faq.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })) } : null;
+        return list && qa ? [list, qa] : list || qa;
+      })(),
+      content: `<nav>${link('/', 'Головна')}${parent ? ` › ${link(catPath(parent.slug), parent.name)}` : ''} › ${esc(cat.name)}</nav><h1>${esc(name)}</h1>${kids.length ? `<ul>${kids.map((k) => `<li>${link(catPath(k.slug), k.name)}</li>`).join('')}</ul>` : ''}${items.length ? productList(items) : '<p>Товари цієї категорії скоро з\'являться в каталозі.</p>'}${cat.description ? String(cat.description).split(/\n+/).filter(Boolean).map((t) => `<p>${esc(t)}</p>`).join('') : ''}${faq.length ? `<h2>Питання та відповіді</h2>${faq.map((f) => `<h3>${esc(f.q)}</h3><p>${esc(f.a)}</p>`).join('')}` : ''}${navBlock(cats)}`,
     };
   }
 

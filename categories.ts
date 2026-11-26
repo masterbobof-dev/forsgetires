@@ -5,6 +5,7 @@ import {
   Filter, Zap, Fan, Wind, Flashlight, Hammer, Thermometer, CircleStop, Settings2, Link, Plug, Paintbrush, Shield, Fuel, Key, Cable,
 } from 'lucide-react';
 import { supabase } from './supabaseClient';
+import { catSlugFrom } from './api/_paths.js';
 import { TyreProduct } from './types';
 
 export type CategoryKind = 'tyre' | 'generic';
@@ -94,9 +95,14 @@ const withAvailability = async (list: ProductCategory[]): Promise<ProductCategor
     for (const k of list.filter(x => x.parent_id === c.id)) { const [a, b] = total(k, seen); n += a; p += b; }
     return [n, p];
   };
+  // a section opened by its address (from Google or a shared link) is kept even when everything in it is
+  // "on order": otherwise the visitor would get the home page instead of the section they asked for
+  const keep = new Set<number>();
+  const slug = typeof window !== 'undefined' ? catSlugFrom(window.location.pathname, window.location.search) : '';
+  for (let c = list.find(x => x.slug === slug); c && !keep.has(c.id); c = list.find(x => x.id === c!.parent_id)) keep.add(c.id);
   return list
     .map(c => { const [n, p] = total(c); return { ...c, available: n, available_with_photo: p }; })
-    .filter(c => (c.available || 0) > 0)
+    .filter(c => (c.available || 0) > 0 || keep.has(c.id))
     .sort((a, b) => (b.available! - a.available!) || sortCats(a, b));
 };
 

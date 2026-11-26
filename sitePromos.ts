@@ -63,10 +63,10 @@ export const fetchBanners = async (): Promise<SiteBanner[]> => {
 };
 
 /** Home page blocks order (settings.home_blocks, edited in the program). */
-export type HomeBlockType = 'banners' | 'car_search' | 'size_search' | 'categories' | 'hits' | 'promos' | 'benefits' | 'reviews' | 'articles';
+export type HomeBlockType = 'banners' | 'car_search' | 'size_search' | 'categories' | 'hits' | 'promos' | 'benefits' | 'reviews' | 'articles' | 'forum';
 /** blocks the program may turn on; the lean default home shows only banners + hits/recent, then the product grid */
-export const ALL_HOME_BLOCKS: HomeBlockType[] = ['banners', 'car_search', 'hits', 'size_search', 'categories', 'promos', 'benefits', 'reviews', 'articles'];
-export const DEFAULT_HOME_BLOCKS: HomeBlockType[] = ['banners', 'car_search', 'hits'];
+export const ALL_HOME_BLOCKS: HomeBlockType[] = ['banners', 'car_search', 'hits', 'size_search', 'categories', 'promos', 'benefits', 'reviews', 'articles', 'forum'];
+export const DEFAULT_HOME_BLOCKS: HomeBlockType[] = ['banners', 'car_search', 'hits', 'forum'];
 export const fetchHomeBlocks = async (): Promise<{ type: HomeBlockType; title?: string }[]> => {
   const { data } = await settingValue('home_blocks');
   try {

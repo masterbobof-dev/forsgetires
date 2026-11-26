@@ -34,3 +34,17 @@ export const setCanonical = (url: string) => {
 export const setMetaDescription = (text: string) => {
   setHeadTag('meta[name="description"]', () => { const m = document.createElement('meta'); m.setAttribute('name', 'description'); return m; }, 'content', text);
 };
+
+/** A range filter value like "60..82" (set by the car picker): its bounds and every whole number in between. */
+export const parseAttrRange = (v: string) => {
+  const m = v.match(/^(\d{1,4})\.\.(\d{1,4})$/);
+  if (!m) return null;
+  const from = Number(m[1]), to = Number(m[2]);
+  if (to < from || to - from > 300) return null;
+  return { from, to, values: Array.from({ length: to - from + 1 }, (_, i) => String(from + i)) };
+};
+/** "60..82" → "60–82 Ah" for the filter boxes */
+export const attrRangeLabel = (v: string, unit?: string) => {
+  const r = parseAttrRange(v);
+  return r ? `${r.from}–${r.to}${unit ? ` ${unit}` : ''}` : null;
+};

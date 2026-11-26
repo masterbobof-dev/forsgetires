@@ -221,7 +221,19 @@ const TyreShop: React.FC<TyreShopProps> = ({
     showToast(adding ? `Додано до порівняння (${compare.ids.length + 1})` : 'Прибрано з порівняння');
   };
 
-  const scrollToList = () => setTimeout(() => listTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  // Scroll to the list once the new list has loaded: scrolling right away landed in the wrong place
+  // (the home blocks above disappear a moment later and the page jumped to the footer).
+  const scrollPending = useRef(false);
+  const scrollToList = () => {
+    scrollPending.current = true;
+    // nothing to reload (same section): scroll anyway, a little later
+    setTimeout(() => { if (scrollPending.current) { scrollPending.current = false; listTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, 1500);
+  };
+  useEffect(() => {
+    if (loading || !scrollPending.current) return;
+    scrollPending.current = false;
+    setTimeout(() => listTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+  }, [loading, tyres]);
   const cartTotal = useMemo(() => cartItems.reduce((a,b) => a + (safeParsePrice(b.price)*b.quantity), 0), [cartItems]);
   /** the home page as such: all goods, nothing searched or filtered */
   const isHome = activeCategory === 'all' && !debouncedSearch.trim() && activeFilterCount === 0 && !openingSection;

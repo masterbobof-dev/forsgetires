@@ -15,16 +15,6 @@ const saved = (fake) => (fake.inserted.settings || []).map((r) => `${r.key}=${r.
 /** the input that stands right after its label */
 const field = (page, label) => page.locator(`label:has-text("${label}") + input`);
 
-/** the server side of the AI keys: remembers what was saved and only ever says whether a key exists */
-const aiKeys = (fake, stored = {}) => {
-  fake.keyCalls = [];
-  fake.functions['admin-ai-keys'] = (body) => {
-    fake.keyCalls.push(body);
-    if (body.action !== 'status') Object.assign(stored, body);
-    return { ok: true, hasGemini: !!stored.gemini, hasOpenai: !!stored.openai, hasGroq: !!stored.groq, hasCustom: !!stored.custom, hasSerper: !!stored.serper, customUrl: stored.customUrl || '', customModel: stored.customModel || '' };
-  };
-};
-
 const openSettings = async (shop, ui, url) => {
   await ui.goto(`${url}/admin`);
   await ui.click(shop.page.getByRole('navigation').getByRole('button', { name: 'Налаштування' }).first());
@@ -36,19 +26,17 @@ const part = (page, name) => page.getByRole('button', { name, exact: true });
 const keys = async (browser, url) => {
   const shop = await openShop(browser, url, {
     user: OWNER(), viewport: { width: 1440, height: 900 },
-    tables: (t) => t.settings.push({ key: 'manager_email', value: 'manager@test.ua' }, { key: 'ai_provider', value: 'groq' }, { key: 'contact_map_link', value: 'https://maps.example/forsage' }),
+    tables: (t) => t.settings.push({ key: 'manager_email', value: 'manager@test.ua' }, { key: 'contact_map_link', value: 'https://maps.example/forsage' }),
   });
   const { page, fake } = shop;
   const ui = actions(shop);
   const S = 'settings-keys';
-  aiKeys(fake, { groq: 'saved-earlier', customUrl: 'https://api.custom.example/v1' });
   fake.managerCalls = [];
   fake.rpc.set_manager_credentials = (args) => { fake.managerCalls.push(args); return null; };
   const save = page.getByRole('button', { name: 'Зберегти зміни' });
 
   await step(shop, S, 'settings tab', async () => {
     await openSettings(shop, ui, url);
-    await until(async () => assert.deepEqual(fake.keyCalls, [{ action: 'status' }]));
   });
 
   await step(shop, S, 'contacts', async () => {
@@ -60,24 +48,11 @@ const keys = async (browser, url) => {
   });
 
   await step(shop, S, 'keys', async () => {
-    await ui.click(part(page, 'API Ключі / AI'));
+    await ui.click(part(page, 'API Ключі'));
     await until(async () => assert.equal(await page.getByPlaceholder('admin@forsage.com').inputValue(), 'owner@test.ua'));
     assert.equal(await page.getByPlaceholder('Ключ API Нової Пошти').inputValue(), 'test-np-key');
-    const provider = page.locator('select').filter({ has: page.locator('option', { hasText: 'Google Gemini' }) });
-    assert.equal(await provider.inputValue(), 'groq');
-    // a saved key is never shown: only the note that it exists
-    assert.equal(await page.getByPlaceholder('gsk_...').inputValue(), '');
-    assert.equal(await page.getByText('Ключ збережено на сервері').count(), 1);
-    assert.equal(await page.getByPlaceholder('https://api.zenmux.ai/v1').inputValue(), 'https://api.custom.example/v1');
-
-    await ui.fill(page.getByPlaceholder('AIza...'), 'AIza-test-1');
-    assert.equal(await page.getByPlaceholder('AIza...').getAttribute('type'), 'password');
-    await ui.click(page.locator('div.relative', { has: page.getByPlaceholder('AIza...') }).getByTitle('Показати'));
-    assert.equal(await page.getByPlaceholder('AIza...').getAttribute('type'), 'text');
-    await ui.select(provider, 'gemini');
-    await ui.select(page.locator('select').filter({ has: page.locator('option', { hasText: 'gpt-4o-mini (Економна)' }) }), 'gpt-4o');
-    assert.equal(await page.getByPlaceholder('Наприклад: gpt-5.3-instant').inputValue(), 'gpt-4o');
-    await ui.fill(page.getByPlaceholder('Наприклад: kuaishou/kat-coder-pro-v1-free'), 'vendor/model-x');
+    // AI works in the program: no AI keys or provider on the site
+    assert.equal(await page.getByText('Провайдер AI').count(), 0);
     await ui.fill(page.getByPlaceholder('Ключ API Нової Пошти'), 'np-new');
   });
 
@@ -94,27 +69,14 @@ const keys = async (browser, url) => {
     await ui.click(save);
     await toast(page, 'Всі налаштування збережено!');
     assert.deepEqual(saved(fake), [
-      'nova_poshta_key=np-new', 'supplier_api_key=', 'ai_provider=gemini', 'service_staff_email=staff@test.ua', 'admin_email=owner@test.ua',
+      'nova_poshta_key=np-new', 'supplier_api_key=', 'service_staff_email=staff@test.ua', 'admin_email=owner@test.ua',
       'hide_tire_service=false',
       // the manager got a new password, so the e-mail goes through the server function, not into the table
-      'ai_openai_base_url=https://api.openai.com/v1', 'ai_openai_model=gpt-4o', 'ai_custom_base_url=https://api.custom.example/v1', 'ai_custom_model=vendor/model-x',
       'contact_phone1=050 111 22 33', 'contact_phone2=063 582 38 58', 'contact_address=м. Дніпро, вул. Тестова 1', 'contact_map_link=https://maps.example/forsage',
     ]);
     assert.deepEqual(fake.managerCalls, [{ m_email: 'manager@test.ua', m_password: 'Secret123' }]);
-    assert.deepEqual(fake.keyCalls, [
-      { action: 'status' },
-      { gemini: 'AIza-test-1', customUrl: 'https://api.custom.example/v1', customModel: 'vendor/model-x' },
-      { action: 'status' },
-    ]);
     // the password field is emptied after saving
     assert.equal(await page.getByPlaceholder('Введіть новий пароль, щоб змінити...').inputValue(), '');
-  });
-
-  await step(shop, S, 'keys after saving', async () => {
-    await ui.click(part(page, 'API Ключі / AI'));
-    await until(async () => assert.equal(await page.getByPlaceholder('AIza...').inputValue(), ''));
-    assert.ok(await page.getByText('Ключ збережено на сервері. Введіть новий лише щоб замінити.').isVisible());
-    assert.equal(await page.getByPlaceholder('Наприклад: kuaishou/kat-coder-pro-v1-free').inputValue(), 'vendor/model-x');
   });
 
   await step(shop, S, 'save again without a password', async () => {
@@ -123,10 +85,9 @@ const keys = async (browser, url) => {
     fake.inserted.settings = [];
     await ui.click(save);
     await toast(page, 'Всі налаштування збережено!');
-    assert.equal(saved(fake).length, 15);
+    assert.equal(saved(fake).length, 10);
     assert.ok(saved(fake).includes('manager_email=manager@test.ua'), 'without a new password the e-mail is saved into the table');
     assert.equal(fake.managerCalls.length, 1, 'the manager password is not sent again');
-    assert.deepEqual(fake.keyCalls.at(-2), { customUrl: 'https://api.custom.example/v1', customModel: 'vendor/model-x' });
   });
 
   await shop.context.close();
@@ -147,7 +108,6 @@ const suppliers = async (browser, url) => {
   const { page, fake } = shop;
   const ui = actions(shop);
   const S = 'settings-suppliers';
-  aiKeys(fake);
   // the confirmation code is random: the same one in every run
   await shop.context.addInitScript(() => { Math.random = () => 0.4242; });
   const CODE = '4817';
@@ -231,7 +191,6 @@ const photos = async (browser, url) => {
   const { page, fake } = shop;
   const ui = actions(shop);
   const S = 'settings-photos';
-  aiKeys(fake);
   const input = page.locator('input[type="file"]');
   const start = page.getByRole('button', { name: 'Розпочати обробку' });
   const journal = page.locator('div.font-mono.max-h-40 > div');
@@ -292,7 +251,6 @@ const phone = async (browser, url) => {
   const { page, fake } = shop;
   const ui = actions(shop);
   const S = 'settings-phone';
-  aiKeys(fake, { gemini: 'x', serper: 'y' });
 
   await step(shop, S, 'settings on a phone', async () => {
     await ui.goto(`${url}/admin`);
@@ -304,7 +262,7 @@ const phone = async (browser, url) => {
 
   for (const [name, title, mark] of [
     ['contacts', 'Контакти', 'Контактна Інформація'],
-    ['keys', 'API Ключі / AI', 'Безпека та Ключі'],
+    ['keys', 'API Ключі', 'Безпека та Ключі'],
     ['staff access', 'Менеджер / Доступ', 'Вхід для Менеджера'],
     ['stock and import', 'Склад / Імпорт', 'Розумне завантаження фото'],
   ]) {

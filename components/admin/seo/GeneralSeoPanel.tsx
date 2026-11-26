@@ -1,9 +1,9 @@
 import React from 'react';
-import { Search, Globe, Save, RefreshCw, CheckCircle, AlertTriangle, Info, BarChart, Image as ImageIcon, Link2, Upload, Loader2, Wand2, FileCode } from 'lucide-react';
+import { Search, Globe, Save, RefreshCw, CheckCircle, AlertTriangle, Info, BarChart, Image as ImageIcon, Link2, Upload, Loader2, FileCode } from 'lucide-react';
 import type { SeoSiteSettings } from './useSeoSiteSettings';
 
 const GeneralSeoPanel: React.FC<{ site: SeoSiteSettings }> = ({ site }) => {
-  const { uploadingImage, imageInputRef, isGeneratingAi, settings, analysis, handleChange, generateSmartData, generateAiSeo, handleImageUpload, handleSave, generateSitemap } = site;
+  const { uploadingImage, imageInputRef, settings, analysis, handleChange, generateSmartData, handleImageUpload, handleSave, generateSitemap } = site;
   return (
     <>
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -17,10 +17,6 @@ const GeneralSeoPanel: React.FC<{ site: SeoSiteSettings }> = ({ site }) => {
           <button onClick={generateSitemap} className="bg-zinc-800 text-emerald-400 hover:text-white px-4 py-3 rounded-xl border border-emerald-900/50 hover:border-emerald-500 flex flex-1 sm:flex-none items-center justify-center gap-2 font-bold transition-all">
             <FileCode size={18} />
             Sitemap
-          </button>
-          <button disabled={isGeneratingAi} onClick={generateAiSeo} className="bg-zinc-800 text-purple-400 hover:text-white px-4 py-3 rounded-xl border border-purple-900/50 hover:border-purple-500 hover:bg-purple-900/20 flex flex-1 sm:flex-none items-center justify-center gap-2 font-bold transition-all shadow-[0_0_15px_rgba(168,85,247,0.15)] disabled:opacity-50">
-            {isGeneratingAi ? <Loader2 size={18} className="animate-spin" /> : <Wand2 size={18} />}
-            AI Оптимізація
           </button>
           <button onClick={generateSmartData} className="bg-zinc-800 text-zinc-300 hover:text-white px-4 py-3 rounded-xl border border-zinc-700 hover:border-zinc-500 flex flex-1 sm:flex-none items-center justify-center gap-2 font-bold transition-colors">
             <RefreshCw size={18} /> Шаблон

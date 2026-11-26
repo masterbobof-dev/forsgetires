@@ -33,6 +33,7 @@ import { renderProductSchema } from './shop/productSchema';
 import { useShopSettings } from './shop/hooks/useShopSettings';
 import { useShopFilters } from './shop/hooks/useShopFilters';
 import { useCategoryUrl } from './shop/hooks/useCategoryUrl';
+import { catSlugFrom } from '../api/_paths.js';
 import { useCheckout } from './shop/hooks/useCheckout';
 import { useProductList } from './shop/hooks/useProductList';
 import { useFilterOptions } from './shop/hooks/useFilterOptions';
@@ -97,6 +98,14 @@ const TyreShop: React.FC<TyreShopProps> = ({
 
   const filters = useShopFilters();
   const { searchQuery, setSearchQuery, debouncedSearch, setDebouncedSearch, activeFilterCount, resetFilters } = filters;
+  // A section's own address is being opened (from Google or a link): until the section is chosen, don't show
+  // the home page and don't load all goods — it fetched the home blocks for nothing and made the page jump.
+  // Decided while drawing (not in an effect), because the home blocks would start loading in that same moment.
+  const urlSectionDone = useRef(false);
+  const urlSlug = catSlugFrom(window.location.pathname, window.location.search);
+  const openingSection = !urlSectionDone.current && activeCategory === 'all' && window.location.pathname.startsWith('/katalog/')
+    && (categoriesLoading || urlSlug === 'akcii' || urlSlug === 'obrane' || categories.some(c => c.slug === urlSlug));
+  useEffect(() => { if (!categoriesLoading) urlSectionDone.current = true; }, [categoriesLoading]);
   useCategoryUrl(categories, categoriesLoading, activeCategory, setActiveCategory, categorySlug);
   // statistics: which sections people open
   useEffect(() => { if (activeCat) logAnalyticsEvent('page_view', undefined, `Розділ: ${activeCat.name}`); }, [activeCat?.id]);
@@ -123,13 +132,13 @@ const TyreShop: React.FC<TyreShopProps> = ({
 
   // --- the list, its filters, the open product ---
   const { tyres, loading, loadingMore, hasMore, totalCount, loadMore } = useProductList({
-    categories, categoriesLoading, dbReady, promosReady, activeCategory, activeCat, agroCategory, showTyreFilters,
+    categories, categoriesLoading: categoriesLoading || openingSection, dbReady, promosReady, activeCategory, activeCat, agroCategory, showTyreFilters,
     activeSort: filters.activeSort, debouncedSearch, attrFilters: filters.attrFilters,
     filterBrand: filters.filterBrand, filterRadius: filters.filterRadius, filterWidth: filters.filterWidth, filterHeight: filters.filterHeight,
     filterSeason: filters.filterSeason, showOnlyInStock: filters.showOnlyInStock,
     favoriteIds: favorites.ids, priorityProductId, enableStockQty, prepare,
   });
-  const { filterOptions, attrValues } = useFilterOptions(categories, categoriesLoading, dbReady, activeCategory, activeCat);
+  const { filterOptions, attrValues } = useFilterOptions(categories, categoriesLoading || openingSection, dbReady, activeCategory, activeCat);
   const { selectedProduct, openProduct, closeProduct } = useProductRoute({ tyres, prepare, categories, categoriesLoading, activeCategory, changeCategory, categorySlug, initialProduct });
   useShopSeo(selectedProduct, activeCat, activeCategory);
 
@@ -215,9 +224,6 @@ const TyreShop: React.FC<TyreShopProps> = ({
   const scrollToList = () => setTimeout(() => listTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   const cartTotal = useMemo(() => cartItems.reduce((a,b) => a + (safeParsePrice(b.price)*b.quantity), 0), [cartItems]);
   /** the home page as such: all goods, nothing searched or filtered */
-  // a section's own address is being opened: while the sections load, don't flash the home page (it also
-  // fetched all the home blocks for nothing and made the page jump)
-  const openingSection = categoriesLoading && /^\/katalog\/./.test(window.location.pathname);
   const isHome = activeCategory === 'all' && !debouncedSearch.trim() && activeFilterCount === 0 && !openingSection;
   const slideClass = slideDir === 1 ? 'slide-in-from-right-8' : slideDir === -1 ? 'slide-in-from-left-8' : 'slide-in-from-bottom-4';
 

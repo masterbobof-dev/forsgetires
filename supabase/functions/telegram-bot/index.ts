@@ -157,15 +157,37 @@ const notifyOrder = async (id: number) => {
   return { sent: people.length };
 };
 
+const stars = (n: number) => '★'.repeat(n || 0) + '☆'.repeat(5 - (n || 0));
+const reviewText = (r: any, status = '') =>
+  `<b>⭐ ${r.approved ? 'Відгук' : 'Новий відгук'} — ${stars(r.rating)}</b>\n` +
+  `<a href="${SITE}/p/${r.product_id}">${esc(r.tyres?.title || 'Товар')}</a>\n👤 ${esc(r.author_name)} · ${new Date(r.created_at).toLocaleString('uk-UA', { timeZone: 'Europe/Kyiv', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}\n\n` +
+  `${esc(r.body || '(без тексту)')}` + (r.admin_reply ? `\n\n💬 <b>Відповідь магазину:</b> ${esc(r.admin_reply)}` : '') + (status ? `\n\n${esc(status)}` : '');
+const reviewButtons = (r: any) => ({ inline_keyboard: [
+  ...(r.approved ? [] : [[{ text: '✅ Опублікувати', callback_data: `rv:${r.id}:ok` }]]),
+  [{ text: r.admin_reply ? '✏️ Змінити відповідь' : '💬 Відповісти', callback_data: `rv:${r.id}:re` }, { text: '🗑 Видалити', callback_data: `rv:${r.id}:no` }],
+] });
+const loadReview = async (id: number) => (await db.from('product_reviews').select('*, tyres(title)').eq('id', id).maybeSingle()).data;
+
 const notifyReview = async (id: number) => {
-  const { data: r } = await db.from('product_reviews').select('*, tyres(title)').eq('id', id).maybeSingle();
+  const r = await loadReview(id);
   if (!r) return { sent: 0 };
   const people = await recipients('owners');
-  const text = `<b>⭐ Новий відгук — ${'★'.repeat(r.rating || 0)}${'☆'.repeat(5 - (r.rating || 0))}</b>\n` +
-    `${esc(r.tyres?.title || 'Товар')}\n👤 ${esc(r.author_name)}\n\n${esc(r.body || '(без тексту)')}`;
-  const markup = { inline_keyboard: [[{ text: '✅ Опублікувати', callback_data: `rv:${r.id}:ok` }, { text: '🗑 Відхилити', callback_data: `rv:${r.id}:no` }]] };
-  for (const p of people) await send(p.chat_id, text, r.approved ? {} : { reply_markup: markup });
+  for (const p of people) await send(p.chat_id, reviewText(r), { reply_markup: reviewButtons(r) });
   return { sent: people.length };
+};
+
+// /reviews: the reviews waiting for a check, then the last few, each with its buttons
+const reviewsReport = async (chatId: number) => {
+  const since = new Date(Date.now() - 7 * 864e5).toISOString();
+  const [{ data: waiting }, { data: week }] = await Promise.all([
+    db.from('product_reviews').select('*, tyres(title)').eq('approved', false).order('created_at').limit(10),
+    db.from('product_reviews').select('rating, approved').gte('created_at', since),
+  ]);
+  const w = week || [];
+  const avg = w.length ? (w.reduce((s: number, r: any) => s + (r.rating || 0), 0) / w.length).toFixed(1) : '';
+  await send(chatId, `<b>💬 Відгуки</b>\nЗа 7 днів: <b>${w.length}</b>${avg ? ` · середня оцінка ${avg} ★` : ''}\nЧекають перевірки: <b>${waiting?.length || 0}</b>` +
+    (waiting?.length ? '' : '\n\nУсі відгуки перевірені 👍'));
+  for (const r of waiting || []) await send(chatId, reviewText(r), { reply_markup: reviewButtons(r) });
 };
 
 // ---------- reports ----------
@@ -207,13 +229,15 @@ const alert = async (text: string) => {
 
 const daily = async () => {
   const people = await recipients(true);
-  const [{ count: waitingReviews }, { count: newOrders }] = await Promise.all([
+  const [{ count: waitingReviews }, { count: newOrders }, { count: todayReviews }] = await Promise.all([
     db.from('product_reviews').select('id', { count: 'exact', head: true }).eq('approved', false),
     db.from('tyre_orders').select('id', { count: 'exact', head: true }).eq('status', 'new'),
+    db.from('product_reviews').select('id', { count: 'exact', head: true }).gte('created_at', todayStart()),
   ]);
   const text = (await summary(todayStart(), '📊 Підсумок дня', true)) +
     (newOrders ? `\n\n❗ Не оброблено нових замовлень: ${newOrders} — /orders` : '') +
-    (waitingReviews ? `\n💬 Відгуків чекають перевірки: ${waitingReviews}` : '') + (await syncState()) + (await healthLine());
+    (todayReviews ? `\n💬 Нових відгуків сьогодні: ${todayReviews}` : '') +
+    (waitingReviews ? `\n⏳ Відгуків чекають перевірки: ${waitingReviews} — /reviews` : '') + (await syncState()) + (await healthLine());
   for (const p of people) await send(p.chat_id, text);
   // forum moderators: a short forum summary of the day, if something happened
   const { data: fs } = await db.rpc('forum_stats', { p_days: 1 });
@@ -250,7 +274,7 @@ const HELP_STAFF = [
   '',
   'Під кожним замовленням є кнопки: підтвердити, відправлено, ТТН, коментар.',
 ];
-const HELP_OWNER = [...HELP_STAFF, '', '<b>Для власника</b>', '/today — замовлення і виручка за сьогодні', '/week — за 7 днів', '/team — хто має доступ до бота', '/forum — форум: нові теми, відповіді, люди', '', 'Щовечора о 20:00 — підсумок дня.'];
+const HELP_OWNER = [...HELP_STAFF, '', '<b>Для власника</b>', '/today — замовлення і виручка за сьогодні', '/week — за 7 днів', '/team — хто має доступ до бота', '/forum — форум: нові теми, відповіді, люди', '/reviews — відгуки: нові і ті, що чекають перевірки', '', 'Про кожен новий відгук приходить повідомлення з кнопками: опублікувати, відповісти, видалити.', 'Щовечора о 20:00 — підсумок дня.'];
 const HELP_FORUM = [
   '<b>Бот модератора форуму</b>',
   'Сюди приходять нові теми й відповіді на форумі. Під кожним повідомленням є кнопки «Сховати» і «Видалити».',
@@ -305,6 +329,11 @@ const onMessage = async (msg: any) => {
   if (user.pending && !text.startsWith('/')) {
     const [kind, id] = user.pending.split(':');
     await db.from('telegram_users').update({ pending: null }).eq('chat_id', chatId);
+    if (kind === 'rr') {
+      await db.from('product_reviews').update({ admin_reply: text.slice(0, 1000) }).eq('id', Number(id));
+      const r = await loadReview(Number(id));
+      return r ? send(chatId, reviewText(r, `Відповідь збережено (${user.name})${r.approved ? ', її видно на сайті' : '. Натисніть «Опублікувати», щоб відгук з відповіддю з’явився на сайті'}`), { reply_markup: reviewButtons(r) }) : send(chatId, 'Відгук уже видалено.');
+    }
     const field = kind === 'ttn' ? { tracking_number: text.replace(/\s+/g, '').slice(0, 40) } : { manager_comment: text.slice(0, 500) };
     await db.from('tyre_orders').update({ ...field, updated_at: new Date().toISOString(), ...(kind === 'ttn' ? { status: 'shipped' } : {}) }).eq('id', Number(id));
     const o = await loadOrder(Number(id));
@@ -335,6 +364,8 @@ const onMessage = async (msg: any) => {
     }
     case '/today':
       return owner ? send(chatId, await summary(todayStart(), '📊 Сьогодні', true)) : send(chatId, 'Лише для власника.');
+    case '/reviews':
+      return owner ? reviewsReport(chatId) : send(chatId, 'Лише для власника.');
     case '/week':
       return owner ? send(chatId, await summary(new Date(Date.now() - 7 * 864e5).toISOString(), '📊 Останні 7 днів', true)) : send(chatId, 'Лише для власника.');
     case '/team': {
@@ -396,10 +427,25 @@ const onButton = async (cb: any) => {
   }
   if (kind === 'rv') {
     if (user.role !== 'owner') return tg('answerCallbackQuery', { callback_query_id: cb.id, text: 'Лише для власника', show_alert: true });
-    if (value === 'ok') await db.from('product_reviews').update({ approved: true }).eq('id', id);
-    else await db.from('product_reviews').delete().eq('id', id);
-    await tg('editMessageReplyMarkup', { chat_id: chatId, message_id: cb.message.message_id, reply_markup: { inline_keyboard: [] } });
-    return tg('answerCallbackQuery', { callback_query_id: cb.id, text: value === 'ok' ? 'Опубліковано' : 'Відхилено' });
+    const r = await loadReview(id);
+    if (!r) {
+      await tg('editMessageReplyMarkup', { chat_id: chatId, message_id: cb.message.message_id, reply_markup: { inline_keyboard: [] } });
+      return tg('answerCallbackQuery', { callback_query_id: cb.id, text: 'Відгук уже видалено' });
+    }
+    if (value === 're') {
+      await db.from('telegram_users').update({ pending: `rr:${id}` }).eq('chat_id', chatId);
+      await send(chatId, `Напишіть відповідь покупцю ${esc(r.author_name)} — її буде видно під відгуком на сайті:`, { reply_markup: { force_reply: true } });
+      return tg('answerCallbackQuery', { callback_query_id: cb.id });
+    }
+    if (value === 'ok') {
+      await db.from('product_reviews').update({ approved: true }).eq('id', id);
+      r.approved = true;
+      await tg('editMessageText', { chat_id: chatId, message_id: cb.message.message_id, text: reviewText(r, `✅ Опубліковано — ${user.name}`), parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: reviewButtons(r) });
+    } else {
+      await db.from('product_reviews').delete().eq('id', id);
+      await tg('editMessageText', { chat_id: chatId, message_id: cb.message.message_id, text: reviewText(r, `🗑 Видалено — ${user.name}`), parse_mode: 'HTML', disable_web_page_preview: true });
+    }
+    return tg('answerCallbackQuery', { callback_query_id: cb.id, text: value === 'ok' ? 'Опубліковано' : 'Видалено' });
   }
   return tg('answerCallbackQuery', { callback_query_id: cb.id });
 };
@@ -416,6 +462,7 @@ const setup = async () => {
     { command: 'today', description: 'Підсумок дня (власник)' },
     { command: 'week', description: 'Підсумок тижня (власник)' },
     { command: 'team', description: 'Хто має доступ (власник)' },
+    { command: 'reviews', description: 'Відгуки покупців (власник)' },
     { command: 'forum', description: 'Форум: теми, відповіді, люди' },
     { command: 'notify', description: 'Увімкнути / вимкнути сповіщення' },
     { command: 'help', description: 'Допомога' },

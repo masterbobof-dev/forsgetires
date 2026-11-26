@@ -46,6 +46,8 @@ export const useProductList = (q: ProductListParams) => {
   // every new search / section gets a number: an older answer that comes back late is thrown away
   // (otherwise the list jumps: first the results of "фі", then of "фільтр")
   const reqNo = useRef(0);
+  // home page mix: how far the own and the partner lists have been shown
+  const mixAt = useRef({ own: 0, partner: 0 });
   const attrFiltersKey = JSON.stringify(q.attrFilters);
   const paramsKey = [q.categoriesLoading, q.activeCategory, q.activeSort, q.enableStockQty, q.filterBrand, q.filterRadius, q.filterWidth, q.filterHeight,
     q.filterSeason, q.showOnlyInStock, q.debouncedSearch, q.priorityProductId, attrFiltersKey, q.promosReady].join('|');
@@ -57,6 +59,7 @@ export const useProductList = (q: ProductListParams) => {
     try {
       if (isRefresh) setLoading(true); else setLoadingMore(true);
       const from = pageIndex * PAGE_SIZE, to = from + PAGE_SIZE - 1;
+      const build = () => {
       let query = supabase.from('tyres').select('*', { count: 'exact' });
 
       // smart search: sizes in any format, several words, Cyrillic brand names
@@ -99,8 +102,36 @@ export const useProductList = (q: ProductListParams) => {
         const sorts = { price_asc: 'price_num', price_desc: 'price_num', newest: 'created_at', oldest: 'created_at', no_photo: 'created_at' };
         query = query.order('in_stock', { ascending: false }).order((sorts as any)[q.activeSort] || 'created_at', { ascending: ['price_asc', 'oldest'].includes(q.activeSort) });
       }
+      return query;
+      };
 
-      const { data, error, count } = await query.range(from, to);
+      // the home page (all goods, nothing searched): own goods and partner goods (GPL, Omega) take turns,
+      // otherwise the 20 000+ partner goods would come only after all own goods
+      const mix = q.activeCategory === 'all' && !q.debouncedSearch.trim() && q.activeSort === 'recommended';
+      let data: any[] | null, error: any, count: number | null, more: boolean;
+      if (mix) {
+        // each side keeps its own place; when one side runs out, the other fills the page
+        if (isRefresh) mixAt.current = { own: 0, partner: 0 };
+        const at = mixAt.current;
+        const [own, partner] = await Promise.all([
+          build().is('supplier_offer_id', null).range(at.own, at.own + PAGE_SIZE - 1),
+          build().not('supplier_offer_id', 'is', null).range(at.partner, at.partner + PAGE_SIZE - 1),
+        ]);
+        error = own.error || partner.error;
+        const a = own.data || [], p = partner.data || [];
+        data = [];
+        let i = 0, j = 0;
+        while (data.length < PAGE_SIZE && (i < a.length || j < p.length)) {
+          if (i < a.length) data.push(a[i++]);
+          if (data.length < PAGE_SIZE && j < p.length) data.push(p[j++]);
+        }
+        if (my === reqNo.current) mixAt.current = { own: at.own + i, partner: at.partner + j };
+        count = (own.count || 0) + (partner.count || 0);
+        more = at.own + i < (own.count || 0) || at.partner + j < (partner.count || 0);
+      } else {
+        const r = await build().range(from, to);
+        data = r.data; error = r.error; count = r.count; more = (r.data || []).length === PAGE_SIZE;
+      }
       if (my !== reqNo.current) return;
       if (error) throw error;
       if (data) {
@@ -125,7 +156,7 @@ export const useProductList = (q: ProductListParams) => {
             return [...prev.filter(p => !newIds.has(p.id)), ...uniqueNew];
         });
         setPage(pageIndex);
-        setHasMore(data.length === PAGE_SIZE);
+        setHasMore(more);
         if (count !== null) setTotalCount(count);
       }
       if (isRefresh) setLoadedKey(key);

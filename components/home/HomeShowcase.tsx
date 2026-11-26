@@ -62,18 +62,27 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
   useEffect(() => { fetchHomeBlocks().then(setBlocks); fetchBanners().then(setBanners); }, []);
 
   useEffect(() => {
-    // hits with photos; if there are few, add recommended goods
+    // hits with photos; if there are few, add recommended goods.
+    // Both are asked at once (not one after another): the first photos on the page appear sooner.
     (async () => {
-      const { data: hits } = await supabase.from('tyres').select('*').eq('is_hot', true).neq('in_stock', false).eq('on_order', false).eq('has_photo', true).limit(12);
+      const [{ data: hits }, rec] = await Promise.all([
+        supabase.from('tyres').select('*').eq('is_hot', true).neq('in_stock', false).eq('on_order', false).eq('has_photo', true).limit(12),
+        // what visitors look at and put in the cart, spread over different sections
+        supabase.rpc('home_recommended', { p_n: 12, p_skip: [] }),
+      ]);
       let list = (hits as TyreProduct[]) || [];
       setHotIsPicked(list.length >= 4);
       if (list.length < 12) {
-        // the rest: what visitors look at and put in the cart, spread over different sections (falls back to the biggest stock)
         const need = 12 - list.length;
-        let { data: more } = await supabase.rpc('home_recommended', { p_n: need, p_skip: list.map(p => p.id) });
-        if (!more?.length) ({ data: more } = await supabase.from('tyres').select('*').neq('in_stock', false).eq('on_order', false).eq('has_photo', true)
-          .not('id', 'in', `(${list.map(p => p.id).join(',') || 0})`).order('stock_quantity', { ascending: false }).limit(need));
-        list = [...list, ...((more as TyreProduct[]) || [])];
+        const seen = new Set(list.map(p => p.id));
+        let more = ((rec.data as TyreProduct[]) || []).filter(p => !seen.has(p.id)).slice(0, need);
+        if (!more.length) {
+          // falls back to the biggest stock
+          const { data } = await supabase.from('tyres').select('*').neq('in_stock', false).eq('on_order', false).eq('has_photo', true)
+            .not('id', 'in', `(${list.map(p => p.id).join(',') || 0})`).order('stock_quantity', { ascending: false }).limit(need);
+          more = (data as TyreProduct[]) || [];
+        }
+        list = [...list, ...more];
       }
       setHot(list.map(prepare));
       setHotLoaded(true);
@@ -197,13 +206,13 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
             {hotIsPicked && <button onClick={() => onPickCategory('hot')} className="text-sm font-bold text-[#FFC300] hover:underline flex items-center">Усі <ChevronRight size={16} /></button>}
           </div>
           <div className="flex gap-3 overflow-x-auto pb-2 -mx-3 px-3 snap-x scrollbar-hide fade-edges md:[mask-image:none]">
-            {hot.map(p => {
+            {hot.map((p, idx) => {
               const old = parseFloat(p.old_price || '0'), price = parseFloat(p.price || '0');
               return (
                 <button key={p.id} onClick={() => onOpenProduct(p)} className="snap-start shrink-0 w-[160px] md:w-[200px] text-left bg-zinc-900 border border-zinc-800 hover:border-[#FFC300] rounded-2xl overflow-hidden transition-colors">
                   <div className="aspect-square bg-white relative">
                     {p.image_url
-                      ? <img src={p.image_thumb_url || p.image_url} alt={p.title} loading="lazy" referrerPolicy="no-referrer" className="w-full h-full object-contain p-3 mix-blend-multiply" />
+                      ? <img src={p.image_thumb_url || p.image_url} alt={p.title} loading={idx < 2 ? 'eager' : 'lazy'} fetchPriority={idx < 2 ? 'high' : 'auto'} referrerPolicy="no-referrer" className="w-full h-full object-contain p-3 mix-blend-multiply" />
                       : <NoPhoto icon={getCategoryIcon(categories.find(c => c.id === p.category_id)?.icon || categories.find(c => c.id === categories.find(k => k.id === p.category_id)?.parent_id)?.icon)} size={40} />}
                     {old > price && <span className="absolute top-2 left-2 bg-red-600 text-white text-[11px] font-black px-2 py-0.5 rounded-full">−{Math.round((1 - price / old) * 100)}%</span>}
                   </div>

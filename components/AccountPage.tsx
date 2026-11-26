@@ -27,6 +27,18 @@ export const ORDER_STATUS: Record<string, { label: string; cls: string }> = {
   cancelled: { label: 'Скасовано', cls: 'bg-red-500/10 text-red-400 border-red-500/30' },
 };
 
+/** A forum moderator gets a button to the forum part of the admin panel. */
+const ForumModLink: React.FC = () => {
+  const [mod, setMod] = useState(false);
+  useEffect(() => { supabase.rpc('is_forum_mod').then(({ data }) => setMod(data === true), () => undefined); }, []);
+  if (!mod) return null;
+  return (
+    <a href="/admin" className="md:col-span-2 flex items-center gap-3 bg-[#FFC300]/10 border border-[#FFC300]/40 rounded-2xl p-4 text-[#FFC300] font-black uppercase text-sm hover:bg-[#FFC300]/20">
+      🛡️ Модерація форуму <span className="ml-auto text-xs font-bold normal-case text-zinc-300">відкрити →</span>
+    </a>
+  );
+};
+
 const price = (v: string) => Math.round(parseFloat(String(v).replace(',', '.').replace(/[^\d.]/g, '')) || 0);
 
 const inputCls = 'w-full bg-black border border-zinc-700 rounded-xl p-3 pl-10 text-white outline-none focus:border-[#FFC300] transition-colors';
@@ -169,6 +181,7 @@ const AccountPage: React.FC<{ auth: AuthState; onBack: () => void }> = ({ auth, 
         )
       ) : (
         <div className="grid md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <ForumModLink />
           <div className="md:col-span-2 bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
             <h2 className="text-xs font-black uppercase tracking-widest text-zinc-400">Значок на форумі</h2>
             <p className="text-zinc-500 text-xs">Показується біля ваших повідомлень на форумі: оберіть прикольну іконку або поставте своє фото.</p>

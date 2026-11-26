@@ -14,10 +14,12 @@ export interface ForumTopic {
 export interface ForumPost {
   id: number; topic_id: number; created_at: string; author_name: string; is_shop: boolean;
   body: string; images: string[]; is_hidden: boolean; edited_at: string | null; author_avatar: string | null;
+  /** the message this one answers (null = an answer to the topic itself) */
+  parent_id: number | null;
 }
 
 const TOPIC_FIELDS = 'id, created_at, author_name, is_shop, category, title, body, images, is_pinned, is_hidden, is_locked, replies_count, last_reply_at, views, edited_at, author_avatar';
-const POST_FIELDS = 'id, topic_id, created_at, author_name, is_shop, body, images, is_hidden, edited_at, author_avatar';
+const POST_FIELDS = 'id, topic_id, created_at, author_name, is_shop, body, images, is_hidden, edited_at, author_avatar, parent_id';
 
 export const forumPath = (t?: Pick<ForumTopic, 'id' | 'title'> | null) => {
   if (!t) return '/forum';
@@ -125,7 +127,7 @@ export const createTopic = async (t: { category: string; title: string; body: st
   if (error) throw error;
   return data as { id: number; title: string };
 };
-export const createPost = async (p: { topic_id: number; body: string; images: string[] }) => {
+export const createPost = async (p: { topic_id: number; body: string; images: string[]; parent_id?: number | null }) => {
   const { error } = await supabase.from('forum_posts').insert([p]);
   if (error) throw error;
 };
@@ -148,6 +150,27 @@ export const deletePost = async (id: number) => {
 };
 export const setHidden = (table: 'forum_topics' | 'forum_posts', id: number, hidden: boolean) =>
   table === 'forum_topics' ? updateTopic(id, { is_hidden: hidden }) : updatePost(id, { is_hidden: hidden });
+
+/** Replies as a tree: answers to the topic first, each followed by the answers to it (oldest first). */
+export const postTree = (posts: ForumPost[]) => {
+  const ids = new Set(posts.map(p => p.id));
+  const kids = new Map<number | null, ForumPost[]>();
+  for (const p of posts) {
+    const parent = p.parent_id && ids.has(p.parent_id) ? p.parent_id : null;
+    if (!kids.has(parent)) kids.set(parent, []);
+    kids.get(parent)!.push(p);
+  }
+  const out: { post: ForumPost; depth: number; replyTo: ForumPost | null }[] = [];
+  const byId = new Map(posts.map(p => [p.id, p]));
+  const walk = (parent: number | null, depth: number) => {
+    for (const p of kids.get(parent) || []) {
+      out.push({ post: p, depth, replyTo: parent ? byId.get(parent) || null : null });
+      walk(p.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return out;
+};
 
 /** Which messages of a topic are the visitor's own (they may edit those). user_id is not readable, so the database answers. */
 export const fetchOwnIds = async (userId: string | undefined, topicId: number) => {

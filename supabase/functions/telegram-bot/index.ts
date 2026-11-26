@@ -4,10 +4,11 @@
  *
  * Who calls it:
  *  - Telegram (webhook; header X-Telegram-Bot-Api-Secret-Token): messages and button presses.
- *  - The database (header x-sync-key): { action: "notify_order", id } | { action: "notify_review", id } | { action: "daily" } | { action: "setup" }
+ *  - The database (header x-sync-key): { action: "notify_order", id } | { action: "notify_review", id } | { action: "notify_forum", table, id } | { action: "daily" } | { action: "setup" }
  *  - The admin panel (staff login): { action: "status" } | { action: "set_token", token } | { action: "test" } | { action: "setup" }
  *
- * People: table telegram_users (role owner = everything incl. money; staff = orders and goods).
+ * People: table telegram_users (role owner = everything incl. money; staff = orders and goods; forum = forum moderator:
+ * new forum messages with Hide / Delete buttons and forum figures, nothing about orders or money).
  * Access is given with a one-time code from the admin panel: t.me/<bot>?start=<code>.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
@@ -95,10 +96,57 @@ const orderButtons = (o: any) => {
 
 const loadOrder = async (id: number) => (await db.from('tyre_orders').select('*').eq('id', id).maybeSingle()).data;
 
-const recipients = async (ownersOnly = false) => {
-  let q = db.from('telegram_users').select('chat_id, role').eq('active', true).eq('notify', true);
-  if (ownersOnly) q = q.eq('role', 'owner');
+/** who gets a message: 'orders' = owners and workers, 'owners' = owners only, 'forum' = owners and forum moderators */
+const recipients = async (who: boolean | 'orders' | 'owners' | 'forum' = 'orders') => {
+  const roles = who === true || who === 'owners' ? ['owner'] : who === 'forum' ? ['owner', 'forum'] : ['owner', 'staff'];
+  const q = db.from('telegram_users').select('chat_id, role').eq('active', true).eq('notify', true).in('role', roles);
   return (await q).data || [];
+};
+
+// ---------- forum ----------
+const forumItem = async (table: string, id: number) => {
+  if (table === 'forum_topics') {
+    const { data } = await db.from('forum_topics').select('id, title, body, author_name, is_hidden, category').eq('id', id).maybeSingle();
+    return data ? { kind: 't', id, topicId: data.id, title: data.title, body: data.body, author: data.author_name, hidden: data.is_hidden } : null;
+  }
+  const { data } = await db.from('forum_posts').select('id, topic_id, body, author_name, is_hidden, parent_id, forum_topics(title)').eq('id', id).maybeSingle();
+  return data ? { kind: 'p', id, topicId: data.topic_id, title: data.forum_topics?.title, body: data.body, author: data.author_name, hidden: data.is_hidden, reply: !!data.parent_id } : null;
+};
+const forumText = (f: any, note = '') => [
+  `💬 <b>Форум: ${f.kind === 't' ? 'нова тема' : f.reply ? 'відповідь на повідомлення' : 'нова відповідь'}</b>${f.hidden ? ' · 🙈 сховано' : ''}`,
+  `<b>${esc(f.title || '')}</b>`,
+  `👤 ${esc(f.author)}`,
+  '',
+  esc(String(f.body || '').slice(0, 700)),
+  '',
+  `${SITE}/forum/${f.topicId}`,
+  note ? `\n<i>${esc(note)}</i>` : '',
+].filter((l, i) => l !== '' || i === 3 || i === 5).join('\n');
+const forumButtons = (f: any) => ({ inline_keyboard: [[
+  f.hidden ? { text: '👁 Показати', callback_data: `fs:${f.kind}${f.id}` } : { text: '🙈 Сховати', callback_data: `fh:${f.kind}${f.id}` },
+  { text: '🗑 Видалити', callback_data: `fd:${f.kind}${f.id}` },
+]] });
+const notifyForum = async (table: string, id: number) => {
+  const f = await forumItem(table, id);
+  if (!f) return { sent: 0 };
+  const people = await recipients('forum');
+  for (const p of people) await send(p.chat_id, forumText(f), { reply_markup: forumButtons(f) });
+  return { sent: people.length };
+};
+const forumReport = async (days: number) => {
+  const { data: s } = await db.rpc('forum_stats', { p_days: days });
+  if (!s) return 'Немає даних.';
+  const top = (s.top_topics || []).map((t: any) => `• ${esc(t.title)} — 👁 ${t.views}, 💬 ${t.replies_count}`).join('\n');
+  const authors = (s.top_authors || []).map((a: any) => `• ${esc(a.name)} — ${a.n}`).join('\n');
+  return [
+    `<b>📈 Форум за ${days === 1 ? 'добу' : `${days} днів`}</b>`,
+    `Нових тем: <b>${s.topics}</b> · відповідей: <b>${s.posts}</b>`,
+    `Писали людей: <b>${s.writers}</b>`,
+    `Зареєстровано покупців: <b>${s.users_total}</b> (нових за період: <b>${s.users_new}</b>)`,
+    s.hidden ? `Сховано повідомлень: ${s.hidden}` : '',
+    top ? `\n<b>Популярні теми</b>\n${top}` : '',
+    authors ? `\n<b>Найактивніші</b>\n${authors}` : '',
+  ].filter(Boolean).join('\n');
 };
 
 const notifyOrder = async (id: number) => {
@@ -112,7 +160,7 @@ const notifyOrder = async (id: number) => {
 const notifyReview = async (id: number) => {
   const { data: r } = await db.from('product_reviews').select('*, tyres(title)').eq('id', id).maybeSingle();
   if (!r) return { sent: 0 };
-  const people = await recipients(true);
+  const people = await recipients('owners');
   const text = `<b>⭐ Новий відгук — ${'★'.repeat(r.rating || 0)}${'☆'.repeat(5 - (r.rating || 0))}</b>\n` +
     `${esc(r.tyres?.title || 'Товар')}\n👤 ${esc(r.author_name)}\n\n${esc(r.body || '(без тексту)')}`;
   const markup = { inline_keyboard: [[{ text: '✅ Опублікувати', callback_data: `rv:${r.id}:ok` }, { text: '🗑 Відхилити', callback_data: `rv:${r.id}:no` }]] };
@@ -152,7 +200,7 @@ const healthLine = async () => {
 };
 
 const alert = async (text: string) => {
-  const people = await recipients(true);
+  const people = await recipients('owners');
   for (const p of people) await send(p.chat_id, String(text).slice(0, 3500));
   return { sent: people.length };
 };
@@ -167,6 +215,13 @@ const daily = async () => {
     (newOrders ? `\n\n❗ Не оброблено нових замовлень: ${newOrders} — /orders` : '') +
     (waitingReviews ? `\n💬 Відгуків чекають перевірки: ${waitingReviews}` : '') + (await syncState()) + (await healthLine());
   for (const p of people) await send(p.chat_id, text);
+  // forum moderators: a short forum summary of the day, if something happened
+  const { data: fs } = await db.rpc('forum_stats', { p_days: 1 });
+  if (fs && (fs.today_topics || fs.today_posts)) {
+    const mods = (await recipients('forum')).filter((p: any) => p.role === 'forum');
+    const ft = await forumReport(1);
+    for (const p of mods) await send(p.chat_id, ft);
+  }
   return { sent: people.length };
 };
 
@@ -195,7 +250,18 @@ const HELP_STAFF = [
   '',
   'Під кожним замовленням є кнопки: підтвердити, відправлено, ТТН, коментар.',
 ];
-const HELP_OWNER = [...HELP_STAFF, '', '<b>Для власника</b>', '/today — замовлення і виручка за сьогодні', '/week — за 7 днів', '/team — хто має доступ до бота', '', 'Щовечора о 20:00 — підсумок дня.'];
+const HELP_OWNER = [...HELP_STAFF, '', '<b>Для власника</b>', '/today — замовлення і виручка за сьогодні', '/week — за 7 днів', '/team — хто має доступ до бота', '/forum — форум: нові теми, відповіді, люди', '', 'Щовечора о 20:00 — підсумок дня.'];
+const HELP_FORUM = [
+  '<b>Бот модератора форуму</b>',
+  'Сюди приходять нові теми й відповіді на форумі. Під кожним повідомленням є кнопки «Сховати» і «Видалити».',
+  '',
+  '/forum — форум за 7 днів: теми, відповіді, нові люди, популярні теми',
+  '/forum 30 — те саме за 30 днів',
+  '/today — форум за добу',
+  '/notify — увімкнути / вимкнути сповіщення',
+];
+const ROLE_NAME: Record<string, string> = { owner: 'власник', staff: 'працівник', forum: 'модератор форуму' };
+const helpFor = (role: string) => (role === 'owner' ? HELP_OWNER : role === 'forum' ? HELP_FORUM : HELP_STAFF);
 
 const me = async (chatId: number) => (await db.from('telegram_users').select('*').eq('chat_id', chatId).eq('active', true).maybeSingle()).data;
 
@@ -208,8 +274,8 @@ const link = async (msg: any, code: string) => {
   await db.from('telegram_users').upsert({ chat_id: msg.chat.id, name: inv.label || name, username: msg.from?.username || null, role: inv.role, active: true, notify: true }, { onConflict: 'chat_id' });
   await db.from('telegram_invites').update({ used_at: new Date().toISOString(), used_by: msg.chat.id }).eq('code', code);
   // tell the owners
-  for (const o of await recipients(true)) if (o.chat_id !== msg.chat.id) await send(o.chat_id, `👋 До бота підключився: <b>${esc(inv.label || name)}</b> (${inv.role === 'owner' ? 'власник' : 'працівник'})`);
-  return send(msg.chat.id, `Готово! Ви підключені як <b>${inv.role === 'owner' ? 'власник' : 'працівник'}</b> магазину «Форсаж».\nСюди приходитимуть нові замовлення.\n\n${(inv.role === 'owner' ? HELP_OWNER : HELP_STAFF).join('\n')}`);
+  for (const o of await recipients('owners')) if (o.chat_id !== msg.chat.id) await send(o.chat_id, `👋 До бота підключився: <b>${esc(inv.label || name)}</b> (${ROLE_NAME[inv.role] || inv.role})`);
+  return send(msg.chat.id, `Готово! Ви підключені як <b>${ROLE_NAME[inv.role] || inv.role}</b> магазину «Форсаж».\n${inv.role === 'forum' ? 'Сюди приходитимуть нові повідомлення форуму.' : 'Сюди приходитимуть нові замовлення.'}\n\n${helpFor(inv.role).join('\n')}`);
 };
 
 const onMessage = async (msg: any) => {
@@ -224,6 +290,17 @@ const onMessage = async (msg: any) => {
   }
   const owner = user.role === 'owner';
 
+  // forum moderators: only the forum
+  if (user.role === 'forum') {
+    if (cmd === '/forum') return send(chatId, await forumReport(Math.min(365, Math.max(1, Number(arg.replace(/\D/g, '')) || 7))));
+    if (cmd === '/today') return send(chatId, await forumReport(1));
+    if (cmd === '/notify') {
+      await db.from('telegram_users').update({ notify: !user.notify }).eq('chat_id', chatId);
+      return send(chatId, user.notify ? '🔕 Сповіщення вимкнено. Увімкнути: /notify' : '🔔 Сповіщення увімкнено.');
+    }
+    return send(chatId, HELP_FORUM.join('\n'));
+  }
+
   // the answer to "send TTN" / "write a comment"
   if (user.pending && !text.startsWith('/')) {
     const [kind, id] = user.pending.split(':');
@@ -236,7 +313,9 @@ const onMessage = async (msg: any) => {
 
   switch (cmd) {
     case '/start': case '/help': case '/menu':
-      return send(chatId, (owner ? HELP_OWNER : HELP_STAFF).join('\n'));
+      return send(chatId, helpFor(user.role).join('\n'));
+    case '/forum':
+      return owner ? send(chatId, await forumReport(Math.min(365, Math.max(1, Number(arg.replace(/\D/g, '')) || 7)))) : send(chatId, 'Лише для власника.');
     case '/orders': {
       const { data } = await db.from('tyre_orders').select('*').in('status', ['new', 'confirmed']).order('created_at', { ascending: false }).limit(10);
       if (!data?.length) return send(chatId, 'Нових і підтверджених замовлень немає 👍');
@@ -262,7 +341,7 @@ const onMessage = async (msg: any) => {
       if (!owner) return send(chatId, 'Лише для власника.');
       const { data } = await db.from('telegram_users').select('name, username, role, notify, active').order('created_at');
       return send(chatId, '<b>Доступ до бота</b>\n' + (data || []).map((u: any) =>
-        `• ${esc(u.name)}${u.username ? ` (@${esc(u.username)})` : ''} — ${u.role === 'owner' ? 'власник' : 'працівник'}${u.active ? '' : ' · вимкнено'}${u.notify ? '' : ' · 🔕'}`).join('\n') +
+        `• ${esc(u.name)}${u.username ? ` (@${esc(u.username)})` : ''} — ${ROLE_NAME[u.role] || u.role}${u.active ? '' : ' · вимкнено'}${u.notify ? '' : ' · 🔕'}`).join('\n') +
         '\n\nДодати або прибрати людину: Адмінка → Telegram.');
     }
     default:
@@ -278,6 +357,24 @@ const onButton = async (cb: any) => {
   if (!user) return tg('answerCallbackQuery', { callback_query_id: cb.id, text: 'Немає доступу', show_alert: true });
   const [kind, idStr, value] = String(cb.data || '').split(':');
   const id = Number(idStr);
+
+  // forum: hide / show / delete a message (owners and forum moderators)
+  if (kind === 'fh' || kind === 'fs' || kind === 'fd') {
+    if (user.role !== 'owner' && user.role !== 'forum') return tg('answerCallbackQuery', { callback_query_id: cb.id, text: 'Немає доступу', show_alert: true });
+    const table = idStr.startsWith('t') ? 'forum_topics' : 'forum_posts';
+    const fid = Number(idStr.slice(1));
+    if (kind === 'fd') {
+      const f = await forumItem(table, fid);
+      await db.from(table).delete().eq('id', fid);
+      await tg('editMessageText', { chat_id: chatId, message_id: cb.message.message_id, text: f ? forumText(f, `🗑 Видалено — ${user.name}`) : `🗑 Видалено — ${esc(user.name)}`, parse_mode: 'HTML', disable_web_page_preview: true });
+      return tg('answerCallbackQuery', { callback_query_id: cb.id, text: 'Видалено' });
+    }
+    await db.from(table).update({ is_hidden: kind === 'fh' }).eq('id', fid);
+    const f = await forumItem(table, fid);
+    if (f) await tg('editMessageText', { chat_id: chatId, message_id: cb.message.message_id, text: forumText(f, `${kind === 'fh' ? '🙈 Сховано' : '👁 Показано'} — ${user.name}`), parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: forumButtons(f) });
+    return tg('answerCallbackQuery', { callback_query_id: cb.id, text: kind === 'fh' ? 'Сховано' : 'Показано' });
+  }
+  if (user.role === 'forum') return tg('answerCallbackQuery', { callback_query_id: cb.id, text: 'Лише для персоналу магазину', show_alert: true });
 
   if (kind === 'st') {
     await db.from('tyre_orders').update({ status: value, updated_at: new Date().toISOString(), seen_at: new Date().toISOString() }).eq('id', id);
@@ -319,6 +416,7 @@ const setup = async () => {
     { command: 'today', description: 'Підсумок дня (власник)' },
     { command: 'week', description: 'Підсумок тижня (власник)' },
     { command: 'team', description: 'Хто має доступ (власник)' },
+    { command: 'forum', description: 'Форум: теми, відповіді, люди' },
     { command: 'notify', description: 'Увімкнути / вимкнути сповіщення' },
     { command: 'help', description: 'Допомога' },
   ];
@@ -360,6 +458,7 @@ Deno.serve(async (req) => {
       if (req.headers.get('x-sync-key') !== s.sync) return json({ error: 'forbidden' }, 403);
       if (body.action === 'notify_order') return json(await notifyOrder(Number(body.id)));
       if (body.action === 'notify_review') return json(await notifyReview(Number(body.id)));
+      if (body.action === 'notify_forum') return json(await notifyForum(String(body.table), Number(body.id)));
       if (body.action === 'daily') return json(await daily());
       if (body.action === 'alert') return json(await alert(body.text));
       if (body.action === 'setup') return json(await setup());

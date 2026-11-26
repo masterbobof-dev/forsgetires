@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   MessagesSquare, Plus, Pencil, Trash2, Pin, Lock, Unlock, EyeOff, Eye, Loader2, Search, ExternalLink, ChevronDown, ChevronUp, FolderTree, Save, X,
+  ShieldCheck, Send, Copy, BarChart3,
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import {
@@ -83,8 +84,106 @@ const SectionsPanel: React.FC<{ sections: ForumSection[]; counts: Record<string,
   );
 };
 
+/** Forum figures for 7 / 30 days (the same as the Telegram /forum command). */
+const StatsPanel: React.FC = () => {
+  const [days, setDays] = useState(7);
+  const [s, setS] = useState<any>(null);
+  useEffect(() => { setS(null); supabase.rpc('forum_stats', { p_days: days }).then(({ data }) => setS(data || {})); }, [days]);
+  const cell = (n: number | undefined, label: string) => (
+    <div className="bg-black/40 border border-zinc-800 rounded-xl p-3"><div className="text-2xl font-black text-white">{n ?? '—'}</div><div className="text-[11px] text-zinc-400">{label}</div></div>
+  );
+  return (
+    <section className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 md:p-6 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-black uppercase flex items-center gap-2"><BarChart3 size={18} className="text-[#FFC300]" /> Статистика форуму</h3>
+        <select value={days} onChange={e => setDays(Number(e.target.value))} className={`${input} w-auto`} aria-label="Період">
+          <option value={1}>За добу</option><option value={7}>За 7 днів</option><option value={30}>За 30 днів</option>
+        </select>
+      </div>
+      {!s ? <Loader2 className="animate-spin text-[#FFC300]" /> : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            {cell(s.topics, 'нових тем')}{cell(s.posts, 'відповідей')}{cell(s.writers, 'людей писали')}{cell(s.users_new, `нових покупців (усього ${s.users_total ?? 0})`)}
+          </div>
+          {!!s.top_topics?.length && (
+            <div className="text-sm"><div className="text-xs font-bold text-zinc-400 uppercase mb-1">Популярні теми</div>
+              {s.top_topics.map((t: any) => <a key={t.id} href={forumPath(t)} target="_blank" rel="noopener noreferrer" className="block truncate text-zinc-200 hover:text-[#FFC300]">• {t.title} <span className="text-zinc-500">— переглядів {t.views}, відповідей {t.replies_count}</span></a>)}
+            </div>
+          )}
+          {!!s.top_authors?.length && (
+            <div className="text-sm"><div className="text-xs font-bold text-zinc-400 uppercase mb-1">Найактивніші</div>
+              <div className="flex flex-wrap gap-2">{s.top_authors.map((a: any) => <span key={a.name} className="px-2 py-1 rounded-lg bg-black/40 border border-zinc-800 text-zinc-200">{a.name} · {a.n}</span>)}</div>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+};
+
+/** Owner only: who may look after the forum, and their Telegram invitations. */
+const ModeratorsPanel: React.FC = () => {
+  const [list, setList] = useState<{ email: string; name: string | null }[]>([]);
+  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [msg, setMsg] = useState('');
+  const [link, setLink] = useState('');
+  const load = async () => { const { data } = await supabase.from('forum_moderators').select('email, name').order('created_at'); setList((data as any) || []); };
+  useEffect(() => { load(); }, []);
+  const add = async () => {
+    const e = email.trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(e)) { setMsg('Вкажіть e-mail, з яким людина входить на сайт'); return; }
+    const { error } = await supabase.from('forum_moderators').upsert({ email: e, name: name.trim() || null });
+    if (error) { setMsg('Не вдалося зберегти'); return; }
+    setEmail(''); setName(''); setMsg('Додано ✓'); load();
+  };
+  const remove = async (e: string) => {
+    if (!confirm(`Забрати права модератора у ${e}?`)) return;
+    await supabase.from('forum_moderators').delete().eq('email', e); load();
+  };
+  const invite = async (label: string) => {
+    const code = Array.from(crypto.getRandomValues(new Uint8Array(6)), b => b.toString(16).padStart(2, '0')).join('');
+    const { error } = await supabase.from('telegram_invites').insert({ code, role: 'forum', label: label || 'Модератор форуму' });
+    if (error) { setMsg('Не вдалося створити запрошення'); return; }
+    setLink(`https://t.me/Forsageshop_bot?start=${code}`);
+  };
+  return (
+    <section className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 md:p-6 space-y-3">
+      <h3 className="font-black uppercase flex items-center gap-2"><ShieldCheck size={18} className="text-[#FFC300]" /> Модератори форуму</h3>
+      <p className="text-xs text-zinc-400 leading-relaxed">
+        Модератор бачить в адмінці <b>лише форум</b>: може ховати й видаляти повідомлення, закріплювати й закривати теми, змінювати розділи.
+        Замовлень, товарів, цін і налаштувань він не бачить. Людина має зареєструватися на сайті з цим e-mail і відкрити адресу <b>forsage-tires.com/admin</b>.
+      </p>
+      <div className="grid sm:grid-cols-[1fr_1fr_auto] gap-2">
+        <input value={email} onChange={e => setEmail(e.target.value)} placeholder="E-mail модератора" className={input} aria-label="E-mail модератора" />
+        <input value={name} onChange={e => setName(e.target.value)} placeholder="Ім'я (для себе)" className={input} />
+        <button onClick={add} className={`${btn} h-10 bg-[#FFC300] text-black border-[#FFC300] justify-center`}><Plus size={14} /> Додати</button>
+      </div>
+      {msg && <p className="text-sm text-[#FFC300]">{msg}</p>}
+      {list.length > 0 && (
+        <ul className="divide-y divide-zinc-800">
+          {list.map(m => (
+            <li key={m.email} className="flex flex-wrap items-center gap-2 py-2">
+              <span className="flex-1 min-w-0 text-sm text-white truncate">{m.name ? <b>{m.name}</b> : null} {m.email}</span>
+              <button onClick={() => invite(m.name || m.email)} className={btnGrey}><Send size={14} /> Запросити в Telegram</button>
+              <button onClick={() => remove(m.email)} className={btnRed}><Trash2 size={14} /> Забрати права</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {link && (
+        <div className="bg-black/40 border border-[#FFC300]/40 rounded-xl p-3 text-sm space-y-2">
+          <p className="text-zinc-300">Надішліть це посилання модератору. Він натисне «Start» у Telegram і почне отримувати нові повідомлення форуму та статистику (команда /forum). Діє 24 години, спрацює один раз.</p>
+          <div className="flex gap-2 items-center"><code className="flex-1 min-w-0 truncate text-[#FFC300]">{link}</code>
+            <button onClick={() => navigator.clipboard?.writeText(link).catch(() => undefined)} className={btnGrey}><Copy size={14} /> Копіювати</button></div>
+        </div>
+      )}
+    </section>
+  );
+};
+
 /** One topic in the admin list: quick actions, editing, and its replies. */
-const TopicAdmin: React.FC<{ t: ForumTopic; sections: ForumSection[]; userId: string; onChanged: () => void }> = ({ t, sections, userId, onChanged }) => {
+const TopicAdmin: React.FC<{ t: ForumTopic; sections: ForumSection[]; userId: string; onChanged: () => void; asShop: boolean }> = ({ t, sections, userId, onChanged, asShop }) => {
   const [open, setOpen] = useState(false);
   const [edit, setEdit] = useState<'topic' | number | null>(null);
   const [posts, setPosts] = useState<ForumPost[] | null>(null);
@@ -140,15 +239,16 @@ const TopicAdmin: React.FC<{ t: ForumTopic; sections: ForumSection[]; userId: st
               </div>
             </div>
           ))}
-          {posts && <MessageForm userId={userId} submitLabel="Відповісти від магазину" onSubmit={v => act(() => createPost({ topic_id: t.id, body: v.body, images: v.images }))} />}
+          {posts && <MessageForm userId={userId} submitLabel={asShop ? 'Відповісти від магазину' : 'Відповісти'} onSubmit={v => act(() => createPost({ topic_id: t.id, body: v.body, images: v.images }))} />}
         </div>
       )}
     </li>
   );
 };
 
-/** Admin → Форум: sections, every topic (including hidden), new topics from the shop. */
-const ForumTab: React.FC = () => {
+/** Admin → Форум: sections, every topic (including hidden), new topics from the shop.
+ *  A forum moderator (role "forum") sees only this tab and posts under their own name. */
+const ForumTab: React.FC<{ isStaff?: boolean }> = ({ isStaff = true }) => {
   const [sections, setSections] = useState<ForumSection[]>([]);
   const [topics, setTopics] = useState<ForumTopic[] | null>(null);
   const [userId, setUserId] = useState('');
@@ -157,6 +257,8 @@ const ForumTab: React.FC = () => {
   const [view, setView] = useState<'all' | 'hidden'>('all');
   const [creating, setCreating] = useState(false);
   const [showSections, setShowSections] = useState(false);
+  const [showStats, setShowStats] = useState(false);
+  const [showMods, setShowMods] = useState(false);
 
   const load = async () => {
     const all = await fetchSections(true);
@@ -179,14 +281,18 @@ const ForumTab: React.FC = () => {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-xl md:text-2xl font-black uppercase flex items-center gap-2"><MessagesSquare className="text-[#FFC300]" /> Форум</h2>
         <div className="flex flex-wrap gap-2">
+          <button onClick={() => setShowStats(!showStats)} className={btnGrey}><BarChart3 size={14} /> Статистика</button>
+          {isStaff && <button onClick={() => setShowMods(!showMods)} className={btnGrey}><ShieldCheck size={14} /> Модератори</button>}
           <button onClick={() => setShowSections(!showSections)} className={btnGrey}><FolderTree size={14} /> Розділи</button>
           <a href="/forum" target="_blank" rel="noopener noreferrer" className={btnGrey}><ExternalLink size={14} /> Відкрити форум</a>
           <button onClick={() => setCreating(!creating)} className={`${btn} bg-[#FFC300] text-black border-[#FFC300]`}><Plus size={14} /> Нова тема</button>
         </div>
       </div>
+      {showStats && <StatsPanel />}
+      {showMods && isStaff && <ModeratorsPanel />}
       {showSections && <SectionsPanel sections={sections} counts={filter ? {} : counts} onChanged={load} />}
       {creating && userId && sections.length > 0 && (
-        <MessageForm userId={userId} sections={sections} topic allowPin submitLabel="Опублікувати від магазину" onCancel={() => setCreating(false)}
+        <MessageForm userId={userId} sections={sections} topic allowPin submitLabel={isStaff ? 'Опублікувати від магазину' : 'Опублікувати'} onCancel={() => setCreating(false)}
           onSubmit={async v => { await createTopic({ category: v.category, title: v.title, body: v.body, images: v.images, is_pinned: !!v.is_pinned }); setCreating(false); await load(); }} />
       )}
       <div className="flex flex-wrap gap-2 items-center">
@@ -210,7 +316,7 @@ const ForumTab: React.FC = () => {
       </div>
       {!topics ? <div className="py-10 flex justify-center"><Loader2 className="animate-spin text-[#FFC300]" /></div>
         : !shown.length ? <p className="text-zinc-500 text-center py-10">Тем не знайдено</p>
-          : <ul className="space-y-2">{shown.map(t => <TopicAdmin key={t.id} t={t} sections={sections} userId={userId} onChanged={load} />)}</ul>}
+          : <ul className="space-y-2">{shown.map(t => <TopicAdmin key={t.id} t={t} sections={sections} userId={userId} onChanged={load} asShop={isStaff} />)}</ul>}
     </div>
   );
 };

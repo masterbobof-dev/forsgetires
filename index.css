@@ -162,3 +162,6 @@ html { touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; text-size-adju
     display: none;
   }
 }
+
+/* search boxes have their own clear button: hide the browser one (two crosses on iPhone) */
+input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }

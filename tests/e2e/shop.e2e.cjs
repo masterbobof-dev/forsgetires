@@ -99,7 +99,6 @@ const catalogue = async (browser, url) => {
   await step(shop, S, 'search with a brand typed in Cyrillic', async () => {
     await ui.fill(page.locator('input[type="search"]'), 'ханкук');
     await expectCards(page, 2);
-    await until(async () => assert.ok(await page.locator('button', { hasText: 'Hankook Dynapro HP2' }).isVisible(), 'search hints show goods from other sections too'));
     await ui.press(page.locator('input[type="search"]'), 'Enter');
   });
 

@@ -66,6 +66,8 @@ export interface TyreProduct {
   promo_badge?: string | null;
   /** old tyres: not in stock, price to be confirmed by the manager */
   on_order?: boolean;
+  /** delivery time in days from the shop program, e.g. "3" or "3-5" */
+  lead_days?: string | null;
 
   // Cart Logic
   quantity?: number;

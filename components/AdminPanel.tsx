@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Lock, LogOut, ShieldAlert, UserCheck, Loader2, Menu, X as CloseIcon, ChevronRight, Settings as SettingsIcon, ShoppingBag, BarChart3, Globe, Megaphone, FileText, Database, FolderTree, AlertCircle, Sparkles, MessageSquare, Image as ImageIcon, Send, MessagesSquare } from 'lucide-react';
 import SettingsTab from './admin/SettingsTab';
-import TyresTab from './admin/TyresTab';
+import ProductsBrowser from './admin/ProductsBrowser';
 import OrdersTab from './admin/OrdersTab';
 import StatsTab from './admin/StatsTab';
 import ArticlesTab from './admin/ArticlesTab';
@@ -342,7 +342,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
 
       <main className="max-w-[1800px] mx-auto p-2 md:p-4 print:hidden">
         {isAdmin && activeTab === 'settings' && <SettingsTab />}
-        {activeTab === 'tyres' && <TyresTab />}
+        {activeTab === 'tyres' && <ProductsBrowser />}
         {activeTab === 'reviews' && <ReviewsTab />}
         {activeTab === 'orders' && <OrdersTab />}
         {activeTab === 'stats' && <StatsTab />}

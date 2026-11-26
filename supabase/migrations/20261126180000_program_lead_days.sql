@@ -1,0 +1,4 @@
+-- Applied through the Supabase tools: tyres.lead_days (delivery time in days from the shop program);
+-- private.program_sync_apply takes p.lead_days (or delivery_days / lead_time) from site_catalog_export;
+-- the site's own setting contact_order_wait is removed (the time is set in the program only).
+-- Also: rpc admin_category_totals() for Admin → Товари.

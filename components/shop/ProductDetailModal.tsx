@@ -131,7 +131,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
     const img = t.image_thumb_url || t.image_url;
     const Icon = iconFor ? iconFor(t) : undefined;
     return (
-      <div key={t.id} className="snap-start shrink-0 w-[104px] md:w-[150px] bg-zinc-950 border border-zinc-800 hover:border-zinc-600 rounded-2xl overflow-hidden flex flex-col transition-colors">
+      <div key={t.id} className="snap-start shrink-0 w-[118px] md:w-[150px] bg-zinc-950 border border-zinc-800 hover:border-zinc-600 rounded-2xl overflow-hidden flex flex-col transition-colors">
         <button onClick={openItem(t)} className="text-left flex-1 outline-none focus:outline-none [-webkit-tap-highlight-color:transparent]">
           <div className={`relative h-20 md:h-28 flex items-center justify-center ${img ? 'bg-white' : ''}`}>
             {img ? <img src={img} alt={t.title} loading="lazy" className="w-full h-full object-contain p-2" /> : <NoPhoto icon={Icon} size={26} />}
@@ -140,8 +140,8 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
           <p className="px-2.5 pt-2 text-[11px] font-bold text-white line-clamp-2 min-h-[2.6em] leading-snug">{t.title} {t.radius}</p>
         </button>
         <div className="px-2.5 pb-2.5 pt-1.5 flex items-center justify-between gap-1">
-          <span className="text-sm font-black text-[#FFC300]">{t.on_order && !t.supplier_offer_id ? <span className="text-[11px] text-amber-400">Під замовлення</span> : <>{formatPrice(t.price)} <span className="text-[10px] text-zinc-500 font-normal">грн</span></>}</span>
-          {(!t.on_order || t.supplier_offer_id) && <button onClick={withFull(t, addToCart)} aria-label="У кошик" className="w-8 h-8 shrink-0 rounded-lg bg-[#FFC300] hover:bg-white text-black flex items-center justify-center"><ShoppingCart size={15} /></button>}
+          <span className="text-[13px] font-black text-[#FFC300] whitespace-nowrap">{t.on_order && !t.supplier_offer_id ? <span className="text-[11px] text-amber-400">Під замовлення</span> : <>{formatPrice(t.price)} <span className="text-[10px] text-zinc-500 font-normal">грн</span></>}</span>
+          {(!t.on_order || t.supplier_offer_id) && <button onClick={withFull(t, addToCart)} aria-label="У кошик" className="w-7 h-7 shrink-0 rounded-lg bg-[#FFC300] hover:bg-white text-black flex items-center justify-center"><ShoppingCart size={14} /></button>}
         </div>
       </div>
     );

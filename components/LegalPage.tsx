@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, FileText, ShieldCheck } from 'lucide-react';
 import { supabase } from '../supabaseClient';
+import { settingsRows } from '../publicSettings';
 import { PHONE_NUMBER_1, SITE_URL } from '../constants';
 
 export type LegalDoc = 'oferta' | 'privacy';
@@ -103,7 +104,7 @@ const LegalPage: React.FC<{ doc: LegalDoc; onBack: () => void }> = ({ doc, onBac
   const [seller, setSeller] = useState<Seller>({ name: PLACEHOLDER, code: PLACEHOLDER, address: PLACEHOLDER, email: PLACEHOLDER, phone: PHONE_NUMBER_1 });
 
   useEffect(() => {
-    supabase.from('settings').select('key, value').in('key', ['legal_seller_name', 'legal_seller_code', 'legal_seller_address', 'legal_seller_email', 'contact_phone1'])
+    settingsRows(['legal_seller_name', 'legal_seller_code', 'legal_seller_address', 'legal_seller_email', 'contact_phone1'])
       .then(({ data }) => {
         if (!data) return;
         const get = (k: string) => data.find((r: any) => r.key === k)?.value?.trim();

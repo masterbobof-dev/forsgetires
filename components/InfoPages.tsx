@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Truck, Store, Wallet, ShieldCheck, RotateCcw, Phone, MapPin, MessageCircle, Send, Mail, HelpCircle, ChevronDown, Info } from 'lucide-react';
 import { supabase } from '../supabaseClient';
+import { settingsRows } from '../publicSettings';
 import { PHONE_NUMBER_1, PHONE_NUMBER_2, PHONE_LINK_1, PHONE_LINK_2, TELEGRAM_LINK, VIBER_LINK } from '../constants';
 import { linkClick } from '../navigation';
 import { ArticleBody } from './ArticlesPage';
@@ -53,7 +54,7 @@ const InfoPages: React.FC<{ page: InfoPage; onBack: () => void }> = ({ page, onB
   }, [page]);
 
   useEffect(() => {
-    supabase.from('settings').select('key, value').in('key', ['contact_phone1', 'contact_phone2', 'legal_seller_email']).then(({ data }) => {
+    settingsRows(['contact_phone1', 'contact_phone2', 'legal_seller_email']).then(({ data }) => {
       const get = (k: string) => data?.find((r: any) => r.key === k)?.value?.trim();
       const link = (v: string) => { const d = v.replace(/\D/g, ''); return `tel:${d.startsWith('0') ? `+38${d}` : `+${d}`}`; };
       const p1 = get('contact_phone1'), p2 = get('contact_phone2');

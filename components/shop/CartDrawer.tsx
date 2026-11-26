@@ -91,7 +91,7 @@ const CartDrawer: React.FC<CartDrawerProps> = (props) => {
                      {props.cart.map(item => (
                         <div key={item.id} className="group bg-zinc-800/30 p-4 rounded-2xl border border-zinc-800/50 flex gap-4 hover:border-zinc-700 transition-all">
                            <div className="w-20 h-20 bg-black rounded-xl overflow-hidden flex-shrink-0 border border-zinc-800">
-                              <img src={item.image_url || '/favicon.svg'} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
+                              <img src={item.image_url || '/favicon.svg'} alt={item.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
                            </div>
                            <div className="flex-grow min-w-0 flex flex-col justify-between">
                               <div>

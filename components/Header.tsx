@@ -8,6 +8,7 @@ import { linkClick } from '../navigation';
 import CatalogMenu from './CatalogMenu';
 import { PHONE_NUMBER_1, PHONE_NUMBER_2, PHONE_LINK_1, PHONE_LINK_2 } from '../constants';
 import { supabase } from '../supabaseClient';
+import { settingsRows } from '../publicSettings';
 
 interface HeaderProps {
   currentView: ViewState;
@@ -83,7 +84,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
 
   useEffect(() => {
     const fetchContacts = async () => {
-      const { data } = await supabase.from('settings').select('key, value').in('key', ['contact_phone1', 'contact_phone2']);
+      const { data } = await settingsRows(['contact_phone1', 'contact_phone2']);
       if (data) {
         const newPhones = { ...phones };
         data.forEach(r => {

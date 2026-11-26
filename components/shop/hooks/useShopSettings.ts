@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../../supabaseClient';
+import { settingsRows } from '../../../publicSettings';
 import type { TyreProduct } from '../../../types';
 import { PHONE_LINK_1, PHONE_NUMBER_1 } from '../../../constants';
 
@@ -25,7 +26,7 @@ export const useShopSettings = () => {
 
   useEffect(() => {
     const fetchSettings = async () => {
-      const { data: setts } = await supabase.from('settings').select('key, value').in('key', [
+      const { data: setts } = await settingsRows([
         'enable_stock_quantity',
         'contact_phone1',
         'contact_phone2',

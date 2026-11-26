@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
+import { settingValue } from './publicSettings';
 import type { TyreProduct } from './types';
 import type { ProductCategory } from './categories';
 
@@ -67,7 +68,7 @@ export type HomeBlockType = 'banners' | 'size_search' | 'categories' | 'hits' | 
 export const ALL_HOME_BLOCKS: HomeBlockType[] = ['banners', 'hits', 'size_search', 'categories', 'promos', 'benefits', 'reviews', 'articles'];
 export const DEFAULT_HOME_BLOCKS: HomeBlockType[] = ['banners', 'hits'];
 export const fetchHomeBlocks = async (): Promise<{ type: HomeBlockType; title?: string }[]> => {
-  const { data } = await supabase.from('settings').select('value').eq('key', 'home_blocks').maybeSingle();
+  const { data } = await settingValue('home_blocks');
   try {
     const list = JSON.parse((data as any)?.value || '[]') as { type: HomeBlockType; enabled?: boolean; title?: string }[];
     if (Array.isArray(list) && list.length) return list.filter(b => b.enabled !== false && ALL_HOME_BLOCKS.includes(b.type));

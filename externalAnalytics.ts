@@ -6,6 +6,7 @@
  * Nothing is loaded while the IDs are empty.
  */
 import { supabase } from './supabaseClient';
+import { settingsRows } from './publicSettings';
 
 declare global {
   interface Window { dataLayer?: unknown[]; gtag?: (...args: unknown[]) => void; fbq?: any; _fbq?: any }
@@ -16,7 +17,7 @@ let started = false;
 export const initExternalAnalytics = async () => {
   if (started || typeof window === 'undefined') return;
   started = true;
-  const { data } = await supabase.from('settings').select('key, value').in('key', ['ga_measurement_id', 'fb_pixel_id']);
+  const { data } = await settingsRows(['ga_measurement_id', 'fb_pixel_id']);
   const get = (k: string) => (data || []).find((r: any) => r.key === k)?.value?.trim();
 
   const ga = get('ga_measurement_id');

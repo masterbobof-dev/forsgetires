@@ -6,6 +6,7 @@ import Footer from './components/Footer';
 import { ViewState, TyreProduct, CartItem } from './types';
 import { Loader2, ShieldAlert, LogOut } from 'lucide-react';
 import { supabase } from './supabaseClient';
+import { settingsRows } from './publicSettings';
 import { useAuth } from './useAuth';
 import { logAnalyticsEvent } from './components/admin/analytics';
 import { CustomerAuthModal, StaffLogin } from './components/auth/AuthForms';
@@ -125,7 +126,7 @@ const App: React.FC = () => {
   // Dynamic SEO loader
   useEffect(() => {
     const loadSeo = async () => {
-      const { data } = await supabase.from('settings').select('key, value').in('key', [
+      const { data } = await settingsRows([
         'seo_title', 'seo_description', 'seo_keywords', 'seo_image', 'seo_robots', 'seo_canonical',
       ]);
       if (!data) return;

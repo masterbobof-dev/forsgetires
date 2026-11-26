@@ -12,7 +12,7 @@ async function render(req, res) {
   let product = null;
   if (id) {
     try {
-      const rows = await rest(`tyres?id=eq.${id}&select=id,title,description,seo_title,seo_description,price,old_price,manufacturer,category_id,image_url,in_stock,radius,season,slug,catalog_number,on_order,stock_quantity,program_product_id`);
+      const rows = await rest(`tyres?id=eq.${id}&select=id,title,description,seo_title,seo_description,price,old_price,manufacturer,category_id,image_url,gallery,in_stock,radius,season,slug,catalog_number,on_order,stock_quantity,program_product_id`);
       product = rows[0] || null;
     } catch (e) {
       if (e instanceof DbUnavailable) throw e; // busy database is not "not found": answered with 503 below
@@ -66,10 +66,13 @@ async function render(req, res) {
     '@context': 'https://schema.org/',
     '@type': 'Product',
     name: product.title,
-    image: [image],
+    // all photos of the product (Google may show any of them)
+    image: [image, ...(Array.isArray(product.gallery) ? product.gallery : [])].filter((u, i, a) => u && a.indexOf(u) === i).slice(0, 10),
     description,
     sku: product.catalog_number || `product-${product.id}`,
-    brand: { '@type': 'Brand', name: product.manufacturer || SHOP_NAME },
+    ...(product.catalog_number ? { mpn: product.catalog_number } : {}),
+    // the real maker only; the shop's own name here would be a wrong brand
+    ...(product.manufacturer ? { brand: { '@type': 'Brand', name: product.manufacturer } } : {}),
     offers: {
       '@type': 'Offer',
       url,
@@ -78,6 +81,13 @@ async function render(req, res) {
       availability: product.in_stock === false ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock',
       itemCondition: 'https://schema.org/NewCondition',
       seller: { '@type': 'Organization', name: SHOP_NAME },
+      // the same terms as on the "Гарантія і повернення" page: return within 14 days
+      hasMerchantReturnPolicy: {
+        '@type': 'MerchantReturnPolicy',
+        applicableCountry: 'UA',
+        returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
+        merchantReturnDays: 14,
+      },
     },
   };
   try {
@@ -87,7 +97,7 @@ async function render(req, res) {
       ld.aggregateRating = { '@type': 'AggregateRating', ratingValue: Number(avg.toFixed(1)), reviewCount: reviews.length, bestRating: 5, worstRating: 1 };
     }
   } catch (e) { if (e instanceof DbUnavailable) throw e; /* no reviews table yet */ }
-  if (onOrder) delete ld.offers; // price is confirmed by the manager
+  if (onOrder || !(price > 0)) delete ld.offers; // price is confirmed by the manager / no price: Google rejects a 0 price
   html = html.replace('</head>', `    <script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>\n  </head>`);
   html = setRootContent(html, `<h1>${esc(product.title)}</h1><p>${onOrder ? 'Під замовлення — ціну і термін уточнюйте у менеджера' : `Ціна: ${price} грн${product.in_stock === false ? ' (немає в наявності)' : ''}`}</p><p>${esc(description)}</p><p><a href="/">Каталог товарів</a></p>`);
 

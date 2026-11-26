@@ -14,13 +14,16 @@ const KEEP_DAYS = 30;
 
 const gzip = async (text: string) => new Uint8Array(await new Response(new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
 
+// partner goods (tyres.supplier_offer_id) are not copied: the program sends them again by itself (nightly full refresh)
+const base = (table: string) => { const q = db.from(table).select('*'); return table === 'tyres' ? q.is('supplier_offer_id', null) : q; };
+
 const dump = async (table: string) => {
   const rows: any[] = [];
   for (let from = 0; ; from += 1000) {
-    const { data, error } = await db.from(table).select('*').order('created_at', { ascending: true, nullsFirst: true }).range(from, from + 999);
+    const { data, error } = await base(table).order('created_at', { ascending: true, nullsFirst: true }).range(from, from + 999);
     if (error) {
       // tables without created_at
-      const r2 = await db.from(table).select('*').range(from, from + 999);
+      const r2 = await base(table).range(from, from + 999);
       if (r2.error) throw new Error(`${table}: ${r2.error.message}`);
       rows.push(...(r2.data || [])); if ((r2.data || []).length < 1000) break; continue;
     }

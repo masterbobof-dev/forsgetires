@@ -43,6 +43,8 @@ const PickerBody: React.FC<PickerProps & { onCar?: (name: string) => void }> = (
   const [make, setMake] = useState('');
   const [id, setId] = useState<number | ''>('');
   const [q, setQ] = useState('');
+  /** which part is open after the car is chosen: nothing until the person presses Шини / АКБ / Диски */
+  const [tab, setTab] = useState<'tyres' | 'battery' | 'wheels' | null>(null);
 
   useEffect(() => {
     supabase.from('vehicles').select('id, make, model, years, tyres, wheel_pcd, wheel_dia, battery_ah_min, battery_ah_max, battery_body, battery_polarity, note')
@@ -58,7 +60,7 @@ const PickerBody: React.FC<PickerProps & { onCar?: (name: string) => void }> = (
       });
   }, []);
   const choose = (v: Vehicle | null) => {
-    setMake(v?.make || ''); setId(v?.id ?? ''); setQ('');
+    setMake(v?.make || ''); setId(v?.id ?? ''); setQ(''); setTab(null);
     const name = v ? `${v.make} ${v.model}` : '';
     try {
       if (v) { localStorage.setItem(SAVED_KEY, String(v.id)); localStorage.setItem(SAVED_NAME, name); }
@@ -133,7 +135,23 @@ const PickerBody: React.FC<PickerProps & { onCar?: (name: string) => void }> = (
 
       {car && (
         <div className="mt-4 space-y-3 animate-in fade-in duration-300">
-          {car.tyres.length > 0 && (
+          {/* three big buttons; the offers open only for the chosen one */}
+          <div className="grid grid-cols-3 gap-2">
+            {([
+              ['tyres', CircleDot, 'Шини', counts ? (() => { const st = Object.values(counts.tyres).reduce((n, c) => n + c.stock, 0); const all = Object.values(counts.tyres).reduce((n, c) => n + c.all, 0); return st ? `${st} в наявності` : all ? `${all} під замовл.` : 'під замовлення'; })() : '…'],
+              ['battery', Battery, 'АКБ', counts ? (counts.battery ? `${counts.battery} підходять` : 'підберемо') : '…'],
+              ['wheels', Disc3, 'Диски', counts ? (counts.wheels ? `${counts.wheels} підходять` : 'під замовлення') : '…'],
+            ] as const).map(([key, Icon, label, sub]) => (
+              <button key={key} onClick={() => setTab(tab === key ? null : key)} aria-pressed={tab === key}
+                className={`rounded-2xl border-2 py-3 px-1 flex flex-col items-center gap-1 transition-colors ${tab === key ? 'bg-[#FFC300] border-[#FFC300] text-black' : 'bg-zinc-900 border-zinc-700 text-white hover:border-[#FFC300]'}`}>
+                <Icon size={26} className={tab === key ? '' : 'text-[#FFC300]'} />
+                <span className="font-black uppercase text-sm">{label}</span>
+                <span className={`text-[10px] font-bold ${tab === key ? 'text-black/70' : 'text-zinc-400'}`}>{sub}</span>
+              </button>
+            ))}
+          </div>
+          {!tab && <p className="text-xs text-zinc-400 text-center">Оберіть, що підібрати для <b className="text-white">{car.make} {car.model}</b></p>}
+          {tab === 'tyres' && (car.tyres.length ? <div className="animate-in fade-in duration-200">
             <div>
               <p className="text-xs font-bold text-zinc-400 uppercase mb-1.5 flex items-center gap-1.5"><CircleDot size={14} className="text-[#FFC300]" /> Шини (заводські розміри)</p>
               <div className="flex flex-wrap gap-2">
@@ -150,7 +168,10 @@ const PickerBody: React.FC<PickerProps & { onCar?: (name: string) => void }> = (
                 })}
               </div>
             </div>
-          )}
+          
+          </div> : <p className="text-sm text-zinc-400">Заводські розміри шин для цього авто ще не внесені — зателефонуйте, підберемо.</p>)}
+          {tab === 'battery' && (
+            <div className="animate-in fade-in duration-200">
           <div className="flex flex-wrap items-center gap-2 justify-between bg-black/40 border border-zinc-800 rounded-xl px-3 py-2.5">
             <p className="text-sm text-zinc-300 flex items-center gap-2">
               <Battery size={18} className="text-[#FFC300] shrink-0" />
@@ -165,7 +186,9 @@ const PickerBody: React.FC<PickerProps & { onCar?: (name: string) => void }> = (
               )
             )}
           </div>
-          {car.wheel_pcd && (
+            </div>
+          )}
+          {tab === 'wheels' && (car.wheel_pcd ? <div className="animate-in fade-in duration-200">
             <div className="flex flex-wrap items-center gap-2 justify-between bg-black/40 border border-zinc-800 rounded-xl px-3 py-2.5">
               <p className="text-sm text-zinc-300 flex items-center gap-2">
                 <Disc3 size={18} className="text-[#FFC300] shrink-0" />
@@ -183,7 +206,8 @@ const PickerBody: React.FC<PickerProps & { onCar?: (name: string) => void }> = (
                 </div>
               ) : null}
             </div>
-          )}
+          
+          </div> : <p className="text-sm text-zinc-400">Кріплення дисків для цього авто ще не внесене — зателефонуйте, підберемо.</p>)}
           {car.note && <p className="text-xs text-zinc-300 flex items-start gap-1.5"><Info size={14} className="text-[#FFC300] shrink-0 mt-0.5" /> {car.note}</p>}
           <p className="text-[11px] text-zinc-500 flex items-center gap-1.5"><Phone size={12} /> Комплектації бувають різні — перед покупкою звірте розмір з боковиною шини або уточніть у менеджера.</p>
         </div>

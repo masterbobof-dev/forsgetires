@@ -31,6 +31,8 @@ export interface ProductCategory {
   available?: number;
   /** of them with a photo */
   available_with_photo?: number;
+  /** everything a buyer can see in it, also partner goods on order (with subcategories) — shop pages only */
+  total?: number;
 }
 
 /** Icons the admin can choose for a category (key -> component). */
@@ -82,19 +84,20 @@ const sortCats = (a: ProductCategory, b: ProductCategory) =>
  * Shop pages show only categories that have goods in stock (with their subcategories),
  * the biggest first. If the counts can't be loaded, all categories are shown.
  */
-type CountRow = { category_id: number; n: number; with_photo: number };
+type CountRow = { category_id: number; n: number; with_photo: number; n_all?: number };
 let countsCache: Promise<CountRow[] | null> | null = null;
 const loadCounts = (): Promise<CountRow[] | null> => (countsCache ??= Promise.resolve(supabase.rpc('category_counts')).then(({ data, error }) => (error ? null : (data as any[]))).catch(() => null));
 const withAvailability = async (list: ProductCategory[]): Promise<ProductCategory[]> => {
   const rows = await loadCounts();
   if (!rows) return list;
   const own = new Map(rows.map(r => [Number(r.category_id), r]));
-  const total = (c: ProductCategory, seen = new Set<number>()): [number, number] => {
-    if (seen.has(c.id)) return [0, 0];
+  const total = (c: ProductCategory, seen = new Set<number>()): [number, number, number] => {
+    if (seen.has(c.id)) return [0, 0, 0];
     seen.add(c.id);
-    let n = Number(own.get(c.id)?.n || 0), p = Number(own.get(c.id)?.with_photo || 0);
-    for (const k of list.filter(x => x.parent_id === c.id)) { const [a, b] = total(k, seen); n += a; p += b; }
-    return [n, p];
+    const r = own.get(c.id);
+    let n = Number(r?.n || 0), p = Number(r?.with_photo || 0), all = Number(r?.n_all ?? r?.n ?? 0);
+    for (const k of list.filter(x => x.parent_id === c.id)) { const [a, b, d] = total(k, seen); n += a; p += b; all += d; }
+    return [n, p, all];
   };
   // a section opened by its address (from Google or a shared link) is kept even when everything in it is
   // "on order": otherwise the visitor would get the home page instead of the section they asked for
@@ -102,8 +105,9 @@ const withAvailability = async (list: ProductCategory[]): Promise<ProductCategor
   const slug = typeof window !== 'undefined' ? catSlugFrom(window.location.pathname, window.location.search) : '';
   for (let c = list.find(x => x.slug === slug); c && !keep.has(c.id); c = list.find(x => x.id === c!.parent_id)) keep.add(c.id);
   return list
-    .map(c => { const [n, p] = total(c); return { ...c, available: n, available_with_photo: p }; })
-    .filter(c => (c.available || 0) > 0 || keep.has(c.id))
+    .map(c => { const [n, p, all] = total(c); return { ...c, available: n, available_with_photo: p, total: all }; })
+    // a section with only partner goods (on order) is shown too: they can be bought
+    .filter(c => (c.total || 0) > 0 || keep.has(c.id))
     .sort((a, b) => (b.available! - a.available!) || sortCats(a, b));
 };
 

@@ -1,155 +1,145 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, ChevronRight, ChevronLeft, Flame, X } from 'lucide-react';
-import { ProductCategory, getRootCategories, getChildren, getCategoryIcon } from '../categories';
+import { Search, ChevronRight, Flame, X, Folder, FolderOpen, LayoutGrid, Package } from 'lucide-react';
+import { ProductCategory, getRootCategories, getChildren } from '../categories';
+import { catSlugFrom } from '../api/_paths.js';
 
 /**
- * The full product catalogue: main sections on the left, ALL their subsections on the right (with the number of goods),
- * and a field to find a section by name. Computer: a big drop-down. Phone: a full-screen panel (sections → subsections).
+ * The full product catalogue as a folder tree, the same as in the admin panel: a panel slides out from the left over
+ * the page (phone and computer). A folder opens its subfolders (several can be open), a subfolder opens its goods.
+ * A field on top finds a folder by name, with its parent folder in small letters.
  */
 interface Props {
   categories: ProductCategory[];
   onPick: (slug: string) => (e: React.MouseEvent) => void;
   hrefFor: (slug: string) => string;
   onClose: () => void;
-  mobile?: boolean;
+  /** links under the tree (forum, delivery, …) */
+  footer?: React.ReactNode;
 }
 
 const norm = (s: string) => s.toLowerCase().replace(/ё/g, 'е').replace(/[’'`]/g, '');
+const count = (c: ProductCategory) => c.total ?? c.available ?? 0;
 
-const CatalogMenu: React.FC<Props> = ({ categories, onPick, hrefFor, onClose, mobile = false }) => {
-  // biggest sections first
-  const roots = useMemo(() => getRootCategories(categories).sort((a, b) => (b.available || 0) - (a.available || 0)), [categories]);
-  const [active, setActive] = useState<number | null>(mobile ? null : roots[0]?.id ?? null);
+const CatalogMenu: React.FC<Props> = ({ categories, onPick, hrefFor, onClose, footer }) => {
+  const roots = useMemo(() => getRootCategories(categories).sort((a, b) => count(b) - count(a)), [categories]);
+  const kidsOf = (id: number) => getChildren(categories, id).sort((a, b) => count(b) - count(a));
+  // the folder of the page you are on is open at once
+  const [open, setOpen] = useState<Set<number>>(() => {
+    const slug = catSlugFrom(window.location.pathname, window.location.search);
+    const c = categories.find(x => x.slug === slug);
+    const root = c ? (c.parent_id ?? c.id) : null;
+    return new Set(root ? [root] : []);
+  });
+  const toggle = (id: number) => setOpen(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const [query, setQuery] = useState('');
+  const touchX = useRef<number | null>(null);
+  const currentSlug = catSlugFrom(window.location.pathname, window.location.search);
+
   useEffect(() => {
-    if (!mobile) return;
     const prev = document.body.style.overflow; document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
-  }, [mobile]);
-  const root = roots.find(r => r.id === active) || (mobile ? undefined : roots[0]);
-  const kids = root ? getChildren(categories, root.id).sort((a, b) => (b.available || 0) - (a.available || 0)) : [];
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => { document.body.style.overflow = prev; document.removeEventListener('keydown', onKey); };
+  }, [onClose]);
+
   const q = norm(query.trim());
-  const found = q.length >= 2 ? categories.filter(c => norm(c.name).includes(q)).sort((a, b) => (b.available || 0) - (a.available || 0)).slice(0, 30) : [];
+  const words = q.split(/\s+/).filter(Boolean);
+  const found = words.length && q.length >= 2 ? categories.filter(c => words.every(w => norm(c.name).includes(w))).sort((a, b) => count(b) - count(a)) : [];
   const parentName = (c: ProductCategory) => categories.find(p => p.id === c.parent_id)?.name;
-  const iconOf = (c: ProductCategory) => getCategoryIcon(c.icon || categories.find(p => p.id === c.parent_id)?.icon);
-  const count = (c: ProductCategory) => (c.available ? <span className="ml-auto pl-2 text-[11px] text-zinc-500 font-normal tabular-nums">{c.available}</span> : null);
+  const num = (c: ProductCategory) => <span className="text-xs text-zinc-500 tabular-nums shrink-0">{count(c)}</span>;
+  const on = (c: ProductCategory) => c.slug === currentSlug;
 
-  const searchBox = (
-    <div className="relative">
-      <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-      <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Знайти розділ: фільтри, лампочки, масла…" autoFocus={!mobile}
-        className="w-full h-11 bg-black border border-zinc-700 rounded-xl pl-9 pr-9 text-sm text-white outline-none focus:border-[#FFC300] placeholder:text-zinc-600" />
-      {query && <button onClick={() => setQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-500 hover:text-white" aria-label="Очистити"><X size={16} /></button>}
-    </div>
+  const leaf = (c: ProductCategory, sub = false) => (
+    <a key={c.id} href={hrefFor(c.slug)} onClick={onPick(c.slug)}
+      className={`flex items-center gap-2.5 ${sub ? 'pl-3 pr-4 py-2' : 'px-4 py-3'} ${on(c) ? 'bg-[#FFC300]/10 text-[#FFC300]' : 'text-zinc-200 hover:bg-zinc-800'}`}>
+      {sub && <span className="w-3 border-t border-zinc-700 -ml-3 shrink-0" aria-hidden />}
+      <Folder size={sub ? 16 : 20} className={`${sub ? 'text-[#FFC300]/80' : 'text-[#FFC300]'} shrink-0`} />
+      <span className={`flex-1 min-w-0 truncate font-bold ${sub ? 'text-sm' : ''}`}>{c.name}</span>
+      {num(c)}
+    </a>
   );
 
-  const link = (c: ProductCategory, extra = '') => {
-    const Icon = iconOf(c);
-    return (
-      <a key={c.id} href={hrefFor(c.slug)} onClick={onPick(c.slug)}
-        className={`flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold text-zinc-200 hover:bg-zinc-800 hover:text-[#FFC300] transition-colors ${extra}`}>
-        <span className="text-[#FFC300] shrink-0"><Icon size={17} className="shrink-0" /></span>
-        <span className="min-w-0 leading-tight">{c.name}{q && c.parent_id && <span className="block text-[11px] text-zinc-500 font-normal">{parentName(c)}</span>}</span>
-        {count(c)}
-      </a>
-    );
-  };
-
-  const results = q.length >= 2 && (
-    found.length
-      ? <div className={`grid gap-1 ${mobile ? '' : 'grid-cols-3'}`}>{found.map(c => link(c))}</div>
-      : <p className="text-sm text-zinc-500 py-6 text-center">Розділ не знайдено. Спробуйте пошук товарів на сторінці каталогу.</p>
-  );
-
-  // ---------- phone ----------
-  if (mobile) {
-    // rendered into <body>: inside the blurred header a "fixed" panel would be clipped to the header
-    return createPortal(
-      <div className="fixed inset-0 z-[190] bg-zinc-950 flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-200 md:hidden">
-        <div className="flex items-center gap-2 px-3 h-14 border-b border-zinc-800 shrink-0">
-          {root && !q
-            ? <button onClick={() => setActive(null)} className="h-10 w-10 flex items-center justify-center rounded-xl bg-zinc-900 text-white" aria-label="Назад"><ChevronLeft size={20} /></button>
-            : null}
-          <h2 className="flex-1 font-black uppercase tracking-wide text-white truncate">{root && !q ? root.name : 'Каталог товарів'}</h2>
-          <button onClick={onClose} className="h-10 w-10 flex items-center justify-center rounded-xl bg-zinc-900 text-white" aria-label="Закрити"><X size={20} /></button>
+  return createPortal(
+    <div className="fixed inset-0 z-[190]" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60 animate-in fade-in duration-200" />
+      <nav aria-label="Каталог товарів" onClick={e => e.stopPropagation()}
+        onTouchStart={e => { touchX.current = e.touches[0].clientX; }}
+        onTouchEnd={e => { if (touchX.current != null && e.changedTouches[0].clientX - touchX.current < -70) onClose(); touchX.current = null; }}
+        className="absolute left-0 top-0 bottom-0 w-[88%] max-w-md bg-zinc-900 border-r border-zinc-800 shadow-2xl flex flex-col animate-in slide-in-from-left duration-200">
+        <div className="flex items-center justify-between px-4 h-14 border-b border-zinc-800 shrink-0">
+          <h2 className="font-black uppercase text-white flex items-center gap-2"><LayoutGrid size={18} className="text-[#FFC300]" /> Каталог товарів</h2>
+          <button onClick={onClose} aria-label="Закрити каталог" className="w-10 h-10 rounded-xl flex items-center justify-center text-zinc-400 hover:text-white bg-zinc-800"><X size={20} /></button>
         </div>
-        <div className="p-3 shrink-0">{searchBox}</div>
-        <div className="flex-1 overflow-y-auto overscroll-contain px-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
-          {q.length >= 2 ? results : root ? (
-            <div className="flex flex-col gap-1">
-              {link(root, 'bg-[#FFC300]/10 !text-[#FFC300]')}
-              {kids.map(c => link(c))}
-            </div>
-          ) : (
-            <div className="flex flex-col gap-1">
-              {roots.map(r => {
-                const Icon = getCategoryIcon(r.icon);
-                const hasKids = getChildren(categories, r.id).length > 0;
-                return hasKids ? (
-                  <button key={r.id} onClick={() => setActive(r.id)} className="flex items-center gap-3 rounded-xl px-3 py-3.5 bg-zinc-900 text-left text-base font-black text-white active:bg-zinc-800">
-                    <span className="w-9 h-9 rounded-xl bg-[#FFC300]/10 text-[#FFC300] flex items-center justify-center shrink-0"><Icon size={20} /></span>
-                    <span className="flex-1">{r.name}</span>
-                    <span className="text-xs text-zinc-500 font-normal">{r.available}</span>
-                    <ChevronRight size={18} className="text-zinc-500" />
-                  </button>
-                ) : (
-                  <a key={r.id} href={hrefFor(r.slug)} onClick={onPick(r.slug)} className="flex items-center gap-3 rounded-xl px-3 py-3.5 bg-zinc-900 text-base font-black text-white">
-                    <span className="w-9 h-9 rounded-xl bg-[#FFC300]/10 text-[#FFC300] flex items-center justify-center shrink-0"><Icon size={20} /></span>
-                    <span className="flex-1">{r.name}</span><span className="text-xs text-zinc-500 font-normal">{r.available}</span>
-                  </a>
-                );
-              })}
-              <a href={hrefFor('akcii')} onClick={onPick('akcii')} className="flex items-center gap-3 rounded-xl px-3 py-3.5 bg-orange-500/10 text-base font-black text-orange-400">
-                <span className="w-9 h-9 rounded-xl bg-orange-500/15 flex items-center justify-center shrink-0"><Flame size={20} /></span> Хіти та акції
-              </a>
+        <div className="px-3 pt-3 pb-2 border-b border-zinc-800 space-y-2 shrink-0">
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Знайти розділ: фільтри, лампочки, масла…" aria-label="Знайти розділ"
+              className="w-full h-11 bg-black border border-zinc-700 rounded-xl pl-9 pr-9 text-sm text-white outline-none focus:border-[#FFC300] placeholder:text-zinc-600" />
+            {query && <button onClick={() => setQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-500 hover:text-white" aria-label="Очистити"><X size={16} /></button>}
+          </div>
+          {!q && (
+            <div className="flex gap-2 text-[11px] font-bold">
+              <button onClick={() => setOpen(new Set(roots.map(r => r.id)))} className="text-zinc-400 hover:text-white">Розгорнути все</button>
+              <span className="text-zinc-700">·</span>
+              <button onClick={() => setOpen(new Set())} className="text-zinc-400 hover:text-white">Згорнути все</button>
             </div>
           )}
         </div>
-      </div>,
-      document.body,
-    );
-  }
 
-  // ---------- computer ----------
-  return (
-    <div className="flex flex-col gap-3 normal-case">
-      {searchBox}
-      {q.length >= 2 ? <div className="max-h-[60vh] overflow-y-auto">{results}</div> : (
-        <div className="grid grid-cols-[230px_1fr] gap-4 min-h-[320px]">
-          <div className="flex flex-col gap-0.5 border-r border-zinc-800 pr-3">
-            {roots.map(r => {
-              const Icon = getCategoryIcon(r.icon);
-              const on = root?.id === r.id;
-              return (
-                <a key={r.id} href={hrefFor(r.slug)} onClick={onPick(r.slug)} onMouseEnter={() => setActive(r.id)} onFocus={() => setActive(r.id)}
-                  className={`flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-black transition-colors ${on ? 'bg-[#FFC300] text-black' : 'text-white hover:bg-zinc-800'}`}>
-                  <Icon size={18} className={`shrink-0 ${on ? '' : 'text-[#FFC300]'}`} />
-                  <span className="flex-1">{r.name}</span>
-                  <span className={`text-[11px] font-normal ${on ? 'text-black/60' : 'text-zinc-500'}`}>{r.available}</span>
-                  <ChevronRight size={14} className={on ? '' : 'text-zinc-600'} />
-                </a>
-              );
-            })}
-            <a href={hrefFor('akcii')} onClick={onPick('akcii')} className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-black text-orange-400 hover:bg-orange-500/10 mt-1">
-              <Flame size={18} /> Хіти та акції
-            </a>
-          </div>
-          <div className="min-w-0">
-            {root && (
-              <>
-                <a href={hrefFor(root.slug)} onClick={onPick(root.slug)} className="inline-flex items-center gap-1 text-lg font-black text-white hover:text-[#FFC300] mb-2">
-                  {root.name} <span className="text-sm text-zinc-500 font-normal">— усі товари ({root.available})</span> <ChevronRight size={16} />
-                </a>
-                {kids.length
-                  ? <div className="grid grid-cols-3 gap-x-1 gap-y-0.5 max-h-[60vh] overflow-y-auto pr-1">{kids.map(c => link(c, '!py-2'))}</div>
-                  : <p className="text-sm text-zinc-500">У цьому розділі немає підрозділів — відкрийте його повністю.</p>}
-              </>
-            )}
-          </div>
+        <div className="flex-1 overflow-y-auto overscroll-contain py-2">
+          {q.length >= 2 ? (
+            found.length ? found.map(c => (
+              <a key={c.id} href={hrefFor(c.slug)} onClick={onPick(c.slug)}
+                className={`flex items-center gap-3 px-4 py-2.5 ${on(c) ? 'bg-[#FFC300]/10 text-[#FFC300]' : 'text-zinc-200 hover:bg-zinc-800'}`}>
+                <Folder size={18} className="text-[#FFC300] shrink-0" />
+                <span className="flex-1 min-w-0"><span className="block text-sm font-bold truncate">{c.name}</span>{c.parent_id && <span className="block text-[10px] font-bold text-sky-400 truncate">{parentName(c)}</span>}</span>
+                {num(c)}
+              </a>
+            )) : <p className="px-4 py-6 text-sm text-zinc-500">Розділ не знайдено. Спробуйте пошук товарів на сторінці каталогу.</p>
+          ) : (
+            <>
+              <a href={hrefFor('akcii')} onClick={onPick('akcii')} className="flex items-center gap-3 px-4 py-3 text-orange-400 font-black hover:bg-orange-500/10">
+                <Flame size={20} /> <span className="flex-1">Хіти та акції</span>
+              </a>
+              {roots.map(r => {
+                const kids = kidsOf(r.id);
+                if (!kids.length) return leaf(r);
+                const opened = open.has(r.id);
+                return (
+                  <div key={r.id}>
+                    <div className={`flex items-center ${on(r) ? 'bg-[#FFC300]/10' : 'hover:bg-zinc-800'}`}>
+                      <button onClick={() => toggle(r.id)} aria-expanded={opened}
+                        className={`flex-1 min-w-0 flex items-center gap-3 pl-4 pr-2 py-3 text-left ${on(r) ? 'text-[#FFC300]' : 'text-white'}`}>
+                        {opened ? <FolderOpen size={20} className="text-[#FFC300] shrink-0" /> : <Folder size={20} className="text-[#FFC300] shrink-0" />}
+                        <span className="flex-1 font-bold truncate">{r.name}</span>
+                        {num(r)}
+                      </button>
+                      <button onClick={() => toggle(r.id)} aria-label={opened ? `Згорнути ${r.name}` : `Розгорнути ${r.name}`} className="w-11 h-11 flex items-center justify-center text-zinc-400 hover:text-white shrink-0">
+                        <ChevronRight size={18} className={`transition-transform ${opened ? 'rotate-90' : ''}`} />
+                      </button>
+                    </div>
+                    {opened && (
+                      <div className="ml-6 border-l border-zinc-700 mb-1">
+                        <a href={hrefFor(r.slug)} onClick={onPick(r.slug)} className="flex items-center gap-2.5 pl-3 pr-4 py-2 text-[#FFC300] hover:bg-zinc-800">
+                          <span className="w-3 border-t border-zinc-700 -ml-3 shrink-0" aria-hidden />
+                          <Package size={16} className="shrink-0" />
+                          <span className="flex-1 text-sm font-black">Усі товари розділу</span>
+                          {num(r)}
+                        </a>
+                        {kids.map(k => leaf(k, true))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </>
+          )}
         </div>
-      )}
-    </div>
+        {footer && <div className="border-t border-zinc-800 px-4 py-3 shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">{footer}</div>}
+      </nav>
+    </div>,
+    document.body,
   );
 };
 

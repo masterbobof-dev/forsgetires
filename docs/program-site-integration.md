@@ -168,3 +168,48 @@ Body: { "action": "<назва дії>", ...параметри }
 2. те саме масло іншого об'єму;
 3. та сама в'язкість і ті самі допуски інших фірм — що більше спільних допусків, то вище;
 4. просто та сама в'язкість.
+
+## Доповнення 5: форум і просування сайту (SEO) через шлюз
+
+Усе через той самий шлюз `site-api` з ключем `x-site-key`. Програма пише на форум **від імені магазину** («Форсаж (магазин)»).
+ШІ на самому сайті вимкнено: заголовки й описи для Google тепер пише ШІ-помічник програми.
+
+### Форум
+- `forum.sections.list` `{}` → `[{ id, parent_id, slug, name, description, sort_order }]`
+- `forum.sections.upsert` `{ id?, name, description?, parent_id?, sort_order?, slug? }` — створити або змінити розділ
+- `forum.sections.delete` `{ id }` — лише порожній розділ
+- `forum.topics.list` `{ section?, since?, search?, hidden?, from_shop?, limit?: 50, offset? }` → `[{ id, title, section, author_name, is_shop, is_pinned, is_locked, is_hidden, replies_count, views, last_reply_at, url }]`
+- `forum.topic.get` `{ id }` → тема з `body` і `posts: [{ id, parent_id, author_name, is_shop, body, images, is_hidden, created_at }]`
+- `forum.topics.create` `{ section (slug або id), title, body, images?: [url], pinned?, locked? }` → нова тема з `url`
+- `forum.topics.update` `{ id, title?, body?, images?, section?, pinned?, locked?, hidden? }`
+- `forum.topics.delete` `{ id }`
+- `forum.posts.create` `{ topic_id, body, parent_id?, images? }` — відповідь (з `parent_id` — відповідь на конкретне повідомлення)
+- `forum.posts.update` `{ id, body?, images?, hidden? }`, `forum.posts.delete` `{ id }`
+- `forum.stats` `{ days?: 7 }` → нові теми, відповіді, хто писав, нові покупці, популярні теми, найактивніші
+- `forum.photos.upload_url` `{ count?: 1, ext?: 'jpg' | 'webp' }` → `[{ upload_url, public_url }]`: фото стиснути в програмі (до ~1600 px), завантажити PUT-запитом на `upload_url`, у тему передати `public_url`.
+
+Текст теми — звичайний текст, абзаци через порожній рядок. Пишіть корисно і чесно, з прив'язкою до Синельникового там, де це доречно
+(адреса вул. Квітнева, 9, телефони). Не вигадуйте відгуків і діалогів від імені «покупців».
+
+### SEO товарів
+- `seo.products.missing` `{ limit?: 100, offset?, field?: 'description' }` → товари на сайті без заголовка/опису для Google:
+  `[{ program_product_id, title, brand, price, category, has_description, seo_title, seo_description }]`
+- `seo.products.set` `{ items: [{ program_product_id, seo_title?, seo_description?, seo_keywords?, description? }] }` (до 500 за раз) → `{ saved, not_on_site }`
+  - `seo_title` — до 60 символів: назва + головна перевага + «Синельникове/Форсаж» за потреби
+  - `seo_description` — 140–160 символів: що це, для чого, наявність/доставка
+  - `description` — текст опису на сторінці товару (без вигаданих характеристик)
+- Ще можна надсилати ці поля разом із товаром у `site_catalog_export` (`seo_title`, `seo_description`, `seo_keywords`) — синхронізація підхопить.
+- Також працює для одного товару: `products.site_fields.set` (є `seo_keywords`).
+
+### SEO розділів каталогу
+- `seo.categories.list` `{}` → `[{ id, name, slug, url, description, seo_title, seo_description, noindex, faq }]`
+- `seo.categories.set` `{ id, seo_title?, seo_description?, description? (текст під товарами), faq?: [{ q, a }] (до 20), noindex? }`
+
+### SEO сайту загалом
+- `seo.settings.get` `{}` → усі ключі `seo_*`
+- `seo.settings.set` `{ values: { seo_title, seo_description, seo_keywords, seo_image, seo_hours: "Mo-Su 08:00-19:00", seo_founded, seo_tpl_title, seo_tpl_desc, seo_gsc_verify ... } }` — лише ключі, що починаються з `seo_`
+- `seo.health` `{}` → оцінка: скільки товарів без заголовка/опису, дублі назв, задовгі заголовки, товари без фото й тексту, розділи без тексту
+- `seo.redirects.list` / `seo.redirects.set { from_path, to_path }` / `seo.redirects.delete { from_path }` — перенаправлення старих адрес
+
+### Статті й сторінки
+Як і раніше: `pages.list`, `pages.upsert`, `pages.delete` (статті та інфо-сторінки доставка/гарантія/про нас/контакти/FAQ).

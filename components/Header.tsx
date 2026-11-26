@@ -87,7 +87,9 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
 
   // Close mobile menu on resize to desktop
   useEffect(() => {
-    const handleResize = () => { if (window.innerWidth >= 768) setIsMenuOpen(false); };
+    // only a real width change (turning the phone); the address bar hiding on scroll changes just the height
+    let w = window.innerWidth;
+    const handleResize = () => { if (window.innerWidth !== w) { w = window.innerWidth; setIsMenuOpen(false); } };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -169,14 +171,6 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
 
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-6">
-            <button
-              onClick={() => onAccountClick?.()}
-              className={`flex items-center gap-2 text-sm font-bold transition-colors px-3 py-2 rounded-xl hover:bg-zinc-800/60 ${currentView === 'account' ? 'text-[#FFC300]' : 'text-zinc-300 hover:text-[#FFC300]'}`}
-              aria-label={isLoggedIn || isStaff ? 'Мій кабінет' : 'Увійти'}
-            >
-              <User size={18} /> {isLoggedIn || isStaff ? 'Кабінет' : 'Увійти'}
-            </button>
-
             <div ref={catalogRef} className="relative">
               <button
                 onClick={() => setCatalogOpen(o => !o)}
@@ -203,15 +197,22 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
 
             <button
               onClick={openCart}
-              className="relative flex items-center gap-2 bg-[#FFC300] hover:bg-white text-black font-black text-xs uppercase tracking-wide px-3 py-2 rounded-xl transition-colors active:scale-95"
+              className="relative flex items-center gap-2 bg-[#FFC300] hover:bg-white text-black font-black text-sm uppercase tracking-wide px-4 py-2.5 rounded-xl transition-colors active:scale-95"
               aria-label="Кошик"
             >
-              <ShoppingCart size={16} /> Кошик
+              <ShoppingCart size={20} /> Кошик
               {cartCount > 0 && (
                 <span key={cartCount} className="min-w-[18px] h-[18px] px-1 bg-black text-[#FFC300] text-[11px] font-black rounded-full flex items-center justify-center animate-in zoom-in duration-200">
                   {cartCount > 99 ? '99+' : cartCount}
                 </span>
               )}
+            </button>
+            <button
+              className="flex items-center gap-2 bg-zinc-900 border border-zinc-700 hover:border-[#FFC300] text-white px-3 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all"
+              onClick={() => setIsMenuOpen(prev => !prev)}
+              aria-label="Меню"
+            >
+              <span className="text-[#FFC300]">{isMenuOpen ? <X size={20} /> : <Menu size={20} />}</span> Меню
             </button>
           </nav>
 
@@ -220,12 +221,12 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
             {/* Cart badge — mobile */}
             <button
               onClick={() => { setIsMenuOpen(false); openCart(); }}
-              className="relative h-9 pl-2.5 pr-3 flex items-center gap-1.5 rounded-xl border-2 border-[#FFC300] text-[#FFC300] font-black text-[11px] uppercase active:scale-95 transition-transform"
+              className="relative h-10 pl-3 pr-3.5 flex items-center gap-1.5 rounded-xl bg-[#FFC300] text-black font-black text-xs uppercase active:scale-95 transition-transform"
               aria-label="Кошик"
             >
-              <ShoppingCart size={17} /> <span className="hidden min-[340px]:inline">Кошик</span>
+              <ShoppingCart size={20} /> <span className="hidden min-[340px]:inline">Кошик</span>
               {cartCount > 0 && (
-                <span key={`mob-${cartCount}`} className="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 bg-[#FFC300] text-black text-[10px] font-black rounded-full flex items-center justify-center animate-in zoom-in duration-200">
+                <span key={`mob-${cartCount}`} className="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 bg-black text-[#FFC300] border border-[#FFC300] text-[10px] font-black rounded-full flex items-center justify-center animate-in zoom-in duration-200">
                   {cartCount > 99 ? '99+' : cartCount}
                 </span>
               )}
@@ -255,11 +256,11 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
       {/* Mobile Dropdown */}
       {/* a tap anywhere outside the menu closes it (put into <body>: the header's blur would trap a fixed layer) */}
       {isMenuOpen && createPortal(
-        <div className="md:hidden fixed inset-0 z-40 bg-black/60" onClick={() => setIsMenuOpen(false)} aria-hidden="true" />,
+        <div className="fixed inset-0 z-40 bg-black/60" onClick={() => setIsMenuOpen(false)} aria-hidden="true" />,
         document.body,
       )}
       {isMenuOpen && (
-        <div className="md:hidden absolute top-full left-0 w-full max-h-[calc(100dvh-var(--header-h,64px))] overflow-y-auto overscroll-contain bg-zinc-900 border-b border-white/10 shadow-2xl animate-in slide-in-from-top-2 duration-200">
+        <div className="absolute top-full left-0 md:left-auto md:right-4 w-full md:w-[380px] md:rounded-b-2xl max-h-[calc(100dvh-var(--header-h,64px))] overflow-y-auto overscroll-contain bg-zinc-900 border-b border-white/10 shadow-2xl animate-in slide-in-from-top-2 duration-200">
           <div className="bg-black/50 px-4 py-3 border-b border-white/5 flex flex-wrap justify-center gap-x-5 gap-y-1">
             <a href={phones.link1} className="flex items-center gap-2 text-[#FFC300] font-bold">
               <Phone size={16} /> {phones.p1}

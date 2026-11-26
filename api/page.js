@@ -110,19 +110,30 @@ async function build(pathname, query) {
     };
   }
 
-  // --- forum ---
+  // --- forum: sections and subsections (forum_sections), topics, replies ---
   if (pathname === '/forum' || pathname.startsWith('/forum/')) {
-    const FORUM_CATS = { shyny: 'Шини', dysky: 'Диски', akb: 'Акумулятори', remont: 'Ремонт і обслуговування', masla: 'Масла і рідини', inshe: 'Інше' };
+    let sections = [];
+    try { sections = await rest('forum_sections?select=id,parent_id,slug,name,description&order=sort_order,id'); } catch (e) { if (e instanceof DbUnavailable) throw e; }
+    const sec = (slug) => sections.find((x) => x.slug === slug);
+    const kidsOf = (id) => sections.filter((x) => x.parent_id === id);
+    /** a section with its parent: for crumbs */
+    const chain = (slug) => { const a = sec(slug); if (!a) return []; const p = a.parent_id ? sections.find((x) => x.id === a.parent_id) : null; return p ? [p, a] : [a]; };
+    const secLink = (x) => link(`/forum?c=${x.slug}`, x.name);
     const m = pathname.match(/^\/forum\/(\d+)/);
     if (pathname === '/forum') {
-      const c = FORUM_CATS[query.c] ? String(query.c) : '';
-      const topics = await rest(`forum_topics?select=id,title,category,author_name,replies_count,last_reply_at&is_hidden=is.false${c ? `&category=eq.${c}` : ''}&order=is_pinned.desc,last_reply_at.desc&limit=100`);
-      const name = c ? `Форум: ${FORUM_CATS[c].toLowerCase()}` : 'Форум автомобілістів';
+      const c = sec(String(query.c || '')) ? String(query.c) : '';
+      const cur = c ? sec(c) : null;
+      const slugs = cur ? [cur.slug, ...kidsOf(cur.id).map((k) => k.slug)] : [];
+      const topics = await rest(`forum_topics?select=id,title,category,author_name,replies_count,last_reply_at&is_hidden=is.false${slugs.length ? `&category=in.(${slugs.join(',')})` : ''}&order=is_pinned.desc,last_reply_at.desc&limit=100`);
+      const name = cur ? `Форум: ${cur.name.toLowerCase()}` : 'Форум автомобілістів';
+      const tree = cur ? kidsOf(cur.id) : sections.filter((x) => !x.parent_id);
       return {
         title: `${name} — поради про шини, диски, акумулятори і ремонт | ${SHOP_NAME}`,
-        description: 'Питання і відповіді водіїв та фахівців магазину «Форсаж»: вибір шин і дисків, акумулятори, масла, ремонт і обслуговування авто.',
+        description: cur?.description ? `${cur.description}. Питання і відповіді водіїв та фахівців магазину «Форсаж».` : 'Питання і відповіді водіїв та фахівців магазину «Форсаж»: вибір шин і дисків, акумулятори, масла, ремонт і обслуговування авто.',
         url: SITE_URL + '/forum' + (c ? `?c=${c}` : ''),
-        content: `<h1>${esc(name)}</h1><ul>${Object.entries(FORUM_CATS).map(([k, v]) => `<li>${link(`/forum?c=${k}`, v)}</li>`).join('')}</ul>`
+        crumbs: [{ name: 'Форум', url: SITE_URL + '/forum' }, ...chain(c).map((x) => ({ name: x.name, url: `${SITE_URL}/forum?c=${x.slug}` }))],
+        content: `<nav>${link('/forum', 'Форум')}${chain(c).map((x) => ` › ${secLink(x)}`).join('')}</nav><h1>${esc(name)}</h1>`
+          + (tree.length ? `<ul>${tree.map((x) => `<li>${secLink(x)}${x.description ? ` — ${esc(x.description)}` : ''}${!cur && kidsOf(x.id).length ? `<ul>${kidsOf(x.id).map((k) => `<li>${secLink(k)}</li>`).join('')}</ul>` : ''}</li>`).join('')}</ul>` : '')
           + `<ul>${topics.map((t) => `<li>${link(forumPath(t), t.title)} — ${t.replies_count} відп.</li>`).join('')}</ul>${navBlock(cats)}`,
       };
     }
@@ -134,7 +145,7 @@ async function build(pathname, query) {
       title: `${t.title} — форум «${SHOP_NAME}»`,
       description: excerpt(t.body),
       url, image: t.images?.[0],
-      crumbs: [{ name: 'Форум', url: SITE_URL + '/forum' }, { name: FORUM_CATS[t.category] || 'Інше', url: `${SITE_URL}/forum?c=${t.category}` }],
+      crumbs: [{ name: 'Форум', url: SITE_URL + '/forum' }, ...chain(t.category).map((x) => ({ name: x.name, url: `${SITE_URL}/forum?c=${x.slug}` }))],
       ld: {
         '@context': 'https://schema.org', '@type': 'DiscussionForumPosting', headline: t.title, text: t.body.slice(0, 5000), url,
         datePublished: t.created_at, author: { '@type': t.is_shop ? 'Organization' : 'Person', name: t.author_name },
@@ -142,7 +153,7 @@ async function build(pathname, query) {
         interactionStatistic: { '@type': 'InteractionCounter', interactionType: 'https://schema.org/CommentAction', userInteractionCount: t.replies_count },
         comment: posts.slice(0, 50).map((p) => ({ '@type': 'Comment', text: p.body.slice(0, 2000), datePublished: p.created_at, author: { '@type': 'Person', name: p.author_name } })),
       },
-      content: `<nav>${link('/forum', 'Форум')} › ${link(`/forum?c=${t.category}`, FORUM_CATS[t.category] || 'Інше')}</nav><h1>${esc(t.title)}</h1>${paragraphs(t.body)}`
+      content: `<nav>${link('/forum', 'Форум')}${chain(t.category).map((x) => ` › ${secLink(x)}`).join('')}</nav><h1>${esc(t.title)}</h1>${paragraphs(t.body)}`
         + (posts.length ? `<h2>Відповіді</h2>${posts.map((p) => `<div><p><b>${esc(p.author_name)}</b></p>${paragraphs(p.body)}</div>`).join('')}` : '')
         + `<p>${link('/forum', 'Усі теми форуму')}</p>`,
     };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Lock, LogOut, ShieldAlert, UserCheck, Loader2, Menu, X as CloseIcon, ChevronRight, Settings as SettingsIcon, ShoppingBag, BarChart3, Globe, Megaphone, FileText, Database, FolderTree, AlertCircle, Sparkles, MessageSquare, Image as ImageIcon, Send } from 'lucide-react';
+import { Lock, LogOut, ShieldAlert, UserCheck, Loader2, Menu, X as CloseIcon, ChevronRight, Settings as SettingsIcon, ShoppingBag, BarChart3, Globe, Megaphone, FileText, Database, FolderTree, AlertCircle, Sparkles, MessageSquare, Image as ImageIcon, Send, MessagesSquare } from 'lucide-react';
 import SettingsTab from './admin/SettingsTab';
 import TyresTab from './admin/TyresTab';
 import OrdersTab from './admin/OrdersTab';
@@ -14,6 +14,7 @@ import ReviewsTab from './admin/ReviewsTab';
 import PhotoFinderTab from './admin/PhotoFinderTab';
 import SeoAiTab from './admin/SeoAiTab';
 import TelegramTab from './admin/TelegramTab';
+import ForumTab from './admin/ForumTab';
 import { supabase } from '../supabaseClient';
 
 interface AdminPanelProps {
@@ -216,7 +217,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
       categories: 'Категорії', reviews: 'Відгуки',
       tyres: 'Товари', orders: 'Замовлення', promo: 'Маркетинг', sync: 'API / Синхр.',
       seo: 'SEO', articles: 'Статті', settings: 'Налаштування', stats: 'Статистика',
-      ai: 'AI Помічник', photos: 'Фото ШІ', seoai: 'SEO ШІ', telegram: 'Telegram',
+      ai: 'AI Помічник', photos: 'Фото ШІ', seoai: 'SEO ШІ', telegram: 'Telegram', forum: 'Форум',
     };
     return labels[tab] ?? tab;
   };
@@ -226,15 +227,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
       categories: <FolderTree size={18} />, reviews: <MessageSquare size={18} />, tyres: <ShoppingBag size={18} />, orders: <FileText size={18} />,
       promo: <Megaphone size={18} />, sync: <Database size={18} />, seo: <Globe size={18} />,
       articles: <FileText size={18} />, settings: <SettingsIcon size={18} />, stats: <BarChart3 size={18} />,
-      ai: <Sparkles size={18} />, photos: <ImageIcon size={18} />, seoai: <Sparkles size={18} />, telegram: <Send size={18} />,
+      ai: <Sparkles size={18} />, photos: <ImageIcon size={18} />, seoai: <Sparkles size={18} />, telegram: <Send size={18} />, forum: <MessagesSquare size={18} />,
     };
     return icons[tab] ?? null;
   };
 
   const currentTabs = isAdmin
-    ? ['orders', 'tyres', 'photos', 'categories', 'reviews', 'ai', 'promo', 'seo', 'seoai', 'articles', 'stats', 'telegram', 'settings']
+    ? ['orders', 'tyres', 'photos', 'categories', 'reviews', 'ai', 'promo', 'seo', 'seoai', 'articles', 'forum', 'stats', 'telegram', 'settings']
     : isManager
-      ? ['orders', 'tyres', 'photos', 'categories', 'reviews', 'ai', 'promo', 'seo', 'seoai', 'articles', 'stats']
+      ? ['orders', 'tyres', 'photos', 'categories', 'reviews', 'ai', 'promo', 'seo', 'seoai', 'articles', 'forum', 'stats']
       : [];
 
   return (
@@ -348,6 +349,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
         {activeTab === 'orders' && <OrdersTab />}
         {activeTab === 'stats' && <StatsTab />}
         {activeTab === 'articles' && <ArticlesTab />}
+        {activeTab === 'forum' && <ForumTab />}
         {activeTab === 'seo' && <SeoTab />}
         {activeTab === 'promo' && <PromoTab />}
         {activeTab === 'ai' && <AiAssistantTab />}

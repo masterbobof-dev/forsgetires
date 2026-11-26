@@ -23,6 +23,8 @@ export const useTyresList = (categories: ProductCategory[], dbReady: boolean, sh
   const [filterSupplierId, setFilterSupplierId] = useState<string>('all');
   const [filterCategoryId, setFilterCategoryId] = useState<string>('all');
   const [showOnlyInStock, setShowOnlyInStock] = useState(false);
+  /** photo filter: all goods, only with a photo, only without */
+  const [filterPhoto, setFilterPhoto] = useState<'all' | 'with' | 'without'>('all');
 
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [categoryCounts, setCategoryCounts] = useState<BucketCounts>({ all: 0, car: 0, cargo: 0, truck: 0, agro: 0, suv: 0, hot: 0, out: 0, no_photo: 0 });
@@ -41,7 +43,7 @@ export const useTyresList = (categories: ProductCategory[], dbReady: boolean, sh
       setHasMoreTyres(true);
       fetchTyres(0, true); 
       fetchCategoryCounts();
-  }, [tyreCategoryTab, tyreSort, filterSupplierId, filterCategoryId, categories, enableStockQty, showOnlyInStock]);
+  }, [tyreCategoryTab, tyreSort, filterSupplierId, filterCategoryId, categories, enableStockQty, showOnlyInStock, filterPhoto]);
 
   const fetchSettings = async () => {
     try {
@@ -103,7 +105,8 @@ export const useTyresList = (categories: ProductCategory[], dbReady: boolean, sh
            const terms = cleanSearch.trim().split(/\s+/);
            terms.forEach(term => {
                const t = term.replace(/[()+,]/g, '');
-               if(t) query = query.or(`title.ilike.%${t}%,catalog_number.ilike.%${t}%,radius.ilike.%${t}%,product_number.ilike.%${t}%,manufacturer.ilike.%${t}%`);
+               // name, article, barcode (from the program), cross numbers, brand
+               if(t) query = query.or(`title.ilike.%${t}%,catalog_number.ilike.%${t}%,radius.ilike.%${t}%,product_number.ilike.%${t}%,search_numbers.ilike.%${t}%,manufacturer.ilike.%${t}%`);
            });
        }
 
@@ -121,12 +124,16 @@ export const useTyresList = (categories: ProductCategory[], dbReady: boolean, sh
            if (catFilter) query = query.or(catFilter);
        }
 
+       if (filterPhoto === 'with') query = query.not('image_url', 'is', null).neq('image_url', '');
+       else if (filterPhoto === 'without') query = query.or('image_url.is.null,image_url.eq.');
+
        query = query.order('in_stock', { ascending: false });
 
        if (tyreSort === 'newest') query = query.order('created_at', { ascending: false });
        else if (tyreSort === 'oldest') query = query.order('created_at', { ascending: true });
-       else if (tyreSort === 'price_asc') query = query.order('price', { ascending: true });
-       else if (tyreSort === 'price_desc') query = query.order('price', { ascending: false });
+       // by the number, not the text (text put 900 after 5000)
+       else if (tyreSort === 'price_asc') query = query.order('price_num', { ascending: true, nullsFirst: false });
+       else if (tyreSort === 'price_desc') query = query.order('price_num', { ascending: false, nullsFirst: false });
        else if (tyreSort === 'with_photo') query = query.order('image_url', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false });
        else if (tyreSort === 'no_photo') query = query.order('image_url', { ascending: true, nullsFirst: true }).order('created_at', { ascending: false });
 
@@ -193,6 +200,8 @@ export const useTyresList = (categories: ProductCategory[], dbReady: boolean, sh
       setFilterSupplierId('all');
       setTyreCategoryTab('all');
       setShowOnlyInStock(false);
+      setFilterPhoto('all');
+      setFilterCategoryId('all');
       setTyres([]);
       fetchTyres(0, true);
   };
@@ -217,6 +226,7 @@ export const useTyresList = (categories: ProductCategory[], dbReady: boolean, sh
     tyreSearch, setTyreSearch, tyreCategoryTab, setTyreCategoryTab, tyreSort, setTyreSort,
     filterSupplierId, setFilterSupplierId, filterCategoryId, setFilterCategoryId, showOnlyInStock, setShowOnlyInStock,
     suppliers, categoryCounts, enableStockQty,
+    filterPhoto, setFilterPhoto,
     selectedTyreIds, setSelectedTyreIds, toggleSelection, handleSelectAllOnPage, resetAllFilters, renderCategoryName,
   };
 };

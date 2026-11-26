@@ -19,7 +19,7 @@ const TyresToolbar: React.FC<TyresToolbarProps> = ({ list, categoryOptions, view
   const {
     renderCategoryName, resetAllFilters, setTyreCategoryTab, categoryCounts, suppliers, fetchTyres,
     filterSupplierId, setFilterSupplierId, filterCategoryId, setFilterCategoryId, tyreSort, setTyreSort,
-    tyreSearch, setTyreSearch, showOnlyInStock, setShowOnlyInStock,
+    tyreSearch, setTyreSearch, showOnlyInStock, setShowOnlyInStock, filterPhoto, setFilterPhoto,
   } = list;
   const [showCategoryMenu, setShowCategoryMenu] = useState(false);
   // Mobile UI state
@@ -74,8 +74,8 @@ const TyresToolbar: React.FC<TyresToolbarProps> = ({ list, categoryOptions, view
         </div>
 
         {/* Mobile Expandable Filters */}
-        <div className={`${showFilters ? 'flex' : 'hidden md:flex'} flex-col md:flex-row gap-2 animate-in slide-in-from-top-2 duration-200`}>
-            <div className="grid grid-cols-2 md:flex gap-2 w-full md:w-auto">
+        <div className={`${showFilters ? 'flex' : 'hidden md:flex'} flex-col 2xl:flex-row gap-2 animate-in slide-in-from-top-2 duration-200`}>
+            <div className="grid grid-cols-2 md:flex md:flex-wrap gap-2 w-full 2xl:w-auto md:[&>div]:min-w-[170px]">
                 <div className="relative">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"><Briefcase size={14}/></div>
                     <select value={filterSupplierId} onChange={(e) => setFilterSupplierId(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-2 py-2.5 outline-none focus:border-[#FFC300] text-[11px] font-bold appearance-none cursor-pointer text-white">
@@ -95,10 +95,19 @@ const TyresToolbar: React.FC<TyresToolbarProps> = ({ list, categoryOptions, view
                 <div className="relative">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"><ArrowUpDown size={14}/></div>
                     <select value={tyreSort} onChange={(e) => setTyreSort(e.target.value as any)} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-2 py-2.5 outline-none focus:border-[#FFC300] text-[11px] font-bold appearance-none cursor-pointer text-white">
-                        <option value="newest">Нові</option>
-                        <option value="oldest">Старі</option>
-                        <option value="price_asc">Дешеві</option>
-                        <option value="price_desc">Дорогі</option>
+                        <option value="newest">Спочатку нові</option>
+                        <option value="oldest">Спочатку старі</option>
+                        <option value="price_desc">Ціна: від більшої</option>
+                        <option value="price_asc">Ціна: від меншої</option>
+                    </select>
+                </div>
+
+                <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"><ImageIcon size={14}/></div>
+                    <select value={filterPhoto} onChange={(e) => setFilterPhoto(e.target.value as 'all' | 'with' | 'without')} aria-label="Фото" className={`w-full bg-zinc-900 border rounded-xl pl-9 pr-2 py-2.5 outline-none focus:border-[#FFC300] text-[11px] font-bold appearance-none cursor-pointer ${filterPhoto !== 'all' ? 'border-[#FFC300] text-[#FFC300]' : 'border-zinc-800 text-white'}`}>
+                        <option value="all">Фото: всі</option>
+                        <option value="with">З фото</option>
+                        <option value="without">Без фото</option>
                     </select>
                 </div>
             </div>
@@ -108,7 +117,7 @@ const TyresToolbar: React.FC<TyresToolbarProps> = ({ list, categoryOptions, view
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={16}/>
                     <input 
                         type="text" 
-                        placeholder="Пошук (Назва, Код)..." 
+                        placeholder="Пошук: назва, артикул, штрихкод…" 
                         value={tyreSearch} 
                         onChange={e => {
                             const val = e.target.value;

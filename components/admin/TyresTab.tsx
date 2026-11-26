@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Loader2, ArrowDown, RefreshCw, FilterX, CheckCircle } from 'lucide-react';
+import { Loader2, ArrowDown, RefreshCw, FilterX, CheckCircle, FolderOpen } from 'lucide-react';
 import AttributeImport from './AttributeImport';
 import { useCategories, getRootCategories, getChildren, ProductCategory } from '../../categories';
 // Blocks of the tab
 import TyresToolbar from './tyres/TyresToolbar';
+import CategorySidebar, { CategoriesEditor } from './tyres/CategorySidebar';
 import BulkActionsBar from './tyres/BulkActionsBar';
 import { TyresMobileList, TyresTable, TyresGrid } from './tyres/TyresViews';
 import TyreEditModal from './tyres/TyreEditModal';
@@ -25,7 +26,9 @@ import { exportProductsCsv } from './tyres/exportProducts';
 const TyresTab: React.FC = () => {
   const messages = useMessages();
   const { errorMessage, successMessage, setSuccessMessage, showError } = messages;
-  const { categories, dbReady } = useCategories({ includeInactive: true });
+  const { categories, dbReady, reload: reloadCategories } = useCategories({ includeInactive: true });
+  const [showCatEditor, setShowCatEditor] = useState(false);
+  const [totalsKey, setTotalsKey] = useState(0);
   const list = useTyresList(categories, dbReady, showError);
   const { tyres, loadingTyres, hasMoreTyres, tyrePage, totalCount, fetchTyres, resetAllFilters, selectedTyreIds } = list;
   const row = useRowActions(list, messages);
@@ -55,6 +58,16 @@ const TyresTab: React.FC = () => {
     <div className="animate-in fade-in pb-20">
         {errorMessage && <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[300] bg-red-900/90 text-white px-6 py-3 rounded-full border border-red-500 shadow-2xl">{errorMessage}</div>}
         {successMessage && <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[300] bg-green-600/90 text-white px-6 py-3 rounded-full border border-green-400 shadow-2xl flex items-center gap-2"><CheckCircle size={20} />{successMessage}</div>}
+
+        {showCatEditor && <CategoriesEditor onClose={() => { setShowCatEditor(false); reloadCategories(); setTotalsKey(k => k + 1); }} />}
+
+        <div className="flex gap-4 items-start">
+        <CategorySidebar categories={categories} active={list.filterCategoryId} onPick={list.setFilterCategoryId}
+          allCount={list.categoryCounts.all} onEdit={() => setShowCatEditor(true)} reloadKey={totalsKey} />
+        <div className="flex-1 min-w-0">
+
+        {/* phones and tablets: the sections editor (on wide screens it is in the left column) */}
+        <button onClick={() => setShowCatEditor(true)} className="2xl:hidden mb-3 h-10 px-3 rounded-xl border border-zinc-800 bg-zinc-900 text-xs font-bold text-zinc-300 flex items-center gap-2"><FolderOpen size={16} className="text-[#FFC300]" /> Редагувати категорії</button>
 
         {/* --- TOP TOOLBAR --- */}
         <TyresToolbar
@@ -94,6 +107,9 @@ const TyresTab: React.FC = () => {
         {hasMoreTyres && tyres.length > 0 && (
             <div className="mt-8 text-center pb-8"><button onClick={() => fetchTyres(tyrePage + 1)} disabled={loadingTyres} className="bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 px-8 rounded-xl border border-zinc-700 transition-all flex items-center gap-2 mx-auto disabled:opacity-50 min-w-[200px] justify-center">{loadingTyres ? <Loader2 className="animate-spin" /> : <ArrowDown size={20} />} Завантажити ще ({Math.max(0, totalCount - tyres.length)})</button></div>
         )}
+
+        </div>
+        </div>
 
         {/* Add/Edit Modal with PASTE Support */}
         {editor.showAddTyreModal && (

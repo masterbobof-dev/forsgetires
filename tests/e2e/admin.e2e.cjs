@@ -14,7 +14,7 @@ const HANKOOK = 'Hankook Kinergy Eco2 K435 205/55 R16 91H';
 const LAUFENN = 'Laufenn i FIT Ice LW71 205/55 R16 94T';
 
 /** rows of the products table (computers) */
-const rows = (page) => page.locator('div.min-w-\\[1000px\\] div.divide-y > div');
+const rows = (page) => page.locator('div.min-w-\\[1030px\\] div.divide-y > div');
 const rowOf = (page, title) => rows(page).filter({ has: page.locator('span.truncate.block', { hasText: title }) });
 const rowTitles = (page) => rows(page).locator('span.truncate.block').allTextContents();
 const expectRows = (page, n) => until(async () => assert.equal(await rows(page).count(), n, 'rows in the products table'));
@@ -36,8 +36,8 @@ const list = async (browser, url) => {
   const S = 'admin-list';
   const menuButton = page.locator('div.relative.flex-grow > button').first();
   const sectionSelect = page.locator('select').filter({ has: page.locator('option', { hasText: 'Всі категорії' }) });
-  const sortSelect = page.locator('select').filter({ has: page.locator('option', { hasText: 'Дешеві' }) });
-  const search = page.getByPlaceholder('Пошук (Назва, Код)...');
+  const sortSelect = page.locator('select').filter({ has: page.locator('option', { hasText: 'Ціна: від меншої' }) });
+  const search = page.getByPlaceholder('Пошук: назва, артикул, штрихкод…');
 
   await step(shop, S, 'products tab', async () => {
     await openProducts(shop, ui, url);
@@ -82,6 +82,7 @@ const list = async (browser, url) => {
 
   await step(shop, S, 'sort by price', async () => {
     await ui.select(sortSelect, 'price_asc');
+    // by the number (the list is filtered to batteries here): the cheapest battery first
     await until(async () => assert.equal((await rowTitles(page))[0], 'Акумулятор FORSE Asia 45Ah 330A R+'));
     await ui.select(sortSelect, 'newest');
     await until(async () => assert.equal((await rowTitles(page))[0], VARTA));
@@ -264,8 +265,8 @@ const editWindow = async (browser, url) => {
 
   await step(shop, S, 'product that is not from the program', async () => {
     await ui.select(sectionSelect, 'all');
-    await ui.fill(page.getByPlaceholder('Пошук (Назва, Код)...'), 'Belshina');
-    await ui.press(page.getByPlaceholder('Пошук (Назва, Код)...'), 'Enter');
+    await ui.fill(page.getByPlaceholder('Пошук: назва, артикул, штрихкод…'), 'Belshina');
+    await ui.press(page.getByPlaceholder('Пошук: назва, артикул, штрихкод…'), 'Enter');
     await expectRows(page, 1);
     await ui.click(rows(page).first().locator('button[title="Редагувати"]'));
     await until(async () => assert.ok(await win.getByRole('heading', { name: 'Редагування' }).isVisible()));

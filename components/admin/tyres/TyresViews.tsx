@@ -47,7 +47,11 @@ export const TyresMobileList: React.FC<TyresViewProps> = ({ list, row, onEdit, s
                                     {isSelected && <CheckSquare size={12}/>}
                                 </button>
                             </div>
-                            <h4 className="text-[11px] font-bold text-white line-clamp-1 mb-1 leading-tight">{tyre.title}</h4>
+                            <h4 onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(tyre.title); setSuccessMessage('Назву скопійовано'); setTimeout(() => setSuccessMessage(''), 1500); }}
+                              className="text-[12px] font-bold text-white line-clamp-2 mb-1 leading-tight active:text-[#FFC300]" title="Натисніть, щоб скопіювати назву">{tyre.title} <Copy size={10} className="inline text-zinc-600" /></h4>
+                            {(tyre.catalog_number || tyre.product_number) && (
+                              <p className="text-[10px] text-zinc-500 font-mono truncate mb-1">{tyre.catalog_number && <>Арт: {tyre.catalog_number}</>}{tyre.catalog_number && tyre.product_number && ' · '}{tyre.product_number && <>▮▮ {tyre.product_number}</>}</p>
+                            )}
                             <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-[10px]">
                                 <span className="text-[#FFC300] font-black">{tyre.price} грн</span>
                                 <span className="text-zinc-600">/</span>
@@ -99,9 +103,9 @@ export const TyresTable: React.FC<TyresViewProps> = ({ list, row, onEdit, onAiSe
   const openEditTyreModal = onEdit, handleOpenAiSearch = onAiSearch;
   return (
     <div className="hidden md:block bg-black border border-zinc-800 rounded-xl overflow-hidden shadow-xl overflow-x-auto no-scrollbar">
-        <div className="min-w-[1000px]">
+        <div className="min-w-[1030px]">
             {/* Header */}
-            <div className="grid grid-cols-[40px_100px_120px_40px_50px_80px_100px_minmax(0,1fr)_50px_80px_60px_120px] gap-2 p-3 bg-black border-b border-zinc-800 text-zinc-500 text-xs font-bold uppercase items-center sticky top-0 z-20">
+            <div className="grid grid-cols-[40px_100px_120px_40px_50px_80px_100px_minmax(0,1fr)_50px_80px_60px_150px] gap-2 p-3 bg-black border-b border-zinc-800 text-zinc-500 text-xs font-bold uppercase items-center sticky top-0 z-20">
                 <div className="flex justify-center">
                     <button onClick={handleSelectAllOnPage} className={`w-5 h-5 rounded border flex items-center justify-center ${tyres.every(t => selectedTyreIds.has(t.id)) ? 'bg-[#FFC300] border-[#FFC300] text-black' : 'border-zinc-600 hover:border-zinc-400'}`}>
                         {tyres.every(t => selectedTyreIds.has(t.id)) && <CheckSquare size={14}/>}
@@ -128,7 +132,7 @@ export const TyresTable: React.FC<TyresViewProps> = ({ list, row, onEdit, onAiSe
                     const isOutOfStock = tyre.in_stock === false;
 
                     return (
-                        <div key={tyre.id} className={`grid grid-cols-[40px_100px_120px_40px_50px_80px_100px_minmax(0,1fr)_50px_80px_60px_120px] gap-2 p-2 items-center hover:bg-zinc-900 transition-colors ${isSelected ? 'bg-zinc-800/50' : ''} ${isOutOfStock ? 'opacity-80' : ''}`}>
+                        <div key={tyre.id} className={`grid grid-cols-[40px_100px_120px_40px_50px_80px_100px_minmax(0,1fr)_50px_80px_60px_150px] gap-2 p-2 items-center hover:bg-zinc-900 transition-colors ${isSelected ? 'bg-zinc-800/50' : ''} ${isOutOfStock ? 'opacity-80' : ''}`}>
                             <div className="flex justify-center">
                                 <button onClick={() => toggleSelection(tyre.id)} className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-[#FFC300] border-[#FFC300] text-black' : 'border-zinc-600 hover:border-zinc-400'}`}>
                                     {isSelected && <CheckSquare size={12}/>}
@@ -144,7 +148,10 @@ export const TyresTable: React.FC<TyresViewProps> = ({ list, row, onEdit, onAiSe
                                     {isOutOfStock && <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none"><div className="bg-red-600 text-white text-[9px] px-2 py-0.5 font-bold uppercase -rotate-12 border border-red-900 shadow-md">Немає</div></div>}
                                 </div>
                             </div>
-                            <div className="text-xs text-zinc-400 font-mono truncate" title={tyre.catalog_number}>{tyre.catalog_number || '-'}</div>
+                            <div className="min-w-0">
+                                <div className="text-xs text-zinc-400 font-mono truncate" title={tyre.catalog_number}>{tyre.catalog_number || '-'}</div>
+                                {tyre.product_number && <div className="text-[10px] text-zinc-500 font-mono truncate" title={`Штрихкод: ${tyre.product_number}`}>▮▮ {tyre.product_number}</div>}
+                            </div>
                             <div className="flex justify-center"><input type="checkbox" checked={!!tyre.is_hot} onChange={() => handleQuickHotToggle(tyre)} className="w-5 h-5 accent-orange-600 cursor-pointer bg-zinc-800 border-zinc-600 rounded" /></div>
                             <div className="flex justify-center">
                                 {tyre.vehicle_type === 'cargo' ? <Truck size={16} className="text-blue-400"/> : tyre.vehicle_type === 'suv' ? <Mountain size={16} className="text-green-400"/> : tyre.vehicle_type === 'truck' ? <Truck size={16} className="text-blue-800"/> : tyre.vehicle_type === 'agro' ? <Tractor size={16} className="text-green-600"/> : <Car size={16} className="text-blue-300"/>}

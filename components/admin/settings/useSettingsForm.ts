@@ -46,7 +46,9 @@ export const useSettingsForm = (showMsg: ShowMsg) => {
       phone1: PHONE_NUMBER_1,
       phone2: PHONE_NUMBER_2,
       address: 'м. Синельникове, вул. Квітнева 9',
-      mapLink: MAP_DIRECT_LINK
+      mapLink: MAP_DIRECT_LINK,
+      /** days goods "on order" take to arrive, shown in the cart */
+      orderWait: '3–5',
   });
 
   const refreshAiKeyFlags = async () => {
@@ -92,6 +94,7 @@ export const useSettingsForm = (showMsg: ShowMsg) => {
                 if(r.key === 'contact_phone2') newContacts.phone2 = r.value;
                 if(r.key === 'contact_address') newContacts.address = r.value;
                 if(r.key === 'contact_map_link') newContacts.mapLink = r.value;
+                if(r.key === 'contact_order_wait') newContacts.orderWait = r.value;
             });
             setContactSettings(newContacts);
         }
@@ -130,6 +133,7 @@ export const useSettingsForm = (showMsg: ShowMsg) => {
         await supabase.from('settings').upsert({ key: 'contact_phone2', value: contactSettings.phone2 });
         await supabase.from('settings').upsert({ key: 'contact_address', value: contactSettings.address });
         await supabase.from('settings').upsert({ key: 'contact_map_link', value: contactSettings.mapLink });
+        await supabase.from('settings').upsert({ key: 'contact_order_wait', value: contactSettings.orderWait.trim() || '3–5' });
 
         const aiPayload: Record<string, string> = {};
         if (geminiKey.trim()) aiPayload.gemini = geminiKey.trim();

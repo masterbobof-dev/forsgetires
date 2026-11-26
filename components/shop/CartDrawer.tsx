@@ -36,14 +36,16 @@ interface CartDrawerProps {
   orderError: string;
   setOrderSuccess: (v: boolean) => void;
   formatPrice: (p: string | undefined) => string;
+  /** days goods "on order" take to arrive, e.g. "3–5" */
+  orderWait?: string;
 }
 
 const priceOf = (i: CartItem) => (i.on_order ? 0 : parseFloat(String(i.price || '0').replace(/[^\d.]/g, '')) || 0);
 const money = (n: number) => n.toLocaleString('uk-UA', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
 /** Availability of a cart line, like on the product card. */
-const Stock: React.FC<{ item: CartItem }> = ({ item }) => {
-  if (item.on_order) return <span className="inline-flex items-center gap-1 text-[11px] font-bold text-orange-400 bg-orange-500/10 border border-orange-500/30 rounded-lg px-2 py-1">Під замовлення · ціну уточнимо</span>;
+const Stock: React.FC<{ item: CartItem; wait?: string }> = ({ item, wait }) => {
+  if (item.on_order) return <span className="inline-flex items-center gap-1 text-[11px] font-bold text-orange-400 bg-orange-500/10 border border-orange-500/30 rounded-lg px-2 py-1">Під замовлення · очікування {wait || '3–5'} дн.</span>;
   const q = Number(item.stock_quantity || 0);
   return (
     <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-2 py-1">
@@ -137,7 +139,7 @@ const CartDrawer: React.FC<CartDrawerProps> = (props) => {
                             {item.catalog_number && <span>{item.manufacturer ? ' · ' : ''}Арт: {item.catalog_number}</span>}
                           </p>
                           <h4 className="text-white font-bold text-sm leading-snug mt-0.5 line-clamp-3">{item.title}</h4>
-                          <div className="mt-2"><Stock item={item} /></div>
+                          <div className="mt-2"><Stock item={item} wait={props.orderWait} /></div>
                         </div>
                       </div>
                       <div className="flex items-center justify-between mt-3 pl-9">

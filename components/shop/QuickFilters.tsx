@@ -1,3 +1,4 @@
+import { attrRangeLabel } from './shopUtils';
 import React from 'react';
 import type { FilterPreset } from '../../productAttributes';
 import type { FilterOptions } from './FilterToolbar';
@@ -36,6 +37,7 @@ const QuickFilters: React.FC<QuickFiltersProps> = ({ showTyreFilters, preset, at
               <select key={f.key} aria-label={f.label} value={val} onChange={e => onAttrChange(f.key, e.target.value)}
                 className={`w-full min-w-0 bg-zinc-900 border rounded-xl px-3 py-3 font-bold text-sm outline-none focus:border-[#FFC300] ${val ? 'border-[#FFC300] text-[#FFC300]' : 'border-zinc-800 text-white'}`}>
                 <option value="">{f.label}</option>
+                {attrRangeLabel(val, f.unit) && <option value={val}>{attrRangeLabel(val, f.unit)}</option>}
                 {values.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             );

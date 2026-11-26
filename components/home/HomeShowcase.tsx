@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import NoPhoto from '../shop/NoPhoto';
-import { Search, Truck, Store, Wallet, ShieldCheck, Flame, ChevronRight, ChevronLeft, BookOpen, HelpCircle, Percent } from 'lucide-react';
+import { Search, Truck, Store, Wallet, ShieldCheck, Flame, ChevronRight, ChevronLeft, BookOpen, HelpCircle, Percent, MessagesSquare, MessageSquare, Plus } from 'lucide-react';
 import { useSitePromos, fetchBanners, fetchHomeBlocks, SiteBanner, HomeBlockType, DEFAULT_HOME_BLOCKS } from '../../sitePromos';
 import { navigateTo } from '../../navigation';
 import { supabase } from '../../supabaseClient';
@@ -11,6 +11,8 @@ import { linkClick } from '../../navigation';
 import { Stars } from '../shop/ProductReviews';
 import SizeGuideModal from './SizeGuideModal';
 import VehiclePicker from './VehiclePicker';
+import { forumPath } from '../../forum';
+import { useShopSettings } from '../shop/hooks/useShopSettings';
 import { getRecent } from '../../recentlyViewed';
 
 interface Props {
@@ -40,6 +42,8 @@ const selectCls = 'w-full bg-black border border-zinc-700 rounded-xl px-3 py-3 t
 const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPickCategory, onSizeSearch, onAttrSearch, onSearchText, onOpenProduct, formatPrice, prepare }) => {
   const batteryRoot = categories.find(c => !c.parent_id && c.filter_preset === 'batteries');
   const wheelRoot = categories.find(c => !c.parent_id && c.filter_preset === 'wheels');
+  const hubcaps = categories.find(c => c.slug === 'dysky-kovpaky');
+  const { shopPhone, shopPhoneLink } = useShopSettings();
   const [w, setW] = useState('');
   const [h, setH] = useState('');
   const [r, setR] = useState('');
@@ -49,6 +53,7 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
   const [hot, setHot] = useState<TyreProduct[]>([]);
   const [hotLoaded, setHotLoaded] = useState(false);
   const [articles, setArticles] = useState<Article[]>([]);
+  const [forumTopics, setForumTopics] = useState<{ id: number; title: string; replies_count: number; last_reply_at: string; is_shop: boolean }[]>([]);
   const [reviews, setReviews] = useState<{ id: number; author_name: string; rating: number; body: string | null; tyres?: { title: string } | null }[]>([]);
   const roots = getRootCategories(categories);
   const [blocks, setBlocks] = useState<{ type: HomeBlockType; title?: string }[]>(DEFAULT_HOME_BLOCKS.map(type => ({ type })));
@@ -88,6 +93,8 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
       setHotLoaded(true);
     })();
     fetchArticles(3).then(setArticles);
+    supabase.from('forum_topics').select('id, title, replies_count, last_reply_at, is_shop').eq('is_hidden', false)
+      .order('last_reply_at', { ascending: false }).limit(4).then(({ data }) => setForumTopics((data as any) || []));
     supabase.from('product_reviews').select('id, author_name, rating, body, tyres(title)').eq('approved', true).order('created_at', { ascending: false }).limit(3)
       .then(({ data }) => setReviews((data as any) || []));
   }, []);
@@ -103,7 +110,9 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
     banners: banners.length > 0 ? <BannerSlider banners={banners} linkTo={linkTo} /> : null,
     car_search: <VehiclePicker onTyreSize={onSearchText ? (w, h, r) => onSearchText(`${w}/${h} ${r}`) : onSizeSearch}
       onBattery={batteryRoot && onAttrSearch ? (attrs) => onAttrSearch(batteryRoot.id, attrs) : undefined}
-      onWheels={wheelRoot && onAttrSearch ? (attrs) => onAttrSearch(wheelRoot.id, attrs) : undefined} />,
+      onWheels={wheelRoot && onAttrSearch ? (attrs) => onAttrSearch(wheelRoot.id, attrs) : undefined}
+      onHubcaps={hubcaps && onAttrSearch ? () => onAttrSearch(hubcaps.id, {}) : undefined}
+      phone={shopPhone} phoneLink={shopPhoneLink} />,
     size_search: categories.some(c => c.kind === 'tyre') && <>
       {/* Quick size search */}
       <section className="bg-gradient-to-br from-zinc-900 to-zinc-950 border border-zinc-800 rounded-3xl p-4 md:p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -319,6 +328,26 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
       )}
 
       </>,
+    forum: forumTopics.length > 0 && (
+      <section>
+        <div className="flex items-center justify-between mb-3 md:mb-4">
+          <h2 className="text-lg md:text-2xl font-black uppercase tracking-tight flex items-center gap-2"><MessagesSquare className="text-[#FFC300]" /> Останнє на форумі</h2>
+          <a href="/forum" onClick={linkClick('/forum')} className="text-sm font-bold text-[#FFC300] hover:underline flex items-center">Усі теми <ChevronRight size={16} /></a>
+        </div>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl divide-y divide-zinc-800 overflow-hidden">
+          {forumTopics.map(t => {
+            const href = forumPath(t);
+            return (
+              <a key={t.id} href={href} onClick={linkClick(href)} className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/60 transition-colors">
+                <span className="flex-1 min-w-0 font-bold text-white text-sm md:text-base truncate">{t.title}</span>
+                <span className="text-xs text-zinc-500 shrink-0 flex items-center gap-1"><MessageSquare size={13} /> {t.replies_count}</span>
+              </a>
+            );
+          })}
+        </div>
+        <a href="/forum/new" onClick={linkClick('/forum/new')} className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-zinc-300 hover:text-white"><Plus size={16} className="text-[#FFC300]" /> Поставити своє питання</a>
+      </section>
+    ),
   };
 
   return (

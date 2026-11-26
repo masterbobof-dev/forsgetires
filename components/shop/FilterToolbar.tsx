@@ -1,3 +1,4 @@
+import { attrRangeLabel } from './shopUtils';
 import React, { useEffect, useState } from 'react';
 import SearchSuggest, { SuggestHandlers } from './SearchSuggest';
 import { Search, X, SlidersHorizontal, Eye, EyeOff, ArrowUpDown, Check } from 'lucide-react';
@@ -153,6 +154,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ state, set, setAttr, o
             <label className={labelCls}>{field.label}</label>
             <select value={value} onChange={e => setAttr(field.key, e.target.value)} className={selectCls}>
               <option value="">Будь-яка</option>
+              {attrRangeLabel(value, field.unit) && <option value={value}>{attrRangeLabel(value, field.unit)}</option>}
               {values.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>

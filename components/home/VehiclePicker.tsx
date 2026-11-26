@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Car, Battery, Disc3, CircleDot, Phone, Search, Info, X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
+import { parseAttrRange } from '../shop/shopUtils';
 
 export interface Vehicle {
   id: number; make: string; model: string; years: string; tyres: string[];
@@ -10,6 +11,12 @@ export interface Vehicle {
 }
 
 const SAVED_KEY = 'forsage_my_car';
+/** Battery filter for a car: its polarity and capacity from the recommended one up to a bit bigger (smaller is not fit). */
+const batteryAttrs = (car: Vehicle): Record<string, string> => ({
+  ...(car.battery_polarity ? { polarity: car.battery_polarity } : {}),
+  ...(car.battery_ah_min ? { capacity: `${car.battery_ah_min}..${(car.battery_ah_max || car.battery_ah_min) + 10}` } : {}),
+});
+const countBadge = (n: number | null | undefined) => n == null ? '' : ` (${n})`;
 const norm = (s: string) => s.toLowerCase().replace(/[^a-zа-яіїєґ0-9]+/gi, ' ').trim();
 
 const selectCls = 'w-full bg-black border border-zinc-700 rounded-xl px-3 py-3 text-white font-bold outline-none focus:border-[#FFC300] disabled:opacity-40';
@@ -25,7 +32,10 @@ const VehiclePicker: React.FC<{
   onTyreSize: (w: string, h: string, r: string) => void;
   onBattery?: (attrs: Record<string, string>) => void;
   onWheels?: (attrs: Record<string, string>) => void;
-}> = ({ onTyreSize, onBattery, onWheels }) => {
+  /** hubcaps section (when there are no wheels to offer) */
+  onHubcaps?: () => void;
+  phone?: string; phoneLink?: string;
+}> = ({ onTyreSize, onBattery, onWheels, onHubcaps, phone, phoneLink }) => {
   const [list, setList] = useState<Vehicle[]>([]);
   const [make, setMake] = useState('');
   const [id, setId] = useState<number | ''>('');
@@ -57,6 +67,30 @@ const VehiclePicker: React.FC<{
     if (!words.length) return [];
     return list.filter(v => { const t = norm(`${v.make} ${v.model}`); return words.every(w => t.includes(w)); }).slice(0, 8);
   }, [q, list]);
+  /** how many goods each button would show: sizes, batteries, wheels (null = still counting) */
+  const [counts, setCounts] = useState<{ tyres: Record<string, { all: number; stock: number }>; battery: number | null; wheels: number | null } | null>(null);
+  useEffect(() => {
+    if (!car) { setCounts(null); return; }
+    let live = true;
+    setCounts(null);
+    const visible = () => supabase.from('tyres').select('id', { count: 'exact', head: true }).or('in_stock.neq.false,program_product_id.is.null');
+    const tyreCounts = Promise.all(car.tyres.map(async size => {
+      const [{ count: all }, { count: stock }] = await Promise.all([
+        visible().ilike('title', `%${size}%`),
+        visible().ilike('title', `%${size}%`).eq('on_order', false).neq('in_stock', false),
+      ]);
+      return [size, { all: all || 0, stock: stock || 0 }] as const;
+    }));
+    const batt = batteryAttrs(car);
+    let bq = visible().eq('on_order', false).neq('in_stock', false).in('attributes->>capacity', parseAttrRange(batt.capacity || '')?.values || ['-']);
+    if (batt.polarity) bq = bq.eq('attributes->>polarity', batt.polarity);
+    const wq = car.wheel_pcd ? visible().eq('attributes->>pcd', car.wheel_pcd) : null;
+    Promise.all([tyreCounts, batt.capacity ? bq : Promise.resolve({ count: null }), wq || Promise.resolve({ count: null })]).then(([t, b, w]) => {
+      if (live) setCounts({ tyres: Object.fromEntries(t), battery: b.count ?? null, wheels: w.count ?? null });
+    }, () => undefined);
+    return () => { live = false; };
+  }, [car?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const batteryText = car && car.battery_ah_min
     ? <>Акумулятор: <b className="text-white">{car.battery_ah_min === car.battery_ah_max ? car.battery_ah_min : `${car.battery_ah_min}–${car.battery_ah_max}`} Ah</b>
       {car.battery_polarity ? `, ${car.battery_polarity === 'right' ? 'плюс праворуч' : 'плюс ліворуч'}` : ''}
@@ -98,9 +132,13 @@ const VehiclePicker: React.FC<{
               <div className="flex flex-wrap gap-2">
                 {car.tyres.map(s => {
                   const p = splitTyreSize(s);
+                  const c = counts?.tyres[s];
                   return (
                     <button key={s} disabled={!p} onClick={() => p && onTyreSize(...p)}
-                      className="px-3 h-10 rounded-xl bg-[#FFC300] text-black font-black text-sm hover:bg-white transition-colors disabled:bg-zinc-800 disabled:text-zinc-400">{s}</button>
+                      className={`px-3 min-h-10 py-1.5 rounded-xl font-black text-sm transition-colors text-left leading-tight ${c && c.all === 0 ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700' : 'bg-[#FFC300] text-black hover:bg-white'}`}>
+                      {s}
+                      {c && <span className="block text-[10px] font-bold opacity-80">{c.stock ? `${c.stock} в наявності` : c.all ? `${c.all} під замовлення` : 'під замовлення'}</span>}
+                    </button>
                   );
                 })}
               </div>
@@ -112,8 +150,12 @@ const VehiclePicker: React.FC<{
               <span>{batteryText}</span>
             </p>
             {onBattery && (
-              <button onClick={() => onBattery(car.battery_polarity ? { polarity: car.battery_polarity } : {})}
-                className="h-9 px-3 rounded-lg border border-[#FFC300]/50 text-[#FFC300] font-bold text-xs hover:bg-[#FFC300]/10">Показати акумулятори</button>
+              counts?.battery === 0 && phoneLink ? (
+                <a href={phoneLink} className="h-9 px-3 rounded-lg border border-[#FFC300]/50 text-[#FFC300] font-bold text-xs hover:bg-[#FFC300]/10 flex items-center gap-1.5"><Phone size={13} /> Підберемо телефоном</a>
+              ) : (
+                <button onClick={() => onBattery(batteryAttrs(car))}
+                  className="h-9 px-3 rounded-lg border border-[#FFC300]/50 text-[#FFC300] font-bold text-xs hover:bg-[#FFC300]/10">Показати акумулятори{countBadge(car.battery_ah_min ? counts?.battery : null)}</button>
+              )
             )}
           </div>
           {car.wheel_pcd && (
@@ -122,9 +164,15 @@ const VehiclePicker: React.FC<{
                 <Disc3 size={18} className="text-[#FFC300] shrink-0" />
                 <span>Диски: кріплення <b className="text-white">{car.wheel_pcd}</b>{car.wheel_dia ? <>, центральний отвір <b className="text-white">{car.wheel_dia}</b> мм</> : null}</span>
               </p>
-              {onWheels && (
-                <button onClick={() => onWheels({ pcd: car.wheel_pcd! })} className="h-9 px-3 rounded-lg border border-[#FFC300]/50 text-[#FFC300] font-bold text-xs hover:bg-[#FFC300]/10">Показати диски</button>
-              )}
+              {counts?.wheels ? (
+                onWheels && <button onClick={() => onWheels({ pcd: car.wheel_pcd! })} className="h-9 px-3 rounded-lg border border-[#FFC300]/50 text-[#FFC300] font-bold text-xs hover:bg-[#FFC300]/10">Показати диски ({counts.wheels})</button>
+              ) : counts ? (
+                <div className="w-full flex flex-wrap items-center gap-2 pt-1">
+                  <span className="text-xs text-zinc-400 flex-1 min-w-[180px]">Таких дисків зараз немає на сайті — привеземо під замовлення.</span>
+                  {phoneLink && <a href={phoneLink} className="h-9 px-3 rounded-lg border border-[#FFC300]/50 text-[#FFC300] font-bold text-xs hover:bg-[#FFC300]/10 flex items-center gap-1.5"><Phone size={13} /> {phone || 'Зателефонувати'}</a>}
+                  {onHubcaps && <button onClick={onHubcaps} className="h-9 px-3 rounded-lg border border-zinc-700 text-zinc-300 font-bold text-xs hover:border-zinc-500">Ковпаки на колеса</button>}
+                </div>
+              ) : null}
             </div>
           )}
           {car.note && <p className="text-xs text-zinc-300 flex items-start gap-1.5"><Info size={14} className="text-[#FFC300] shrink-0 mt-0.5" /> {car.note}</p>}

@@ -1,0 +1,2 @@
+-- Applied through the Supabase tools (migration forum_after_insert_fix): a customer's new topic failed because the
+-- Telegram message read a field of an unnamed record; now plain variables, and a Telegram error never blocks saving.

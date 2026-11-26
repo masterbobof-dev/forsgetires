@@ -1,3 +1,4 @@
+import { parseAttrRange } from '../shopUtils';
 import { useEffect, useState } from 'react';
 import { supabase } from '../../../supabaseClient';
 import type { TyreProduct } from '../../../types';
@@ -52,7 +53,12 @@ export const useProductList = (q: ProductListParams) => {
       // smart search: sizes in any format, several words, Cyrillic brand names
       for (const f of searchFilters(parseSearch(q.debouncedSearch))) query = query.or(f);
       for (const [key, value] of Object.entries(q.attrFilters)) {
-        if (value) query = key === 'approval' ? query.contains('auto_approvals', [value]) : query.eq(`attributes->>${key}`, value);
+        if (!value) continue;
+        const range = parseAttrRange(value);
+        query = key === 'approval' ? query.contains('auto_approvals', [value])
+          // "60..82" (from the car picker): any whole value in between, e.g. battery capacity
+          : range ? query.in(`attributes->>${key}`, range.values)
+          : query.eq(`attributes->>${key}`, value);
       }
       if (q.filterBrand) query = query.eq('manufacturer', q.filterBrand);
       if (q.filterRadius) query = query.eq('radius', q.filterRadius);

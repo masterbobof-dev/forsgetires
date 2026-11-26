@@ -29,6 +29,10 @@ export default async function handler(req, res) {
     let topics = [];
     try { topics = await rest('forum_topics?select=id,title,last_reply_at&is_hidden=is.false&order=id'); } catch (e) { if (e instanceof DbUnavailable) throw e; /* no forum */ }
     for (const t of topics) xml += urlTag(SITE_URL + forumPath(t), { lastmod: day(t.last_reply_at), changefreq: 'weekly', priority: '0.5' });
+    // forum sections and subsections (/forum?c=...)
+    let fsec = [];
+    try { fsec = await rest('forum_sections?select=slug&order=sort_order'); } catch (e) { if (e instanceof DbUnavailable) throw e; }
+    for (const f of fsec) xml += urlTag(`${SITE_URL}/forum?c=${encodeURIComponent(f.slug)}`, { changefreq: 'weekly', priority: '0.4' });
     xml += urlTag(`${SITE_URL}/oferta`, { changefreq: 'yearly', priority: '0.2' });
     xml += urlTag(`${SITE_URL}/privacy`, { changefreq: 'yearly', priority: '0.2' });
     for (const p of products) xml += urlTag(SITE_URL + productPath(p), { lastmod: day(p.created_at), changefreq: 'weekly', priority: '0.7' });

@@ -128,6 +128,12 @@ const rpc = {
   tyre_cost: ({ p_id }) => (p_id === 1002 ? 2100 : null),
   is_staff: (_args, fake) => !!fake.user && fake.user.email === 'owner@test.ua',
   is_admin: (_args, fake) => !!fake.user && fake.user.email === 'owner@test.ua',
+  // Admin → Товари: goods per section (all of them)
+  admin_category_totals: (_args, fake) => {
+    const by = {};
+    for (const p of fake.tables.tyres) if (p.category_id != null) by[p.category_id] = (by[p.category_id] || 0) + 1;
+    return Object.entries(by).map(([category_id, n]) => ({ category_id: Number(category_id), n }));
+  },
 };
 
 /** edge functions the admin panel calls */

@@ -98,7 +98,7 @@ const keys = async (browser, url) => {
       'hide_tire_service=false',
       // the manager got a new password, so the e-mail goes through the server function, not into the table
       'ai_openai_base_url=https://api.openai.com/v1', 'ai_openai_model=gpt-4o', 'ai_custom_base_url=https://api.custom.example/v1', 'ai_custom_model=vendor/model-x',
-      'contact_phone1=050 111 22 33', 'contact_phone2=063 582 38 58', 'contact_address=м. Дніпро, вул. Тестова 1', 'contact_map_link=https://maps.example/forsage', 'contact_order_wait=3–5',
+      'contact_phone1=050 111 22 33', 'contact_phone2=063 582 38 58', 'contact_address=м. Дніпро, вул. Тестова 1', 'contact_map_link=https://maps.example/forsage',
     ]);
     assert.deepEqual(fake.managerCalls, [{ m_email: 'manager@test.ua', m_password: 'Secret123' }]);
     assert.deepEqual(fake.keyCalls, [
@@ -123,7 +123,7 @@ const keys = async (browser, url) => {
     fake.inserted.settings = [];
     await ui.click(save);
     await toast(page, 'Всі налаштування збережено!');
-    assert.equal(saved(fake).length, 16);
+    assert.equal(saved(fake).length, 15);
     assert.ok(saved(fake).includes('manager_email=manager@test.ua'), 'without a new password the e-mail is saved into the table');
     assert.equal(fake.managerCalls.length, 1, 'the manager password is not sent again');
     assert.deepEqual(fake.keyCalls.at(-2), { customUrl: 'https://api.custom.example/v1', customModel: 'vendor/model-x' });

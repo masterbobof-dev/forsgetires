@@ -9,7 +9,7 @@ import {
   deleteTopic, deletePost, fetchOwnIds, rootSections, childSections, sectionChain, sectionSlugs, sectionName,
   type ForumSection, type ForumTopic, type ForumPost,
 } from '../../forum';
-import { Body, Photos, Author, MessageForm, when, whenShort } from './forumParts';
+import { Body, Photos, Author, Avatar, AvatarPicker, MessageForm, when, whenShort } from './forumParts';
 
 const sectionHref = (slug: string) => `/forum?c=${slug}`;
 
@@ -59,7 +59,7 @@ const TopicRow: React.FC<{ t: ForumTopic; all: ForumSection[]; showSection?: boo
       </div>
       <h3 className="text-base md:text-lg font-bold text-white leading-snug break-words">{t.title}</h3>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-zinc-500">
-        <span className={t.is_shop ? 'text-[#FFC300] font-bold' : ''}>{t.author_name}</span>
+        <span className={`flex items-center gap-1.5 ${t.is_shop ? 'text-[#FFC300] font-bold' : ''}`}><Avatar name={t.author_name} avatar={t.author_avatar} shop={t.is_shop} size={20} />{t.author_name}</span>
         <span className="flex items-center gap-1"><MessageSquare size={13} /> {t.replies_count}</span>
         <span className="flex items-center gap-1"><Eye size={13} /> {t.views}</span>
         <span>{when(t.last_reply_at)}</span>
@@ -186,7 +186,7 @@ const ForumPage: React.FC<{ auth: AuthState; isStaff: boolean; onBack: () => voi
               {topic.is_hidden && <span className="flex items-center gap-1 text-red-400"><EyeOff size={12} /> Приховано</span>}
             </div>
             <h1 className="text-xl md:text-3xl font-black text-white mb-3 break-words">{topic.title}</h1>
-            <Author name={topic.author_name} shop={topic.is_shop} date={topic.created_at} edited={topic.edited_at} />
+            <Author name={topic.author_name} shop={topic.is_shop} date={topic.created_at} edited={topic.edited_at} avatar={topic.author_avatar} />
             <div className="mt-4"><Body text={topic.body} /></div>
             <Photos urls={topic.images} />
             {(isStaff || own.topic) && (
@@ -208,7 +208,7 @@ const ForumPage: React.FC<{ auth: AuthState; isStaff: boolean; onBack: () => voi
             onSubmit={v => act(() => updatePost(p.id, { body: v.body, images: v.images }))} />
         ) : (
           <div key={p.id} className={`border rounded-2xl p-4 ${p.is_shop ? 'bg-[#FFC300]/5 border-[#FFC300]/30' : 'bg-zinc-900/60 border-zinc-800'} ${p.is_hidden ? 'opacity-50' : ''}`}>
-            <Author name={p.author_name} shop={p.is_shop} date={p.created_at} edited={p.edited_at} />
+            <Author name={p.author_name} shop={p.is_shop} date={p.created_at} edited={p.edited_at} avatar={p.author_avatar} />
             <div className="mt-2"><Body text={p.body} /></div>
             <Photos urls={p.images} />
             {(isStaff || own.posts.has(p.id)) && (
@@ -264,6 +264,12 @@ const ForumPage: React.FC<{ auth: AuthState; isStaff: boolean; onBack: () => voi
           </div>
           {newTopicButton}
         </div>
+        {userId && (
+          <details className="mb-4 bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+            <summary className="cursor-pointer text-sm font-bold text-zinc-300">Ваш значок на форумі — оберіть прикольну іконку або поставте своє фото</summary>
+            <div className="mt-3"><AvatarPicker userId={userId} name={auth.session?.user?.user_metadata?.full_name || auth.session?.user?.email || '?'} /></div>
+          </details>
+        )}
         <div className="relative mb-6">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Пошук по темах форуму"

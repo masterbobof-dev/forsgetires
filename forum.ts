@@ -9,15 +9,15 @@ export interface ForumSection {
 export interface ForumTopic {
   id: number; created_at: string; author_name: string; is_shop: boolean; category: string;
   title: string; body: string; images: string[]; is_pinned: boolean; is_hidden: boolean; is_locked: boolean;
-  replies_count: number; last_reply_at: string; views: number; edited_at: string | null;
+  replies_count: number; last_reply_at: string; views: number; edited_at: string | null; author_avatar: string | null;
 }
 export interface ForumPost {
   id: number; topic_id: number; created_at: string; author_name: string; is_shop: boolean;
-  body: string; images: string[]; is_hidden: boolean; edited_at: string | null;
+  body: string; images: string[]; is_hidden: boolean; edited_at: string | null; author_avatar: string | null;
 }
 
-const TOPIC_FIELDS = 'id, created_at, author_name, is_shop, category, title, body, images, is_pinned, is_hidden, is_locked, replies_count, last_reply_at, views, edited_at';
-const POST_FIELDS = 'id, topic_id, created_at, author_name, is_shop, body, images, is_hidden, edited_at';
+const TOPIC_FIELDS = 'id, created_at, author_name, is_shop, category, title, body, images, is_pinned, is_hidden, is_locked, replies_count, last_reply_at, views, edited_at, author_avatar';
+const POST_FIELDS = 'id, topic_id, created_at, author_name, is_shop, body, images, is_hidden, edited_at, author_avatar';
 
 export const forumPath = (t?: Pick<ForumTopic, 'id' | 'title'> | null) => {
   if (!t) return '/forum';
@@ -155,4 +155,31 @@ export const fetchOwnIds = async (userId: string | undefined, topicId: number) =
   const { data } = await supabase.rpc('forum_own', { p_topic: topicId });
   const r = (data || {}) as { topic?: boolean; posts?: number[] };
   return { topic: !!r.topic, posts: new Set<number>(r.posts || []) };
+};
+
+// --- avatars: a fun icon ("emoji:🚗") or the person's own photo ---
+export const AVATAR_ICONS = ['🚗', '🏎️', '🚙', '🛻', '🚐', '🚚', '🚜', '🏍️', '🛞', '🔧', '🔋', '⛽', '🏁', '🚦', '😎', '🤠', '🦊', '🐻', '🐺', '🦁', '🐯', '🐼', '🦅', '🐝', '⚡', '🔥', '❄️', '☀️', '🌟', '🎯'];
+
+/** Photo for the avatar: cut to a square in the middle, 256 px JPEG, into the person's own folder. */
+export const uploadAvatar = async (file: File, userId: string): Promise<string> => {
+  const bitmap = await createImageBitmap(file);
+  const side = Math.min(bitmap.width, bitmap.height);
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 256;
+  const ctx = canvas.getContext('2d')!;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, 256, 256);
+  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => (b ? resolve(b) : reject(new Error('no image'))), 'image/jpeg', 0.88));
+  const path = `${userId}/avatar-${Date.now()}.jpg`;
+  const { error } = await supabase.storage.from('forum').upload(path, blob, { contentType: 'image/jpeg', cacheControl: '31536000' });
+  if (error) throw error;
+  return supabase.storage.from('forum').getPublicUrl(path).data.publicUrl;
+};
+export const fetchMyAvatar = async (userId: string) => {
+  const { data } = await supabase.from('customer_profiles').select('avatar').eq('id', userId).maybeSingle();
+  return (data as { avatar: string | null } | null)?.avatar || null;
+};
+export const saveMyAvatar = async (userId: string, avatar: string | null) => {
+  const { error } = await supabase.from('customer_profiles').upsert({ id: userId, avatar, updated_at: new Date().toISOString() });
+  if (error) throw error;
 };

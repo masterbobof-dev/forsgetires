@@ -130,7 +130,7 @@ const TopicAdmin: React.FC<{ t: ForumTopic; sections: ForumSection[]; userId: st
               onSubmit={v => act(async () => { await updatePost(p.id, { body: v.body, images: v.images }); setEdit(null); })} />
           ) : (
             <div key={p.id} className={`border rounded-xl p-3 ${p.is_hidden ? 'border-red-900/60 opacity-60' : 'border-zinc-800'}`}>
-              <Author name={p.author_name} shop={p.is_shop} date={p.created_at} edited={p.edited_at} />
+              <Author name={p.author_name} shop={p.is_shop} date={p.created_at} edited={p.edited_at} avatar={p.author_avatar} />
               <div className="mt-2 text-sm"><Body text={p.body} /></div>
               <Photos urls={p.images} />
               <div className="flex flex-wrap gap-1.5 mt-2">

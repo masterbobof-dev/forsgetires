@@ -33,7 +33,7 @@ const VehiclePicker: React.FC<{
   onBattery?: (attrs: Record<string, string>) => void;
   onWheels?: (attrs: Record<string, string>) => void;
   /** hubcaps section (when there are no wheels to offer) */
-  onHubcaps?: () => void;
+  onHubcaps?: (radius: string) => void;
   phone?: string; phoneLink?: string;
 }> = ({ onTyreSize, onBattery, onWheels, onHubcaps, phone, phoneLink }) => {
   const [list, setList] = useState<Vehicle[]>([]);
@@ -170,7 +170,9 @@ const VehiclePicker: React.FC<{
                 <div className="w-full flex flex-wrap items-center gap-2 pt-1">
                   <span className="text-xs text-zinc-400 flex-1 min-w-[180px]">Таких дисків зараз немає на сайті — привеземо під замовлення.</span>
                   {phoneLink && <a href={phoneLink} className="h-9 px-3 rounded-lg border border-[#FFC300]/50 text-[#FFC300] font-bold text-xs hover:bg-[#FFC300]/10 flex items-center gap-1.5"><Phone size={13} /> {phone || 'Зателефонувати'}</a>}
-                  {onHubcaps && <button onClick={onHubcaps} className="h-9 px-3 rounded-lg border border-zinc-700 text-zinc-300 font-bold text-xs hover:border-zinc-500">Ковпаки на колеса</button>}
+                  {onHubcaps && [...new Set(car.tyres.map(t => splitTyreSize(t)?.[2].replace(/C$/, '')).filter(Boolean) as string[])].map(r => (
+                    <button key={r} onClick={() => onHubcaps(r)} className="h-9 px-3 rounded-lg border border-zinc-700 text-zinc-300 font-bold text-xs hover:border-zinc-500">Ковпаки {r}</button>
+                  ))}
                 </div>
               ) : null}
             </div>

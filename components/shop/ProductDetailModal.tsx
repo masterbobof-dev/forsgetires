@@ -46,12 +46,13 @@ interface ProductDetailModalProps {
 const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClose, addToCart, formatPrice, getSeasonLabel, renderSchema, openLightbox, onQuickOrder, onSimilarClick, preset, isFavorite, onToggleFavorite, isCompared, onToggleCompare, userId, userName, onRequireLogin, showStock = false, iconFor }) => {
   const [companions, setCompanions] = useState<TyreProduct[]>([]);
   const [approvals, setApprovals] = useState<string[]>([]);
+  const [allAnalogs, setAllAnalogs] = useState(false);
   const [similar, setSimilar] = useState<TyreProduct[]>([]);
   const [loadingSimilar, setLoadingSimilar] = useState(false);
   const [photoIdx, setPhotoIdx] = useState(0);
   const [touchX, setTouchX] = useState<number | null>(null);
   const lastScroll = useRef(0); // a tap right after scrolling must not open another product
-  useEffect(() => { setPhotoIdx(0); }, [product?.id]);
+  useEffect(() => { setPhotoIdx(0); setAllAnalogs(false); }, [product?.id]);
 
   const isTyre = !!(product && (product.width || product.radius || product.season));
 
@@ -145,6 +146,47 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
       </div>
     );
   };
+  /** Analogs: a compact list (small photo, full name, stock or delivery days, price, cart) — 4 rows, the rest on demand. */
+  const analogRow = (t: TyreProduct) => {
+    const reason = (t as TyreProduct & { reason?: string }).reason || '';
+    const badge = REASON_BADGE[reason];
+    const img = t.image_thumb_url || t.image_url;
+    const Icon = iconFor ? iconFor(t) : undefined;
+    const askPrice = t.on_order && !t.supplier_offer_id;
+    return (
+      <li key={t.id} className="flex items-center gap-2.5 py-2">
+        <button onClick={openItem(t)} className="flex items-center gap-2.5 flex-1 min-w-0 text-left outline-none [-webkit-tap-highlight-color:transparent]">
+          <span className={`w-12 h-12 shrink-0 rounded-lg overflow-hidden flex items-center justify-center ${img ? 'bg-white' : 'bg-zinc-800'}`}>
+            {img ? <img src={img} alt="" loading="lazy" className="w-full h-full object-contain p-0.5" /> : <NoPhoto icon={Icon} size={18} />}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-xs font-bold text-white leading-snug line-clamp-2">{t.title}</span>
+            <span className="flex flex-wrap items-center gap-x-2 text-[10px] font-bold mt-0.5">
+              {badge && <span className={`${badge.cls} px-1 rounded uppercase`}>{badge.label}</span>}
+              <span className={t.on_order ? 'text-amber-400' : 'text-emerald-400'}>{t.on_order ? `під замовлення${t.lead_days ? ` · ${t.lead_days} дн.` : ''}` : 'в наявності'}</span>
+            </span>
+          </span>
+        </button>
+        <span className="shrink-0 text-right">
+          {askPrice ? <span className="text-[11px] text-amber-400 font-bold">ціна за запитом</span> : <span className="text-sm font-black text-[#FFC300] whitespace-nowrap">{formatPrice(t.price)} <span className="text-[10px] text-zinc-500 font-normal">грн</span></span>}
+        </span>
+        {!askPrice && <button onClick={withFull(t, addToCart)} aria-label="У кошик" className="w-9 h-9 shrink-0 rounded-lg bg-[#FFC300] hover:bg-white text-black flex items-center justify-center"><ShoppingCart size={15} /></button>}
+      </li>
+    );
+  };
+  const analogList = (title: string, items: TyreProduct[]) => (
+    <section>
+      <h3 className="text-white text-sm md:text-base font-black uppercase tracking-wide mb-1 flex items-center gap-2">
+        <span className="w-1.5 h-4 bg-[#FFC300] rounded-full" />{title} <span className="text-zinc-500 text-xs font-bold normal-case">{items.length}</span>
+      </h3>
+      <ul className="divide-y divide-zinc-800">{(allAnalogs ? items : items.slice(0, 4)).map(analogRow)}</ul>
+      {items.length > 4 && (
+        <button onClick={() => setAllAnalogs(v => !v)} className="mt-1 w-full h-9 rounded-xl border border-zinc-800 text-xs font-bold text-zinc-300 hover:border-zinc-600">
+          {allAnalogs ? 'Згорнути' : `Показати ще ${items.length - 4}`}
+        </button>
+      )}
+    </section>
+  );
   const row = (title: string, items: TyreProduct[]) => (
     <section>
       <h3 className="text-white text-sm md:text-base font-black uppercase tracking-wide mb-3 flex items-center gap-2">
@@ -348,7 +390,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
           {companions.length > 0 && row('З цим купують', companions)}
           {loadingSimilar
             ? <div className="flex justify-center py-4"><Loader2 className="animate-spin text-zinc-500" /></div>
-            : similar.length > 0 && row(isTyre ? 'Схожі пропозиції' : 'Аналоги й схожі товари', similar)}
+            : similar.length > 0 && (isTyre ? row('Схожі пропозиції', similar) : analogList('Аналоги й схожі товари', similar))}
 
           <ProductReviews productId={product.id} userId={userId} userName={userName} onRequireLogin={onRequireLogin} />
 

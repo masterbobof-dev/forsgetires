@@ -6,16 +6,43 @@ export const SUPABASE_URL = 'https://zzxueclhkhvwdmxflmyx.supabase.co';
 // Public "anon" key (same one the website uses in the browser); read-only by database rules.
 export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6eHVlY2xoa2h2d2RteGZsbXl4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2NjEzMTAsImV4cCI6MjA4MDIzNzMxMH0.yJW-HC03EwyYPpyWTrDbTN4t0YrlNe1H40fwLZ_ZxfU';
 
+/** Database is busy or unreachable (not "no such row"): pages answer 503 "try later" instead of 404/500. */
+export class DbUnavailable extends Error {}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 export const rest = async (path, from, to) => {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      ...(from !== undefined ? { Range: `${from}-${to}`, 'Range-Unit': 'items' } : {}),
-    },
-  });
-  if (!res.ok) throw new Error(`Supabase ${res.status}: ${await res.text()}`);
-  return res.json();
+  // a busy database usually answers on the 2nd try; 3 tries, at most 10 s each
+  for (let attempt = 1; ; attempt++) {
+    let res;
+    try {
+      res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          ...(from !== undefined ? { Range: `${from}-${to}`, 'Range-Unit': 'items' } : {}),
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+    } catch (e) {
+      if (attempt < 3) { await sleep(attempt * 1500); continue; }
+      throw new DbUnavailable(`Supabase unreachable: ${e.message}`);
+    }
+    if (res.ok) return res.json();
+    const text = await res.text();
+    // 5xx, 429 and "statement timeout" (57014) are temporary
+    const temporary = res.status >= 500 || res.status === 429 || text.includes('57014');
+    if (temporary && attempt < 3) { await sleep(attempt * 1500); continue; }
+    throw new (temporary ? DbUnavailable : Error)(`Supabase ${res.status}: ${text}`);
+  }
+};
+
+/** Answer "temporarily unavailable, come back later" — search engines keep the page as it was. */
+export const sendUnavailable = (res, body = 'Temporarily unavailable, please try again later', type = 'text/plain; charset=utf-8') => {
+  res.setHeader('Content-Type', type);
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Retry-After', '1800');
+  return res.status(503).send(body);
 };
 
 /** All rows of a query, 1000 at a time. */

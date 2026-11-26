@@ -2,7 +2,7 @@
 // page-specific <title>, description and text for Google before sending it.
 import fs from 'node:fs';
 import path from 'node:path';
-import { escapeXml as esc, SUPABASE_URL, SUPABASE_ANON_KEY } from './_shop.js';
+import { escapeXml as esc, SUPABASE_URL, SUPABASE_ANON_KEY, DbUnavailable } from './_shop.js';
 
 let cachedHtml = null;
 export const loadAppHtml = async (req) => {
@@ -56,7 +56,7 @@ let siteCache = null;
 export const siteSettings = async (rest) => {
   if (siteCache && siteCache.at > Date.now() - 60000) return siteCache.s;
   let s = {};
-  try { s = Object.fromEntries((await rest('settings?select=key,value&key=like.seo_*')).map((r) => [r.key, String(r.value ?? '')])); } catch { /* defaults */ }
+  try { s = Object.fromEntries((await rest('settings?select=key,value&key=like.seo_*')).map((r) => [r.key, String(r.value ?? '')])); } catch (e) { if (e instanceof DbUnavailable) throw e; /* defaults */ }
   siteCache = { at: Date.now(), s };
   return s;
 };
@@ -85,6 +85,6 @@ export const findRedirect = async (rest, path) => {
       await fetch(`${SUPABASE_URL}/rest/v1/rpc/seo_redirect_hit`, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ p: path }) }).catch(() => {});
       return rows[0].to_path;
     }
-  } catch { /* table missing */ }
+  } catch (e) { if (e instanceof DbUnavailable) throw e; /* table missing */ }
   return null;
 };

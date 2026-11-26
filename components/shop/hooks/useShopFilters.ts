@@ -12,7 +12,7 @@ export const useShopFilters = () => {
   const [searchQuery, setSearchQuery] = useState('');
   // search runs 350 ms after the customer stops typing
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  useEffect(() => { const t = setTimeout(() => setDebouncedSearch(searchQuery), 350); return () => clearTimeout(t); }, [searchQuery]);
+  useEffect(() => { const t = setTimeout(() => setDebouncedSearch(searchQuery), 250); return () => clearTimeout(t); }, [searchQuery]);
   // statistics: what people search for
   useEffect(() => { if (debouncedSearch.trim().length >= 3) logAnalyticsEvent('search', undefined, debouncedSearch.trim()); }, [debouncedSearch]);
   const [showOnlyInStock, setShowOnlyInStock] = useState(false);

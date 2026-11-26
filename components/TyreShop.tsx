@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { supabase } from '../supabaseClient';
 import { TyreProduct, CartItem } from '../types';
 import { useCategories, getRootOf, getRootCategories, getChildren, isTyreProduct, getCategoryIcon } from '../categories';
 import { getPresetForCategory, getPresetForProduct, getCardChips } from '../productAttributes';
@@ -329,14 +328,6 @@ const TyreShop: React.FC<TyreShopProps> = ({
               activeFilters={activeFilterCount}
               totalCount={totalCount}
               onOpenFilters={() => setFiltersOpen(true)}
-              suggest={{
-                categories,
-                onProduct: async p => {
-                  const { data } = await supabase.from('tyres').select('*').eq('id', p.id).maybeSingle();
-                  if (data) openProduct(prepare(data as TyreProduct));
-                },
-                onCategory: c => { setSearchQuery(''); setDebouncedSearch(''); changeCategory(c.id); listTopRef.current?.scrollIntoView({ behavior: 'smooth' }); },
-              }}
             />
 
             {loading ? (

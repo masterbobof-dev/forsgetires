@@ -9,6 +9,7 @@ import {
   rootSections, childSections, sectionName, sectionSlugs, forumPath, type ForumSection, type ForumTopic, type ForumPost,
 } from '../../forum';
 import { MessageForm, SectionSelect, Body, Photos, Author, when } from '../forum/forumParts';
+import LiveTopic from '../forum/LiveTopic';
 
 const btn = 'h-9 px-3 rounded-lg border text-xs font-bold flex items-center gap-1.5 shrink-0';
 const btnGrey = `${btn} border-zinc-700 text-zinc-300 hover:border-zinc-500`;
@@ -182,48 +183,42 @@ const ModeratorsPanel: React.FC = () => {
   );
 };
 
-/** One topic in the admin list: quick actions, editing, and its replies. */
+/** One topic in the admin list: tap it and it opens for editing right there (text saves by itself,
+ *  photos are added / pasted / removed at once), with its replies under it. */
 const TopicAdmin: React.FC<{ t: ForumTopic; sections: ForumSection[]; userId: string; onChanged: () => void; asShop: boolean }> = ({ t, sections, userId, onChanged, asShop }) => {
   const [open, setOpen] = useState(false);
-  const [edit, setEdit] = useState<'topic' | number | null>(null);
+  const [topic, setTopic] = useState(t);
+  useEffect(() => setTopic(t), [t]);
+  const [edit, setEdit] = useState<number | null>(null);
   const [posts, setPosts] = useState<ForumPost[] | null>(null);
   const loadPosts = async () => setPosts((await fetchTopic(t.id, false)).posts);
   useEffect(() => { if (open) loadPosts(); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   const act = async (fn: () => Promise<void>, ask?: string) => {
     if (ask && !confirm(ask)) return;
-    try { await fn(); onChanged(); if (open) await loadPosts(); } catch { alert('Не вдалося зберегти зміни'); }
+    try { await fn(); await loadPosts(); } catch { alert('Не вдалося зберегти зміни'); }
   };
   return (
-    <li className={`bg-zinc-900 border rounded-2xl ${t.is_hidden ? 'border-red-900/60' : t.is_pinned ? 'border-[#FFC300]/40' : 'border-zinc-800'}`}>
-      <div className="p-3 md:p-4">
-        <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase text-zinc-500 mb-1">
-          <span className="text-[#FFC300]">{sectionName(sections, t.category)}</span>
-          {t.is_pinned && <span className="flex items-center gap-1 text-[#FFC300]"><Pin size={12} /> закріплено</span>}
-          {t.is_locked && <span className="flex items-center gap-1"><Lock size={12} /> закрито</span>}
-          {t.is_hidden && <span className="flex items-center gap-1 text-red-400"><EyeOff size={12} /> приховано</span>}
+    <li className={`bg-zinc-900 border rounded-2xl ${topic.is_hidden ? 'border-red-900/60' : topic.is_pinned ? 'border-[#FFC300]/40' : 'border-zinc-800'}`}>
+      <button type="button" onClick={() => { if (open) onChanged(); setOpen(!open); }} aria-expanded={open} className="w-full text-left p-3 md:p-4 flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase text-zinc-500 mb-1">
+            <span className="text-[#FFC300]">{sectionName(sections, topic.category)}</span>
+            {topic.is_pinned && <span className="flex items-center gap-1 text-[#FFC300]"><Pin size={12} /> закріплено</span>}
+            {topic.is_locked && <span className="flex items-center gap-1"><Lock size={12} /> закрито</span>}
+            {topic.is_hidden && <span className="flex items-center gap-1 text-red-400"><EyeOff size={12} /> приховано</span>}
+          </div>
+          <div className="font-bold text-white break-words">{topic.title}</div>
+          <div className="text-xs text-zinc-500 mt-1">{topic.author_name} · {when(topic.created_at)} · відповідей {topic.replies_count} · переглядів {topic.views}{topic.images?.length ? ` · фото ${topic.images.length}` : ''}</div>
         </div>
-        <div className="font-bold text-white break-words">{t.title}</div>
-        <div className="text-xs text-zinc-500 mt-1">{t.author_name} · {when(t.created_at)} · відповідей {t.replies_count} · переглядів {t.views}</div>
-        <div className="flex flex-wrap gap-1.5 mt-3">
-          <button onClick={() => { setEdit('topic'); setOpen(true); }} className={btnGrey}><Pencil size={14} /> Редагувати</button>
-          <button onClick={() => act(() => updateTopic(t.id, { is_pinned: !t.is_pinned }))} className={btnGrey}><Pin size={14} /> {t.is_pinned ? 'Відкріпити' : 'Закріпити'}</button>
-          <button onClick={() => act(() => updateTopic(t.id, { is_locked: !t.is_locked }))} className={btnGrey}>{t.is_locked ? <Unlock size={14} /> : <Lock size={14} />} {t.is_locked ? 'Відкрити' : 'Закрити'}</button>
-          <button onClick={() => act(() => updateTopic(t.id, { is_hidden: !t.is_hidden }))} className={btnGrey}>{t.is_hidden ? <Eye size={14} /> : <EyeOff size={14} />} {t.is_hidden ? 'Показати' : 'Сховати'}</button>
-          <SectionSelect sections={sections} value={t.category} onChange={slug => act(() => updateTopic(t.id, { category: slug }))}
-            className="h-9 bg-black border border-zinc-700 rounded-lg px-2 text-xs text-zinc-300 font-bold max-w-[200px]" />
-          <a href={forumPath(t)} target="_blank" rel="noopener noreferrer" className={btnGrey}><ExternalLink size={14} /> На сайті</a>
-          <button onClick={() => setOpen(!open)} className={btnGrey}>{open ? <ChevronUp size={14} /> : <ChevronDown size={14} />} Відповіді</button>
-          <button onClick={() => act(() => deleteTopic(t.id), `Видалити тему «${t.title}» разом з усіма відповідями? Повернути не можна.`)} className={btnRed}><Trash2 size={14} /> Видалити</button>
-        </div>
-      </div>
+        <span className="shrink-0 h-9 px-3 rounded-lg border border-zinc-700 text-zinc-300 text-xs font-bold flex items-center gap-1.5">
+          {open ? <><ChevronUp size={14} /> Згорнути</> : <><Pencil size={14} /> Правити</>}
+        </span>
+      </button>
       {open && (
         <div className="border-t border-zinc-800 p-3 md:p-4 space-y-3 bg-black/20">
-          {edit === 'topic' ? (
-            <MessageForm userId={userId} sections={sections} topic allowPin initial={t} submitLabel="Зберегти" onCancel={() => setEdit(null)}
-              onSubmit={v => act(async () => { await updateTopic(t.id, { title: v.title, body: v.body, images: v.images, category: v.category, is_pinned: !!v.is_pinned }); setEdit(null); })} />
-          ) : (
-            <div><Body text={t.body} /><Photos urls={t.images} /></div>
-          )}
+          <LiveTopic topic={topic} sections={sections} userId={userId} onChanged={setTopic} onDeleted={onChanged} />
+          <a href={forumPath(topic)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-[#FFC300]"><ExternalLink size={14} /> Подивитися на сайті</a>
+          <h4 className="text-xs font-black uppercase text-zinc-500 pt-2">Відповіді</h4>
           {!posts ? <Loader2 className="animate-spin text-[#FFC300]" /> : posts.map(p => edit === p.id ? (
             <MessageForm key={p.id} userId={userId} initial={p} submitLabel="Зберегти" onCancel={() => setEdit(null)}
               onSubmit={v => act(async () => { await updatePost(p.id, { body: v.body, images: v.images }); setEdit(null); })} />
@@ -233,8 +228,8 @@ const TopicAdmin: React.FC<{ t: ForumTopic; sections: ForumSection[]; userId: st
               <div className="mt-2 text-sm"><Body text={p.body} /></div>
               <Photos urls={p.images} />
               <div className="flex flex-wrap gap-1.5 mt-2">
-                <button onClick={() => setEdit(p.id)} className={btnGrey}><Pencil size={14} /> Редагувати</button>
-                <button onClick={() => act(() => updatePost(p.id, { is_hidden: !p.is_hidden }))} className={btnGrey}>{p.is_hidden ? <Eye size={14} /> : <EyeOff size={14} />} {p.is_hidden ? 'Показати' : 'Сховати'}</button>
+                <button onClick={() => setEdit(p.id)} className={btnGrey}><Pencil size={14} /> Правити</button>
+                <button onClick={() => act(() => updatePost(p.id, { is_hidden: !p.is_hidden }), p.is_hidden ? undefined : 'Сховати цю відповідь від відвідувачів?')} className={btnGrey}>{p.is_hidden ? <Eye size={14} /> : <EyeOff size={14} />} {p.is_hidden ? 'Показати' : 'Сховати'}</button>
                 <button onClick={() => act(() => deletePost(p.id), 'Видалити цю відповідь?')} className={btnRed}><Trash2 size={14} /> Видалити</button>
               </div>
             </div>

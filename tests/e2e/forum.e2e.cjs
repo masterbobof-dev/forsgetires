@@ -168,6 +168,34 @@ const owner = async (browser, url) => {
     assert.ok(await page.getByText(/t\.me\/Forsageshop_bot\?start=/).isVisible());
   });
 
+  await step(shop, S, 'edit a topic in place: text saves by itself', async () => {
+    await ui.click(page.getByRole('button', { name: /Які шини на Ланос\?/ }));
+    const title = page.getByLabel('Заголовок теми');
+    await ui.fill(title, 'Які шини взяти на Ланос?');
+    await until(async () => assert.ok((fake.inserted['forum_topics:update'] || []).some((u) => u.set.title === 'Які шини взяти на Ланос?')), 'the title is saved without a button');
+    await until(async () => assert.ok(await page.getByText('збережено').first().isVisible()));
+  });
+
+  await step(shop, S, 'paste a photo from the clipboard', async () => {
+    await page.evaluate(async () => {
+      const c = document.createElement('canvas'); c.width = 20; c.height = 20;
+      const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+      const dt = new DataTransfer(); dt.items.add(new File([blob], 'shot.png', { type: 'image/png' }));
+      document.querySelector('[aria-label="Текст теми"]').dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
+    });
+    await until(async () => assert.ok((fake.inserted['forum_topics:update'] || []).some((u) => Array.isArray(u.set.images) && u.set.images.length === 1)), 'the pasted photo is saved to the topic');
+    assert.equal(await page.getByRole('button', { name: 'Прибрати фото' }).count(), 1);
+  });
+
+  await step(shop, S, 'hiding needs a confirmation', async () => {
+    let asked = '';
+    page.once('dialog', (d) => { asked = d.message(); d.dismiss(); });
+    await ui.click(page.getByRole('button', { name: 'Ще', exact: true }));
+    await ui.click(page.getByRole('button', { name: 'Сховати' }).first());
+    await until(async () => assert.match(asked, /Сховати тему/));
+    assert.ok(!(fake.inserted['forum_topics:update'] || []).some((u) => u.set.is_hidden === true), 'nothing hidden after «no»');
+  });
+
   await shop.context.close();
 };
 

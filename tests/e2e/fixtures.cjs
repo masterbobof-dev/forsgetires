@@ -37,6 +37,9 @@ const product = (id, title, price, extra = {}) => {
   };
   p.has_photo = !!p.image_url;
   p.price_num = Number(p.price);
+  // generated columns of the real table: the order of goods in lists
+  p.ask_price = !!p.on_order && !p.supplier_offer_id;
+  p.list_rank = p.ask_price ? 3 : p.supplier_offer_id ? 1 : p.has_photo ? 0 : 2;
   return p;
 };
 const tyre = (id, title, price, manufacturer, radius, season, category_id, extra = {}) =>

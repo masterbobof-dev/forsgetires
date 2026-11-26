@@ -85,16 +85,17 @@ export const useProductList = (q: ProductListParams) => {
         if (catFilter) query = query.or(catFilter);
       }
 
-      // "All goods" without a search shows only what can be bought now (old "on order" tyres are found by search)
-      if (q.activeCategory === 'all' && !q.debouncedSearch.trim()) query = query.eq('on_order', false);
+      // "All goods" without a search shows only what can be bought now: own stock and partner goods with a price
+      // (old "on order, ask the price" goods are found by search)
+      if (q.activeCategory === 'all' && !q.debouncedSearch.trim()) query = query.eq('ask_price', false);
       if (q.activeSort === 'with_photo') query = query.eq('has_photo', true);
 
-      // real stock first, old "on order" tyres after it
-      query = query.order('on_order', { ascending: true });
       if (q.activeSort === 'recommended' || q.activeSort === 'with_photo') {
-        // what is nice to buy first: recommended in the program (is_hot), with a photo, then the newest
-        query = query.order('is_hot', { ascending: false }).order('has_photo', { ascending: false }).order('in_stock', { ascending: false }).order('created_at', { ascending: false });
+        // recommended in the program first; then own goods with a photo, partner goods, own goods without a photo,
+        // and "on order, ask the price" at the end (list_rank)
+        query = query.order('is_hot', { ascending: false }).order('list_rank', { ascending: true }).order('in_stock', { ascending: false }).order('created_at', { ascending: false });
       } else {
+        query = query.order('ask_price', { ascending: true });
         const sorts = { price_asc: 'price_num', price_desc: 'price_num', newest: 'created_at', oldest: 'created_at', no_photo: 'created_at' };
         query = query.order('in_stock', { ascending: false }).order((sorts as any)[q.activeSort] || 'created_at', { ascending: ['price_asc', 'oldest'].includes(q.activeSort) });
       }

@@ -12,6 +12,7 @@ import {
 } from '../../forum';
 import { Body, Photos, Author, Avatar, AvatarPicker, MessageForm, when, whenShort } from './forumParts';
 import { ProfileView, MessagesView } from './ForumPeople';
+import LiveTopic from './LiveTopic';
 
 const sectionHref = (slug: string) => `/forum?c=${slug}`;
 
@@ -205,7 +206,11 @@ const ForumPage: React.FC<{ auth: AuthState; isStaff: boolean; onBack: () => voi
     content = !topic ? <p className="text-zinc-400 py-10 text-center">Тему не знайдено або її приховано.</p> : (
       <article className="space-y-4">
         <Crumbs chain={sectionChain(sections, topic.category)} />
-        {editing === 'topic' && userId ? (
+        {isStaff && userId ? (
+          // the shop and moderators edit the topic right here: text saves by itself, photos are added and removed at once
+          <LiveTopic topic={topic} sections={sections} userId={userId} pasteAnywhere
+            onChanged={t => setTopic(t)} onDeleted={() => navigateTo(sectionHref(topic.category))} />
+        ) : editing === 'topic' && userId ? (
           <MessageForm userId={userId} sections={isStaff ? sections : []} topic initial={topic} submitLabel="Зберегти" onCancel={() => setEditing(null)}
             onSubmit={v => act(() => updateTopic(topic.id, { title: v.title, body: v.body, images: v.images, ...(isStaff ? { category: v.category } : {}) }))} />
         ) : (
@@ -250,7 +255,7 @@ const ForumPage: React.FC<{ auth: AuthState; isStaff: boolean; onBack: () => voi
                   )}
                   {(isStaff || own.posts.has(p.id)) && <Tool onClick={() => setEditing(p.id)} icon={<Pencil size={14} />} label="Редагувати" />}
                   {isStaff && <>
-                    <Tool onClick={() => act(() => updatePost(p.id, { is_hidden: !p.is_hidden }))} icon={<EyeOff size={14} />} label={p.is_hidden ? 'Показати' : 'Сховати'} />
+                    <Tool onClick={() => act(() => updatePost(p.id, { is_hidden: !p.is_hidden }), p.is_hidden ? undefined : 'Сховати цю відповідь від відвідувачів?')} icon={<EyeOff size={14} />} label={p.is_hidden ? 'Показати' : 'Сховати'} />
                     <Tool danger onClick={() => act(() => deletePost(p.id), 'Видалити цю відповідь?')} icon={<Trash2 size={14} />} label="Видалити" />
                   </>}
                 </div>

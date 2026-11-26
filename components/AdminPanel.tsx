@@ -4,9 +4,6 @@ import SettingsTab from './admin/SettingsTab';
 import ProductsBrowser from './admin/ProductsBrowser';
 import OrdersTab from './admin/OrdersTab';
 import StatsTab from './admin/StatsTab';
-import ArticlesTab from './admin/ArticlesTab';
-import SeoTab from './admin/SeoTab';
-import PromoTab from './admin/PromoTab';
 import ReviewsTab from './admin/ReviewsTab';
 import TelegramTab from './admin/TelegramTab';
 import ForumTab from './admin/ForumTab';
@@ -87,7 +84,7 @@ const useConfirm = () => {
 const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
   // the open section is remembered while the browser tab is open (coming back from the site opens the same one)
   // "Категорії" now live inside "Товари" (left column), so an old saved tab opens there
-  const [activeTab, setActiveTabState] = useState<string>(() => { try { const t = sessionStorage.getItem('admin_tab') || 'orders'; return t === 'categories' ? 'tyres' : ['ai', 'photos', 'seoai'].includes(t) ? 'orders' : t; } catch { return 'orders'; } });
+  const [activeTab, setActiveTabState] = useState<string>(() => { try { const t = sessionStorage.getItem('admin_tab') || 'orders'; return t === 'categories' ? 'tyres' : ['ai', 'photos', 'seoai', 'seo', 'promo', 'articles'].includes(t) ? 'orders' : t; } catch { return 'orders'; } });
   const setActiveTab = (t: string) => { setActiveTabState(t); try { sessionStorage.setItem('admin_tab', t); } catch { /* private mode */ } window.scrollTo({ top: 0 }); };
   const [accessStatus, setAccessStatus] = useState<AccessStatus>('loading');
   const [currentUserEmail, setCurrentUserEmail] = useState('');
@@ -234,9 +231,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
   };
 
   const currentTabs = isAdmin
-    ? ['orders', 'tyres', 'reviews', 'promo', 'seo', 'articles', 'forum', 'stats', 'telegram', 'settings']
+    ? ['orders', 'tyres', 'reviews', 'forum', 'stats', 'telegram', 'settings']
     : isManager
-      ? ['orders', 'tyres', 'reviews', 'promo', 'seo', 'articles', 'forum', 'stats']
+      ? ['orders', 'tyres', 'reviews', 'forum', 'stats']
       : isForumMod ? ['forum'] : [];
 
   return (
@@ -348,17 +345,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
         {activeTab === 'reviews' && <ReviewsTab />}
         {activeTab === 'orders' && <OrdersTab />}
         {activeTab === 'stats' && <StatsTab />}
-        {activeTab === 'articles' && <ArticlesTab />}
         {activeTab === 'forum' && <ForumTab isStaff={!isForumMod} />}
-        {activeTab === 'seo' && <SeoTab />}
-        {activeTab === 'promo' && <PromoTab />}
         {isAdmin && activeTab === 'telegram' && <TelegramTab />}
       </main>
 
       {/* Phones and tablets: the main sections at the bottom, the rest in "Ще" */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 border-t border-zinc-800 shadow-2xl print:hidden pb-[env(safe-area-inset-bottom)]">
         <div className="grid grid-cols-5">
-          {currentTabs.filter(t => ['orders', 'tyres', 'forum', 'seo'].includes(t)).map(t => (
+          {currentTabs.filter(t => ['orders', 'tyres', 'forum', 'reviews'].includes(t)).map(t => (
             <button key={t} onClick={() => setActiveTab(t)}
               className={`flex flex-col items-center justify-center gap-1 py-2.5 ${activeTab === t ? 'text-[#FFC300]' : 'text-zinc-500'}`}>
               {getTabIcon(t)}
@@ -366,7 +360,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, onBackToSite }) => {
             </button>
           ))}
           <button onClick={() => setIsMobileMenuOpen(true)}
-            className={`flex flex-col items-center justify-center gap-1 py-2.5 ${!['orders', 'tyres', 'forum', 'seo'].includes(activeTab) ? 'text-[#FFC300]' : 'text-zinc-500'}`}>
+            className={`flex flex-col items-center justify-center gap-1 py-2.5 ${!['orders', 'tyres', 'forum', 'reviews'].includes(activeTab) ? 'text-[#FFC300]' : 'text-zinc-500'}`}>
             <Menu size={18} />
             <span className="text-[10px] font-bold">Ще</span>
           </button>

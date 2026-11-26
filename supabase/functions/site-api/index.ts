@@ -21,7 +21,7 @@ const HOME_BLOCKS = ['banners', 'size_search', 'categories', 'hits', 'promos', '
 const pick = (o: Record<string, unknown>, keys: string[]) => Object.fromEntries(keys.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
 
 const productByProgramId = async (pid: string) => {
-  const row = check(await db.from('tyres').select('id, description, attributes, hidden_on_site, seo_title, seo_description, image_url, image_thumb_url, gallery, gallery_thumbs')
+  const row = check(await db.from('tyres').select('id, description, attributes, hidden_on_site, seo_title, seo_description, seo_keywords, image_url, image_thumb_url, gallery, gallery_thumbs')
     .eq('program_product_id', need(pid, 'program_product_id')).maybeSingle());
   return row || fail('Товар ще не з’явився на сайті (синхронізація раз на 2 хвилини; товар має бути в наявності)');
 };
@@ -35,6 +35,16 @@ const savePhotos = async (id: number, photos: { full: string; thumb: string }[])
     gallery: photos.map(p => p.full), gallery_thumbs: photos.map(p => p.thumb),
     image_url: photos[0]?.full ?? null, image_thumb_url: photos[0]?.thumb ?? null,
   }).eq('id', id));
+};
+
+// ---------- forum helpers ----------
+const SHOP_AUTHOR = 'Форсаж (магазин)';
+const TOPIC_COLS = 'id, created_at, category, title, author_name, is_shop, is_pinned, is_locked, is_hidden, replies_count, views, last_reply_at, edited_at, images';
+const topicOut = (t: any) => ({ ...t, section: t.category, url: `https://www.forsage-tires.com/forum/${t.id}`, category: undefined });
+const slug = (v: string) => String(v).toLowerCase().replace(/[^a-zа-яіїєґ0-9]+/gi, '-').replace(/^-|-$/g, '').slice(0, 60) || `r-${Math.random().toString(36).slice(2, 6)}`;
+const sectionSlug = async (v: unknown) => {
+  const s = check(await db.from('forum_sections').select('slug').or(`slug.eq.${String(v).replace(/[,()]/g, '')}${/^\d+$/.test(String(v)) ? `,id.eq.${v}` : ''}`).limit(1)) as any[];
+  return s[0]?.slug || fail(`Розділ форуму ${v} не знайдено (дайте slug або id з forum.sections.list)`);
 };
 
 const actions: Record<string, (p: any) => Promise<unknown>> = {
@@ -106,7 +116,7 @@ const actions: Record<string, (p: any) => Promise<unknown>> = {
   // ---------- product fields for the site ----------
   'products.site_fields.get': async (p) => {
     const r: any = await productByProgramId(p.program_product_id);
-    return { site_product_id: r.id, description: r.description, specs: r.attributes || {}, hidden: r.hidden_on_site, seo_title: r.seo_title, seo_description: r.seo_description, photos: photosOf(r) };
+    return { site_product_id: r.id, description: r.description, specs: r.attributes || {}, hidden: r.hidden_on_site, seo_title: r.seo_title, seo_description: r.seo_description, seo_keywords: r.seo_keywords, photos: photosOf(r) };
   },
   'products.site_fields.set': async (p) => {
     const r: any = await productByProgramId(p.program_product_id);
@@ -115,6 +125,7 @@ const actions: Record<string, (p: any) => Promise<unknown>> = {
     if (p.specs !== undefined) upd.attributes = p.specs && typeof p.specs === 'object' ? p.specs : {};
     if (p.seo_title !== undefined) upd.seo_title = p.seo_title || null;
     if (p.seo_description !== undefined) upd.seo_description = p.seo_description || null;
+    if (p.seo_keywords !== undefined) upd.seo_keywords = p.seo_keywords || null;
     if (p.hidden !== undefined) {
       upd.hidden_on_site = !!p.hidden;
       // hidden -> off the site now; shown again -> visible if in stock (the sync keeps it up to date)
@@ -263,6 +274,140 @@ const actions: Record<string, (p: any) => Promise<unknown>> = {
     if (rows.length) check(await db.from('settings').upsert(rows));
     return { saved: rows.length };
   },
+
+  // ---------- forum (the program writes as the shop: author «Форсаж (магазин)») ----------
+  'forum.sections.list': async () => check(await db.from('forum_sections').select('id, parent_id, slug, name, description, sort_order').order('sort_order').order('id')),
+  'forum.sections.upsert': async (p) => {
+    const row: Record<string, unknown> = pick(p, ['name', 'description', 'parent_id', 'sort_order']);
+    if (p.slug) row.slug = slug(p.slug);
+    if (!p.id) { row.name = need(p.name, 'name'); row.slug = row.slug || slug(p.name); return check(await db.from('forum_sections').insert(row).select().single()); }
+    return check(await db.from('forum_sections').update(row).eq('id', p.id).select().single());
+  },
+  'forum.sections.delete': async (p) => {
+    const s: any = check(await db.from('forum_sections').select('id, slug').eq('id', need(p.id, 'id')).single());
+    const kids = await db.from('forum_sections').select('id', { count: 'exact', head: true }).eq('parent_id', s.id);
+    const used = await db.from('forum_topics').select('id', { count: 'exact', head: true }).eq('category', s.slug);
+    if ((kids.count || 0) + (used.count || 0) > 0) fail('У розділі є підрозділи або теми — спершу перенесіть їх');
+    check(await db.from('forum_sections').delete().eq('id', s.id));
+    return { deleted: s.id };
+  },
+  'forum.topics.list': async (p) => {
+    let q = db.from('forum_topics').select(TOPIC_COLS).order('last_reply_at', { ascending: false })
+      .range(p.offset || 0, (p.offset || 0) + Math.min(p.limit || 50, 200) - 1);
+    if (p.section) q = q.eq('category', p.section);
+    if (p.since) q = q.gte('last_reply_at', p.since);
+    if (typeof p.hidden === 'boolean') q = q.eq('is_hidden', p.hidden);
+    if (typeof p.from_shop === 'boolean') q = q.eq('is_shop', p.from_shop);
+    if (p.search) q = q.ilike('title', `%${String(p.search).replace(/[%,()]/g, ' ')}%`);
+    return (check(await q) as any[]).map(topicOut);
+  },
+  'forum.topic.get': async (p) => {
+    const t = check(await db.from('forum_topics').select(TOPIC_COLS + ', body').eq('id', need(p.id, 'id')).maybeSingle()) || fail('Тему не знайдено');
+    const posts = check(await db.from('forum_posts').select('id, parent_id, created_at, author_name, is_shop, body, images, is_hidden, edited_at').eq('topic_id', p.id).order('created_at').limit(1000)) as any[];
+    return { ...topicOut(t), body: (t as any).body, posts };
+  },
+  'forum.topics.create': async (p) => {
+    const now = new Date().toISOString();
+    const row = { category: await sectionSlug(need(p.section, 'section')), title: String(need(p.title, 'title')).slice(0, 200), body: String(need(p.body, 'body')),
+      images: Array.isArray(p.images) ? p.images.slice(0, 12) : [], is_pinned: !!p.pinned, is_locked: !!p.locked, is_shop: true, author_name: SHOP_AUTHOR,
+      created_at: now, last_reply_at: now, replies_count: 0, views: 0 };
+    return topicOut(check(await db.from('forum_topics').insert(row).select(TOPIC_COLS).single()));
+  },
+  'forum.topics.update': async (p) => {
+    const upd: Record<string, unknown> = {};
+    if (p.title !== undefined) upd.title = String(p.title).slice(0, 200);
+    if (p.body !== undefined) upd.body = String(p.body);
+    if (p.images !== undefined) upd.images = Array.isArray(p.images) ? p.images.slice(0, 12) : [];
+    if (p.section !== undefined) upd.category = await sectionSlug(p.section);
+    if (p.pinned !== undefined) upd.is_pinned = !!p.pinned;
+    if (p.locked !== undefined) upd.is_locked = !!p.locked;
+    if (p.hidden !== undefined) upd.is_hidden = !!p.hidden;
+    if (upd.title !== undefined || upd.body !== undefined || upd.images !== undefined) upd.edited_at = new Date().toISOString();
+    return topicOut(check(await db.from('forum_topics').update(upd).eq('id', need(p.id, 'id')).select(TOPIC_COLS).single()));
+  },
+  'forum.topics.delete': async (p) => { check(await db.from('forum_topics').delete().eq('id', need(p.id, 'id'))); return { deleted: p.id }; },
+  'forum.posts.create': async (p) => {
+    const topic = need(p.topic_id, 'topic_id');
+    if (p.parent_id) { const par: any = check(await db.from('forum_posts').select('topic_id').eq('id', p.parent_id).maybeSingle()); if (!par || par.topic_id !== topic) fail('parent_id не з цієї теми'); }
+    const row = { topic_id: topic, parent_id: p.parent_id || null, body: String(need(p.body, 'body')), images: Array.isArray(p.images) ? p.images.slice(0, 12) : [],
+      is_shop: true, author_name: SHOP_AUTHOR, created_at: new Date().toISOString() };
+    return check(await db.from('forum_posts').insert(row).select('id, topic_id, parent_id, created_at').single());
+  },
+  'forum.posts.update': async (p) => {
+    const upd: Record<string, unknown> = {};
+    if (p.body !== undefined) { upd.body = String(p.body); upd.edited_at = new Date().toISOString(); }
+    if (p.images !== undefined) upd.images = Array.isArray(p.images) ? p.images.slice(0, 12) : [];
+    if (p.hidden !== undefined) upd.is_hidden = !!p.hidden;
+    return check(await db.from('forum_posts').update(upd).eq('id', need(p.id, 'id')).select('id, is_hidden, edited_at').single());
+  },
+  'forum.posts.delete': async (p) => { check(await db.from('forum_posts').delete().eq('id', need(p.id, 'id'))); return { deleted: p.id }; },
+  'forum.stats': async (p) => check(await db.rpc('forum_stats', { p_days: Math.min(Math.max(Number(p.days) || 7, 1), 365) })),
+  'forum.photos.upload_url': async (p) => {
+    const count = Math.min(Math.max(Number(p.count) || 1, 1), 12);
+    const out = [];
+    for (let i = 0; i < count; i++) {
+      const path = `shop/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${p.ext === 'webp' ? 'webp' : 'jpg'}`;
+      const { data, error } = await db.storage.from('forum').createSignedUploadUrl(path);
+      if (error) fail(error.message);
+      out.push({ upload_url: data!.signedUrl, public_url: db.storage.from('forum').getPublicUrl(path).data.publicUrl });
+    }
+    return out;
+  },
+
+  // ---------- SEO: what Google shows (titles, descriptions, section texts, FAQ, redirects) ----------
+  'seo.health': async () => check(await db.rpc('seo_health')),
+  'seo.products.missing': async (p) => {
+    // products on the site without their own Google title/description: the program's AI fills them (seo.products.set)
+    let q = db.from('tyres').select('program_product_id, title, manufacturer, price, description, seo_title, seo_description, category_id, product_categories(name)')
+      .not('program_product_id', 'is', null).neq('in_stock', false).order('id').range(p.offset || 0, (p.offset || 0) + Math.min(p.limit || 100, 500) - 1);
+    q = p.field === 'description' ? q.or('seo_description.is.null,seo_description.eq.') : q.or('seo_title.is.null,seo_title.eq.,seo_description.is.null,seo_description.eq.');
+    return (check(await q) as any[]).map(r => ({ program_product_id: r.program_product_id, title: r.title, brand: r.manufacturer, price: money(r.price),
+      category: r.product_categories?.name ?? null, has_description: !!r.description, seo_title: r.seo_title, seo_description: r.seo_description }));
+  },
+  'seo.products.set': async (p) => {
+    // many at once: [{ program_product_id, seo_title?, seo_description?, seo_keywords?, description? }]
+    const items = (need(p.items, 'items') as any[]).slice(0, 500);
+    let saved = 0; const missing: string[] = [];
+    for (const it of items) {
+      const upd: Record<string, unknown> = {};
+      for (const k of ['seo_title', 'seo_description', 'seo_keywords', 'description']) if (it[k] !== undefined) upd[k] = it[k] ? String(it[k]) : null;
+      if (!Object.keys(upd).length) continue;
+      const r = await db.from('tyres').update(upd).eq('program_product_id', it.program_product_id).select('id');
+      if (r.error) fail(r.error.message);
+      if (r.data?.length) saved++; else missing.push(it.program_product_id);
+    }
+    return { saved, not_on_site: missing };
+  },
+  'seo.categories.list': async () => {
+    const cats = check(await db.from('product_categories').select('id, name, slug, parent_id, is_active, description, seo_title, seo_description, noindex, faq').order('sort_order')) as any[];
+    return cats.map(c => ({ ...c, url: `https://www.forsage-tires.com/katalog/${c.slug}` }));
+  },
+  'seo.categories.set': async (p) => {
+    const upd: Record<string, unknown> = {};
+    for (const k of ['seo_title', 'seo_description', 'description']) if (p[k] !== undefined) upd[k] = p[k] || null;
+    if (p.noindex !== undefined) upd.noindex = !!p.noindex;
+    if (p.faq !== undefined) {
+      // questions and answers under the section: [{ q, a }]
+      upd.faq = Array.isArray(p.faq) ? p.faq.filter((x: any) => x?.q && x?.a).slice(0, 20).map((x: any) => ({ q: String(x.q), a: String(x.a) })) : null;
+    }
+    return check(await db.from('product_categories').update(upd).eq('id', need(p.id, 'id')).select('id, seo_title, seo_description, noindex').single());
+  },
+  'seo.settings.get': async () => Object.fromEntries((check(await db.from('settings').select('key, value').like('key', 'seo_%')) as any[]).map(r => [r.key, r.value])),
+  'seo.settings.set': async (p) => {
+    // site-wide: seo_title, seo_description, seo_keywords, seo_image, seo_hours ("Mo-Su 08:00-19:00"), seo_founded,
+    // product title templates seo_tpl_title / seo_tpl_desc (and per section seo_tpl_title_<id>), seo_gsc_verify
+    const values = need(p.values, 'values') as Record<string, unknown>;
+    const rows = Object.entries(values).map(([key, value]) => (/^seo_[a-z0-9_]+$/.test(key) && key !== 'seo_mode' ? { key, value: String(value ?? '') } : fail(`Ключ ${key} не дозволено`)));
+    if (rows.length) check(await db.from('settings').upsert(rows));
+    return { saved: rows.length };
+  },
+  'seo.redirects.list': async () => check(await db.from('seo_redirects').select('from_path, to_path, hits, created_at').order('created_at', { ascending: false })),
+  'seo.redirects.set': async (p) => {
+    const from = String(need(p.from_path, 'from_path')), to = String(need(p.to_path, 'to_path'));
+    if (!from.startsWith('/') || !to.startsWith('/')) fail('Шляхи мають починатися з / (наприклад /katalog/stari-shyny)');
+    return check(await db.from('seo_redirects').upsert({ from_path: from, to_path: to }).select().single());
+  },
+  'seo.redirects.delete': async (p) => { check(await db.from('seo_redirects').delete().eq('from_path', need(p.from_path, 'from_path'))); return { deleted: p.from_path }; },
 
   // ---------- service ----------
   'ping': async () => {

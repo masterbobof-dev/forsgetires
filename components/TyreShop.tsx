@@ -68,7 +68,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
 }) => {
   const { categories, dbReady, loading: categoriesLoading } = useCategories();
   const { promos, ready: promosReady } = useSitePromos();
-  const { enableStockQty, novaPoshtaKey, shopPhone, shopPhone2, shopPhoneLink, shopPhoneLink2, agroFeaturedProducts } = useShopSettings();
+  const { enableStockQty, novaPoshtaKey, shopPhone, shopPhone2, shopPhoneLink, shopPhoneLink2, agroFeaturedProducts, orderWait } = useShopSettings();
   const favorites = useStoredIds(FAVORITES_KEY);
   const compare = useStoredIds(COMPARE_KEY, COMPARE_MAX);
   const { toast, show: showToast } = useToast();
@@ -417,7 +417,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
       )}
 
       <CartDrawer
-        isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} cart={cartItems} cartTotal={cartTotal}
+        isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} cart={cartItems} cartTotal={cartTotal} orderWait={orderWait}
         {...checkoutForm}
         formatPrice={formatPrice}
         removeFromCart={(id) => onCartChange(cartItems.filter(i => i.id !== id))}

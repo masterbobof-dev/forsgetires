@@ -90,7 +90,8 @@ const settings = [
 
 const tables = () => ({
   product_categories: categories.map((c) => ({ ...c })),
-  tyres: products.map((p) => ({ ...p })),
+  // price_num is a generated column in the real database (the number from the price text)
+  tyres: products.map((p) => ({ ...p, price_num: p.price ? Number(String(p.price).replace(/[^\d.]/g, '')) || null : null })),
   settings: settings.map((s) => ({ ...s })),
   site_promos: [{ id: 1, title: 'Мінус 10% на акумулятори', discount_percent: 10, target_type: 'category', target_ids: ['3'], badge_text: null, ends_at: null }],
   site_banners: [{ id: 1, title: 'Зимові шини в наявності', subtitle: 'Доставка Новою Поштою', image_url: svg('#27272a', 'Банер'), image_mobile_url: null, button_text: 'Дивитись', link: '/katalog/shyny', sort_order: 0 }],

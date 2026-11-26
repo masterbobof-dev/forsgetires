@@ -25,6 +25,11 @@ const ContactsPanel: React.FC<{ form: SettingsForm }> = ({ form }) => {
                <input type="text" value={contactSettings.address} onChange={e => setContactSettings({...contactSettings, address: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white" placeholder="м. Синельникове, вул. Квітнева 9"/>
            </div>
            <div>
+               <label className="block text-zinc-400 text-xs font-bold uppercase mb-1">Термін очікування товарів «під замовлення», днів</label>
+               <input type="text" value={contactSettings.orderWait} onChange={e => setContactSettings({...contactSettings, orderWait: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-bold" placeholder="3–5"/>
+               <p className="text-[11px] text-zinc-500 mt-1">Показується в кошику: «Під замовлення · очікування 3–5 дн.»</p>
+           </div>
+           <div>
                <label className="block text-zinc-400 text-xs font-bold uppercase mb-1 flex items-center gap-2"><Link2 size={14}/> Посилання на Google Maps</label>
                <input type="text" value={contactSettings.mapLink} onChange={e => setContactSettings({...contactSettings, mapLink: e.target.value})} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-zinc-300 text-sm font-mono" placeholder="https://maps.google..."/>
            </div>

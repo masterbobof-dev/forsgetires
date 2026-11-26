@@ -23,6 +23,8 @@ export const useShopSettings = () => {
   const [shopPhoneLink, setShopPhoneLink] = useState(PHONE_LINK_1);
   const [shopPhoneLink2, setShopPhoneLink2] = useState('tel:+380635823858');
   const [agroFeaturedProducts, setAgroFeaturedProducts] = useState<TyreProduct[]>([]);
+  /** how many days goods "on order" take to arrive, e.g. "3–5" (Admin → Налаштування → Контакти) */
+  const [orderWait, setOrderWait] = useState('3–5');
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -32,10 +34,12 @@ export const useShopSettings = () => {
         'contact_phone2',
         'nova_poshta_key',
         'agro_featured_ids',
+        'contact_order_wait',
       ]);
       if (setts) {
           for (const item of setts) {
               if (item.key === 'enable_stock_quantity') setEnableStockQty(item.value === 'true');
+              if (item.key === 'contact_order_wait' && item.value?.trim()) setOrderWait(item.value.trim());
               if (item.key === 'contact_phone1') {
                   setShopPhone(item.value);
                   setShopPhoneLink(telLink(item.value));
@@ -59,5 +63,5 @@ export const useShopSettings = () => {
     fetchSettings();
   }, []);
 
-  return { enableStockQty, novaPoshtaKey, shopPhone, shopPhone2, shopPhoneLink, shopPhoneLink2, agroFeaturedProducts };
+  return { enableStockQty, novaPoshtaKey, shopPhone, shopPhone2, shopPhoneLink, shopPhoneLink2, agroFeaturedProducts, orderWait };
 };

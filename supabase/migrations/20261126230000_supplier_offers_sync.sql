@@ -1,0 +1,12 @@
+-- Applied to the live database on 2026-11-26 (migrations supplier_offers_sync + supplier_sync_cron and small fixes).
+-- Partner goods (GPL, Omega) from the program's site_supplier_offers_export() are shown on the site "під замовлення".
+-- tyres.supplier_offer_id (unique) = the program's external_id.
+-- private.supplier_sync_state: cursor (updated_at, external_id), last run, nightly full pass (full_resync_at, missing_checked_at).
+-- private.supplier_category_rules + private.supplier_category(name, program category): the program category if mapped,
+--   otherwise by the first words of the name (Фільтр → Фільтри, Глушник → Вихлопна система ...), otherwise Автозапчастини.
+-- private.supplier_offers_apply(payload): set-based update of existing rows and insert of new visible ones.
+--   Visible = active at the partner, has a photo and a price, the folder is on, not hidden by hand, and the shop does not
+--   have the same article in its own stock. Price = retail price only. lead_days = min days to ship.
+-- public.supplier_sync_state / supplier_sync_apply / supplier_sync_save / supplier_sync_hide_missing: service role only.
+-- cron: supplier-sync every 5 minutes (edge function supplier-sync), supplier-sync-full-reset at 02:53 UTC.
+-- The full SQL is in the Supabase migration history of the project.

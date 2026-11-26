@@ -1,15 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Loader2, Save, Trash2, Plus, Sparkles, Hand, AlertTriangle, CheckCircle, ExternalLink, EyeOff } from 'lucide-react';
+import { Loader2, Save, Trash2, Plus, AlertTriangle, CheckCircle, ExternalLink, EyeOff } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 
 /**
- * Extra SEO settings: health check, AI / manual mode, title templates, section texts and hiding,
+ * Extra SEO settings: health check, title templates, section texts and hiding,
  * redirects, shop hours, Google / Facebook counters. The site's server pages read these settings.
  */
-export type SeoView = 'health' | 'mode' | 'templates' | 'sections' | 'redirects' | 'local' | 'counters';
+export type SeoView = 'health' | 'templates' | 'sections' | 'redirects' | 'local' | 'counters';
 export const SEO_VIEWS: { id: SeoView; label: string }[] = [
   { id: 'health', label: 'Перевірка' },
-  { id: 'mode', label: 'ШІ або вручну' },
   { id: 'templates', label: 'Шаблони' },
   { id: 'sections', label: 'Розділи' },
   { id: 'redirects', label: 'Перенаправлення' },
@@ -62,13 +61,13 @@ const Health: React.FC<{ onOpen: (v: string) => void }> = ({ onOpen }) => {
   if (!h) return <div className={box}><Loader2 className="animate-spin text-zinc-500" /></div>;
   const pct = (n: number) => (h.products ? Math.round((n / h.products) * 100) : 0);
   const rows: { n: number; text: string; fix: string; go?: string; bad?: boolean }[] = [
-    { n: h.no_seo_title, text: `товарів без власного заголовка для Google (${pct(h.no_seo_title)}%)`, fix: 'Увімкніть режим «ШІ» або задайте шаблон — тоді заголовок буде у всіх.', go: 'mode' },
-    { n: h.no_seo_desc, text: 'товарів без опису для Google', fix: 'Те саме: режим «ШІ» або шаблон опису.', go: 'templates' },
+    { n: h.no_seo_title, text: `товарів без власного заголовка для Google (${pct(h.no_seo_title)}%)`, fix: 'Заголовки й описи для Google пише ШІ-помічник у програмі. Поки їх немає — сайт бере шаблон.', go: 'templates' },
+    { n: h.no_seo_desc, text: 'товарів без опису для Google', fix: 'Те саме: опис прийде з програми, а поки — шаблон.', go: 'templates' },
     { n: h.dup_products, text: `товарів з однаковими заголовками (${h.dup_groups} груп)`, fix: `Google вважає їх копіями. Найчастіші: ${(h.dup_examples || []).slice(0, 3).join('; ')}. Приберіть дублі в програмі.`, bad: true },
-    { n: h.long_title, text: 'заголовків довших за 70 символів (Google обріже)', fix: 'Скоротіть у «Товар вручну».', go: 'products' },
+    { n: h.long_title, text: 'заголовків довших за 70 символів (Google обріже)', fix: 'Скоротіть назву в програмі.' },
     { n: h.short_desc, text: 'занадто коротких описів для Google', fix: 'Краще 140–160 символів.' },
-    { n: h.thin, text: 'товарів без фото і без тексту — Google показує їх гірше', fix: 'Фото ШІ та описи в програмі.' },
-    { n: h.cats_no_title, text: `розділів без заголовка для Google (з ${h.cats})`, fix: 'Заповніть у «Розділи» або увімкніть ШІ.', go: 'sections' },
+    { n: h.thin, text: 'товарів без фото і без тексту — Google показує їх гірше', fix: 'Фото й описи додаються в програмі.' },
+    { n: h.cats_no_title, text: `розділів без заголовка для Google (з ${h.cats})`, fix: 'Заповніть у «Розділи».', go: 'sections' },
     { n: h.cats_no_text, text: 'розділів без тексту на сторінці', fix: 'Текст унизу сторінки розділу допомагає потрапити в пошук.', go: 'sections' },
   ];
   const score = Math.max(0, 100 - Math.round(pct(h.no_seo_title) * 0.3 + pct(h.dup_products) * 0.4 + pct(h.thin) * 0.2 + (h.cats ? (h.cats_no_text / h.cats) * 10 : 0)));
@@ -76,7 +75,7 @@ const Health: React.FC<{ onOpen: (v: string) => void }> = ({ onOpen }) => {
     <div className="space-y-4">
       <div className={`${box} flex items-center gap-5`}>
         <div className={`text-5xl font-black ${score >= 80 ? 'text-green-400' : score >= 50 ? 'text-[#FFC300]' : 'text-red-400'}`}>{score}</div>
-        <div><div className="text-white font-black">Оцінка SEO зі 100</div><p className={hint}>Перевірено {h.products} товарів у наявності та {h.cats} розділів. Приховано від Google розділів: {h.cats_hidden}. Перенаправлень: {h.redirects}.{h.ai_done ? ` ШІ вже заповнив: ${h.ai_done}.` : ''}</p></div>
+        <div><div className="text-white font-black">Оцінка SEO зі 100</div><p className={hint}>Перевірено {h.products} товарів у наявності та {h.cats} розділів. Приховано від Google розділів: {h.cats_hidden}. Перенаправлень: {h.redirects}.</p></div>
       </div>
       <div className={box}>
         {rows.map((r, i) => (
@@ -90,30 +89,6 @@ const Health: React.FC<{ onOpen: (v: string) => void }> = ({ onOpen }) => {
           </div>
         ))}
       </div>
-    </div>
-  );
-};
-
-// ---------------- AI / manual ----------------
-const Mode: React.FC = () => {
-  const s = useSettings(['seo_mode']);
-  const mode = s.vals.seo_mode === 'ai' ? 'ai' : 'manual';
-  const pick = (m: string) => { s.set('seo_mode', m); s.save({ seo_mode: m }); };
-  const card = (id: string, icon: React.ReactNode, title: string, text: string) => (
-    <button onClick={() => pick(id)} className={`text-left rounded-2xl border-2 p-4 transition ${mode === id ? 'border-[#FFC300] bg-[#FFC300]/10' : 'border-zinc-800 bg-zinc-900 hover:border-zinc-600'}`}>
-      <div className="flex items-center gap-2 text-white font-black">{icon}{title}{mode === id && <CheckCircle size={16} className="text-[#FFC300] ml-auto" />}</div>
-      <p className={`${hint} mt-2`}>{text}</p>
-    </button>
-  );
-  return (
-    <div className={box}>
-      <div className="text-white font-black text-lg">Хто заповнює SEO</div>
-      <div className="grid sm:grid-cols-2 gap-3">
-        {card('ai', <Sparkles size={18} className="text-[#FFC300]" />, 'ШІ автоматично', 'Кожні 10 хвилин ШІ пише заголовок і опис для Google до 25 товарів і 10 розділів, де їх ще немає, і одразу публікує. Те, що ви написали вручну, ШІ не чіпає. Описи товарів на сайті не пише — вони з програми.')}
-        {card('manual', <Hand size={18} className="text-[#FFC300]" />, 'Вручну', 'ШІ нічого сам не робить. Для товарів без заголовка сайт бере шаблон (вкладка «Шаблони»). Ви правите товари у «Товар вручну», а розділи — у «Розділи».')}
-      </div>
-      <p className={hint}>ШІ працює на вашому ключі Gemini. Один товар коштує частки цента, усі ~7000 товарів — орієнтовно до 1–2 $. Вимкнути можна будь-коли, натиснувши «Вручну».</p>
-      {s.msg && <div className="text-sm text-green-400">{s.msg}</div>}
     </div>
   );
 };
@@ -142,7 +117,7 @@ const Templates: React.FC = () => {
   return (
     <div className={box}>
       <div className="text-white font-black text-lg">Шаблони заголовків</div>
-      <p className={hint}>Шаблон потрібен для товарів, у яких немає свого заголовка (написаного вручну або ШІ). Натисніть на слово в дужках — воно вставиться в поле, де стоїть курсор. Шаблон розділу важливіший за загальний.</p>
+      <p className={hint}>Шаблон потрібен для товарів, у яких немає свого заголовка (з програми). Натисніть на слово в дужках — воно вставиться в поле, де стоїть курсор. Шаблон розділу важливіший за загальний.</p>
       <div className="flex flex-wrap gap-1.5">{VARS.map(v => <button key={v} onClick={() => s.set(focus, `${(s.vals[focus] || '').trimEnd()} ${v}`.trim())} className="text-xs bg-zinc-800 text-zinc-200 rounded-lg px-2 py-1 hover:bg-zinc-700">{v}</button>)}</div>
       {pair('', 'Для всіх товарів')}
       {roots.map(r => pair(`_${r.id}`, `Розділ «${r.name}»`))}
@@ -294,7 +269,6 @@ const Counters: React.FC = () => {
 
 const SeoProPanel: React.FC<{ view: SeoView; onOpen: (v: string) => void }> = ({ view, onOpen }) => {
   if (view === 'health') return <Health onOpen={onOpen} />;
-  if (view === 'mode') return <Mode />;
   if (view === 'templates') return <Templates />;
   if (view === 'sections') return <Sections />;
   if (view === 'redirects') return <Redirects />;

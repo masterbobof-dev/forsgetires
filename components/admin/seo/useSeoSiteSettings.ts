@@ -1,18 +1,15 @@
 import React, { useState, useRef } from 'react';
 import { supabase } from '../../../supabaseClient';
-import { generatePlainDescription, parseJsonFromAiText } from '../../../aiSeoClient';
-import type { AIProviderId } from '../../../aiTypes';
 
-/** "Сайт загалом": the site's meta tags, their score, AI/template filling, social picture, saving, sitemap download. */
-export const useSeoSiteSettings = (aiProvider: AIProviderId) => {
+/** "Сайт загалом": the site's meta tags, their score, template filling, social picture, saving, sitemap download. */
+export const useSeoSiteSettings = () => {
   const [loading, setLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
 
   const [settings, setSettings] = useState({
     seo_title: 'Шиномонтаж Форсаж Синельникове',
-    seo_description: 'Цілодобовий шиномонтаж, продаж шин та дисків. Якісний ремонт, зварювання аргоном. вул. Квітнева 9.',
+    seo_description: 'Шиномонтаж з 8:00 до 19:00, продаж шин та дисків. Якісний ремонт, зварювання аргоном. вул. Квітнева 9.',
     seo_keywords: 'шиномонтаж, синельникове, купити шини, ремонт дисків',
     seo_image: '',
     seo_robots: 'index, follow',
@@ -101,42 +98,6 @@ export const useSeoSiteSettings = (aiProvider: AIProviderId) => {
       });
   };
 
-  const generateAiSeo = async () => {
-      setIsGeneratingAi(true);
-      try {
-          const prompt = `Ти - провідний SEO-експерт для локального бізнесу. Створи ідеальні мета-теги для сайту автосервісу/шиномонтажу "Форсаж".
-Ми масштабуємося на ДНІПРО та ДНІПРОПЕТРОВСЬКУ ОБЛАСТЬ. 
-Цільові міста: Синельникове, Дніпро, Павлоград.
-Обов'язкові ключові запити: "Купити шини Дніпро", "Шиномонтаж Синельникове", "Ремонт дисків та зварювання аргоном", "Вантажний шиномонтаж область".
-Зроби заголовок максимально привабливим (CTR), а опис - таким, що спонукає до дзвінка. 
-
-ПОВЕРНИ ЛИШЕ СТРОГИЙ JSON:
-{
-  "seo_title": "Заголовок (до 60 симв, з акцентом на Синельникове і шиномонтаж)",
-  "seo_description": "Опис (до 160 симв, з переліком головних переваг та локацій)",
-  "seo_keywords": "7-10 ключових слів через кому"
-}`;
-          const rawResponse = await generatePlainDescription({
-              provider: aiProvider,
-              prompt
-          });
-          const parsed = parseJsonFromAiText(rawResponse);
-          
-          setSettings({
-              ...settings,
-              seo_title: String(parsed.seo_title || settings.seo_title),
-              seo_description: String(parsed.seo_description || settings.seo_description),
-              seo_keywords: String(parsed.seo_keywords || settings.seo_keywords)
-          });
-          alert("Авто-генерація за допомогою AI успішно завершена!");
-      } catch (err: any) {
-          console.error("AI Error:", err);
-          alert("Помилка AI: " + (err.message || "Невідома помилка"));
-      } finally {
-          setIsGeneratingAi(false);
-      }
-  };
-
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (!e.target.files || e.target.files.length === 0) return;
       setUploadingImage(true);
@@ -209,8 +170,8 @@ export const useSeoSiteSettings = (aiProvider: AIProviderId) => {
   };
 
   return {
-    loading, uploadingImage, imageInputRef, isGeneratingAi, settings, analysis,
-    fetchSeoSettings, handleChange, analyzeSeo, generateSmartData, generateAiSeo, handleImageUpload, handleSave, generateSitemap,
+    loading, uploadingImage, imageInputRef, settings, analysis,
+    fetchSeoSettings, handleChange, analyzeSeo, generateSmartData, handleImageUpload, handleSave, generateSitemap,
   };
 };
 

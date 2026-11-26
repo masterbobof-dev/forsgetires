@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "tsc --noEmit",
     "preview": "vite preview",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "tsx --test tests/*.test.ts",
+    "e2e": "node tests/e2e/shop.e2e.cjs && node tests/e2e/admin.e2e.cjs && node tests/e2e/settings.e2e.cjs && node tests/e2e/seo.e2e.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.86.0",
@@ -19,6 +20,8 @@
   },
   "devDependencies": {
     "@types/node": "^22.19.15",
+    "@types/react": "^19.3.3",
+    "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",

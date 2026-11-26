@@ -1,5 +1,5 @@
 # Automatic checks:
-#  - on every pull request / push to main: type check, unit tests, build
+#  - on every pull request / push to main: type check, unit tests, build, the shop test in a browser
 #  - after every production deploy on Vercel: the live site answers correctly (smoke test)
 name: checks
 on:
@@ -23,6 +23,18 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+      # the shop as a customer sees it: sections, filters, product, cart, order (the database is replaced by test data)
+      - name: Browser for the shop test
+        run: npm install --no-save playwright@1.63.0 && npx playwright install --with-deps chromium
+      - name: Shop test in a browser
+        run: npm run e2e
+      - name: Keep screenshots of failed steps
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: tests/e2e/.artifacts
+          if-no-files-found: ignore
 
   live-site:
     if: github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'Production'

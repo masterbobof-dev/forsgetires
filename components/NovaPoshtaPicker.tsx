@@ -36,7 +36,7 @@ const NovaPoshtaPicker: React.FC<Props> = ({ city, warehouse, onChange, inputCls
   const [loadingWh, setLoadingWh] = useState(false);
   const [whQuery, setWhQuery] = useState(warehouse);
   const [showWh, setShowWh] = useState(false);
-  const timer = useRef<number>();
+  const timer = useRef<number | undefined>(undefined);
 
   useEffect(() => { loadKey().then(setKey); }, []);
   useEffect(() => { setCityQuery(city); }, [city]);

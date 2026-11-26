@@ -82,7 +82,9 @@ export const useCheckout = ({ userId, userEmail, cartItems, onCartChange, novaPo
     } catch (err: any) { setOrderError(orderErrorText(err)); } finally { setQuickOrderSending(false); }
   };
 
-  const submitOrder = async () => {
+  /** sends the order; `selected` = only the ticked goods of the cart (the rest stay in the cart) */
+  const submitOrder = async (selected?: CartItem[]) => {
+    const items = selected?.length ? selected : cartItems;
     // Nova Poshta needs the full name: at least surname + name
     if (orderName.trim().split(/\s+/).filter(w => w.replace(/[^a-zа-яіїєґ'’-]/gi, '').length >= 2).length < 2) { setOrderError("Вкажіть прізвище та ім'я повністю (ПІБ) — без цього Нова Пошта не видасть посилку"); return; }
     if (!isValidUaPhone(orderPhone)) { setOrderError("Введіть телефон повністю: +380 XX XXX XX XX"); return; }
@@ -98,11 +100,11 @@ export const useCheckout = ({ userId, userEmail, cartItems, onCartChange, novaPo
           payment_method: paymentMethod,
           user_id: userId || null,
           customer_email: userEmail || null,
-          items: cartItems.map(i => ({ id: i.id, title: i.title, quantity: i.quantity, price: i.price }))
+          items: items.map(i => ({ id: i.id, title: i.title, quantity: i.quantity, price: i.on_order ? '0' : i.price }))
       }]);
       if (error) throw error;
-      logAnalyticsEvent('purchase', cartItems.map(i => i.id).join(','), `${cartItems.length} товар(и)`, undefined,
-        cartItems.reduce((sum, i) => sum + safeParsePrice(i.price) * i.quantity, 0));
+      logAnalyticsEvent('purchase', items.map(i => i.id).join(','), `${items.length} товар(и)`, undefined,
+        items.reduce((sum, i) => sum + safeParsePrice(i.price) * i.quantity, 0));
       // remember name / phone / delivery address in the customer's profile
       if (userId) {
         supabase.from('customer_profiles').upsert({
@@ -112,7 +114,7 @@ export const useCheckout = ({ userId, userEmail, cartItems, onCartChange, novaPo
         }).then(() => {});
       }
       setOrderSuccess(true);
-      onCartChange([]);
+      onCartChange(cartItems.filter(i => !items.some(s => s.id === i.id)));
     } catch (err: any) { setOrderError(orderErrorText(err)); } finally { setOrderSending(false); }
   };
 

@@ -214,7 +214,7 @@ const purchase = async (browser, url) => {
   const { page, fake } = shop;
   const ui = actions(shop);
   const S = 'purchase';
-  const drawer = page.locator('div.max-w-md').filter({ has: page.getByRole('heading', { name: 'Кошик' }) });
+  const drawer = page.locator('div.max-w-lg');
 
   await step(shop, S, 'open a product', async () => {
     await ui.goto(`${url}/katalog/akumulyatory`);
@@ -266,14 +266,15 @@ const purchase = async (browser, url) => {
   await step(shop, S, 'cart', async () => {
     await ui.click(page.locator('button[aria-label="Відкрити кошик"]'));
     await until(async () => assert.ok(await drawer.isVisible()));
-    assert.match(await drawer.textContent(), /2 позицій у списку/);
-    assert.match(await drawer.textContent(), /8181 грн/);
+    assert.match(await drawer.textContent(), /2 товари/);
+    assert.match(await drawer.textContent(), /До сплати8\s?181 грн/);
     await ui.click(drawer.locator('button:has(svg.lucide-plus)').first());
-    await until(async () => assert.match(await drawer.textContent(), /11682 грн/));
+    await until(async () => assert.match(await drawer.textContent(), /До сплати11\s?682 грн/));
   });
 
   await step(shop, S, 'checkout needs a full name', async () => {
-    await ui.click(drawer.getByRole('button', { name: /ОФОРМИТИ ЗАМОВЛЕННЯ/ }));
+    await ui.click(drawer.getByRole('button', { name: 'Оформити замовлення' }));
+    await ui.click(drawer.getByRole('button', { name: /Підтвердити замовлення/ }));
     await until(async () => assert.ok(await drawer.getByText(/Вкажіть прізвище та ім'я повністю/).isVisible()));
     assert.equal((fake.inserted.tyre_orders || []).length, 0);
   });
@@ -281,7 +282,7 @@ const purchase = async (browser, url) => {
   await step(shop, S, 'checkout needs a full phone', async () => {
     await ui.fill(drawer.getByPlaceholder("Прізвище Ім'я По батькові"), 'Тестенко Тест');
     await ui.fill(drawer.getByPlaceholder('+380 __ ___ __ __'), '09911');
-    await ui.click(drawer.getByRole('button', { name: /ОФОРМИТИ ЗАМОВЛЕННЯ/ }));
+    await ui.click(drawer.getByRole('button', { name: /Підтвердити замовлення/ }));
     await until(async () => assert.ok(await drawer.getByText(/Введіть телефон повністю/).isVisible()));
     assert.equal((fake.inserted.tyre_orders || []).length, 0);
   });
@@ -298,7 +299,7 @@ const purchase = async (browser, url) => {
   });
 
   await step(shop, S, 'order is sent', async () => {
-    await ui.click(drawer.getByRole('button', { name: /ОФОРМИТИ ЗАМОВЛЕННЯ/ }));
+    await ui.click(drawer.getByRole('button', { name: /Підтвердити замовлення/ }));
     await until(async () => assert.ok(await drawer.getByRole('heading', { name: 'Дякуємо!' }).isVisible()));
     assert.deepEqual(fake.inserted.tyre_orders, [{
       customer_name: 'Тестенко Тест', customer_phone: '+380 99 111 22 33', status: 'new',
@@ -564,19 +565,20 @@ const customer = async (browser, url) => {
   const { page, fake } = shop;
   const ui = actions(shop);
   const S = 'customer';
-  const drawer = page.locator('div.max-w-md').filter({ has: page.getByRole('heading', { name: 'Кошик' }) });
+  const drawer = page.locator('div.max-w-lg');
 
   await step(shop, S, 'checkout is prefilled from the profile', async () => {
     await ui.goto(`${url}/katalog/dysky`);
     await expectCards(page, 2);
     await ui.click(cards(page).first().locator('button[title="Додати у кошик"]'));
     await ui.click(page.locator('button[aria-label="Відкрити кошик"]'));
+    await ui.click(drawer.getByRole('button', { name: 'Оформити замовлення' }));
     await until(async () => assert.equal(await drawer.getByPlaceholder("Прізвище Ім'я По батькові").inputValue(), 'Петренко Іван'));
     assert.equal(await drawer.getByPlaceholder('+380 __ ___ __ __').inputValue(), '+380 67 111 22 33');
   });
 
   await step(shop, S, 'order is linked to the account', async () => {
-    await ui.click(drawer.getByRole('button', { name: /ОФОРМИТИ ЗАМОВЛЕННЯ/ }));
+    await ui.click(drawer.getByRole('button', { name: /Підтвердити замовлення/ }));
     await until(async () => assert.ok(await drawer.getByRole('heading', { name: 'Дякуємо!' }).isVisible()));
     assert.deepEqual(fake.inserted.tyre_orders, [{
       customer_name: 'Петренко Іван', customer_phone: '+380 67 111 22 33', status: 'new',
@@ -656,10 +658,11 @@ const phone = async (browser, url) => {
 
   await step(shop, S, 'pickup order from the phone', async () => {
     await ui.click(page.locator('button[aria-label="Відкрити кошик"]'));
-    const drawer = page.locator('div.max-w-md').filter({ has: page.getByRole('heading', { name: 'Кошик' }) });
+    const drawer = page.locator('div.max-w-lg');
+    await ui.click(drawer.getByRole('button', { name: 'Оформити замовлення' }));
     await ui.fill(drawer.getByPlaceholder("Прізвище Ім'я По батькові"), 'Коваль Олена');
     await ui.fill(drawer.getByPlaceholder('+380 __ ___ __ __'), '380931234567');
-    await ui.click(drawer.getByRole('button', { name: /ОФОРМИТИ ЗАМОВЛЕННЯ/ }));
+    await ui.click(drawer.getByRole('button', { name: /Підтвердити замовлення/ }));
     await until(async () => assert.ok(await drawer.getByRole('heading', { name: 'Дякуємо!' }).isVisible()));
     assert.deepEqual(fake.inserted.tyre_orders, [{
       customer_name: 'Коваль Олена', customer_phone: '+380 93 123 45 67', status: 'new', delivery_method: 'pickup', delivery_city: '', delivery_warehouse: '',

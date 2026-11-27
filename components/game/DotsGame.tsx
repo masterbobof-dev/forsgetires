@@ -3,13 +3,16 @@ import { ArrowLeft, Copy, Share2, Loader2, Flag, Plus, Bot, Users } from 'lucide
 import { supabase } from '../../supabaseClient';
 import { computeDots, canPut, botMove, type Move } from './dots';
 import { inTelegram, telegramApp } from './telegram';
+import FortressBoard from './FortressBoard';
+import { botAction, replay, type Action } from './fortress';
 
 /**
  * «Точки» for two players by a link (/igra?g=<id>): one starts a game and sends the link, the other opens it.
  * Moves are kept on the server; both screens ask for news every 1.5 s.
  * With no partner, the game is played against the computer on this phone (blue).
  */
-type Game = { id: string; w: number; h: number; moves: Move[]; joined: boolean; finished: boolean };
+type Mode = 'dots' | 'fort';
+type Game = { id: string; w: number; h: number; moves: any[]; joined: boolean; finished: boolean; mode?: Mode };
 type Seat = { token?: string; player: number };
 
 const COLORS = ['', '#ef4444', '#3b82f6'];
@@ -62,15 +65,15 @@ const DotsGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     return () => clearInterval(t);
   }, [id, load]);
 
-  const startBot = () => {
+  const startBot = (mode: Mode = game?.mode || 'dots') => {
     setErr(''); setId(''); setVsBot(true); setSeat({ player: 1 });
-    setGame({ id: 'bot', w: 15, h: 20, moves: [], joined: true, finished: false });
+    setGame({ id: 'bot', w: 15, h: mode === 'fort' ? 19 : 20, moves: [], joined: true, finished: false, mode });
     window.history.replaceState({}, '', '/igra');
   };
 
-  const newGame = async () => {
+  const newGame = async (mode: Mode = game?.mode || 'dots') => {
     setBusy(true); setErr(''); setVsBot(false);
-    const { data, error } = await supabase.rpc('dots_new', { p_w: 15, p_h: 20 });
+    const { data, error } = await supabase.rpc('dots_new_mode', { p_mode: mode, p_w: 15, p_h: mode === 'fort' ? 19 : 20 });
     setBusy(false);
     if (error) { setErr(error.message); return; }
     saveSeat(data.id, { token: data.token, player: 1 });
@@ -78,7 +81,30 @@ const DotsGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     setGame(null); setSeat(null); setId(data.id);
   };
 
-  const state = useMemo(() => (game ? computeDots(game.w, game.h, game.moves) : null), [game]);
+  const fort = game?.mode === 'fort';
+  const state = useMemo(() => (game && !fort ? computeDots(game.w, game.h, game.moves) : null), [game, fort]);
+
+  // «Фортеці»: one action of this player (against the computer — on the phone; with a friend — through the server)
+  const act = async (a: Action) => {
+    if (!game || !seat) return;
+    if (vsBot) { setGame(g => g && { ...g, moves: [...g.moves, { ...a, p: 1 }] }); return; }
+    if (!seat.token) return;
+    setGame(g => g && { ...g, moves: [...g.moves, { ...a, p: seat.player }] });
+    const { data, error } = await supabase.rpc('fort_act', { p_id: game.id, p_token: seat.token, p_action: a });
+    if (error) { setErr(error.message); load(game.id); return; }
+    setErr(''); setGame(data as Game);
+  };
+  // the computer plays its whole turn, one action every 0.6 s so it can be followed
+  useEffect(() => {
+    if (!vsBot || !fort || !game) return;
+    const st = replay(game.moves as Action[]);
+    if (st.winner || st.turn !== 2) return;
+    const t = setTimeout(() => {
+      const a = botAction(st);
+      setGame(g => g && { ...g, moves: [...g.moves, { ...a, p: 2 }] });
+    }, 600);
+    return () => clearTimeout(t);
+  }, [vsBot, fort, game]);
   const turn = game ? (game.moves.length % 2 === 0 ? 1 : 2) : 0;
   const myTurn = !!seat?.player && seat.player === turn && !!game?.joined && !game?.finished;
   // a friend invited from Telegram also gets the game without the shop around it
@@ -138,18 +164,48 @@ const DotsGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   if (!id && !vsBot) {
     return (
       <div data-app-ready className="max-w-md mx-auto px-4 py-10 text-center">
-        <h1 className="text-3xl font-black text-white mb-3">Точки</h1>
-        <p className="text-zinc-400 mb-8">Гра для двох, як на листочку в клітинку. Ставте точки по черзі й обводьте точки суперника — кожна оточена точка дає очко.</p>
-        <div className="flex flex-col gap-3 max-w-xs mx-auto">
-          <button onClick={newGame} disabled={busy} className="flex items-center justify-center gap-2 bg-[#FFC300] text-black font-black px-6 py-4 rounded-2xl disabled:opacity-50">
-            {busy ? <Loader2 className="animate-spin" size={20} /> : <Users size={20} />} Грати з другом
-          </button>
-          <button onClick={startBot} className="flex items-center justify-center gap-2 bg-zinc-800 text-white font-black px-6 py-4 rounded-2xl">
-            <Bot size={20} /> Грати з ботом
-          </button>
+        <h1 className="text-3xl font-black text-white mb-6">Ігри</h1>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-4 text-left">
+          <h2 className="text-xl font-black text-white">🏰 Фортеці</h2>
+          <p className="text-zinc-400 text-sm mb-3">Покрокова стратегія: замкніть коло — це ваша фортеця. Будуйте башти, казарми, наймайте воїнів і танки, захоплюйте чужі фортеці.</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => newGame('fort')} disabled={busy} className="flex items-center justify-center gap-1.5 bg-[#FFC300] text-black font-black py-3 rounded-xl text-sm disabled:opacity-50"><Users size={16} /> З другом</button>
+            <button onClick={() => startBot('fort')} className="flex items-center justify-center gap-1.5 bg-zinc-800 text-white font-black py-3 rounded-xl text-sm"><Bot size={16} /> З ботом</button>
+          </div>
+        </div>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-left">
+          <h2 className="text-xl font-black text-white">• Точки</h2>
+          <p className="text-zinc-400 text-sm mb-3">Класика на листочку в клітинку: ставте точки по черзі й обводьте точки суперника.</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => newGame('dots')} disabled={busy} className="flex items-center justify-center gap-1.5 bg-[#FFC300] text-black font-black py-3 rounded-xl text-sm disabled:opacity-50"><Users size={16} /> З другом</button>
+            <button onClick={() => startBot('dots')} className="flex items-center justify-center gap-1.5 bg-zinc-800 text-white font-black py-3 rounded-xl text-sm"><Bot size={16} /> З ботом</button>
+          </div>
         </div>
         {err && <p className="text-red-400 text-sm mt-4">{err}</p>}
         {!tg && <button onClick={onBack} className="block mx-auto mt-10 text-zinc-500 text-sm"><ArrowLeft size={14} className="inline" /> На сайт</button>}
+      </div>
+    );
+  }
+
+  // --- «Фортеці» ---
+  if (game && fort) {
+    return (
+      <div data-app-ready className="w-full max-w-lg mx-auto px-3 py-3 overflow-hidden">
+        {!tg && <button onClick={onBack} className="text-zinc-500 text-sm flex items-center gap-1 mb-1"><ArrowLeft size={14} /> На сайт</button>}
+        {!game.joined && (
+          <div className="mb-2">
+            <button onClick={share} className="w-full h-11 rounded-xl bg-[#FFC300] text-black font-black text-sm flex items-center justify-center gap-2">
+              <Share2 size={16} /> {copied ? 'Посилання скопійовано' : tg ? 'Запросити друга в Telegram' : 'Надіслати посилання другу'}
+            </button>
+            <button onClick={() => startBot('fort')} className="w-full h-10 mt-2 rounded-xl bg-zinc-800 text-white font-bold text-sm flex items-center justify-center gap-2"><Bot size={16} /> Поки нікого — грати з ботом</button>
+          </div>
+        )}
+        {err && <p className="text-red-400 text-xs text-center mb-1">{err}</p>}
+        <FortressBoard actions={game.moves as Action[]} me={seat?.player || 0} vsBot={vsBot} joined={game.joined} busy={busy} onAct={act}
+          footer={<>
+            <button onClick={() => (vsBot ? startBot('fort') : newGame('fort'))} className="h-10 px-3 rounded-xl bg-zinc-800 text-white font-bold text-sm flex items-center gap-1 whitespace-nowrap"><Plus size={16} /> Нова гра</button>
+            <button onClick={() => { setVsBot(false); setGame(null); setId(''); window.history.replaceState({}, '', '/igra'); }} className="h-10 px-3 rounded-xl bg-zinc-800 text-white font-bold text-sm whitespace-nowrap">Інші ігри</button>
+          </>} />
       </div>
     );
   }
@@ -214,7 +270,7 @@ const DotsGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             {tg || typeof navigator.share === 'function' ? <Share2 size={16} /> : <Copy size={16} />} {copied ? 'Посилання скопійовано' : tg ? 'Запросити друга в Telegram' : 'Надіслати посилання другу'}
           </button>
           <p className="text-[11px] text-zinc-500 mt-1 truncate text-center">{link}</p>
-          <button onClick={startBot} className="w-full h-10 mt-2 rounded-xl bg-zinc-800 text-white font-bold text-sm flex items-center justify-center gap-2"><Bot size={16} /> Поки нікого — грати з ботом</button>
+          <button onClick={() => startBot('dots')} className="w-full h-10 mt-2 rounded-xl bg-zinc-800 text-white font-bold text-sm flex items-center justify-center gap-2"><Bot size={16} /> Поки нікого — грати з ботом</button>
         </div>
       )}
       <div className="bg-white rounded-2xl overflow-hidden shadow-xl touch-manipulation">
@@ -231,8 +287,8 @@ const DotsGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       </div>
       {err && <p className="text-red-400 text-sm text-center mt-2">{err}</p>}
       <div className="flex justify-center gap-2 mt-3">
-        <button onClick={vsBot ? startBot : newGame} disabled={busy && !vsBot} className="h-10 px-3 rounded-xl bg-zinc-800 text-white font-bold text-sm flex items-center gap-1 whitespace-nowrap"><Plus size={16} /> Нова гра</button>
-        {vsBot && <button onClick={newGame} className="h-10 px-3 rounded-xl bg-zinc-800 text-white font-bold text-sm flex items-center gap-1 whitespace-nowrap"><Users size={16} /> З другом</button>}
+        <button onClick={() => (vsBot ? startBot('dots') : newGame('dots'))} disabled={busy && !vsBot} className="h-10 px-3 rounded-xl bg-zinc-800 text-white font-bold text-sm flex items-center gap-1 whitespace-nowrap"><Plus size={16} /> Нова гра</button>
+        {vsBot && <button onClick={() => newGame('dots')} className="h-10 px-3 rounded-xl bg-zinc-800 text-white font-bold text-sm flex items-center gap-1 whitespace-nowrap"><Users size={16} /> З другом</button>}
         {me > 0 && game.joined && !game.finished && <button onClick={finish} className="h-10 px-3 rounded-xl bg-zinc-800 text-white font-bold text-sm flex items-center gap-1 whitespace-nowrap"><Flag size={16} /> Завершити</button>}
       </div>
       {me > 0 && <p className="text-[11px] text-zinc-500 text-center mt-3">Обведіть точки суперника своїми точками (можна по діагоналі) — вони стають вашими. Всередину захопленої області ставити не можна.</p>}

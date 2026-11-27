@@ -47,8 +47,18 @@ const TWINS: string[][] = [
   ['кольц', 'кільц'], ['очистител', 'очисник'], ['радиатор', 'радіатор'], ['крышк', 'кришк'], ['лампочк', 'лампа', 'ламп'],
   ['левый', 'левая', 'лівий', 'ліва'], ['правый', 'правая', 'правий', 'права'], ['передн', 'передн'], ['насос', 'помпа'],
   ['клемм', 'клем'], ['компресс', 'компрес'], ['полирол', 'полірол'], ['вонючк', 'ароматиз'], ['антифриз', 'тосол'], ['домкрат', 'домкрат'],
+  // one maker under two names: ТМК is the Ternopil exhaust plant
+  ['тернопол', 'тернопіл', 'тмк'],
   ['буксир', 'трос'], ['прикуриват', 'прикурюв', 'прикурив'], ['зарядн', 'зарядн'], ['пружин', 'пружин'], ['опор', 'опор'], ['прокладк', 'прокладк'],
 ];
+/** Makers that come under several names (roots). Choosing one in the brand filter shows all of them. */
+const BRAND_FAMILIES: string[][] = [['тмк', 'тернопол', 'тернопіл']];
+/** the roots of a brand's family, or [] when the brand has no other names */
+export const brandFamily = (brand: string): string[] => {
+  const b = brand.toLowerCase().trim();
+  return BRAND_FAMILIES.find(f => f.some(r => b.startsWith(r))) || [];
+};
+
 /** other spellings of a search word (roots), empty if the word has no twin */
 export const twinsOf = (word: string): string[] => {
   const w = word.toLowerCase();

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../../../supabaseClient';
 import type { TyreProduct } from '../../../types';
 import { type ProductCategory, buildCategoryFilter } from '../../../categories';
-import { parseSearch, searchFilters, swapLayout, looseWord } from '../../../searchQuery';
+import { parseSearch, searchFilters, swapLayout, looseWord, brandFamily } from '../../../searchQuery';
 import { logAnalyticsEvent } from '../../admin/analytics';
 import type { CategorySelection } from '../CategoryNav';
 import type { SortValue } from '../FilterToolbar';
@@ -78,7 +78,15 @@ export const useProductList = (q: ProductListParams) => {
       if (q.filterBrand) {
         // the brand, and goods without a brand whose name has it («… Таврия, Славута Тернополь»)
         const b = q.filterBrand.replace(/["\\*]/g, '');
-        query = query.or(`manufacturer.ilike."${b}",and(manufacturer.is.null,title.ilike."*${looseWord(b.toLowerCase())}*")`);
+        const family = brandFamily(b);
+        if (family.length) {
+          // one maker under several names (ТМК = Тернополь / Тернопіль): any of them, by brand or in the name
+          const names = family.map(r => `manufacturer.ilike."*${r}*"`).join(',');
+          const titles = family.map(r => `title.ilike."*${r}*"`).join(',');
+          query = query.or(`${names},and(manufacturer.is.null,or(${titles}))`);
+        } else {
+          query = query.or(`manufacturer.ilike."${b}",and(manufacturer.is.null,title.ilike."*${looseWord(b.toLowerCase())}*")`);
+        }
       }
       if (q.filterRadius) query = query.eq('radius', q.filterRadius);
       if (q.filterWidth) query = query.ilike('title', `%${q.filterWidth}%`);

@@ -223,8 +223,28 @@ const PickerBody: React.FC<PickerProps & { onCar?: (name: string) => void }> = (
 const VehiclePicker: React.FC<PickerProps> = (props) => {
   const [open, setOpen] = useState(false);
   const [carName, setCarName] = useState(() => { try { return localStorage.getItem(SAVED_NAME) || ''; } catch { return ''; } });
-  const close = () => setOpen(false);
-  const then = <A extends unknown[]>(fn?: (...a: A) => void) => fn && ((...a: A) => { close(); fn(...a); });
+  // the window is a step of its own in the browser history: «back» (a swipe on the phone) closes it
+  // and keeps the home page, instead of going to whatever page was open before
+  const openPicker = () => {
+    try { window.history.pushState({ ...(window.history.state || {}), vehiclePicker: true }, '', window.location.href); } catch { /* old browsers */ }
+    setOpen(true);
+  };
+  const close = () => {
+    if (window.history.state?.vehiclePicker) window.history.back(); // → popstate below closes the window
+    else setOpen(false);
+  };
+  // a choice (tyres, a battery, wheels) opens the goods: the window's step is turned into the new page, not left behind
+  const then = <A extends unknown[]>(fn?: (...a: A) => void) => fn && ((...a: A) => {
+    try { if (window.history.state?.vehiclePicker) window.history.replaceState({ ...window.history.state, vehiclePicker: false }, '', window.location.href); } catch { /* ignore */ }
+    setOpen(false);
+    fn(...a);
+  });
+  useEffect(() => {
+    if (!open) return;
+    const onPop = () => { if (!window.history.state?.vehiclePicker) setOpen(false); };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -237,7 +257,7 @@ const VehiclePicker: React.FC<PickerProps> = (props) => {
 
   return (
     <>
-      <button onClick={() => setOpen(true)}
+      <button onClick={openPicker}
         className="w-full flex items-center gap-3 text-left bg-gradient-to-br from-zinc-900 to-zinc-950 border border-zinc-800 hover:border-[#FFC300] rounded-2xl px-4 py-3 transition-colors">
         <span className="w-11 h-11 shrink-0 rounded-xl bg-[#FFC300] text-black flex items-center justify-center"><Car size={22} /></span>
         <span className="flex-1 min-w-0">

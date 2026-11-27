@@ -658,6 +658,17 @@ const phone = async (browser, url) => {
     await until(async () => assert.ok(await win.getByRole('combobox', { name: 'Марка авто' }).isVisible()));
     await ui.click(win.getByRole('button', { name: 'Назад' }));
     await until(async () => assert.equal(await win.count(), 0));
+    await expectPath(page, '/');
+  });
+
+  await step(shop, S, 'phone «back» closes the car picker and stays on the home page', async () => {
+    // the page before the home page was a section: «back» must not go there while the picker is open
+    await ui.click(page.getByRole('button', { name: /Підбір за авто/ }));
+    const win = page.getByRole('dialog', { name: 'Підбір за авто' });
+    await until(async () => assert.ok(await win.isVisible()));
+    await page.goBack();
+    await until(async () => assert.equal(await win.count(), 0));
+    await expectPath(page, '/');
   });
 
   await step(shop, S, 'product window and buy bar', async () => {

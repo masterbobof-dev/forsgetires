@@ -1,7 +1,7 @@
 import { trackExternal } from '../../externalAnalytics';
 import { supabase } from '../../supabaseClient';
 
-export type AnalyticsEventType = 'page_view' | 'view_item' | 'add_to_cart' | 'add_to_wishlist' | 'search' | 'purchase';
+export type AnalyticsEventType = 'page_view' | 'view_item' | 'add_to_cart' | 'add_to_wishlist' | 'search' | 'search_empty' | 'search_fixed' | 'purchase';
 
 const getSessionId = () => {
     let sid = sessionStorage.getItem('analytics_session_id');

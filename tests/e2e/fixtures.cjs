@@ -121,6 +121,28 @@ const rpc = {
     }
     return Object.values(by);
   },
+  // the same as public.filter_options() in the database
+  filter_options: ({ p_cats, p_null_cat, p_hot }, fake) => {
+    const g = fake.tables.tyres.filter((p) => p.in_stock !== false && (!p_hot || p.is_hot)
+      && (!p_cats || p_cats.includes(p.category_id) || (p_null_cat && p.category_id == null)));
+    const uniq = (a) => [...new Set(a.filter((v) => v != null && String(v).trim() !== '').map((v) => String(v).trim()))];
+    const sizes = g.map((p) => (p.title || '').match(/(\d{3})[/\s](\d{2})/)).filter(Boolean);
+    const attrs = {};
+    for (const p of g) for (const [k, v] of Object.entries(p.attributes || {})) if (v != null && String(v).trim() !== '') (attrs[k] ||= new Set()).add(String(v).trim());
+    return {
+      brands: uniq(g.map((p) => p.manufacturer)), radii: uniq(g.map((p) => p.radius)),
+      widths: uniq(sizes.map((m) => m[1])), heights: uniq(sizes.map((m) => m[2])),
+      attrs: Object.fromEntries(Object.entries(attrs).map(([k, v]) => [k, [...v]])),
+      approvals: uniq(g.flatMap((p) => p.auto_approvals || [])),
+    };
+  },
+  // a rough stand-in for the database's typo search: names sharing a 4-letter piece with what was typed
+  search_similar: ({ p_q, p_n }, fake) => {
+    const q = String(p_q || '').toLowerCase();
+    const parts = new Set(); for (const w of q.split(/\s+/)) for (let i = 0; i + 4 <= w.length; i++) parts.add(w.slice(i, i + 4));
+    return fake.tables.tyres.filter((p) => p.in_stock !== false).map((p) => ({ id: p.id, score: [...parts].filter((x) => (p.title || '').toLowerCase().includes(x)).length }))
+      .filter((r) => r.score >= 2 && r.score >= parts.size / 2).sort((a, b) => b.score - a.score).slice(0, p_n || 60);
+  },
   home_recommended: ({ p_n, p_skip }, fake) => fake.tables.tyres.filter((p) => p.in_stock && !p.on_order && p.has_photo && !(p_skip || []).includes(p.id)).slice(0, p_n),
   product_related: ({ p_id }, fake) => {
     const me = fake.tables.tyres.find((p) => p.id === p_id);

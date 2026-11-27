@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../../supabaseClient';
-import { type ProductCategory, buildCategoryFilter } from '../../../categories';
+import { type ProductCategory, buildCategoryFilter, getCategoryTree } from '../../../categories';
 import { sortAttrValues } from '../../../productAttributes';
 import type { CategorySelection } from '../CategoryNav';
 import type { FilterOptions } from '../FilterToolbar';
@@ -20,6 +20,27 @@ export const useFilterOptions = (
     if (categoriesLoading) return;
     let cancelled = false;
     (async () => {
+      // counted in the database: every product of the section (the browser used to see only the first 5000)
+      if (dbReady) {
+        const cats = activeCat ? getCategoryTree(categories, activeCat).map(c => c.id) : null;
+        const { data: o, error } = await supabase.rpc('filter_options', {
+          p_cats: activeCategory === 'hot' ? null : cats, p_null_cat: !!activeCat && activeCat.kind === 'tyre' && !activeCat.parent_id, p_hot: activeCategory === 'hot',
+        });
+        if (cancelled) return;
+        if (!error && o) {
+          const num = (v: string) => parseFloat(v.replace(/[^\d.]/g, ''));
+          setFilterOptions({
+            brands: [...(o.brands || [])].sort((a: string, b: string) => a.localeCompare(b)),
+            radii: [...(o.radii || [])].sort((a: string, b: string) => num(a) - num(b)),
+            widths: [...(o.widths || [])].sort((a: string, b: string) => +a - +b),
+            heights: [...(o.heights || [])].sort((a: string, b: string) => +a - +b),
+          });
+          const attrs: Record<string, string[]> = { ...(o.attrs || {}) };
+          if ((o.approvals || []).length) attrs.approval = o.approvals;
+          setAttrValues(Object.fromEntries(Object.entries(attrs).map(([k, v]) => [k, sortAttrValues(v as string[])])));
+          return;
+        }
+      }
       let q = supabase.from('tyres').select(dbReady ? 'manufacturer, radius, title, attributes, auto_approvals' : 'manufacturer, radius, title').neq('in_stock', false);
       if (activeCategory === 'hot') q = q.eq('is_hot', true);
       else if (activeCat) {

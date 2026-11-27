@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../../../supabaseClient';
 import type { TyreProduct } from '../../../types';
 import { type ProductCategory, buildCategoryFilter } from '../../../categories';
-import { parseSearch, searchFilters } from '../../../searchQuery';
+import { parseSearch, searchFilters, swapLayout } from '../../../searchQuery';
+import { logAnalyticsEvent } from '../../admin/analytics';
 import type { CategorySelection } from '../CategoryNav';
 import type { SortValue } from '../FilterToolbar';
 import { PAGE_SIZE } from '../shopUtils';
@@ -52,6 +53,8 @@ export const useProductList = (q: ProductListParams) => {
   const paramsKey = [q.categoriesLoading, q.activeCategory, q.activeSort, q.enableStockQty, q.filterBrand, q.filterRadius, q.filterWidth, q.filterHeight,
     q.filterSeason, q.showOnlyInStock, q.debouncedSearch, q.priorityProductId, attrFiltersKey, q.promosReady].join('|');
   const [loadedKey, setLoadedKey] = useState('');
+  /** the search was corrected: the other keyboard layout, or names close to what was typed */
+  const [searchNote, setSearchNote] = useState('');
 
   const fetchTyres = async (pageIndex: number, isRefresh = false) => {
     const my = isRefresh ? ++reqNo.current : reqNo.current;
@@ -59,11 +62,11 @@ export const useProductList = (q: ProductListParams) => {
     try {
       if (isRefresh) setLoading(true); else setLoadingMore(true);
       const from = pageIndex * PAGE_SIZE, to = from + PAGE_SIZE - 1;
-      const build = () => {
+      const build = (text = q.debouncedSearch) => {
       let query = supabase.from('tyres').select('*', { count: 'exact' });
 
       // smart search: sizes in any format, several words, Cyrillic brand names
-      for (const f of searchFilters(parseSearch(q.debouncedSearch))) query = query.or(f);
+      for (const f of searchFilters(parseSearch(text))) query = query.or(f);
       for (const [key, value] of Object.entries(q.attrFilters)) {
         if (!value) continue;
         const range = parseAttrRange(value);
@@ -132,6 +135,30 @@ export const useProductList = (q: ProductListParams) => {
         const r = await build().range(from, to);
         data = r.data; error = r.error; count = r.count; more = (r.data || []).length === PAGE_SIZE;
       }
+      // nothing found for the words typed: maybe the keyboard was in the other layout («ащкв» = «ford»),
+      // or there is a typo («амартизатор») — then show what is close and say so
+      let note = '';
+      const typed = q.debouncedSearch.trim();
+      if (isRefresh && typed.length >= 3 && !error && !(data || []).length) {
+        const alt = swapLayout(typed);
+        if (alt) {
+          const r = await build(alt).range(from, to);
+          if ((r.data || []).length) { data = r.data; count = r.count; more = r.data!.length === PAGE_SIZE; note = alt; }
+        }
+        if (!note) {
+          const { data: near } = await supabase.rpc('search_similar', { p_q: typed, p_n: PAGE_SIZE });
+          const ids = ((near as { id: number }[]) || []).map(x => x.id);
+          if (ids.length) {
+            const r = await build('').in('id', ids).range(0, PAGE_SIZE - 1);
+            const order = new Map(ids.map((id, i) => [id, i]));
+            data = (r.data || []).sort((a: any, b: any) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+            count = data.length; more = false; note = 'схожі назви';
+          }
+        }
+        // what people look for and do not find: in the owner's weekly report
+        if (my === reqNo.current) logAnalyticsEvent(note ? 'search_fixed' : 'search_empty', undefined, typed);
+      }
+      if (isRefresh && my === reqNo.current) setSearchNote(note);
       if (my !== reqNo.current) return;
       if (error) throw error;
       if (data) {
@@ -177,5 +204,5 @@ export const useProductList = (q: ProductListParams) => {
   }, [q.favoriteIds.join(',')]);
 
   // until the answer for the current search/section comes, the old list is not shown (it flashed for a moment before)
-  return { tyres, loading: loading || loadedKey !== paramsKey, loadingMore, hasMore, totalCount, loadMore: () => fetchTyres(page + 1) };
+  return { tyres, searchNote, loading: loading || loadedKey !== paramsKey, loadingMore, hasMore, totalCount, loadMore: () => fetchTyres(page + 1) };
 };

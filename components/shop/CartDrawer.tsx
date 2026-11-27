@@ -69,6 +69,10 @@ const CartDrawer: React.FC<CartDrawerProps> = (props) => {
   const total = selected.reduce((a, i) => a + priceOf(i) * i.quantity, 0);
   const pieces = selected.reduce((a, i) => a + i.quantity, 0);
   const hasOnOrder = selected.some(i => i.on_order && !i.supplier_offer_id);
+  // partner goods (with a price) come to the shop in a few days: the longest wait of what is ticked
+  const partner = selected.filter(i => i.on_order && i.supplier_offer_id);
+  const waitDays = Math.max(0, ...partner.map(i => Math.max(0, ...String(i.lead_days || '').split(/\D+/).map(Number).filter(n => n > 0 && n < 60))));
+  const someInStock = selected.some(i => !i.on_order);
   const allOn = off.size === 0;
   const toggle = (id: number) => setOff(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const back = () => (step === 'checkout' ? setStep('cart') : props.onClose());
@@ -226,6 +230,13 @@ const CartDrawer: React.FC<CartDrawerProps> = (props) => {
               <span className="text-2xl font-black text-white">{money(total)} <span className="text-sm text-zinc-400 font-bold">грн</span></span>
             </div>
             {hasOnOrder && <p className="-mt-2 mb-2 text-[11px] text-orange-400 text-right">+ товари під замовлення: ціну назве менеджер</p>}
+            {partner.length > 0 && (
+              <p className="-mt-1 mb-2 text-[11px] text-orange-300 bg-orange-500/10 border border-orange-500/20 rounded-lg px-2 py-1.5">
+                {partner.length === selected.length ? 'Усі товари під замовлення' : `Під замовлення: ${partner.length} з ${selected.length}`}
+                {waitDays ? ` · привеземо приблизно за ${waitDays} дн.` : ' · термін доставки уточнить менеджер'}
+                {someInStock ? '. Решта — в наявності, можна забрати одразу або чекати все разом.' : '.'}
+              </p>
+            )}
             {props.orderError && step === 'checkout' && <div className="mb-3 text-red-400 text-center text-xs font-bold bg-red-900/20 p-3 rounded-xl border border-red-900/50">{props.orderError}</div>}
             {step === 'cart' ? (
               <button onClick={() => setStep('checkout')} disabled={selected.length === 0}

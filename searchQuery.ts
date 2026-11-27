@@ -119,3 +119,23 @@ export const searchFilters = (s: ParsedSearch): string[] => {
   }
   return filters;
 };
+
+// ---------- typed in the wrong keyboard layout ----------
+const EN = "qwertyuiop[]asdfghjkl;'zxcvbnm,.`";
+const UA = 'йцукенгшщзхїфівапролджєячсмитьбю\'';
+const RU = 'йцукенгшщзхъфывапролджэячсмитьбюё';
+const toCyr: Record<string, string> = {}; const toLat: Record<string, string> = {};
+for (let i = 0; i < EN.length; i++) { toCyr[EN[i]] = UA[i]; toLat[UA[i]] = EN[i]; toLat[RU[i]] = EN[i]; }
+
+/**
+ * The same keys in the other layout: «ащкв» → «ford», «ащкв ащсгы» → «ford focus», «akmnh» → «фільтр».
+ * Returns '' when nothing changes. Words with digits (sizes, part numbers) are kept as they are.
+ */
+export const swapLayout = (raw: string): string => {
+  const s = raw.toLowerCase();
+  const cyr = (s.match(/[а-яіїєґё]/g) || []).length, lat = (s.match(/[a-z]/g) || []).length;
+  if (!cyr && !lat) return '';
+  const toLatin = cyr >= lat;
+  const out = s.split(/(\s+)/).map(w => (/\d/.test(w) || /^\s+$/.test(w) ? w : [...w].map(ch => (toLatin ? toLat[ch] : toCyr[ch]) ?? ch).join(''))).join('');
+  return out === s ? '' : out;
+};

@@ -53,6 +53,9 @@ const TWINS: string[][] = [
 ];
 /** Makers that come under several names (roots). Choosing one in the brand filter shows all of them. */
 const BRAND_FAMILIES: string[][] = [['тмк', 'тернопол', 'тернопіл']];
+/** the brand without case, spaces, dots and dashes — the same as tyres.brand_key in the database («K-2» → «k2») */
+export const brandKey = (brand: string) => brand.toLowerCase().replace(/[^0-9a-zа-яіїєґ]/gi, '');
+
 /** the roots of a brand's family, or [] when the brand has no other names */
 export const brandFamily = (brand: string): string[] => {
   const b = brand.toLowerCase().trim();

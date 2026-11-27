@@ -18,7 +18,7 @@ export const articleIdFromPath = (path = window.location.pathname): number | nul
 
 /** Plain-text excerpt (articles are stored as plain text with blank lines between paragraphs). */
 export const articleExcerpt = (content: string, len = 160) => {
-  const text = content.replace(/\s+/g, ' ').trim();
+  const text = content.replace(/\[([^\]\n]+)\]\([^)\s]*\)/g, '$1').replace(/\s+/g, ' ').trim();
   return text.length > len ? `${text.slice(0, len).replace(/\s\S*$/, '')}…` : text;
 };
 

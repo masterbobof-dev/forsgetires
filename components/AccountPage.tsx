@@ -5,6 +5,7 @@ import { User, Phone, MapPin, Package, LogOut, Save, Loader2, Key, CheckCircle2,
 import { supabase } from '../supabaseClient';
 import { fetchMe, fetchUnread, userPath, messagesPath } from '../forum';
 import { linkClick } from '../navigation';
+import { useReviewLink } from '../reviewLink';
 import NovaPoshtaPicker from './NovaPoshtaPicker';
 import type { AuthState } from '../useAuth';
 
@@ -68,6 +69,7 @@ const AccountPage: React.FC<{ auth: AuthState; onBack: () => void }> = ({ auth, 
   const user = auth.session?.user;
   const [profile, setProfile] = useState<Profile>({ full_name: '', phone: '', city: '', warehouse: '' });
   const [orders, setOrders] = useState<OrderRow[]>([]);
+  const reviewLink = useReviewLink();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -189,6 +191,12 @@ const AccountPage: React.FC<{ auth: AuthState; onBack: () => void }> = ({ auth, 
                     </span>
                     <span className="text-[#FFC300] font-black">{total} грн</span>
                   </div>
+                  {o.status === 'completed' && reviewLink && (
+                    <a href={reviewLink} target="_blank" rel="noopener noreferrer"
+                      className="mt-3 mr-2 inline-flex items-center gap-2 text-xs font-bold text-black bg-[#FFC300] hover:bg-yellow-300 px-3 py-2 rounded-lg">
+                      ★ Оцініть нас у Google — це дуже допомагає
+                    </a>
+                  )}
                   {o.tracking_number && (
                     <a href={`https://novaposhta.ua/tracking/?cargo_number=${encodeURIComponent(o.tracking_number)}`} target="_blank" rel="noopener noreferrer"
                       className="mt-3 inline-flex items-center gap-2 text-xs font-bold text-white bg-red-600/90 hover:bg-red-600 px-3 py-2 rounded-lg">

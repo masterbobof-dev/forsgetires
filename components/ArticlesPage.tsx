@@ -4,6 +4,19 @@ import { ArrowLeft, BookOpen, Loader2, Calendar } from 'lucide-react';
 import { Article, fetchArticles, articlePath, articleExcerpt, articleIdFromPath } from '../articles';
 import { linkClick } from '../navigation';
 
+/** Links inside article text: [words](/katalog/...) — only addresses of this site. */
+const LINK = /\[([^\]\n]{1,120})\]\((\/[\w\-\/?=&%.]*)\)/g;
+const withLinks = (text: string) => {
+  const out: React.ReactNode[] = []; let last = 0;
+  for (const m of text.matchAll(LINK)) {
+    out.push(text.slice(last, m.index));
+    out.push(<a key={m.index} href={m[2]} onClick={linkClick(m[2])} className="text-[#FFC300] underline underline-offset-2 hover:text-white">{m[1]}</a>);
+    last = m.index! + m[0].length;
+  }
+  out.push(text.slice(last));
+  return out;
+};
+
 /** Article text is stored as plain text: blank lines separate paragraphs, short lines without a full stop are headings. */
 export const ArticleBody: React.FC<{ content: string }> = ({ content }) => {
   const blocks = content.replace(/\r/g, '').split(/\n{2,}|\n(?=[А-ЯІЇЄA-Z💡])/).map(b => b.trim()).filter(Boolean);
@@ -13,7 +26,7 @@ export const ArticleBody: React.FC<{ content: string }> = ({ content }) => {
         const isHeading = b.length < 80 && !/[.!?:]$/.test(b) && !b.includes('\n');
         return isHeading
           ? <h2 key={i} className="text-xl font-black text-white pt-2">{b}</h2>
-          : <p key={i} className="whitespace-pre-line">{b}</p>;
+          : <p key={i} className="whitespace-pre-line">{withLinks(b)}</p>;
       })}
     </div>
   );

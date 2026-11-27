@@ -38,9 +38,12 @@ const INFO = {
 };
 
 const articleSlugPath = (a) => `/statti/${a.id}-${slugify(String(a.title).replace(/[^\p{L}\p{N}\s-]/gu, ' '))}`;
-const excerpt = (t, n = 160) => { const s = String(t || '').replace(/\s+/g, ' ').trim(); return s.length > n ? `${s.slice(0, n).replace(/\s\S*$/, '')}…` : s; };
+const unlink = (t) => String(t || '').replace(/\[([^\]\n]+)\]\([^)\s]*\)/g, '$1');
+// [words](/katalog/...) inside article text become links (only addresses of this site)
+const linkify = (html) => html.replace(/\[([^\]\n]{1,120})\]\((\/[\w\-\/?=&amp;%.;]*)\)/g, (_, t, h) => `<a href="${h}">${t}</a>`);
+const excerpt = (t, n = 160) => { const s = unlink(t).replace(/\s+/g, ' ').trim(); return s.length > n ? `${s.slice(0, n).replace(/\s\S*$/, '')}…` : s; };
 const paragraphs = (t) => String(t || '').replace(/\r/g, '').split(/\n{2,}/).map((p) => p.trim()).filter(Boolean)
-  .map((p) => (p.length < 80 && !/[.!?:]$/.test(p) && !p.includes('\n') ? `<h2>${esc(p)}</h2>` : `<p>${esc(p).replace(/\n/g, '<br>')}</p>`)).join('\n');
+  .map((p) => (p.length < 80 && !/[.!?:]$/.test(p) && !p.includes('\n') ? `<h2>${esc(p)}</h2>` : `<p>${linkify(esc(p)).replace(/\n/g, '<br>')}</p>`)).join('\n');
 const link = (href, text) => `<a href="${esc(href)}">${esc(text)}</a>`;
 const productList = (items) => `<ul>${items.map((p) => `<li>${link(productPath(p), p.title)} — ${parsePrice(p.price)} грн</li>`).join('')}</ul>`;
 const navBlock = (cats) => `<nav><ul>${cats.filter((c) => !c.parent_id).map((c) => `<li>${link(catPath(c.slug), c.name)}</li>`).join('')}<li>${link(catPath('akcii'), 'Хіти та акції')}</li></ul><ul>${Object.entries(INFO).map(([h, i]) => `<li>${link(h, i.title)}</li>`).join('')}<li>${link('/statti', 'Корисні статті')}</li></ul><ul>${CITIES.map((c) => `<li>${link(cityPath(c), `Автозапчастини в ${c.in}`)}</li>`).join('')}</ul></nav>`;

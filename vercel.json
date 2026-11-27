@@ -116,7 +116,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://connect.facebook.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://zzxueclhkhvwdmxflmyx.supabase.co wss://zzxueclhkhvwdmxflmyx.supabase.co https://api.novaposhta.ua https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://*.facebook.com https://connect.facebook.net https://wsrv.nl; frame-src https://www.google.com https://maps.google.com https://*.facebook.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://connect.facebook.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://zzxueclhkhvwdmxflmyx.supabase.co wss://zzxueclhkhvwdmxflmyx.supabase.co https://api.novaposhta.ua https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://*.facebook.com https://connect.facebook.net https://stats.g.doubleclick.net https://www.google.com https://wsrv.nl; frame-src https://www.google.com https://maps.google.com https://*.facebook.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests"
         },
         {
           "key": "Strict-Transport-Security",

@@ -2,6 +2,7 @@ import React from 'react';
 import { Shield, Crown, Truck, KeyRound } from 'lucide-react';
 import type { SettingsForm } from './useSettingsForm';
 import PaymentPanel from './PaymentPanel';
+import CountersPanel from './CountersPanel';
 
 /** Part "API Ключі": the owner's e-mail, delivery and supplier keys. (AI lives in the program, not on the site.) */
 const KeysPanel: React.FC<{ form: SettingsForm }> = ({ form }) => {
@@ -31,6 +32,7 @@ const KeysPanel: React.FC<{ form: SettingsForm }> = ({ form }) => {
              </div>
         </div>
         <PaymentPanel />
+        <CountersPanel />
     </div>
   );
 };

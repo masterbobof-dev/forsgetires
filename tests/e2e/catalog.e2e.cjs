@@ -108,6 +108,11 @@ const partners = async (browser, url) => {
     await until(async () => assert.deepEqual(await titles(page), ['Труба приймальна ТМК ЗАЗ 1102 Таврія 220202']));
   });
 
+  await step(shop, S, 'ТМК is found as Тернопіль', async () => {
+    await page.getByPlaceholder(/Пошук/).first().fill('тернополь таврия');
+    await until(async () => assert.deepEqual(await titles(page), ['Труба приймальна ТМК ЗАЗ 1102 Таврія 220202']));
+  });
+
   await step(shop, S, 'wrong keyboard layout is understood', async () => {
     const box = page.getByPlaceholder(/Пошук/).first();
     await box.fill('gfhnyth');

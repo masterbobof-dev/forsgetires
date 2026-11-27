@@ -29,6 +29,20 @@ if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
 
+// the loading screen from index.html goes away once the shop has drawn its header (or after a moment at the latest)
+const boot = document.getElementById('boot');
+if (boot) {
+  const started = Date.now();
+  const done = () => { boot.style.opacity = '0'; setTimeout(() => boot.remove(), 300); };
+  const check = () => {
+    const drawn = rootElement.firstElementChild && !rootElement.firstElementChild.classList.contains('ssr');
+    if (drawn && (rootElement.querySelector('header') || Date.now() - started > 2500)) done();
+    else if (Date.now() - started > 12000) done();
+    else requestAnimationFrame(check);
+  };
+  requestAnimationFrame(check);
+}
+
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>

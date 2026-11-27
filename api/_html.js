@@ -49,7 +49,7 @@ export const addJsonLd = (html, data) =>
 
 /** Puts plain HTML into <div id="root"> — visible to Google; React replaces it once the app starts. */
 export const setRootContent = (html, inner) =>
-  html.replace(/<div id="root">\s*<\/div>/, `<div id="root"><div class="max-w-5xl mx-auto px-4 py-8 text-zinc-300">${inner}</div></div>`);
+  html.replace(/<div id="root">\s*<\/div>/, `<div id="root"><div class="ssr max-w-5xl mx-auto px-4 py-8 text-zinc-300">${inner}</div></div>`);
 
 /** SEO settings from the admin "SEO" tab (settings.seo_*), cached for a minute per server instance. */
 let siteCache = null;

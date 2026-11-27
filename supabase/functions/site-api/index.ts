@@ -54,6 +54,9 @@ const actions: Record<string, (p: any) => Promise<unknown>> = {
       .range(p.offset || 0, (p.offset || 0) + Math.min(p.limit || 50, 200) - 1);
     if (p.status) q = q.eq('status', STATUS_IN[p.status] || p.status);
     if (p.since) q = q.gte('created_at', p.since);
+    if (p.paid !== undefined) q = q.eq('paid', !!p.paid);
+    if (p.synced === false) q = q.is('synced_at', null);
+    if (p.synced === true) q = q.not('synced_at', 'is', null);
     if (p.search) { const s = String(p.search).replace(/[,()]/g, ' '); q = q.or(`customer_name.ilike.%${s}%,customer_phone.ilike.%${s}%,customer_email.ilike.%${s}%,tracking_number.ilike.%${s}%`); }
     const rows = check(await q) as any[];
     const ids = [...new Set(rows.flatMap(r => (r.items || []).map((i: any) => Number(i.id)).filter(Boolean)))];
@@ -68,6 +71,8 @@ const actions: Record<string, (p: any) => Promise<unknown>> = {
         customer_email: r.customer_email, delivery_method: r.delivery_method, city: r.delivery_city, warehouse: r.delivery_warehouse,
         payment_method: r.payment_method, comment: r.comment, total: items.reduce((s: number, i: any) => s + i.price * i.qty, 0),
         tracking_number: r.tracking_number, manager_comment: r.manager_comment, is_new: !r.seen_at, items,
+        paid: !!r.paid, paid_at: r.paid_at, paid_amount: r.paid_amount === null ? null : Number(r.paid_amount),
+        program_order_id: r.program_order_id, program_order_number: r.program_order_number, synced_at: r.synced_at,
       };
     });
   },
@@ -77,6 +82,14 @@ const actions: Record<string, (p: any) => Promise<unknown>> = {
     if (p.tracking_number !== undefined) upd.tracking_number = p.tracking_number || null;
     if (p.manager_comment !== undefined) upd.manager_comment = p.manager_comment || null;
     return check(await db.from('tyre_orders').update(upd).eq('id', need(p.id, 'id')).select('id, status').single());
+  },
+  // the program created its own order from a paid site order: from now on the goods are in the program's reservations
+  'orders.mark_synced': async (p) => {
+    const row = check(await db.from('tyre_orders').update({
+      synced_at: new Date().toISOString(), program_order_id: String(need(p.program_order_id, 'program_order_id')),
+      program_order_number: p.program_order_number == null ? null : String(p.program_order_number), updated_at: new Date().toISOString(),
+    }).eq('id', need(p.id, 'id')).select('id, synced_at, program_order_id, program_order_number').maybeSingle());
+    return row || fail(`Замовлення ${p.id} не знайдено`);
   },
   'orders.unseen_count': async () => {
     const { count, error } = await db.from('tyre_orders').select('id', { count: 'exact', head: true }).is('seen_at', null);
@@ -115,6 +128,12 @@ const actions: Record<string, (p: any) => Promise<unknown>> = {
 
   // ---------- recommended goods (chosen in the program) ----------
   // shown in «Рекомендуємо» on the home page and first in the «Рекомендовані» order of every section
+  // how much of each item the program holds for its open orders; the site sells only what is free
+  'products.reserved.set': async (p) => {
+    if (!Array.isArray(p.items)) fail('Не вказано items (масив { program_product_id, qty })');
+    if (p.items.length > 1000) fail('Не більше 1000 позицій за один виклик');
+    return check(await db.rpc('program_reserved_set', { p_items: p.items, p_replace: p.replace_all === true }));
+  },
   'products.recommended.list': async () =>
     check(await db.from('tyres').select('id, program_product_id, supplier_offer_id, title, price, in_stock').eq('is_hot', true).order('title')),
   // { program_product_ids?: uuid[], supplier_offer_ids?: string[], ids?: number[], on?: true|false, replace?: true }

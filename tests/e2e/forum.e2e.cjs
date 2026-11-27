@@ -165,7 +165,7 @@ const owner = async (browser, url) => {
     await ui.click(page.getByRole('button', { name: 'Запросити в Telegram' }));
     await until(async () => assert.equal((fake.inserted.telegram_invites || []).length, 1));
     assert.equal(fake.inserted.telegram_invites[0].role, 'forum');
-    assert.ok(await page.getByText(/t\.me\/Forsageshop_bot\?start=/).isVisible());
+    await until(async () => assert.ok(await page.getByText(/t\.me\/Forsageshop_bot\?start=/).isVisible()));
   });
 
   await step(shop, S, 'edit a topic in place: text saves by itself', async () => {

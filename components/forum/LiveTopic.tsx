@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ImagePlus, Loader2, X, Check, Pin, Lock, Unlock, EyeOff, Eye, Trash2, MoreHorizontal, Clipboard } from 'lucide-react';
+import { ImagePlus, Loader2, X, Check, ChevronLeft, Pin, Lock, Unlock, EyeOff, Eye, Trash2, MoreHorizontal, Clipboard } from 'lucide-react';
 import { uploadForumImage, updateTopic, deleteTopic, type ForumSection, type ForumTopic } from '../../forum';
 import { SectionSelect } from './forumParts';
 
@@ -71,6 +71,12 @@ const LiveTopic: React.FC<{
       setUploading(n => n - 1);
     }
   };
+  // the first photo is the cover of the topic: move a photo one place to the left
+  const movePhoto = (i: number) => {
+    if (i <= 0) return;
+    const next = [...images]; [next[i - 1], next[i]] = [next[i], next[i - 1]];
+    setImages(next); latest.current.images = next; save({ images: next });
+  };
   const removePhoto = (u: string) => {
     if (!confirm('Прибрати це фото з теми?')) return;
     const next = images.filter(x => x !== u);
@@ -117,9 +123,13 @@ const LiveTopic: React.FC<{
 
       {/* photos: remove with ×, add with the tile or paste */}
       <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-4">
-        {images.map(u => (
+        {images.map((u, i) => (
           <span key={u} className="relative aspect-square rounded-xl overflow-hidden border border-zinc-700 bg-black">
             <img src={u} alt="" className="w-full h-full object-cover" />
+            {i === 0
+              ? <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded-md bg-[#FFC300] text-black text-[10px] font-black">обкладинка</span>
+              : <button type="button" onClick={() => movePhoto(i)} aria-label="Перемістити фото ліворуч" title="Ближче до початку (перше фото — обкладинка)"
+                  className="absolute bottom-1 left-1 w-7 h-7 rounded-full bg-black/75 text-white flex items-center justify-center"><ChevronLeft size={16} /></button>}
             <button type="button" onClick={() => removePhoto(u)} aria-label="Прибрати фото"
               className="absolute top-1 right-1 w-7 h-7 rounded-full bg-black/75 text-white flex items-center justify-center"><X size={15} /></button>
           </span>

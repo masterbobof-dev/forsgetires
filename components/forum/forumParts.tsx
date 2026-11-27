@@ -174,7 +174,10 @@ export const MessageForm: React.FC<{
     try {
       await onSubmit({ title: title.trim(), category, body: body.trim(), images, is_pinned: pinned });
       if (!initial) { setTitle(''); setBody(''); setImages([]); }
-    } catch (err: any) { setError(err?.message?.includes('Забагато') ? err.message : 'Не вдалося зберегти. Спробуйте ще раз.'); }
+    } catch (err: any) {
+      // messages of the site's own checks (anti-spam, limits) are in Ukrainian and are shown as they are
+      setError(/[а-яіїєґ]/i.test(err?.message || '') ? err.message : 'Не вдалося зберегти. Спробуйте ще раз.');
+    }
     setSending(false);
   };
   return (

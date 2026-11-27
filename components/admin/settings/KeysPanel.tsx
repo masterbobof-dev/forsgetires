@@ -1,6 +1,7 @@
 import React from 'react';
 import { Shield, Crown, Truck, KeyRound } from 'lucide-react';
 import type { SettingsForm } from './useSettingsForm';
+import PaymentPanel from './PaymentPanel';
 
 /** Part "API Ключі": the owner's e-mail, delivery and supplier keys. (AI lives in the program, not on the site.) */
 const KeysPanel: React.FC<{ form: SettingsForm }> = ({ form }) => {
@@ -29,6 +30,7 @@ const KeysPanel: React.FC<{ form: SettingsForm }> = ({ form }) => {
                  <input type="password" value={supplierKey} onChange={e => setSupplierKey(e.target.value)} className="w-full bg-black border border-zinc-700 rounded-lg p-3 text-white font-mono text-sm" placeholder="API ключ постачальника"/>
              </div>
         </div>
+        <PaymentPanel />
     </div>
   );
 };

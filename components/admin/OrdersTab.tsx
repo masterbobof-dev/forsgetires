@@ -44,7 +44,7 @@ const OrdersTab: React.FC = () => {
         <tr><td width="170"><b>Покупець:</b></td><td>${esc(o.customer_name)}</td></tr>
         <tr><td><b>Телефон:</b></td><td>${esc(o.customer_phone)}</td></tr>
         <tr><td><b>Доставка:</b></td><td>${o.delivery_method === 'pickup' ? 'Самовивіз' : `Нова Пошта: ${esc(o.delivery_city)}, ${esc(o.delivery_warehouse)}`}</td></tr>
-        <tr><td><b>Оплата:</b></td><td>${o.delivery_method === 'pickup' ? 'при отриманні' : o.payment_method === 'full' ? 'повна оплата' : 'передоплата'}</td></tr>
+        <tr><td><b>Оплата:</b></td><td>${o.payment_method === 'online' ? (o.paid ? 'оплачено онлайн' : 'онлайн, очікує оплати') : o.delivery_method === 'pickup' ? 'при отриманні' : o.payment_method === 'full' ? 'повна оплата' : 'передоплата'}</td></tr>
         ${o.tracking_number ? `<tr><td><b>ТТН:</b></td><td>${esc(o.tracking_number)}</td></tr>` : ''}
         ${o.comment ? `<tr><td><b>Коментар:</b></td><td>${esc(o.comment)}</td></tr>` : ''}
       </table>
@@ -217,7 +217,7 @@ const OrdersTab: React.FC = () => {
                      </div>
                      {order.payment_method && (
                          <span className="md:ml-auto text-blue-400 font-black bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20 text-[9px] uppercase tracking-wider">
-                             {order.payment_method === 'full' ? 'Повна оплата' : 'Предоплата'}
+                             {order.payment_method === 'online' ? ((order as any).paid ? '✅ Оплачено онлайн' : 'Онлайн: очікує оплати') : order.payment_method === 'full' ? 'Повна оплата' : 'Предоплата'}
                          </span>
                      )}
                  </div>

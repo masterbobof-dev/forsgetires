@@ -1,0 +1,5 @@
+-- Applied live with apply_migration; this file is the record (security).
+-- analytics_events: private.analytics_guard() — known event kinds only, short texts, server time; a flood is dropped quietly
+--   (one visitor > 300 an hour, the site > 3000 in 10 minutes).
+-- stock_alerts: private.stock_alerts_guard() — a real product and phone, 5 per phone an hour, 50 per 10 minutes.
+-- storage bucket «galery»: images only (jpeg/png/webp/gif/avif), up to 10 MB.

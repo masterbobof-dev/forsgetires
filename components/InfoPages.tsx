@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { jsonLd } from '../jsonLd';
 import { ArrowLeft, Truck, Store, Wallet, ShieldCheck, RotateCcw, Phone, MapPin, MessageCircle, Send, Mail, HelpCircle, ChevronDown, Info } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { settingsRows } from '../publicSettings';
@@ -70,7 +71,7 @@ const InfoPages: React.FC<{ page: InfoPage; onBack: () => void }> = ({ page, onB
 
   return (
     <article className="max-w-4xl mx-auto px-4 py-6 md:py-12 pb-28 animate-in fade-in slide-in-from-bottom-4 duration-300">
-      {faqLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />}
+      {faqLd && <script type="application/ld+json" dangerouslySetInnerHTML={jsonLd(faqLd)} />}
       <button onClick={onBack} className="text-zinc-500 hover:text-[#FFC300] text-xs font-black uppercase tracking-widest flex items-center gap-1 mb-6"><ArrowLeft size={14} /> До каталогу</button>
       <h1 className="text-3xl md:text-5xl font-black uppercase italic tracking-tighter mb-2">{custom?.title || meta.title}</h1>
       {custom ? (

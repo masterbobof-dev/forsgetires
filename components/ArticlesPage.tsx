@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { jsonLd } from '../jsonLd';
 import { ArrowLeft, BookOpen, Loader2, Calendar } from 'lucide-react';
 import { Article, fetchArticles, articlePath, articleExcerpt, articleIdFromPath } from '../articles';
 import { linkClick } from '../navigation';
@@ -58,7 +59,7 @@ const ArticlesPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     };
     return (
       <article className="max-w-3xl mx-auto px-4 py-6 md:py-12 pb-28 animate-in fade-in slide-in-from-bottom-4 duration-300">
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={jsonLd(ld)} />
         <a href="/statti" onClick={linkClick('/statti')} className="text-zinc-500 hover:text-[#FFC300] text-xs font-black uppercase tracking-widest flex items-center gap-1 mb-6"><ArrowLeft size={14} /> Усі статті</a>
         <h1 className="text-2xl md:text-4xl font-black tracking-tight mb-3 leading-tight">{current.title}</h1>
         <p className="text-zinc-500 text-sm flex items-center gap-1.5 mb-6"><Calendar size={14} /> {new Date(current.created_at).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' })}</p>

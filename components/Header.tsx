@@ -121,8 +121,8 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onAccountCli
 
         {/* Logo & Brand */}
         <div className="flex items-center gap-2 md:gap-4 min-w-0">
-        {/* the "F": the way into the admin panel (owner and the administrators set in the settings) */}
-        <button type="button" onClick={() => { setIsMenuOpen(false); onLogoAdmin ? onLogoAdmin() : handleNavClick('home'); }} aria-label="Вхід для адміністратора"
+        {/* the "F": to the home page (the admin panel is at /admin and under «Адмінка» for staff) */}
+        <button type="button" onClick={() => handleNavClick('home')} aria-label="Форсаж — на головну"
           className="rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC300] focus-visible:ring-offset-2 focus-visible:ring-offset-black">
           <Logo />
         </button>

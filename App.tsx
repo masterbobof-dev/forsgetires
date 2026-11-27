@@ -192,7 +192,12 @@ const App: React.FC = () => {
 
   const goHome = () => {
     setShopInitialProduct(null);
-    navigate('home');
+    // the very start of the shop: no section, no search, no open product
+    if (window.location.pathname !== '/' || window.location.search) window.history.pushState({}, '', '/');
+    setCurrentView('home');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    window.dispatchEvent(new Event('go-home'));
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
   };
 
   // "Увійти / Кабінет / Адмінка" in the header: staff always go to the admin panel, customers to their cabinet.
@@ -282,7 +287,6 @@ const App: React.FC = () => {
           isLoggedIn={!!auth.session && isStaff === false}
           isStaff={!!auth.session && isStaff === true}
           cartCount={cartCount}
-          onLogoAdmin={() => navigate('admin')}
         />
       )}
 

@@ -2,6 +2,7 @@ User-agent: *
 Allow: /
 Disallow: /admin
 Disallow: /account
+Disallow: /oplata
 
 # SEO-analysis robots: they are not search engines and bring no buyers,
 # but they open thousands of pages a day and overload the shop's database.

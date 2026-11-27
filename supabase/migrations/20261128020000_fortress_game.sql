@@ -1,0 +1,4 @@
+-- Applied live (fortress_game): «Точки: Фортеці» — the turn-based strategy mode of the game.
+-- dots_games.mode ('dots' | 'fort'); dots_new_mode(mode, w, h); dots_get returns mode;
+-- fort_act(id, token, action) appends {t, ..., p} for the player whose turn it is (turns pass on {t:'end'});
+-- the rules (fortresses, gold, towers, barracks, markets, soldiers, tanks, ring capture) are in components/game/fortress.ts.

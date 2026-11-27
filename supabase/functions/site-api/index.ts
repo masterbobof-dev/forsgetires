@@ -126,14 +126,16 @@ const actions: Record<string, (p: any) => Promise<unknown>> = {
   'reviews.moderate': async (p) => check(await db.from('product_reviews').update({ approved: !!p.approved, ...(p.admin_reply !== undefined ? { admin_reply: p.admin_reply } : {}) }).eq('id', need(p.id, 'id')).select('id, approved').single()),
   'reviews.delete': async (p) => { check(await db.from('product_reviews').delete().eq('id', need(p.id, 'id'))); return { deleted: p.id }; },
 
-  // ---------- recommended goods (chosen in the program) ----------
-  // shown in «Рекомендуємо» on the home page and first in the «Рекомендовані» order of every section
+  // ---------- reservations (free stock) ----------
   // how much of each item the program holds for its open orders; the site sells only what is free
   'products.reserved.set': async (p) => {
     if (!Array.isArray(p.items)) fail('Не вказано items (масив { program_product_id, qty })');
     if (p.items.length > 1000) fail('Не більше 1000 позицій за один виклик');
     return check(await db.rpc('program_reserved_set', { p_items: p.items, p_replace: p.replace_all === true }));
   },
+
+  // ---------- recommended goods (chosen in the program) ----------
+  // shown in «Рекомендуємо» on the home page and first in the «Рекомендовані» order of every section
   'products.recommended.list': async () =>
     check(await db.from('tyres').select('id, program_product_id, supplier_offer_id, title, price, in_stock').eq('is_hot', true).order('title')),
   // { program_product_ids?: uuid[], supplier_offer_ids?: string[], ids?: number[], on?: true|false, replace?: true }

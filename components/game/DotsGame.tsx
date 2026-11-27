@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, Copy, Share2, Loader2, Flag, Plus } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { computeDots, canPut, type Move } from './dots';
+import { inTelegram, telegramApp } from './telegram';
 
 /**
  * «Точки» for two players by a link (/igra?g=<id>): one starts a game and sends the link, the other opens it.
@@ -26,7 +27,8 @@ const DotsGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [copied, setCopied] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
 
-  useEffect(() => { document.title = 'Точки — гра для двох'; }, []);
+  const tg = inTelegram();
+  useEffect(() => { document.title = 'Точки — гра для двох'; if (tg) telegramApp(); }, [tg]);
 
   const load = useCallback(async (gid: string) => {
     const { data, error } = await supabase.rpc('dots_get', { p_id: gid });
@@ -70,7 +72,8 @@ const DotsGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const state = useMemo(() => (game ? computeDots(game.w, game.h, game.moves) : null), [game]);
   const turn = game ? (game.moves.length % 2 === 0 ? 1 : 2) : 0;
   const myTurn = !!seat?.player && seat.player === turn && !!game?.joined && !game?.finished;
-  const link = id ? `${window.location.origin}/igra?g=${id}` : '';
+  // a friend invited from Telegram also gets the game without the shop around it
+  const link = id ? `${window.location.origin}/igra?g=${id}${tg ? '&tg=1' : ''}` : '';
 
   const put = async (e: React.MouseEvent<SVGSVGElement>) => {
     if (!game || !state || !seat?.token || !myTurn || busy) return;
@@ -95,6 +98,13 @@ const DotsGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   };
 
   const share = async () => {
+    if (tg) {
+      // Telegram's own «send to a chat» list
+      const url = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent('Зіграймо в «Точки»! Натисни посилання 👇')}`;
+      const app = await telegramApp();
+      if (app?.openTelegramLink) app.openTelegramLink(url); else window.open(url, '_blank');
+      return;
+    }
     try {
       if (navigator.share) { await navigator.share({ title: 'Гра «Точки»', text: 'Зіграймо в «Точки»!', url: link }); return; }
     } catch { /* closed */ }
@@ -104,20 +114,20 @@ const DotsGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   // --- the start screen ---
   if (!id) {
     return (
-      <div className="max-w-md mx-auto px-4 py-10 text-center">
+      <div data-app-ready className="max-w-md mx-auto px-4 py-10 text-center">
         <h1 className="text-3xl font-black text-white mb-3">Точки</h1>
         <p className="text-zinc-400 mb-8">Гра для двох, як на листочку в клітинку. Ставте точки по черзі й обводьте точки суперника — кожна оточена точка дає очко.</p>
         <button onClick={newGame} disabled={busy} className="inline-flex items-center gap-2 bg-[#FFC300] text-black font-black px-6 py-4 rounded-2xl disabled:opacity-50">
           {busy ? <Loader2 className="animate-spin" size={20} /> : <Plus size={20} />} Нова гра
         </button>
         {err && <p className="text-red-400 text-sm mt-4">{err}</p>}
-        <button onClick={onBack} className="block mx-auto mt-10 text-zinc-500 text-sm"><ArrowLeft size={14} className="inline" /> На сайт</button>
+        {!tg && <button onClick={onBack} className="block mx-auto mt-10 text-zinc-500 text-sm"><ArrowLeft size={14} className="inline" /> На сайт</button>}
       </div>
     );
   }
 
   if (!game || !state) {
-    return <div className="py-20 text-center text-zinc-400">{err || <Loader2 className="animate-spin mx-auto text-[#FFC300]" size={36} />}</div>;
+    return <div data-app-ready className="py-20 text-center text-zinc-400">{err || <Loader2 className="animate-spin mx-auto text-[#FFC300]" size={36} />}</div>;
   }
 
   const W = (game.w - 1) * STEP + PAD * 2, H = (game.h - 1) * STEP + PAD * 2;
@@ -155,9 +165,9 @@ const DotsGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     : myTurn ? 'Ваш хід' : 'Хід суперника…';
 
   return (
-    <div className="w-full max-w-lg mx-auto px-3 py-4 overflow-hidden">
+    <div data-app-ready className="w-full max-w-lg mx-auto px-3 py-4 overflow-hidden">
       <div className="flex items-center justify-between gap-2 mb-2">
-        <button onClick={onBack} className="text-zinc-500 text-sm flex items-center gap-1"><ArrowLeft size={14} /> На сайт</button>
+        {tg ? <span className="text-sm font-black text-white">Точки</span> : <button onClick={onBack} className="text-zinc-500 text-sm flex items-center gap-1"><ArrowLeft size={14} /> На сайт</button>}
         <div className="flex items-center gap-3 text-lg font-black">
           <span style={{ color: COLORS[1] }}>● {state.score[1]}</span>
           <span className="text-zinc-600">:</span>
@@ -170,7 +180,7 @@ const DotsGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       {!game.joined && (
         <div className="mb-3">
           <button onClick={share} className="w-full h-11 rounded-xl bg-[#FFC300] text-black font-black text-sm flex items-center justify-center gap-2">
-            {typeof navigator.share === 'function' ? <Share2 size={16} /> : <Copy size={16} />} {copied ? 'Посилання скопійовано' : 'Надіслати посилання другу'}
+            {tg || typeof navigator.share === 'function' ? <Share2 size={16} /> : <Copy size={16} />} {copied ? 'Посилання скопійовано' : tg ? 'Запросити друга в Telegram' : 'Надіслати посилання другу'}
           </button>
           <p className="text-[11px] text-zinc-500 mt-1 truncate text-center">{link}</p>
         </div>

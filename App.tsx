@@ -21,6 +21,7 @@ const AccountPage = lazy(() => import('./components/AccountPage'));
 const LegalPage = lazy(() => import('./components/LegalPage'));
 const PaymentResult = lazy(() => import('./components/PaymentResult'));
 const DotsGame = lazy(() => import('./components/game/DotsGame'));
+import { inTelegram } from './components/game/telegram';
 const InfoPages = lazy(() => import('./components/InfoPages'));
 const ArticlesPage = lazy(() => import('./components/ArticlesPage'));
 const LocalCityPage = lazy(() => import('./components/LocalCityPage'));
@@ -278,7 +279,8 @@ const App: React.FC = () => {
     }
   };
 
-  const isAdminView = currentView === 'admin';
+  // the admin panel and the game opened inside Telegram are shown without the shop's header and footer
+  const isAdminView = currentView === 'admin' || (currentView === 'game' && inTelegram());
 
   return (
     <div className="min-h-screen flex flex-col bg-[#09090b] text-white selection:bg-[#FFC300] selection:text-black">

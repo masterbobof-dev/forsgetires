@@ -101,6 +101,19 @@ const partners = async (browser, url) => {
     await until(async () => assert.deepEqual(await titles(page), ['Партнер товар 3']));
   });
 
+  await step(shop, S, 'wrong keyboard layout is understood', async () => {
+    const box = page.getByPlaceholder(/Пошук/).first();
+    await box.fill('gfhnyth');
+    await until(async () => assert.ok((await titles(page)).length >= 6 && (await titles(page)).every((t) => t.startsWith('Партнер'))));
+    assert.ok(await page.getByText(/інша розкладка клавіатури/).isVisible(), 'the buyer is told why');
+  });
+
+  await step(shop, S, 'a typo shows close names', async () => {
+    await page.getByPlaceholder(/Пошук/).first().fill('Партенр товар');
+    await until(async () => assert.ok(await page.getByText(/Показуємо схожі товари/).isVisible()));
+    assert.ok((await titles(page)).some((t) => t.startsWith('Партнер')));
+  });
+
   await shop.context.close();
 };
 

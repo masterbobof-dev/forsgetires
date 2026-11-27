@@ -130,7 +130,7 @@ const TyreShop: React.FC<TyreShopProps> = ({
   };
 
   // --- the list, its filters, the open product ---
-  const { tyres, loading, loadingMore, hasMore, totalCount, loadMore } = useProductList({
+  const { tyres, searchNote, loading, loadingMore, hasMore, totalCount, loadMore } = useProductList({
     categories, categoriesLoading: categoriesLoading || openingSection, dbReady, promosReady, activeCategory, activeCat, agroCategory, showTyreFilters,
     activeSort: filters.activeSort, debouncedSearch, attrFilters: filters.attrFilters,
     filterBrand: filters.filterBrand, filterRadius: filters.filterRadius, filterWidth: filters.filterWidth, filterHeight: filters.filterHeight,
@@ -341,6 +341,13 @@ const TyreShop: React.FC<TyreShopProps> = ({
               onOpenFilters={() => setFiltersOpen(true)}
             />
 
+            {!loading && searchNote && tyres.length > 0 && (
+              <p className="mt-2 mb-1 text-sm text-zinc-300 bg-[#FFC300]/10 border border-[#FFC300]/30 rounded-xl px-3 py-2">
+                {searchNote === 'схожі назви'
+                  ? <>За запитом «{debouncedSearch.trim()}» точних збігів немає. Показуємо <b className="text-white">схожі товари</b>.</>
+                  : <>Показуємо результати для «<b className="text-white">{searchNote}</b>» (схоже, була інша розкладка клавіатури).</>}
+              </p>
+            )}
             {loading ? (
               <GridSkeleton />
             ) : tyres.length === 0 ? (

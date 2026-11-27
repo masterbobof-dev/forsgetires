@@ -1,0 +1,6 @@
+-- Applied live (stats_regions_interests_no_bots, stats_drop_returning):
+-- private.analytics_guard: events from a browser that names neither itself nor its system ('Other' + 'Unknown OS') are dropped
+--   (a headless robot opened the home page every 3 s on 25–26.11: 7 000+ fake «visitors» from Ashburn, USA);
+-- public.visitor_stats: such rows are left out of all numbers; new keys
+--   regions   — regions of Ukraine (ISO code, named in the admin panel),
+--   interests — catalogue sections whose goods visitors open.

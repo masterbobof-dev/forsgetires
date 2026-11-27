@@ -281,6 +281,8 @@ const App: React.FC = () => {
 
   // the admin panel and the game opened inside Telegram are shown without the shop's header and footer
   const isAdminView = currentView === 'admin' || (currentView === 'game' && inTelegram());
+  // the game is only for Telegram: opened in an ordinary browser, the address leads to the shop
+  useEffect(() => { if (currentView === 'game' && !inTelegram()) navigate('home', { replace: true }); }, [currentView]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="min-h-screen flex flex-col bg-[#09090b] text-white selection:bg-[#FFC300] selection:text-black">

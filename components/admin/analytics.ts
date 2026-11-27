@@ -86,6 +86,8 @@ export const logAnalyticsEvent = async (
     trackExternal(eventType, { id: itemId, name: itemName, value, query: eventType === 'search' ? itemName : undefined });
     try {
         const device = getDeviceInfo();
+        // a browser that names neither itself nor its system = a robot program, not a shopper
+        if (device.browser === 'Other' && device.os === 'Unknown OS') return;
         const geo = await getGeoInfo();
 
         const payload = {

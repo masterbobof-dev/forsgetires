@@ -8,8 +8,26 @@ type Data = {
   orders: { count: number; sum: number };
   by_day: { d: string; visitors: number; views: number }[];
   by_hour: { h: number; n: number }[];
+  regions?: Row[]; interests?: Row[];
   cities: Row[]; countries: Row[]; devices: Row[]; os: Row[]; browsers: Row[]; sources: Row[];
   viewed: Row[]; carted: Row[]; wished: Row[]; searched: Row[]; pages: Row[]; ordered: Row[]; order_cities: Row[];
+};
+
+/** regions of Ukraine by their international code (what the visitor's internet provider reports) */
+const UA_REGIONS: Record<string, string> = {
+  '05': 'Вінницька', '07': 'Волинська', '09': 'Луганська', '12': 'Дніпропетровська', '14': 'Донецька', '18': 'Житомирська',
+  '21': 'Закарпатська', '23': 'Запорізька', '26': 'Івано-Франківська', '30': 'Київ (місто)', '32': 'Київська', '35': 'Кіровоградська',
+  '40': 'Севастополь', '43': 'Крим', '46': 'Львівська', '48': 'Миколаївська', '51': 'Одеська', '53': 'Полтавська', '56': 'Рівненська',
+  '59': 'Сумська', '61': 'Тернопільська', '63': 'Харківська', '65': 'Херсонська', '68': 'Хмельницька', '71': 'Черкаська',
+  '74': 'Чернігівська', '77': 'Чернівецька',
+};
+const regionName = (code: string) => UA_REGIONS[code] ? `${UA_REGIONS[code]}${/^(30|40|43)$/.test(code) ? '' : ' обл.'}` : code;
+/** city names come in English from the provider */
+const CITY_UA: Record<string, string> = {
+  Synelnykove: 'Синельникове', Dnipro: 'Дніпро', Kyiv: 'Київ', Lviv: 'Львів', Kharkiv: 'Харків', Odesa: 'Одеса', Zaporizhzhia: 'Запоріжжя',
+  Pavlohrad: 'Павлоград', Kamianske: "Кам'янське", 'Kryvyi Rih': 'Кривий Ріг', Novomoskovsk: 'Самар (Новомосковськ)', Samar: 'Самар',
+  Vasylkivka: 'Васильківка', Mezhova: 'Межова', Slavhorod: 'Славгород', Poltava: 'Полтава', Vinnytsia: 'Вінниця', Vapnyarka: 'Вапнярка',
+  Cherkasy: 'Черкаси', Kropyvnytskyi: 'Кропивницький', Mykolaiv: 'Миколаїв', 'Ternopil': 'Тернопіль', 'Ivano-Frankivsk': 'Івано-Франківськ',
 };
 
 const DEVICE: Record<string, string> = { Mobile: 'Телефон', Desktop: 'Комп\'ютер', Tablet: 'Планшет' };
@@ -111,7 +129,9 @@ const VisitorStats: React.FC = () => {
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            <List title="З яких міст заходять" icon={<MapPin size={15} />} rows={data.cities} />
+            <List title="З яких областей України" icon={<MapPin size={15} />} rows={data.regions || []} label={regionName} empty="Поки немає даних" />
+            <List title="З яких міст заходять" icon={<MapPin size={15} />} rows={data.cities} label={s => CITY_UA[s] || s} />
+            <List title="Чим цікавляться (розділи)" icon={<Eye size={15} />} rows={data.interests || []} unit="відв." empty="Поки немає даних" />
             <List title="Звідки прийшли" icon={<Share2 size={15} />} rows={data.sources} empty="Збирається з сьогоднішнього дня" />
             <List title="Пристрої" icon={<Smartphone size={15} />} rows={data.devices} label={s => DEVICE[s] || s} />
             <List title="Що дивляться (товари)" icon={<Eye size={15} />} rows={data.viewed} unit="разів" />
@@ -133,7 +153,7 @@ const VisitorStats: React.FC = () => {
             <div className="flex justify-between text-[10px] text-zinc-500 mt-1"><span>0:00</span><span>6:00</span><span>12:00</span><span>18:00</span><span>23:00</span></div>
           </div>
 
-          <p className="text-xs text-zinc-500">Стать і вік відвідувачів сайт сам визначити не може — ці дані є лише в Google Analytics (потрібен ваш лічильник Google).</p>
+          <p className="text-xs text-zinc-500">Роботи (програми, що автоматично відкривають сайт) у статистику не потрапляють. Стать, вік та інтереси відвідувачів сайт сам визначити не може — їх показує безкоштовний Google Analytics, коли на сайті стоїть його лічильник (номер виду G-XXXXXXX).</p>
         </div>
       )}
     </section>

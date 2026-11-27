@@ -143,7 +143,7 @@ async function build(pathname, query) {
       return { noindex: true, title: `${msgs ? 'Повідомлення' : 'Профіль учасника'} — форум «${SHOP_NAME}»`, description: 'Форум автомобілістів магазину «Форсаж»: профілі учасників, гараж, особисті повідомлення.', url: SITE_URL + pathname,
         content: `<h1>${msgs ? 'Повідомлення' : 'Профіль учасника форуму'}</h1><p>${link('/forum', 'Усі теми форуму')}</p>` };
     }
-    const t = m && (await rest(`forum_topics?select=id,title,body,category,author_name,is_shop,images,created_at,replies_count&id=eq.${m[1]}&is_hidden=is.false`))[0];
+    const t = m && (await rest(`forum_topics?select=id,title,body,category,author_name,is_shop,images,created_at,edited_at,last_reply_at,replies_count&id=eq.${m[1]}&is_hidden=is.false`))[0];
     if (!t) return { status: 404, noindex: true, title: `Тему не знайдено | ${SHOP_NAME}`, description: 'Форум магазину «Форсаж».', url: SITE_URL + '/forum', content: `<h1>Тему не знайдено</h1><p>${link('/forum', 'Усі теми форуму')}</p>` };
     const posts = await rest(`forum_posts?select=author_name,body,created_at&topic_id=eq.${t.id}&is_hidden=is.false&order=created_at&limit=200`);
     const url = SITE_URL + forumPath(t);
@@ -154,7 +154,9 @@ async function build(pathname, query) {
       crumbs: [{ name: 'Форум', url: SITE_URL + '/forum' }, ...chain(t.category).map((x) => ({ name: x.name, url: `${SITE_URL}/forum?c=${x.slug}` }))],
       ld: {
         '@context': 'https://schema.org', '@type': 'DiscussionForumPosting', headline: t.title, text: t.body.slice(0, 5000), url,
-        datePublished: t.created_at, author: { '@type': t.is_shop ? 'Organization' : 'Person', name: t.author_name },
+        datePublished: t.created_at, dateModified: t.edited_at || t.last_reply_at || t.created_at,
+        ...(t.images?.length ? { image: t.images.slice(0, 5) } : {}),
+        author: { '@type': t.is_shop ? 'Organization' : 'Person', name: t.author_name },
         ...(t.images?.length ? { image: t.images } : {}),
         interactionStatistic: { '@type': 'InteractionCounter', interactionType: 'https://schema.org/CommentAction', userInteractionCount: t.replies_count },
         comment: posts.slice(0, 50).map((p) => ({ '@type': 'Comment', text: p.body.slice(0, 2000), datePublished: p.created_at, author: { '@type': 'Person', name: p.author_name } })),

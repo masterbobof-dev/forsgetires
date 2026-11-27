@@ -6,7 +6,7 @@ import { PHONE_NUMBER_1, SITE_URL } from '../constants';
 
 export type LegalDoc = 'oferta' | 'privacy';
 
-interface Seller { name: string; code: string; address: string; email: string; phone: string }
+interface Seller { name: string; code: string; address: string; email: string; phone: string; iban?: string; bank?: string }
 
 const PLACEHOLDER = '[буде вказано]';
 
@@ -104,7 +104,7 @@ const LegalPage: React.FC<{ doc: LegalDoc; onBack: () => void }> = ({ doc, onBac
   const [seller, setSeller] = useState<Seller>({ name: PLACEHOLDER, code: PLACEHOLDER, address: PLACEHOLDER, email: PLACEHOLDER, phone: PHONE_NUMBER_1 });
 
   useEffect(() => {
-    settingsRows(['legal_seller_name', 'legal_seller_code', 'legal_seller_address', 'legal_seller_email', 'contact_phone1'])
+    settingsRows(['legal_seller_name', 'legal_seller_code', 'legal_seller_address', 'legal_seller_email', 'legal_seller_iban', 'legal_seller_bank', 'contact_phone1'])
       .then(({ data }) => {
         if (!data) return;
         const get = (k: string) => data.find((r: any) => r.key === k)?.value?.trim();
@@ -114,6 +114,8 @@ const LegalPage: React.FC<{ doc: LegalDoc; onBack: () => void }> = ({ doc, onBac
           address: get('legal_seller_address') || PLACEHOLDER,
           email: get('legal_seller_email') || PLACEHOLDER,
           phone: get('contact_phone1') || prev.phone,
+          iban: get('legal_seller_iban') || '',
+          bank: get('legal_seller_bank') || '',
         }));
       });
   }, []);
@@ -141,10 +143,12 @@ const LegalPage: React.FC<{ doc: LegalDoc; onBack: () => void }> = ({ doc, onBac
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-1">
         <p><span className="text-zinc-500">Продавець:</span> <span className="text-white font-bold">{seller.name}</span></p>
         <p><span className="text-zinc-500">РНОКПП / ЄДРПОУ:</span> {seller.code}</p>
-        <p><span className="text-zinc-500">Адреса:</span> {seller.address}</p>
+        {seller.iban && <p><span className="text-zinc-500">Рахунок (IBAN):</span> <span className="tabular-nums">{seller.iban}</span></p>}
+        {seller.bank && <p><span className="text-zinc-500">Банк:</span> {seller.bank}</p>}
+        {seller.address !== PLACEHOLDER && <p><span className="text-zinc-500">Адреса:</span> {seller.address}</p>}
         <p><span className="text-zinc-500">Магазин:</span> м. Синельникове, вул. Квітнева, 9</p>
         <p><span className="text-zinc-500">Телефон:</span> {seller.phone}</p>
-        <p><span className="text-zinc-500">Email:</span> {seller.email}</p>
+        {seller.email !== PLACEHOLDER && <p><span className="text-zinc-500">Email:</span> {seller.email}</p>}
       </div>
     </article>
   );

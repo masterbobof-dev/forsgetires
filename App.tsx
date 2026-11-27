@@ -20,6 +20,7 @@ if (/^\/($|katalog\/|p\/|\?)/.test(window.location.pathname)) loadShop();
 const AccountPage = lazy(() => import('./components/AccountPage'));
 const LegalPage = lazy(() => import('./components/LegalPage'));
 const PaymentResult = lazy(() => import('./components/PaymentResult'));
+const DotsGame = lazy(() => import('./components/game/DotsGame'));
 const InfoPages = lazy(() => import('./components/InfoPages'));
 const ArticlesPage = lazy(() => import('./components/ArticlesPage'));
 const LocalCityPage = lazy(() => import('./components/LocalCityPage'));
@@ -36,7 +37,7 @@ const PageLoader = () => (
 const PATHS: Record<ViewState, string> = {
   home: '/', admin: '/admin', account: '/account', oferta: '/oferta', privacy: '/privacy', articles: '/statti',
   delivery: '/dostavka-i-oplata', warranty: '/garantiya-i-povernennya', about: '/pro-nas', contacts: '/kontakty', faq: '/faq',
-  city: '/avtozapchastyny-synelnykove', forum: '/forum', payment: '/oplata',
+  city: '/avtozapchastyny-synelnykove', forum: '/forum', payment: '/oplata', game: '/igra',
 };
 const viewFromPath = (path: string): ViewState => {
   const p = path.replace(/\/+$/, '') || '/';
@@ -247,6 +248,8 @@ const App: React.FC = () => {
         return <LegalPage doc={currentView} onBack={goHome} />;
       case 'articles':
         return <ArticlesPage onBack={goHome} />;
+      case 'game':
+        return <DotsGame onBack={goHome} />;
       case 'payment':
         return <PaymentResult onBack={goHome} onPaid={ids => setCartItems(prev => prev.filter(i => !ids.includes(i.id)))} />;
       case 'forum':

@@ -88,7 +88,7 @@
       "destination": "/api/page?path=/:legal"
     },
     {
-      "source": "/:app(admin|account|oplata)",
+      "source": "/:app(admin|account|oplata|igra)",
       "destination": "/app.html"
     },
     {

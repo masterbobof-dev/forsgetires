@@ -155,7 +155,7 @@ const DotsGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     : myTurn ? 'Ваш хід' : 'Хід суперника…';
 
   return (
-    <div className="max-w-lg mx-auto px-3 py-4">
+    <div className="w-full max-w-lg mx-auto px-3 py-4 overflow-hidden">
       <div className="flex items-center justify-between gap-2 mb-2">
         <button onClick={onBack} className="text-zinc-500 text-sm flex items-center gap-1"><ArrowLeft size={14} /> На сайт</button>
         <div className="flex items-center gap-3 text-lg font-black">
@@ -168,11 +168,11 @@ const DotsGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         {me ? <>Ви граєте <span style={{ color: COLORS[me] }}>{NAMES[me].toLowerCase()}</span> · </> : null}{status}
       </p>
       {!game.joined && (
-        <div className="flex gap-2 mb-3">
-          <input readOnly value={link} className="flex-1 min-w-0 bg-zinc-900 border border-zinc-700 rounded-xl px-3 text-xs text-zinc-300" onFocus={e => e.target.select()} />
-          <button onClick={share} className="h-10 px-3 rounded-xl bg-[#FFC300] text-black font-black text-sm flex items-center gap-1">
-            {navigator.share ? <Share2 size={16} /> : <Copy size={16} />} {copied ? 'Скопійовано' : 'Надіслати'}
+        <div className="mb-3">
+          <button onClick={share} className="w-full h-11 rounded-xl bg-[#FFC300] text-black font-black text-sm flex items-center justify-center gap-2">
+            {typeof navigator.share === 'function' ? <Share2 size={16} /> : <Copy size={16} />} {copied ? 'Посилання скопійовано' : 'Надіслати посилання другу'}
           </button>
+          <p className="text-[11px] text-zinc-500 mt-1 truncate text-center">{link}</p>
         </div>
       )}
       <div className="bg-white rounded-2xl overflow-hidden shadow-xl touch-manipulation">

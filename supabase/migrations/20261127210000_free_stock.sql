@@ -1,0 +1,11 @@
+-- Applied live (free_stock_reservations + free_stock_reservations_fix):
+-- tyre_orders: paid, paid_at, paid_amount, payment_ref, program_order_id, program_order_number, synced_at
+--   (buyers cannot set them: private.tyre_orders_sanitize resets them on insert);
+-- tyres: qty_on_hand (warehouse stock from the program), sale_ok (active, priced, section on);
+-- private.program_reserved (program_product_id, qty, updated_at) — the program's reservations;
+-- private.free_stock_refresh(uuid[]) — stock_quantity/in_stock = free stock
+--   = qty_on_hand − reservations − paid orders not yet taken by the program;
+-- public.program_reserved_set(items, replace_all) — for site-api products.reserved.set (service role only);
+-- public.order_stock_check(items) — shortages before an online payment (service role only);
+-- trigger tyre_orders_free_stock — recount when an order is paid, taken, cancelled;
+-- private.program_sync_apply keeps qty_on_hand/sale_ok and recounts the synced goods.

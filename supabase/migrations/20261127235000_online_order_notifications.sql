@@ -1,0 +1,5 @@
+-- Applied live (online_order_notifications):
+-- card-payment orders: no Telegram «new order» while the buyer is paying;
+--   paid  → the order card + «💳 Оплачено онлайн»;
+--   not paid in 20 min → «⏳ не завершив оплату — зателефонуйте» + the order card (private.online_unpaid_remind, cron every 10 min,
+--   tyre_orders.pay_reminded_at marks that it was sent).

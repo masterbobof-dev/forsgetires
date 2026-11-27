@@ -3,6 +3,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { installErrorReporter } from './errorReporter';
+import { originalOf } from './photoUrl';
 
 installErrorReporter();
 
@@ -14,6 +15,9 @@ const PHOTO_PLACEHOLDER = 'data:image/svg+xml;utf8,' + encodeURIComponent(
 document.addEventListener('error', (e) => {
   const img = e.target;
   if (!(img instanceof HTMLImageElement) || img.dataset.photoFallback || img.src.startsWith('data:')) return;
+  // the small copy from the picture service failed: show the partner's original instead
+  const orig = originalOf(img.src);
+  if (orig) { img.dataset.swapped = '1'; img.src = orig; return; }
   if (!/supabase\.co\/storage|\.(jpe?g|png|webp|gif)(\?|$)/i.test(img.src) && !img.closest('[data-product-photo]')) return;
   img.dataset.photoFallback = '1';
   img.removeAttribute('srcset');

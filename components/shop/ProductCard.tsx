@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { listPhoto } from '../../photoUrl';
 import NoPhoto from './NoPhoto';
 import { ShoppingCart, Flame, ShoppingBag, Eye, Info, Heart, Scale, PhoneCall, Clock } from 'lucide-react';
 import { TyreProduct } from '../../types';
@@ -60,7 +61,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
        <div className={`aspect-square relative overflow-hidden ${hasImg ? 'bg-white' : 'bg-zinc-950'}`}>
           {hasImg ? (
             <img 
-              src={tyre.image_thumb_url || tyre.image_url} 
+              src={listPhoto(tyre)} 
               className="w-full h-full object-contain p-3 sm:p-4 mix-blend-multiply transition-transform duration-700 group-hover:scale-105" 
               alt={altText}
               loading={priority ? 'eager' : 'lazy'}
@@ -69,7 +70,12 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
               width={400}
               height={500}
               referrerPolicy="no-referrer"
-              onError={() => setImgBroken(true)}
+              onError={(e) => {
+                // the small copy failed and the original is being tried (index.tsx): wait for it
+                const img = e.currentTarget;
+                if (img.dataset.swapped === '1' && img.dataset.swapSeen !== '1') { img.dataset.swapSeen = '1'; return; }
+                setImgBroken(true);
+              }}
             />
           ) : (
             <NoPhoto icon={PlaceholderIcon} size={46} />

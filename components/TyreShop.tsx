@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import { TyreProduct, CartItem } from '../types';
-import { useCategories, getRootOf, getRootCategories, getChildren, isTyreProduct, getCategoryIcon } from '../categories';
+import { useCategories, useCategoryTexts, getRootOf, getRootCategories, getChildren, isTyreProduct, getCategoryIcon } from '../categories';
 import { getPresetForCategory, getPresetForProduct, getCardChips } from '../productAttributes';
 import { useStoredIds, FAVORITES_KEY, COMPARE_KEY, COMPARE_MAX } from '../shopLists';
 import { useSitePromos } from '../sitePromos';
@@ -78,7 +78,10 @@ const TyreShop: React.FC<TyreShopProps> = ({
 
   // --- the chosen section ---
   const [activeCategory, setActiveCategory] = useState<CategorySelection>('all');
-  const activeCat = typeof activeCategory === 'number' ? categories.find(c => c.id === activeCategory) : undefined;
+  const activeCatBase = typeof activeCategory === 'number' ? categories.find(c => c.id === activeCategory) : undefined;
+  // the open section with its long texts (description, questions and answers, Google title), asked separately
+  const activeTexts = useCategoryTexts(activeCatBase?.id);
+  const activeCat = useMemo(() => (activeCatBase && activeTexts ? { ...activeCatBase, ...activeTexts } : activeCatBase), [activeCatBase, activeTexts]);
   const categorySlug = (cat: CategorySelection) => cat === 'all' ? '' : cat === 'hot' ? 'akcii' : cat === 'fav' ? 'obrane' : (categories.find(c => c.id === cat)?.slug || '');
   const agroCategory = categories.find(c => c.vehicle_type === 'agro');
   const showTyreFilters = !!activeCat && activeCat.kind === 'tyre';

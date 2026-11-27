@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { listPhoto } from '../../photoUrl';
 import NoPhoto from '../shop/NoPhoto';
 import { Search, Truck, Store, Wallet, ShieldCheck, Flame, ChevronRight, ChevronLeft, BookOpen, HelpCircle, Percent, MessagesSquare, MessageSquare, Plus } from 'lucide-react';
 import { useSitePromos, fetchBanners, fetchHomeBlocks, SiteBanner, HomeBlockType, DEFAULT_HOME_BLOCKS } from '../../sitePromos';
@@ -223,7 +224,7 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
                 <button key={p.id} onClick={() => onOpenProduct(p)} className="snap-start shrink-0 w-[160px] md:w-[200px] text-left bg-zinc-900 border border-zinc-800 hover:border-[#FFC300] rounded-2xl overflow-hidden transition-colors">
                   <div className="aspect-square bg-white relative">
                     {p.image_url
-                      ? <img src={p.image_thumb_url || p.image_url} alt={p.title} loading={idx < 2 ? 'eager' : 'lazy'} fetchPriority={idx < 2 ? 'high' : 'auto'} referrerPolicy="no-referrer" className="w-full h-full object-contain p-3 mix-blend-multiply" />
+                      ? <img src={listPhoto(p)} alt={p.title} loading={idx < 2 ? 'eager' : 'lazy'} fetchPriority={idx < 2 ? 'high' : 'auto'} referrerPolicy="no-referrer" className="w-full h-full object-contain p-3 mix-blend-multiply" />
                       : <NoPhoto icon={getCategoryIcon(categories.find(c => c.id === p.category_id)?.icon || categories.find(c => c.id === categories.find(k => k.id === p.category_id)?.parent_id)?.icon)} size={40} />}
                     {old > price && <span className="absolute top-2 left-2 bg-red-600 text-white text-[11px] font-black px-2 py-0.5 rounded-full">−{Math.round((1 - price / old) * 100)}%</span>}
                   </div>
@@ -246,7 +247,7 @@ const HomeShowcase: React.FC<Props> = ({ categories, dbReady, sizeOptions, onPic
               <button key={p.id} onClick={() => openRecent(p.id)} className="snap-start shrink-0 w-[210px] flex items-center gap-2 text-left bg-zinc-900 border border-zinc-800 hover:border-[#FFC300] rounded-xl p-2 transition-colors">
                 <span className={`w-12 h-12 shrink-0 rounded-lg overflow-hidden flex items-center justify-center ${(p.image_thumb_url || p.image_url) ? 'bg-white' : 'bg-zinc-800'}`}>
                   {(p.image_thumb_url || p.image_url)
-                    ? <img src={p.image_thumb_url || p.image_url} alt="" loading="lazy" className="w-full h-full object-contain" />
+                    ? <img src={listPhoto(p, 120)} alt="" loading="lazy" className="w-full h-full object-contain" />
                     : (() => { const c = categories.find(x => x.id === p.category_id); return <NoPhoto icon={getCategoryIcon(c?.icon || categories.find(x => x.id === c?.parent_id)?.icon)} size={20} />; })()}
                 </span>
                 <span className="min-w-0">

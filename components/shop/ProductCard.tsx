@@ -98,7 +98,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ tyre, onClick, onAddToCart, o
           </div>
           
           {/* Favourite / compare */}
-          <div className="absolute top-2 right-2 sm:top-3 sm:right-3 z-30 flex flex-col gap-1.5">
+          <div className="absolute top-2 right-2 sm:top-3 sm:right-3 z-[15] flex flex-col gap-1.5">
             {onToggleFavorite && (
               <button
                 onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}

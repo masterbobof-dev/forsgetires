@@ -92,6 +92,15 @@ export const parseSearch = (raw: string): ParsedSearch => {
   return out;
 };
 
+/**
+ * A word that matches its Ukrainian and Russian spellings: the letters that differ between them become «any one letter»
+ * («таврия» = «таврія», «тернополь» = «тернопіль», «харьков» → «харк_в»). Short words and words with digits stay as typed.
+ */
+export const looseWord = (w: string): string => {
+  if (w.length < 4 || /\d/.test(w) || !/[а-яіїєґё]/i.test(w)) return w;
+  return w.replace(/[иіїыйеєэёгґъ'’ь]/gi, '_').replace(/о/gi, (m, i) => (w.length >= 6 && i > 1 && i < w.length - 1 ? '_' : m));
+};
+
 /** PostgREST "or" filters (each must match) for a parsed search. */
 export const searchFilters = (s: ParsedSearch): string[] => {
   const filters: string[] = [];
@@ -108,7 +117,8 @@ export const searchFilters = (s: ParsedSearch): string[] => {
     return filters;
   }
   for (const t of s.tokens) {
-    filters.push([like('title', t), ...twinsOf(t).map(r => like('title', r)), like('manufacturer', t), like('catalog_number', t), like('product_number', t), like('search_numbers', t.toUpperCase().replace(/[^0-9A-ZА-ЯІЇЄҐ]/g, '') || t)].join(','));
+    const lw = looseWord(t);
+    filters.push([like('title', t), ...(lw !== t ? [like('title', lw), like('manufacturer', lw)] : []), ...twinsOf(t).map(r => like('title', r)), like('manufacturer', t), like('catalog_number', t), like('product_number', t), like('search_numbers', t.toUpperCase().replace(/[^0-9A-ZА-ЯІЇЄҐ]/g, '') || t)].join(','));
   }
   if (s.width && s.height) {
     filters.push([like('title', `${s.width}/${s.height}`), like('title', `${s.width} ${s.height}`), like('title', `${s.width}x${s.height}`)].join(','));

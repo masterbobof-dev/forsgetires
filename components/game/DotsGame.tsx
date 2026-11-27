@@ -4,7 +4,7 @@ import { supabase } from '../../supabaseClient';
 import { computeDots, canPut, botMove, type Move } from './dots';
 import { inTelegram, telegramApp } from './telegram';
 import FortressBoard from './FortressBoard';
-import { botAction, replay, type Action } from './fortress';
+import { botAction, makeReplayer, boardSize, type Action } from './fortress';
 
 /**
  * «Точки» for two players by a link (/igra?g=<id>): one starts a game and sends the link, the other opens it.
@@ -12,7 +12,7 @@ import { botAction, replay, type Action } from './fortress';
  * With no partner, the game is played against the computer on this phone (blue).
  */
 type Mode = 'dots' | 'fort';
-type Game = { id: string; w: number; h: number; moves: any[]; joined: boolean; finished: boolean; mode?: Mode };
+type Game = { id: string; w: number; h: number; moves: any[]; joined: boolean; finished: boolean; mode?: Mode; players?: number; seated?: number };
 type Seat = { token?: string; player: number };
 
 const COLORS = ['', '#ef4444', '#3b82f6'];
@@ -31,6 +31,8 @@ const DotsGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [copied, setCopied] = useState(false);
   /** a game against the computer, kept only on this phone */
   const [vsBot, setVsBot] = useState(false);
+  /** how many players in «Фортеці» (you + bots, or friends) */
+  const [fortN, setFortN] = useState(2);
   const svgRef = useRef<SVGSVGElement>(null);
 
   const tg = inTelegram();
@@ -65,15 +67,19 @@ const DotsGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     return () => clearInterval(t);
   }, [id, load]);
 
-  const startBot = (mode: Mode = game?.mode || 'dots') => {
+  const startBot = (mode: Mode = game?.mode || 'dots', n = game?.players || fortN) => {
     setErr(''); setId(''); setVsBot(true); setSeat({ player: 1 });
-    setGame({ id: 'bot', w: 15, h: mode === 'fort' ? 19 : 20, moves: [], joined: true, finished: false, mode });
+    const [w, h] = mode === 'fort' ? boardSize(n) : [15, 20];
+    setGame({ id: 'bot', w, h, moves: [], joined: true, finished: false, mode, players: mode === 'fort' ? n : 2, seated: n });
     window.history.replaceState({}, '', '/igra');
   };
 
-  const newGame = async (mode: Mode = game?.mode || 'dots') => {
+  const newGame = async (mode: Mode = game?.mode || 'dots', n = game?.players || fortN) => {
     setBusy(true); setErr(''); setVsBot(false);
-    const { data, error } = await supabase.rpc('dots_new_mode', { p_mode: mode, p_w: 15, p_h: mode === 'fort' ? 19 : 20 });
+    const [w, h] = boardSize(n);
+    const { data, error } = mode === 'fort'
+      ? await supabase.rpc('fort_new', { p_players: n, p_w: w, p_h: h })
+      : await supabase.rpc('dots_new_mode', { p_mode: mode, p_w: 15, p_h: 20 });
     setBusy(false);
     if (error) { setErr(error.message); return; }
     saveSeat(data.id, { token: data.token, player: 1 });
@@ -82,6 +88,7 @@ const DotsGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   };
 
   const fort = game?.mode === 'fort';
+  const botReplay = useRef(makeReplayer());
   const state = useMemo(() => (game && !fort ? computeDots(game.w, game.h, game.moves) : null), [game, fort]);
 
   // «Фортеці»: one action of this player (against the computer — on the phone; with a friend — through the server)
@@ -97,12 +104,12 @@ const DotsGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   // the computer plays its whole turn, one action every 0.6 s so it can be followed
   useEffect(() => {
     if (!vsBot || !fort || !game) return;
-    const st = replay(game.moves as Action[]);
-    if (st.winner || st.turn !== 2) return;
+    const st = botReplay.current(game.moves as Action[], game.players || 2, [game.w, game.h]);
+    if (st.winner || st.turn === 1) return;
     const t = setTimeout(() => {
       const a = botAction(st);
-      setGame(g => g && { ...g, moves: [...g.moves, { ...a, p: 2 }] });
-    }, 600);
+      setGame(g => g && { ...g, moves: [...g.moves, { ...a, p: st.turn }] });
+    }, 450);
     return () => clearTimeout(t);
   }, [vsBot, fort, game]);
   const turn = game ? (game.moves.length % 2 === 0 ? 1 : 2) : 0;
@@ -168,9 +175,15 @@ const DotsGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-4 text-left">
           <h2 className="text-xl font-black text-white">🏰 Фортеці</h2>
           <p className="text-zinc-400 text-sm mb-3">Покрокова стратегія: замкніть коло — це ваша фортеця. Будуйте башти, казарми, наймайте воїнів і танки, захоплюйте чужі фортеці.</p>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-zinc-400 text-sm">Гравців:</span>
+            {[2, 3, 4].map(k => (
+              <button key={k} onClick={() => setFortN(k)} className={`w-10 h-9 rounded-lg font-black text-sm ${fortN === k ? 'bg-[#FFC300] text-black' : 'bg-zinc-800 text-white'}`}>{k}</button>
+            ))}
+          </div>
           <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => newGame('fort')} disabled={busy} className="flex items-center justify-center gap-1.5 bg-[#FFC300] text-black font-black py-3 rounded-xl text-sm disabled:opacity-50"><Users size={16} /> З другом</button>
-            <button onClick={() => startBot('fort')} className="flex items-center justify-center gap-1.5 bg-zinc-800 text-white font-black py-3 rounded-xl text-sm"><Bot size={16} /> З ботом</button>
+            <button onClick={() => newGame('fort', fortN)} disabled={busy} className="flex items-center justify-center gap-1.5 bg-[#FFC300] text-black font-black py-3 rounded-xl text-sm disabled:opacity-50"><Users size={16} /> {fortN > 2 ? 'З друзями' : 'З другом'}</button>
+            <button onClick={() => startBot('fort', fortN)} className="flex items-center justify-center gap-1.5 bg-zinc-800 text-white font-black py-3 rounded-xl text-sm"><Bot size={16} /> {fortN > 2 ? 'З ботами' : 'З ботом'}</button>
           </div>
         </div>
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-left">
@@ -197,11 +210,12 @@ const DotsGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             <button onClick={share} className="w-full h-11 rounded-xl bg-[#FFC300] text-black font-black text-sm flex items-center justify-center gap-2">
               <Share2 size={16} /> {copied ? 'Посилання скопійовано' : tg ? 'Запросити друга в Telegram' : 'Надіслати посилання другу'}
             </button>
-            <button onClick={() => startBot('fort')} className="w-full h-10 mt-2 rounded-xl bg-zinc-800 text-white font-bold text-sm flex items-center justify-center gap-2"><Bot size={16} /> Поки нікого — грати з ботом</button>
+            <p className="text-center text-xs text-zinc-400 mt-1">Підключилося гравців: {game.seated || 1} з {game.players || 2}</p>
+            <button onClick={() => startBot('fort')} className="w-full h-10 mt-2 rounded-xl bg-zinc-800 text-white font-bold text-sm flex items-center justify-center gap-2"><Bot size={16} /> Поки нікого — грати з ботами</button>
           </div>
         )}
         {err && <p className="text-red-400 text-xs text-center mb-1">{err}</p>}
-        <FortressBoard actions={game.moves as Action[]} me={seat?.player || 0} vsBot={vsBot} joined={game.joined} busy={busy} onAct={act}
+        <FortressBoard key={`${game.id}-${game.players}`} actions={game.moves as Action[]} n={game.players || 2} size={[game.w, game.h]} me={seat?.player || 0} vsBot={vsBot} joined={game.joined} busy={busy} onAct={act}
           footer={<>
             <button onClick={() => (vsBot ? startBot('fort') : newGame('fort'))} className="h-10 px-3 rounded-xl bg-zinc-800 text-white font-bold text-sm flex items-center gap-1 whitespace-nowrap"><Plus size={16} /> Нова гра</button>
             <button onClick={() => { setVsBot(false); setGame(null); setId(''); window.history.replaceState({}, '', '/igra'); }} className="h-10 px-3 rounded-xl bg-zinc-800 text-white font-bold text-sm whitespace-nowrap">Інші ігри</button>

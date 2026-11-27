@@ -1,15 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Flag, HelpCircle, X } from 'lucide-react';
+import { Flag, HelpCircle, X, Plus, Minus, Maximize2, Crosshair } from 'lucide-react';
 import {
-  replay, canDot, canBuild, reach, targets, hireSpots, income, buildingAt, unitAt,
+  makeReplayer, canDot, canBuild, reach, targets, hireSpots, income, buildingAt, unitAt, home, players,
   COST, NAMES_UA, WIN_SCORE, MAX_ROUNDS, type Action, type BuildKind, type UnitKind, type FState,
 } from './fortress';
 
-/** The board of «Точки: Фортеці»: what you see and what you press. The rules live in fortress.ts. */
-const COLORS = ['', '#ef4444', '#3b82f6'];
-const STEP = 22, PAD = 13;
+/**
+ * The board of «Точки: Фортеці» drawn like a school notebook: blue squares, a red margin, walls and dots in ballpoint
+ * ink, cities hatched with the player's colour. One finger moves the board, two fingers (or the buttons) zoom.
+ * The rules live in fortress.ts.
+ */
+export const PCOLORS = ['', '#dc2626', '#2563eb', '#16a34a', '#9333ea'];
+export const PNAMES = ['', 'Червоні', 'Сині', 'Зелені', 'Фіолетові'];
+const STEP = 20, PAD = 12;
 type Tool = 'dot' | BuildKind | UnitKind;
-
 const TOOLS: { k: Tool; label: string; icon: string }[] = [
   { k: 'dot', label: 'Точка', icon: '•' },
   { k: 'tower', label: 'Башта', icon: '🗼' },
@@ -21,43 +25,105 @@ const TOOLS: { k: Tool; label: string; icon: string }[] = [
 
 const Tank: React.FC<{ x: number; y: number; color: string }> = ({ x, y, color }) => (
   <g transform={`translate(${x},${y})`}>
-    <rect x={-8} y={-5} width={16} height={10} rx={2} fill={color} stroke="#111" strokeWidth={1} />
-    <rect x={-9} y={4} width={18} height={3} rx={1.5} fill="#27272a" />
-    <circle cx={0} cy={-1} r={3.5} fill={color} stroke="#111" strokeWidth={1} />
-    <line x1={2} y1={-2} x2={10} y2={-5} stroke="#111" strokeWidth={2} strokeLinecap="round" />
+    <rect x={-7} y={-4.5} width={14} height={9} rx={2} fill={color} stroke="#1e293b" strokeWidth={1} />
+    <rect x={-8} y={3.5} width={16} height={3} rx={1.5} fill="#334155" />
+    <circle cx={0} cy={-1} r={3} fill={color} stroke="#1e293b" strokeWidth={1} />
+    <line x1={2} y1={-2} x2={9} y2={-4.5} stroke="#1e293b" strokeWidth={1.8} strokeLinecap="round" />
   </g>
 );
 
+/** the game state, replayed once and then moved forward only by the new actions */
+const useFortState = (actions: Action[], n: number, size: [number, number]) => {
+  const replayer = useRef(makeReplayer());
+  return useMemo(() => replayer.current(actions, n, size), [actions, n, size[0], size[1]]); // eslint-disable-line react-hooks/exhaustive-deps
+};
+
 const FortressBoard: React.FC<{
-  actions: Action[]; me: number; vsBot: boolean; joined: boolean; busy: boolean;
+  actions: Action[]; n: number; size: [number, number]; me: number; vsBot: boolean; joined: boolean; busy: boolean;
   onAct: (a: Action) => void;
-  /** «Нова гра» and the invite buttons from the game screen */
   footer?: React.ReactNode;
-}> = ({ actions, me, vsBot, joined, busy, onAct, footer }) => {
-  const s: FState = useMemo(() => replay(actions), [actions]);
+}> = ({ actions, n, size, me, vsBot, joined, busy, onAct, footer }) => {
+  const s = useFortState(actions, n, size);
   const [tool, setTool] = useState<Tool>('dot');
-  const [sel, setSel] = useState<number | null>(null); // selected unit id
+  const [sel, setSel] = useState<number | null>(null);
   const [help, setHelp] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
   const myTurn = !!me && s.turn === me && !s.winner && joined;
   const unit = sel != null ? s.units.find(u => u.id === sel && u.p === me && !u.acted) : undefined;
 
-  // the turn ends by itself after the last action
+  // ---- the turn ends by itself after the last action
   const sentEnd = useRef(-1);
   useEffect(() => {
     if (myTurn && s.actions <= 0 && sentEnd.current !== actions.length) { sentEnd.current = actions.length; onAct({ t: 'end' }); }
   }, [myTurn, s.actions, actions.length]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setSel(null); }, [s.turn]);
 
+  // ---- view: which part of the board is shown (zoom and move)
+  const W = (s.w - 1) * STEP + PAD * 2, H = (s.h - 1) * STEP + PAD * 2;
+  const pos = (i: number) => ({ x: PAD + (i % s.w) * STEP, y: PAD + Math.floor(i / s.w) * STEP });
+  const startView = () => {
+    const [hx, hy] = home(s, me || 1); const vw = Math.min(W, 13 * STEP), vh = vw * 1.25;
+    return { x: Math.max(0, Math.min(W - vw, PAD + hx * STEP - vw / 2)), y: Math.max(0, Math.min(H - vh, PAD + hy * STEP - vh / 2)), w: vw };
+  };
+  const [view, setView] = useState(startView);
+  const vh = view.w * 1.25;
+  const clampView = (v: { x: number; y: number; w: number }) => {
+    const w = Math.max(6 * STEP, Math.min(Math.max(W, H / 1.25), v.w)); const h = w * 1.25;
+    return { w, x: Math.max(-STEP, Math.min(W - w + STEP, v.x)), y: Math.max(-STEP, Math.min(H - h + STEP, v.y)) };
+  };
+  const zoom = (k: number, cx?: number, cy?: number) => setView(v => {
+    const w = v.w * k; const ax = cx ?? v.x + v.w / 2, ay = cy ?? v.y + (v.w * 1.25) / 2;
+    return clampView({ w, x: ax - (ax - v.x) * k, y: ay - (ay - v.y) * k });
+  });
+  const toBoard = (clientX: number, clientY: number) => {
+    const svg = svgRef.current!; const pt = svg.createSVGPoint(); pt.x = clientX; pt.y = clientY;
+    return pt.matrixTransform(svg.getScreenCTM()!.inverse());
+  };
+
+  // ---- fingers: one moves the board (or taps a point), two zoom
+  const ptrs = useRef(new Map<number, { x: number; y: number }>());
+  const gesture = useRef<{ moved: boolean; startX: number; startY: number; view: typeof view; dist?: number; mid?: { x: number; y: number } } | null>(null);
+  const onDown = (e: React.PointerEvent) => {
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const list = [...ptrs.current.values()];
+    if (list.length === 1) gesture.current = { moved: false, startX: e.clientX, startY: e.clientY, view };
+    if (list.length === 2) {
+      const [a, b] = list;
+      gesture.current = { moved: true, startX: 0, startY: 0, view, dist: Math.hypot(a.x - b.x, a.y - b.y), mid: toBoard((a.x + b.x) / 2, (a.y + b.y) / 2) };
+    }
+  };
+  const onMove = (e: React.PointerEvent) => {
+    if (!ptrs.current.has(e.pointerId) || !gesture.current) return;
+    ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const g = gesture.current; const list = [...ptrs.current.values()];
+    const box = boxRef.current!.getBoundingClientRect(); const perPx = g.view.w / box.width;
+    if (list.length === 1 && g.dist == null) {
+      const dx = e.clientX - g.startX, dy = e.clientY - g.startY;
+      if (!g.moved && Math.hypot(dx, dy) > 7) g.moved = true;
+      if (g.moved) setView(clampView({ ...g.view, x: g.view.x - dx * perPx, y: g.view.y - dy * perPx }));
+    } else if (list.length === 2 && g.dist && g.mid) {
+      const [a, b] = list; const d = Math.hypot(a.x - b.x, a.y - b.y);
+      const k = g.dist / Math.max(d, 1); const w = g.view.w * k;
+      setView(clampView({ w, x: g.mid.x - (g.mid.x - g.view.x) * k, y: g.mid.y - (g.mid.y - g.view.y) * k }));
+    }
+  };
+  const onUp = (e: React.PointerEvent) => {
+    const g = gesture.current; const wasSingle = ptrs.current.size === 1;
+    ptrs.current.delete(e.pointerId);
+    if (wasSingle && g && !g.moved && g.dist == null) tapAt(e.clientX, e.clientY);
+    if (!ptrs.current.size) gesture.current = null;
+  };
+  const onWheel = (e: React.WheelEvent) => { const q = toBoard(e.clientX, e.clientY); zoom(e.deltaY > 0 ? 1.15 : 1 / 1.15, q.x, q.y); };
+
   const reachSet = useMemo(() => new Set(unit ? reach(s, unit) : []), [s, unit]);
   const targetSet = useMemo(() => new Set(unit ? targets(s, unit) : []), [s, unit]);
-  const hireSet = useMemo(() => new Set(tool === 'soldier' || tool === 'tank' ? hireSpots(s, me) : []), [s, tool, me]);
+  const hireSet = useMemo(() => new Set(myTurn && (tool === 'soldier' || tool === 'tank') ? hireSpots(s, me) : []), [s, tool, me, myTurn]);
 
-  const tap = (e: React.MouseEvent<SVGSVGElement>) => {
+  const tapAt = (clientX: number, clientY: number) => {
     if (!myTurn || busy) return;
-    const svg = svgRef.current!; const pt = svg.createSVGPoint();
-    pt.x = e.clientX; pt.y = e.clientY;
-    const q = pt.matrixTransform(svg.getScreenCTM()!.inverse());
+    const q = toBoard(clientX, clientY);
     const x = Math.round((q.x - PAD) / STEP), y = Math.round((q.y - PAD) / STEP);
     if (x < 0 || y < 0 || x >= s.w || y >= s.h) return;
     const i = y * s.w + x;
@@ -73,15 +139,13 @@ const FortressBoard: React.FC<{
     else if ((tool === 'soldier' || tool === 'tank') && hireSet.has(i) && s.gold[me] >= COST[tool]) { onAct({ t: 'hire', k: tool, i }); setTool('dot'); }
   };
 
-  const W = (s.w - 1) * STEP + PAD * 2, H = (s.h - 1) * STEP + PAD * 2;
-  const pos = (i: number) => ({ x: PAD + (i % s.w) * STEP, y: PAD + Math.floor(i / s.w) * STEP });
-  // walls: neighbouring dots of a player around his fortress
+  // ---- city walls: neighbouring dots of a player around his city, drawn as pen strokes
   const lines: React.ReactNode[] = [];
   const touches = (i: number, p: number) => {
     const x = i % s.w, y = Math.floor(i / s.w);
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
       const nx = x + dx, ny = y + dy;
-      if (nx >= 0 && ny >= 0 && nx < s.w && ny < s.h && s.inside[ny * s.w + nx] === p) return true;
+      if (nx >= 0 && ny >= 0 && nx < s.w && ny < s.h && s.terr[ny * s.w + nx] === p) return true;
     }
     return false;
   };
@@ -91,51 +155,73 @@ const FortressBoard: React.FC<{
     for (const [dx, dy] of [[1, 0], [0, 1], [1, 1], [-1, 1]]) {
       const nx = x + dx, ny = y + dy; if (nx < 0 || nx >= s.w || ny >= s.h) continue;
       const j = ny * s.w + nx;
-      if (s.dot[j] === p && touches(j, p)) { const a = pos(i), b = pos(j); lines.push(<line key={`l${i}-${j}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={COLORS[p]} strokeWidth={3} strokeLinecap="round" />); }
+      if (s.dot[j] === p && touches(j, p)) { const a = pos(i), b = pos(j); lines.push(<line key={`l${i}-${j}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={PCOLORS[p]} strokeWidth={2.2} strokeLinecap="round" opacity={0.9} />); }
     }
   }
 
-  const opp = me ? 3 - me : 2;
   const status = s.winner
-    ? (s.winner === 3 ? 'Нічия!' : s.winner === me ? 'Ви перемогли! 🎉' : vsBot ? 'Переміг бот. Ще раз?' : 'Переміг суперник')
-    : !joined ? 'Чекаємо другого гравця'
+    ? (s.winner === 99 ? 'Нічия!' : s.winner === me ? 'Ви перемогли! 🎉' : `Перемогли ${PNAMES[s.winner].toLowerCase()}`)
+    : !joined ? 'Чекаємо всіх гравців'
     : myTurn ? `Ваш хід · дій: ${s.actions}`
-    : vsBot ? 'Бот думає…' : 'Хід суперника…';
+    : vsBot ? `Ходять ${PNAMES[s.turn].toLowerCase()} (бот)…` : `Ходять ${PNAMES[s.turn].toLowerCase()}…`;
   const toolOk = (k: Tool) => k === 'dot' || (k === 'soldier' || k === 'tank'
     ? s.buildings.some(b => b.p === me && b.k === 'barracks') && s.gold[me] >= COST[k]
     : s.gold[me] >= COST[k as BuildKind]);
+  const mine = me || 1;
 
   return (
     <div>
-      <div className="flex items-center justify-between text-sm mb-1">
-        <span className="font-black" style={{ color: COLORS[me || 1] }}>● {s.score[me || 1]}</span>
-        <span className="text-zinc-400 text-xs">Раунд {Math.min(s.round, MAX_ROUNDS)}/{MAX_ROUNDS} · до {WIN_SCORE} очок</span>
-        <span className="font-black" style={{ color: COLORS[opp] }}>{s.score[opp]} ●</span>
+      {/* scores of all players; the one whose turn it is is outlined */}
+      <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+        {players(s).map(p => (
+          <span key={p} className={`px-2 py-0.5 rounded-lg text-sm font-black border ${s.turn === p && !s.winner ? 'border-[#FFC300]' : 'border-transparent'}`} style={{ color: PCOLORS[p] }}>
+            ● {s.score[p]}{p === me ? ' (ви)' : ''}
+          </span>
+        ))}
+        <span className="ml-auto text-zinc-500 text-[11px]">Раунд {Math.min(s.round, MAX_ROUNDS)}/{MAX_ROUNDS} · до {WIN_SCORE}</span>
       </div>
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <span className="text-[#FFC300] font-black text-sm">💰 {s.gold[me || 1]} <span className="text-zinc-500 font-bold text-xs">(+{income(s, me || 1)} за хід)</span></span>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <span className="text-[#FFC300] font-black text-sm">💰 {s.gold[mine]} <span className="text-zinc-500 font-bold text-xs">(+{income(s, mine)})</span></span>
         <span className={`text-sm font-bold ${myTurn ? 'text-[#FFC300]' : 'text-zinc-400'}`}>{status}</span>
         <button onClick={() => setHelp(true)} aria-label="Правила" className="text-zinc-400"><HelpCircle size={20} /></button>
       </div>
       {s.log && <p className="text-center text-xs text-orange-300 mb-1">{s.log}</p>}
 
-      <div className="bg-white rounded-2xl overflow-hidden shadow-xl touch-manipulation">
-        <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block select-none" onClick={tap} role="img" aria-label="Поле гри">
-          {Array.from({ length: s.w }, (_, x) => <line key={`v${x}`} x1={PAD + x * STEP} y1={0} x2={PAD + x * STEP} y2={H} stroke="#bfdbfe" strokeWidth={1} />)}
-          {Array.from({ length: s.h }, (_, y) => <line key={`h${y}`} x1={0} y1={PAD + y * STEP} x2={W} y2={PAD + y * STEP} stroke="#bfdbfe" strokeWidth={1} />)}
-          {Array.from(s.inside).map((p, i) => (p ? <rect key={`a${i}`} x={pos(i).x - STEP / 2} y={pos(i).y - STEP / 2} width={STEP} height={STEP} fill={COLORS[p]} opacity={0.16} /> : null))}
-          {lines}
-          {[...hireSet].map(i => <circle key={`hs${i}`} cx={pos(i).x} cy={pos(i).y} r={5} fill="#22c55e" opacity={0.5} />)}
-          {(tool === 'tower' || tool === 'barracks' || tool === 'market') && myTurn && Array.from(s.inside).map((p, i) => (p === me && !s.dot[i] && !buildingAt(s, i) && !unitAt(s, i) ? <circle key={`bs${i}`} cx={pos(i).x} cy={pos(i).y} r={4} fill="#22c55e" opacity={0.5} /> : null))}
-          {[...reachSet].map(i => <circle key={`r${i}`} cx={pos(i).x} cy={pos(i).y} r={4} fill="#eab308" opacity={0.7} />)}
-          {Array.from(s.dot).map((p, i) => (p ? <circle key={`d${i}`} cx={pos(i).x} cy={pos(i).y} r={5} fill={COLORS[p]} /> : null))}
+      <div ref={boxRef} className="relative rounded-2xl overflow-hidden shadow-xl bg-[#fdfdf8]" style={{ touchAction: 'none', aspectRatio: '4 / 5' }}
+        onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onWheel={onWheel}>
+        <svg ref={svgRef} viewBox={`${view.x} ${view.y} ${view.w} ${vh}`} className="w-full h-full block select-none" role="img" aria-label="Поле гри">
+          <defs>
+            {/* a slight tremble of the hand */}
+            <filter id="pen" x="-5%" y="-5%" width="110%" height="110%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.06" numOctaves={2} seed={3} result="n" />
+              <feDisplacementMap in="SourceGraphic" in2="n" scale={1.6} />
+            </filter>
+            {players(s).map(p => (
+              <pattern key={p} id={`hatch${p}`} width={5} height={5} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                <line x1={0} y1={0} x2={0} y2={5} stroke={PCOLORS[p]} strokeWidth={1.1} opacity={0.45} />
+              </pattern>
+            ))}
+          </defs>
+          <rect x={-STEP * 2} y={-STEP * 2} width={W + STEP * 4} height={H + STEP * 4} fill="#fdfdf8" />
+          {Array.from({ length: s.w + 4 }, (_, x) => <line key={`v${x}`} x1={PAD + (x - 2) * STEP} y1={-STEP * 2} x2={PAD + (x - 2) * STEP} y2={H + STEP * 2} stroke="#a5c8ec" strokeWidth={0.7} />)}
+          {Array.from({ length: s.h + 4 }, (_, y) => <line key={`h${y}`} x1={-STEP * 2} y1={PAD + (y - 2) * STEP} x2={W + STEP * 2} y2={PAD + (y - 2) * STEP} stroke="#a5c8ec" strokeWidth={0.7} />)}
+          <line x1={-STEP * 0.6} y1={-STEP * 2} x2={-STEP * 0.6} y2={H + STEP * 2} stroke="#ef4444" strokeWidth={1} opacity={0.7} />
+          {/* cities: hatched like in a notebook (darker where the wall is closed) */}
+          {Array.from(s.terr).map((p, i) => (p ? <rect key={`a${i}`} x={pos(i).x - STEP / 2} y={pos(i).y - STEP / 2} width={STEP} height={STEP} fill={`url(#hatch${p})`} opacity={s.inside[i] === p ? 1 : 0.45} /> : null))}
+          <g filter="url(#pen)">
+            {lines}
+            {Array.from(s.dot).map((p, i) => (p ? <circle key={`d${i}`} cx={pos(i).x} cy={pos(i).y} r={3.6} fill={PCOLORS[p]} /> : null))}
+          </g>
+          {[...hireSet].map(i => <circle key={`hs${i}`} cx={pos(i).x} cy={pos(i).y} r={4.5} fill="#22c55e" opacity={0.55} />)}
+          {(tool === 'tower' || tool === 'barracks' || tool === 'market') && myTurn && Array.from(s.inside).map((p, i) => (p === me && !s.dot[i] && !buildingAt(s, i) && !unitAt(s, i) ? <circle key={`bs${i}`} cx={pos(i).x} cy={pos(i).y} r={3.5} fill="#22c55e" opacity={0.55} /> : null))}
+          {[...reachSet].map(i => <circle key={`r${i}`} cx={pos(i).x} cy={pos(i).y} r={3.5} fill="#eab308" opacity={0.75} />)}
           {s.buildings.map(b => {
             const { x, y } = pos(b.i);
             return (
               <g key={`b${b.id}`}>
-                <rect x={x - 9} y={y - 9} width={18} height={18} rx={4} fill="#fff" stroke={COLORS[b.p]} strokeWidth={2} />
-                <text x={x} y={y + 5} textAnchor="middle" fontSize={13}>{b.k === 'tower' ? '🗼' : b.k === 'barracks' ? '⛺' : '💰'}</text>
-                {b.hp > 1 && <text x={x + 9} y={y - 6} fontSize={7} fontWeight={900} fill={COLORS[b.p]}>{b.hp}</text>}
+                <rect x={x - 8} y={y - 8} width={16} height={16} rx={3} fill="#fff" stroke={PCOLORS[b.p]} strokeWidth={1.8} />
+                <text x={x} y={y + 4.5} textAnchor="middle" fontSize={11}>{b.k === 'tower' ? '🗼' : b.k === 'barracks' ? '⛺' : '💰'}</text>
+                {b.hp > 1 && <text x={x + 8} y={y - 5} fontSize={6.5} fontWeight={900} fill={PCOLORS[b.p]}>{b.hp}</text>}
               </g>
             );
           })}
@@ -143,23 +229,28 @@ const FortressBoard: React.FC<{
             const { x, y } = pos(u.i);
             return (
               <g key={`u${u.id}`} opacity={u.p === me && u.acted && myTurn ? 0.55 : 1}>
-                {u.k === 'tank' ? <Tank x={x} y={y} color={COLORS[u.p]} /> : (
+                {u.k === 'tank' ? <Tank x={x} y={y} color={PCOLORS[u.p]} /> : (
                   <>
-                    <circle cx={x} cy={y} r={8} fill={COLORS[u.p]} stroke="#111" strokeWidth={1} />
-                    <text x={x} y={y + 4} textAnchor="middle" fontSize={10}>🪖</text>
+                    <circle cx={x} cy={y} r={7} fill={PCOLORS[u.p]} stroke="#1e293b" strokeWidth={1} />
+                    <text x={x} y={y + 3.5} textAnchor="middle" fontSize={9}>🪖</text>
                   </>
                 )}
-                {u.hp > 1 && <text x={x + 8} y={y - 6} fontSize={7} fontWeight={900} fill="#111">{u.hp}</text>}
+                {u.hp > 1 && <text x={x + 7} y={y - 5} fontSize={6.5} fontWeight={900} fill="#1e293b">{u.hp}</text>}
               </g>
             );
           })}
-          {[...targetSet].map(i => <circle key={`t${i}`} cx={pos(i).x} cy={pos(i).y} r={10} fill="none" stroke="#dc2626" strokeWidth={2} strokeDasharray="3 2" />)}
-          {unit && <circle cx={pos(unit.i).x} cy={pos(unit.i).y} r={11} fill="none" stroke="#eab308" strokeWidth={2.5} />}
-          {s.last.map(i => <circle key={`last${i}`} cx={pos(i).x} cy={pos(i).y} r={12} fill="none" stroke="#111" strokeWidth={1} strokeDasharray="2 2" />)}
+          {[...targetSet].map(i => <circle key={`t${i}`} cx={pos(i).x} cy={pos(i).y} r={9} fill="none" stroke="#dc2626" strokeWidth={1.8} strokeDasharray="3 2" />)}
+          {unit && <circle cx={pos(unit.i).x} cy={pos(unit.i).y} r={10} fill="none" stroke="#eab308" strokeWidth={2.2} />}
+          {s.last.map(i => <circle key={`last${i}`} cx={pos(i).x} cy={pos(i).y} r={10.5} fill="none" stroke="#1e293b" strokeWidth={0.9} strokeDasharray="2 2" />)}
         </svg>
+        <div className="absolute right-2 bottom-2 flex flex-col gap-1.5" onPointerDown={e => e.stopPropagation()}>
+          <button onClick={() => zoom(1 / 1.3)} aria-label="Ближче" className="w-9 h-9 rounded-full bg-white/90 shadow text-zinc-700 flex items-center justify-center"><Plus size={18} /></button>
+          <button onClick={() => zoom(1.3)} aria-label="Далі" className="w-9 h-9 rounded-full bg-white/90 shadow text-zinc-700 flex items-center justify-center"><Minus size={18} /></button>
+          <button onClick={() => setView(clampView({ x: -STEP / 2, y: -STEP / 2, w: Math.max(W, H / 1.25) + STEP }))} aria-label="Усе поле" className="w-9 h-9 rounded-full bg-white/90 shadow text-zinc-700 flex items-center justify-center"><Maximize2 size={16} /></button>
+          <button onClick={() => setView(startView())} aria-label="До мого міста" className="w-9 h-9 rounded-full bg-white/90 shadow text-zinc-700 flex items-center justify-center"><Crosshair size={16} /></button>
+        </div>
       </div>
 
-      {/* tools */}
       <div className="grid grid-cols-6 gap-1 mt-2">
         {TOOLS.map(t => (
           <button key={t.k} onClick={() => { setTool(t.k); setSel(null); }} disabled={!myTurn || !toolOk(t.k)}
@@ -170,7 +261,10 @@ const FortressBoard: React.FC<{
         ))}
       </div>
       <p className="text-[11px] text-zinc-500 text-center mt-1">
-        {unit ? `${NAMES_UA[unit.k]}: жовті точки — куди їхати, червоні кола — по кому бити` : tool === 'soldier' || tool === 'tank' ? 'Зелені точки — де з’явиться біля казарми' : tool === 'dot' ? 'Натисніть на перехрестя, щоб поставити точку. Натисніть на свого бійця, щоб ним походити.' : 'Зелені точки — де можна будувати (всередині вашої фортеці)'}
+        {unit ? `${NAMES_UA[unit.k]}: жовті точки — куди їхати, червоні кола — по кому бити`
+          : tool === 'soldier' || tool === 'tank' ? 'Зелені точки — де з’явиться біля казарми'
+          : tool === 'dot' ? 'Торкніться перехрестя — точка. Торкніться свого бійця — хід ним. Поле рухається пальцем, два пальці — масштаб.'
+          : 'Зелені точки — де можна будувати (всередині вашого міста)'}
       </p>
       <div className="flex justify-center gap-2 mt-2 flex-wrap">
         {myTurn && <button onClick={() => onAct({ t: 'end' })} className="h-10 px-3 rounded-xl bg-zinc-800 text-white font-bold text-sm flex items-center gap-1 whitespace-nowrap"><Flag size={16} /> Кінець ходу</button>}
@@ -181,14 +275,14 @@ const FortressBoard: React.FC<{
         <div className="fixed inset-0 z-[300] bg-black/80 flex items-end sm:items-center justify-center p-3" onClick={() => setHelp(false)}>
           <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-4 max-w-md w-full max-h-[85vh] overflow-y-auto text-sm text-zinc-300 space-y-2" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center"><b className="text-white text-base">Правила «Фортеці»</b><button onClick={() => setHelp(false)} aria-label="Закрити"><X size={20} /></button></div>
-            <p>• За хід — <b>2 дії</b>: точка, будівля, найм, хід або постріл бійця.</p>
-            <p>• Замкнене коло з ваших точок — <b>фортеця</b>. Всередині можна будувати. Фортеця щоходу дає <b>золото</b> (більша — більше).</p>
-            <p>• 🗼 <b>Башта</b> (5): наприкінці вашого ходу стріляє по найближчому ворогу на 3 клітинки або збиває точку чужої стіни поруч.</p>
-            <p>• ⛺ <b>Казарма</b> (4): біля неї наймаються 🪖 <b>воїни</b> (3: ходять на 2, б'ють поруч) і 🛡️ <b>танки</b> (7: міцні, їдуть на 3, стріляють на 2 клітинки, удар ×2).</p>
-            <p>• 💰 <b>Ринок</b> (6): +2 золота щоходу.</p>
-            <p>• Бійці виходять крізь свою стіну, а чужу — пробивають. Пробита фортеця не дає золота, її башти мовчать.</p>
-            <p>• Обведіть кільцем чужі точки, будівлі чи бійців — усе всередині ваше: точка +1, будівля +5, боєць +2/+4. Знищений боєць +2/+4, будівля +3.</p>
-            <p>• Перемога — <b>{WIN_SCORE} очок</b> або більше очок після {MAX_ROUNDS} раундів.</p>
+            <p>• Грають 2–4 гравці по черзі. За хід — <b>2 дії</b>: точка, будівля, найм, хід або постріл бійця.</p>
+            <p>• Замкнене коло з ваших точок — <b>місто</b> (заштриховане вашим кольором). Всередині можна будувати, місто щоходу дає <b>золото</b>.</p>
+            <p>• 🗼 <b>Башта</b> (5) стріляє наприкінці вашого ходу. ⛺ <b>Казарма</b> (4) — біля неї наймаються 🪖 <b>воїни</b> (3) і 🛡️ <b>танки</b> (7: міцні, стріляють на 2 клітинки, удар ×2). 💰 <b>Ринок</b> (6) — +2 золота.</p>
+            <p>• Бійці проходять крізь свою стіну, а чужу — пробивають.</p>
+            <p>• <b>Пробите місто</b> на початку вашого ходу обороняється: якщо башти й ваші бійці поруч не слабші за ворога — стіна відновлюється; якщо ворог сильніший — місто <b>стискається</b>: крайній ряд стає новою стіною, будівлі там гинуть.</p>
+            <p>• Обведіть кільцем чужі точки, будівлі, бійців чи місто — усе всередині ваше.</p>
+            <p>• Поле рухається пальцем, два пальці — збільшити / зменшити. Кнопки праворуч: ближче, далі, усе поле, до мого міста.</p>
+            <p>• Перемога — <b>{WIN_SCORE} очок</b> або найбільше очок після {MAX_ROUNDS} раундів.</p>
           </div>
         </div>
       )}

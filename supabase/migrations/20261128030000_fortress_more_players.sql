@@ -1,0 +1,4 @@
+-- Applied live (fortress_more_players): «Фортеці» for 2–4 players.
+-- dots_games.players (2..4), p3_token, p4_token; fort_new(players, w, h);
+-- dots_join gives the next free place (2, 3, 4), then watchers; dots_get returns players / seated / joined (all places taken);
+-- fort_act: the turn goes round 1 → … → players, one step per {t:'end'}.

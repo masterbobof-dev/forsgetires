@@ -723,6 +723,23 @@ const stockTracking = async (browser, url) => {
 };
 
 
+// the «F» and «ФОРСАЖ» in the header always lead to the start of the shop
+const logoHome = async (browser, url) => {
+  const shop = await openShop(browser, url);
+  const { page } = shop;
+  const ui = actions(shop);
+  for (const name of ['Форсаж — на головну', 'На головну']) {
+    await step(shop, 'logo', `«${name}» goes home from a section`, async () => {
+      await ui.goto(`${url}/katalog/akumulyatory`);
+      await expectCards(page, 4);
+      await ui.click(page.getByRole('button', { name, exact: true }).first());
+      await expectPath(page, '/');
+      await expectCards(page, 60);
+    });
+  }
+  await shop.context.close();
+};
+
 // online card payment (LiqPay): only goods in stock, the order is made on the server, the buyer comes back to /oplata
 const onlinePay = async (browser, url) => {
   const shop = await openShop(browser, url, { tables: (t) => { t.settings.push({ key: 'pay_online', value: '1' }); } });
@@ -774,4 +791,4 @@ const onlinePay = async (browser, url) => {
 };
 
 // ---------------------------------------------------------------------------------------------
-runScenarios('shop', { catalogue, purchase, lists, links, homeBlocks, customer, phone, stockTracking, onlinePay });
+runScenarios('shop', { catalogue, purchase, lists, links, homeBlocks, customer, phone, stockTracking, onlinePay, logoHome });

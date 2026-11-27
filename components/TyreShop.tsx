@@ -110,6 +110,12 @@ const TyreShop: React.FC<TyreShopProps> = ({
   useEffect(() => { if (!categoriesLoading) urlSectionDone.current = true; }, [categoriesLoading]);
   useCategoryUrl(categories, categoriesLoading, activeCategory, setActiveCategory, categorySlug);
   // statistics: which sections people open
+  // the «F» / «ФОРСАЖ» in the header: back to the start of the shop (all goods, no search, no filters)
+  useEffect(() => {
+    const onHome = () => { changeCategory('all'); resetFilters(); };
+    window.addEventListener('go-home', onHome);
+    return () => window.removeEventListener('go-home', onHome);
+  });
   useEffect(() => { if (activeCat) logAnalyticsEvent('page_view', undefined, `Розділ: ${activeCat.name}`); }, [activeCat?.id]);
 
   const { form: checkoutForm, quickOrder, orderName } = useCheckout({ userId, userEmail, cartItems, onCartChange, novaPoshtaKey });

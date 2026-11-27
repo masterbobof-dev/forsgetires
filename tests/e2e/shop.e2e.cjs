@@ -83,7 +83,10 @@ const catalogue = async (browser, url) => {
   });
 
   await step(shop, S, 'brand filter', async () => {
-    await ui.select(page.locator('aside select').filter({ has: page.locator('option', { hasText: 'Усі бренди' }) }), 'Hankook');
+    // the brand is found by its first letters, then chosen from the list
+    const aside = page.locator('aside');
+    await ui.fill(aside.getByLabel('Знайти бренд'), 'hank');
+    await ui.click(aside.getByRole('button', { name: 'Hankook', exact: true }));
     await expectCards(page, 2);
     await ui.click(page.getByRole('button', { name: /Скинути фільтри \(1\)/ }));
     await expectCards(page, 8);

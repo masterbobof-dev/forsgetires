@@ -5,6 +5,7 @@ import type { TyreProduct, CartItem } from '../../../types';
 import { formatUaPhone, isValidUaPhone } from '../../../phone';
 import { logAnalyticsEvent } from '../../admin/analytics';
 import { safeParsePrice } from '../shopUtils';
+import { settingsRows } from '../../../publicSettings';
 
 interface CheckoutParams {
   /** signed-in customer: the order is linked to the account, the form is prefilled from the profile */
@@ -14,6 +15,10 @@ interface CheckoutParams {
   onCartChange: (items: CartItem[]) => void;
   novaPoshtaKey: string;
 }
+
+/** online payment only for the shop's own goods that are in stock in the needed quantity (checked again on the server) */
+export const canPayOnline = (items: CartItem[]) =>
+  items.length > 0 && items.every(i => !i.on_order && i.in_stock !== false && Number(i.stock_quantity || 0) >= i.quantity);
 
 /** the database refuses some orders with a text meant for the customer; anything else gets a general message */
 const orderErrorText = (err: any) =>
@@ -38,6 +43,12 @@ export const useCheckout = ({ userId, userEmail, cartItems, onCartChange, novaPo
   const [isNpLoadingCities, setIsNpLoadingCities] = useState(false);
   const [isNpLoadingWarehouses, setIsNpLoadingWarehouses] = useState(false);
   const [showCityDropdown, setShowCityDropdown] = useState(false);
+
+  /** online card payment (LiqPay) is switched on by the owner */
+  const [onlineOn, setOnlineOn] = useState(false);
+  /** the buyer chose to pay by card now */
+  const [payOnline, setPayOnline] = useState(false);
+  useEffect(() => { settingsRows(['pay_online']).then(({ data }) => setOnlineOn(data?.find(r => r.key === 'pay_online')?.value === '1')); }, []);
 
   const [orderSending, setOrderSending] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
@@ -89,6 +100,23 @@ export const useCheckout = ({ userId, userEmail, cartItems, onCartChange, novaPo
     if (orderName.trim().split(/\s+/).filter(w => w.replace(/[^a-zа-яіїєґ'’-]/gi, '').length >= 2).length < 2) { setOrderError("Вкажіть прізвище та ім'я повністю (ПІБ) — без цього Нова Пошта не видасть посилку"); return; }
     if (!isValidUaPhone(orderPhone)) { setOrderError("Введіть телефон повністю: +380 XX XXX XX XX"); return; }
     setOrderSending(true); setOrderError('');
+    if (payOnline && onlineOn && canPayOnline(items)) {
+      // the order is created on the server (stock checked again there), then the buyer goes to the LiqPay page
+      try {
+        const { data, error } = await supabase.functions.invoke('liqpay', { body: { action: 'checkout', order: {
+          customer_name: orderName, customer_phone: orderPhone, customer_email: userEmail || null, delivery_method: deliveryMethod,
+          delivery_city: deliveryMethod === 'newpost' ? selectedCityName : null, delivery_warehouse: deliveryMethod === 'newpost' ? selectedWarehouseName : null,
+          items: items.map(i => ({ id: i.id, quantity: i.quantity })),
+        } } });
+        const body: any = data || (error && 'context' in error ? await (error as any).context.json().catch(() => null) : null);
+        if (!body?.ok || !body.url) throw new Error(body?.error || 'Помилка оплати. Спробуйте ще раз або оформіть без онлайн-оплати.');
+        logAnalyticsEvent('purchase', items.map(i => i.id).join(','), `${items.length} товар(и), онлайн`, undefined, body.amount);
+        // the goods leave the cart when the payment comes through (the «оплата» page), not before
+        try { sessionStorage.setItem('forsage_paying', JSON.stringify({ order: body.order_id, ids: items.map(i => i.id) })); } catch { /* private mode */ }
+        window.location.href = body.url;
+      } catch (err: any) { setOrderError(err?.message || 'Помилка оплати'); setOrderSending(false); }
+      return;
+    }
     try {
       const { error } = await supabase.from('tyre_orders').insert([{
           customer_name: orderName,
@@ -152,6 +180,7 @@ export const useCheckout = ({ userId, userEmail, cartItems, onCartChange, novaPo
     form: {
       orderName, setOrderName, orderPhone, setOrderPhone,
       deliveryMethod, setDeliveryMethod, paymentMethod, setPaymentMethod,
+      onlineOn, payOnline, setPayOnline,
       npSearchCity, handleCityInputChange, isNpLoadingCities, showCityDropdown, npCities, handleCitySelect,
       selectedWarehouseName, setSelectedWarehouseName, isNpLoadingWarehouses, npWarehouses, selectedCityRef,
       orderSending, orderSuccess, orderError, setOrderSuccess, submitOrder,

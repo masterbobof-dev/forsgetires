@@ -1,0 +1,6 @@
+-- Applied live (liqpay_online_payment):
+-- public.liqpay_keys_set(public, private)  — owner only; keys go to private.integration_secrets (liqpay_public, liqpay_private)
+-- public.liqpay_keys_status()               — admin panel: keys there?, test mode, on/off, paid orders (private key never shown)
+-- public.liqpay_keys()                      — service role only, for the liqpay edge function
+-- settings.pay_online ('1'/'0')             — readable by shop pages (public_read policy recreated with it)
+-- trigger tyre_orders_paid_notify           — Telegram to the owners when an order is paid / the payment is returned

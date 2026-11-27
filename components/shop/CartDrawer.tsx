@@ -2,8 +2,9 @@
 import React from 'react';
 import { listPhoto } from '../../photoUrl';
 import { formatUaPhone } from '../../phone';
-import { X, ShoppingBag, Trash2, Minus, Plus, Truck, MapPin, Loader2, CheckCircle, ArrowLeft } from 'lucide-react';
+import { X, ShoppingBag, Trash2, Minus, Plus, Truck, MapPin, Loader2, CheckCircle, ArrowLeft, CreditCard } from 'lucide-react';
 import { CartItem } from '../../types';
+import { canPayOnline } from './hooks/useCheckout';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -18,6 +19,10 @@ interface CartDrawerProps {
   setDeliveryMethod: (v: 'pickup' | 'newpost') => void;
   paymentMethod: 'prepayment' | 'full';
   setPaymentMethod: (v: 'prepayment' | 'full') => void;
+  /** online card payment is switched on in the admin panel */
+  onlineOn?: boolean;
+  payOnline?: boolean;
+  setPayOnline?: (v: boolean) => void;
   npSearchCity: string;
   handleCityInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   isNpLoadingCities: boolean;
@@ -76,6 +81,8 @@ const CartDrawer: React.FC<CartDrawerProps> = (props) => {
   const someInStock = selected.some(i => !i.on_order);
   const allOn = off.size === 0;
   const toggle = (id: number) => setOff(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const online = !!props.onlineOn && canPayOnline(selected);
+  const paying = online && !!props.payOnline;
   const back = () => (step === 'checkout' ? setStep('cart') : props.onClose());
 
   return (
@@ -203,13 +210,34 @@ const CartDrawer: React.FC<CartDrawerProps> = (props) => {
                       <option value="">{props.isNpLoadingWarehouses ? 'Завантаження відділень...' : 'Оберіть відділення'}</option>
                       {props.npWarehouses.map((w, i) => <option key={i} value={w.Description}>{w.Description}</option>)}
                     </select>
-                    <div className="grid grid-cols-2 gap-2 p-1.5 bg-black rounded-2xl border border-zinc-800 mt-2">
+                    {!paying && <div className="grid grid-cols-2 gap-2 p-1.5 bg-black rounded-2xl border border-zinc-800 mt-2">
                       <button onClick={() => props.setPaymentMethod('prepayment')} className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-tighter ${props.paymentMethod === 'prepayment' ? 'bg-blue-600 text-white' : 'text-zinc-500'}`}>Предоплата</button>
                       <button onClick={() => props.setPaymentMethod('full')} className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-tighter ${props.paymentMethod === 'full' ? 'bg-blue-600 text-white' : 'text-zinc-500'}`}>Повна оплата</button>
-                    </div>
+                    </div>}
                   </div>
                 )}
               </div>
+              {props.onlineOn && (
+                <div className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
+                  <p className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-2">Оплата</p>
+                  {online ? (
+                    <div className="grid grid-cols-1 gap-2">
+                      <button onClick={() => props.setPayOnline?.(true)} aria-pressed={paying}
+                        className={`flex items-center gap-3 p-3 rounded-xl border text-left ${paying ? 'border-[#FFC300] bg-[#FFC300]/10' : 'border-zinc-700'}`}>
+                        <CreditCard size={20} className="text-[#FFC300] shrink-0" />
+                        <span><span className="block text-sm font-black text-white">Карткою онлайн зараз</span><span className="block text-[11px] text-zinc-400">Visa, Mastercard, Apple Pay, Google Pay · через LiqPay (ПриватБанк). Товар одразу бронюється за вами.</span></span>
+                      </button>
+                      <button onClick={() => props.setPayOnline?.(false)} aria-pressed={!paying}
+                        className={`flex items-center gap-3 p-3 rounded-xl border text-left ${!paying ? 'border-[#FFC300] bg-[#FFC300]/10' : 'border-zinc-700'}`}>
+                        <Truck size={20} className="text-zinc-300 shrink-0" />
+                        <span><span className="block text-sm font-black text-white">{props.deliveryMethod === 'pickup' ? 'При отриманні в магазині' : 'Після дзвінка менеджера'}</span><span className="block text-[11px] text-zinc-400">{props.deliveryMethod === 'pickup' ? 'Готівкою або карткою' : 'Накладений платіж або передоплата за реквізитами'}</span></span>
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-zinc-500">Онлайн-оплата карткою доступна для товарів, які є в наявності в потрібній кількості. Для цього замовлення оплата — після дзвінка менеджера.</p>
+                  )}
+                </div>
+              )}
               <div className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
                 <p className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-2">Ваше замовлення</p>
                 <ul className="space-y-1.5 text-sm">
@@ -248,7 +276,7 @@ const CartDrawer: React.FC<CartDrawerProps> = (props) => {
               <>
                 <button onClick={() => props.submitOrder(selected)} disabled={props.orderSending}
                   className="w-full bg-[#FFC300] hover:bg-white text-black font-black py-4 rounded-2xl text-lg transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:opacity-50">
-                  {props.orderSending ? <Loader2 className="animate-spin" size={24}/> : <><Truck size={24} strokeWidth={2.5}/> Підтвердити замовлення</>}
+                  {props.orderSending ? <Loader2 className="animate-spin" size={24}/> : paying ? <><CreditCard size={24} strokeWidth={2.5}/> Оплатити {money(total)} грн</> : <><Truck size={24} strokeWidth={2.5}/> Підтвердити замовлення</>}
                 </button>
                 <p className="mt-2 text-[11px] text-zinc-500 text-center leading-snug">
                   Оформлюючи замовлення, ви погоджуєтесь з <a href="/oferta" target="_blank" className="underline hover:text-zinc-300">публічною офертою</a> та{' '}

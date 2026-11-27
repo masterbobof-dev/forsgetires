@@ -722,5 +722,56 @@ const stockTracking = async (browser, url) => {
   await shop.context.close();
 };
 
+
+// online card payment (LiqPay): only goods in stock, the order is made on the server, the buyer comes back to /oplata
+const onlinePay = async (browser, url) => {
+  const shop = await openShop(browser, url, { tables: (t) => { t.settings.push({ key: 'pay_online', value: '1' }); } });
+  const { page, fake } = shop;
+  const ui = actions(shop);
+  const S = 'online-pay';
+  const drawer = page.locator('div.max-w-lg');
+  const calls = [];
+  fake.functions.liqpay = (body) => {
+    calls.push(body);
+    if (body.action === 'checkout') return { ok: true, order_id: 77, amount: 3501, url: `${url}/oplata?order=77` };
+    if (body.action === 'status') return { ok: true, found: true, paid: true };
+    return { ok: false };
+  };
+
+  await step(shop, S, 'card payment is offered for goods in stock', async () => {
+    await ui.goto(`${url}/katalog/akumulyatory`);
+    await expectCards(page, 4);
+    await page.evaluate(() => localStorage.setItem('forsage_cart', JSON.stringify([{ id: 2001, title: 'x', price: '3501', quantity: 1, stock_quantity: 5 }])));
+    await ui.goto(`${url}/katalog/akumulyatory`);
+    await ui.click(page.locator('button[aria-label="Відкрити кошик"]'));
+    await ui.click(drawer.getByRole('button', { name: 'Оформити замовлення' }));
+    await until(async () => assert.ok(await drawer.getByRole('button', { name: /Карткою онлайн зараз/ }).isVisible()));
+  });
+
+  await step(shop, S, 'pay by card goes to the bank and back', async () => {
+    await ui.fill(drawer.getByPlaceholder("Прізвище Ім'я По батькові"), 'Тестенко Тест');
+    await ui.fill(drawer.getByPlaceholder('+380 __ ___ __ __'), '0991112233');
+    await ui.click(drawer.getByRole('button', { name: /Карткою онлайн зараз/ }));
+    await ui.click(drawer.getByRole('button', { name: /Оплатити/ }));
+    await expectPath(page, '/oplata');
+    await until(async () => assert.ok(await page.getByRole('heading', { name: 'Оплату отримано!' }).isVisible()));
+    const co = calls.find((c) => c.action === 'checkout');
+    assert.deepEqual(co.order.items, [{ id: 2001, quantity: 1 }]);
+    assert.equal(co.order.customer_phone, '+380 99 111 22 33');
+    assert.equal((fake.inserted.tyre_orders || []).length, 0, 'the order is made on the server, not from the browser');
+    await until(async () => assert.deepEqual(await stored(page, 'forsage_cart'), []), 'paid goods leave the cart');
+  });
+
+  await step(shop, S, 'not offered when there is not enough in stock', async () => {
+    await page.evaluate(() => localStorage.setItem('forsage_cart', JSON.stringify([{ id: 2001, title: 'x', price: '3501', quantity: 9, stock_quantity: 5 }])));
+    await ui.goto(`${url}/katalog/akumulyatory`);
+    await ui.click(page.locator('button[aria-label="Відкрити кошик"]'));
+    await ui.click(drawer.getByRole('button', { name: 'Оформити замовлення' }));
+    await until(async () => assert.ok(await drawer.getByText(/Онлайн-оплата карткою доступна для товарів, які є в наявності/).isVisible()));
+    assert.equal(await drawer.getByRole('button', { name: /Карткою онлайн зараз/ }).count(), 0);
+  });
+  await shop.context.close();
+};
+
 // ---------------------------------------------------------------------------------------------
-runScenarios('shop', { catalogue, purchase, lists, links, homeBlocks, customer, phone, stockTracking });
+runScenarios('shop', { catalogue, purchase, lists, links, homeBlocks, customer, phone, stockTracking, onlinePay });

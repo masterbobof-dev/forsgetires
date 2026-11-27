@@ -180,6 +180,9 @@ async function build(pathname, query) {
     return { title: `${t} — інтернет-магазин ${SHOP_NAME}`, description: d, url: SITE_URL + pathname, content: `<h1>${esc(t)}</h1><p>${esc(d)}</p>${navBlock(cats)}` };
   }
 
+  // --- the page after an online payment: not for search ---
+  if (pathname === '/oplata') return { noindex: true, title: `Оплата замовлення | ${SHOP_NAME}`, description: 'Результат онлайн-оплати замовлення.', url: `${SITE_URL}/oplata`, content: `<h1>Оплата замовлення</h1>${navBlock(cats)}` };
+
   // --- info pages ---
   if (INFO[pathname]) {
     const i = INFO[pathname];

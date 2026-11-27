@@ -1,0 +1,5 @@
+-- Applied live (dots_game, dots_game_fix_search_path): the «Точки» test game for two players by a link (/igra?g=<id>).
+-- public.dots_games (moves as [[x, y, player], ...]; RLS on, no policies); functions for anon:
+--   dots_new(w, h) → {id, token, player:1}; dots_join(id) → second player's token (or watcher);
+--   dots_get(id); dots_move(id, token, x, y) checks the turn and a free point; dots_finish(id, token).
+-- Captures are counted from the moves on each screen (components/game/dots.ts). Games idle for 7 days are deleted (cron dots-cleanup).

@@ -2,6 +2,9 @@
 //   /feeds/google.xml  — Google Merchant Center (Google Покупки)
 //   /feeds/prom.xml    — Prom.ua (YML format, also accepted by Rozetka, Epicentr and others)
 //   /feeds/hotline.xml — Hotline.ua
+//   /feeds/google-partners.xml.gz — Google Merchant Center: partner goods (GPL, Omega), «під замовлення» = backorder.
+//     22k goods are ~20 MB of XML, over the 4.5 MB answer limit, so this one is sent gzip-packed (Merchant Center reads .gz)
+import { gzipSync } from 'node:zlib';
 import { SITE_URL, SHOP_NAME, restAll, rest, escapeXml as esc, productPath, parsePrice, stripHtml, SEASON_UA, sendUnavailable, DbUnavailable } from './_shop.js';
 
 const COMPANY = 'Інтернет-магазин Форсаж (м. Синельникове)';
@@ -20,12 +23,12 @@ const ATTR_LABELS = {
 };
 const ATTR_VALUES = { right: 'R+ (плюс праворуч)', left: 'L+ (плюс ліворуч)', euro: 'Європа', asia: 'Азія', alloy: 'Литий', steel: 'Сталевий', forged: 'Кований' };
 
-const loadData = async () => {
+const loadData = async (partners = false) => {
   let categories = [];
   try { categories = await rest('product_categories?select=id,name,parent_id,kind,filter_preset,is_active'); } catch (e) { if (e instanceof DbUnavailable) throw e; /* none */ }
   const products = await restAll(
-    'tyres?select=id,title,description,price,old_price,manufacturer,image_url,gallery,in_stock,category_id,vehicle_type,radius,season,catalog_number,attributes,slug,stock_quantity' +
-    '&in_stock=not.is.false&on_order=is.false&image_url=not.is.null&order=id'
+    'tyres?select=id,title,description,price,old_price,manufacturer,image_url,gallery,in_stock,category_id,vehicle_type,radius,season,catalog_number,attributes,slug,stock_quantity,on_order,lead_days' +
+    (partners ? '&supplier_offer_id=not.is.null&hidden_on_site=not.is.true' : '&on_order=is.false') + '&in_stock=not.is.false&image_url=not.is.null&order=id'
   );
   const byId = new Map(categories.map((c) => [c.id, c]));
   const rootOf = (c) => { let cur = c; const seen = new Set(); while (cur?.parent_id && byId.has(cur.parent_id) && !seen.has(cur.id)) { seen.add(cur.id); cur = byId.get(cur.parent_id); } return cur; };
@@ -63,7 +66,12 @@ const googleFeed = ({ products }) => {
     x += `  <g:description>${esc(p.description.slice(0, 4900))}</g:description>\n`;
     x += `  <g:link>${esc(p.url)}</g:link>\n  <g:image_link>${esc(p.image_url)}</g:image_link>\n`;
     for (const extra of (p.gallery || []).filter((g) => g && g !== p.image_url).slice(0, 10)) x += `  <g:additional_image_link>${esc(extra)}</g:additional_image_link>\n`;
-    x += `  <g:availability>in_stock</g:availability>\n  <g:condition>new</g:condition>\n`;
+    if (p.on_order) {
+      // partner goods: on order, in the shop in a few days (the longest of "3-5" is used; unknown = 5 days)
+      const days = Math.max(0, ...String(p.lead_days || '').split(/\D+/).map(Number).filter((n) => n > 0 && n < 60)) || 5;
+      const when = new Date(Date.now() + days * 864e5).toISOString().slice(0, 10);
+      x += `  <g:availability>backorder</g:availability>\n  <g:availability_date>${when}T12:00+02:00</g:availability_date>\n  <g:condition>new</g:condition>\n`;
+    } else x += `  <g:availability>in_stock</g:availability>\n  <g:condition>new</g:condition>\n`;
     x += `  <g:price>${sale ? p.oldPrice : p.price}.00 UAH</g:price>\n`;
     if (sale) x += `  <g:sale_price>${p.price}.00 UAH</g:sale_price>\n`;
     if (p.manufacturer) x += `  <g:brand>${esc(p.manufacturer)}</g:brand>\n`; else x += '  <g:identifier_exists>no</g:identifier_exists>\n';
@@ -124,10 +132,16 @@ const hotlineFeed = ({ categories, products }) => {
 
 export default async function handler(req, res) {
   const type = String(req.query.type || 'google');
-  const build = { google: googleFeed, prom: promFeed, hotline: hotlineFeed }[type];
+  const build = { google: googleFeed, 'google-partners': googleFeed, prom: promFeed, hotline: hotlineFeed }[type];
   if (!build) return res.status(404).send('Unknown feed');
   try {
-    const xml = build(await loadData());
+    const xml = build(await loadData(type === 'google-partners'));
+    if (type === 'google-partners') {
+      res.setHeader('Content-Type', 'application/gzip');
+      res.setHeader('Content-Disposition', 'inline; filename="google-partners.xml.gz"');
+      res.setHeader('Cache-Control', 'public, s-maxage=21600, stale-while-revalidate=604800');
+      return res.status(200).send(gzipSync(Buffer.from(xml, 'utf8'), { level: 9 }));
+    }
     res.setHeader('Content-Type', 'application/xml; charset=utf-8');
     // the CDN keeps the last good copy for a week: if the database is down, Google still gets it (a 503 is never cached)
     res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=604800');

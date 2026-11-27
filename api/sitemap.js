@@ -1,5 +1,8 @@
-// Always-fresh sitemap.xml built from Supabase: home, categories, legal pages and
-// every product in stock (/p/<id>-<slug>). Served at /sitemap.xml via vercel.json.
+// Always-fresh sitemaps built from Supabase. /sitemap.xml is an index of parts (one file of 31k goods was ~4 MB,
+// close to the 4.5 MB answer limit and slow for Google to read):
+//   /sitemap-pages.xml          home, sections, info pages, cities, articles, forum
+//   /sitemap-products-N.xml     goods in stock (own and partner), 5000 per file, by id
+// Served via vercel.json rewrites.
 import { SITE_URL, rest, restAll, escapeXml, productPath, slugify, sendUnavailable, DbUnavailable, forumPath } from './_shop.js';
 import { CITIES, cityPath } from './_cities.js';
 
@@ -9,11 +12,42 @@ const urlTag = (loc, { lastmod, changefreq, priority }) =>
   (lastmod ? `    <lastmod>${lastmod}</lastmod>\n` : '') +
   `    <changefreq>${changefreq}</changefreq>\n    <priority>${priority}</priority>\n  </url>\n`;
 
+const PER_FILE = 5000;
+const send = (res, xml) => {
+  res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+  // the CDN keeps the last good copy for a week: if the database is down, Google still gets it (a 503 is never cached)
+  res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=604800');
+  res.status(200).send(xml);
+};
+
 export default async function handler(req, res) {
+  const part = String(req.query?.part || '');
   try {
+    if (!part) {
+      // the index: which parts there are
+      const ids = await restAll('tyres?select=id&in_stock=not.is.false&hidden_on_site=not.is.true&order=id');
+      const files = Math.max(1, Math.ceil(ids.length / PER_FILE));
+      const today = new Date().toISOString().slice(0, 10);
+      let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+      xml += `  <sitemap><loc>${SITE_URL}/sitemap-pages.xml</loc><lastmod>${today}</lastmod></sitemap>\n`;
+      for (let n = 1; n <= files; n++) xml += `  <sitemap><loc>${SITE_URL}/sitemap-products-${n}.xml</loc><lastmod>${today}</lastmod></sitemap>\n`;
+      return send(res, xml + '</sitemapindex>\n');
+    }
+    if (part === 'products') {
+      const n = Math.max(1, parseInt(String(req.query?.n || '1'), 10) || 1);
+      // the database gives at most 1000 rows at a time
+      const products = [];
+      for (let from = (n - 1) * PER_FILE; from < n * PER_FILE; from += 1000) {
+        const page = await rest('tyres?select=id,title,slug,created_at&in_stock=not.is.false&hidden_on_site=not.is.true&order=id', from, Math.min(from + 999, n * PER_FILE - 1));
+        products.push(...page);
+        if (page.length < 1000) break;
+      }
+      let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+      for (const p of products) xml += urlTag(SITE_URL + productPath(p), { lastmod: day(p.created_at), changefreq: 'weekly', priority: '0.7' });
+      return send(res, xml + '</urlset>\n');
+    }
     let categories = [];
     try { categories = await rest('product_categories?select=slug&is_active=eq.true&noindex=is.false&order=sort_order'); } catch (e) { if (e instanceof DbUnavailable) throw e; /* table missing */ }
-    const products = await restAll('tyres?select=id,title,slug,created_at&in_stock=not.is.false&order=id');
 
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
     xml += urlTag(`${SITE_URL}/`, { changefreq: 'daily', priority: '1.0' });
@@ -35,13 +69,8 @@ export default async function handler(req, res) {
     for (const f of fsec) xml += urlTag(`${SITE_URL}/forum?c=${encodeURIComponent(f.slug)}`, { changefreq: 'weekly', priority: '0.4' });
     xml += urlTag(`${SITE_URL}/oferta`, { changefreq: 'yearly', priority: '0.2' });
     xml += urlTag(`${SITE_URL}/privacy`, { changefreq: 'yearly', priority: '0.2' });
-    for (const p of products) xml += urlTag(SITE_URL + productPath(p), { lastmod: day(p.created_at), changefreq: 'weekly', priority: '0.7' });
     xml += '</urlset>\n';
-
-    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
-    // the CDN keeps the last good copy for a week: if the database is down, Google still gets it (a 503 is never cached)
-    res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=604800');
-    res.status(200).send(xml);
+    send(res, xml);
   } catch (err) {
     console.error('sitemap failed', err);
     // 503 + Retry-After: Google keeps the previous sitemap and comes back later

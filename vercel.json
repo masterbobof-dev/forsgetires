@@ -24,6 +24,18 @@
       "destination": "/api/sitemap"
     },
     {
+      "source": "/sitemap-pages.xml",
+      "destination": "/api/sitemap?part=pages"
+    },
+    {
+      "source": "/sitemap-products-:n.xml",
+      "destination": "/api/sitemap?part=products&n=:n"
+    },
+    {
+      "source": "/feeds/google-partners.xml.gz",
+      "destination": "/api/feed?type=google-partners"
+    },
+    {
       "source": "/feeds/google.xml",
       "destination": "/api/feed?type=google"
     },

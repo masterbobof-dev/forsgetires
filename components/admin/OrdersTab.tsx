@@ -217,7 +217,7 @@ const OrdersTab: React.FC = () => {
                      </div>
                      {order.payment_method && (
                          <span className="md:ml-auto text-blue-400 font-black bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20 text-[9px] uppercase tracking-wider">
-                             {order.payment_method === 'online' ? ((order as any).paid ? '✅ Оплачено онлайн' : 'Онлайн: очікує оплати') : order.payment_method === 'full' ? 'Повна оплата' : 'Предоплата'}
+                             {(order.payment_method as string) === 'online' ? ((order as any).paid ? '✅ Оплачено онлайн' : 'Онлайн: очікує оплати') : order.payment_method === 'full' ? 'Повна оплата' : 'Предоплата'}
                          </span>
                      )}
                  </div>

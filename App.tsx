@@ -13,7 +13,10 @@ import { CustomerAuthModal, StaffLogin } from './components/auth/AuthForms';
 import { initExternalAnalytics } from './externalAnalytics';
 
 const AdminPanel = lazy(() => import('./components/AdminPanel'));
-const TyreShop = lazy(() => import('./components/TyreShop'));
+const loadShop = () => import('./components/TyreShop');
+const TyreShop = lazy(loadShop);
+// the shop page is what most visitors open: start loading it together with the app, not after it
+if (/^\/($|katalog\/|p\/|\?)/.test(window.location.pathname)) loadShop();
 const AccountPage = lazy(() => import('./components/AccountPage'));
 const LegalPage = lazy(() => import('./components/LegalPage'));
 const PaymentResult = lazy(() => import('./components/PaymentResult'));

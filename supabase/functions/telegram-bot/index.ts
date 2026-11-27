@@ -62,7 +62,9 @@ const orderText = (o: any, note = '') => {
   const delivery = o.delivery_method === 'newpost'
     ? `🚚 Нова Пошта: ${esc(o.delivery_city || '—')}${o.delivery_warehouse ? `, ${esc(o.delivery_warehouse)}` : ''}`
     : o.delivery_method === 'pickup' ? '🏪 Самовивіз' : '⚡ Швидке замовлення (передзвонити)';
-  const pay = o.payment_method === 'full' ? '💳 Повна оплата' : o.payment_method === 'prepayment' ? '💳 Передоплата' : '';
+  const pay = o.payment_method === 'online'
+    ? (o.paid ? `✅ <b>Оплачено карткою онлайн</b>${o.paid_amount ? ` — ${money(Number(o.paid_amount))}` : ''}` : '⏳ Онлайн-оплата карткою: ще не оплачено')
+    : o.payment_method === 'full' ? '💳 Повна оплата' : o.payment_method === 'prepayment' ? '💳 Передоплата' : '';
   const total = orderTotal(o);
   const when = new Date(o.created_at).toLocaleString('uk-UA', { timeZone: 'Europe/Kyiv', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   return [
@@ -272,6 +274,45 @@ const findGoods = async (q: string) => {
 };
 
 // ---------- people ----------
+// ---------- site visitors (/stats) ----------
+const UA_REGIONS: Record<string, string> = {
+  '05': 'Вінницька', '07': 'Волинська', '09': 'Луганська', '12': 'Дніпропетровська', '14': 'Донецька', '18': 'Житомирська',
+  '21': 'Закарпатська', '23': 'Запорізька', '26': 'Івано-Франківська', '30': 'Київ', '32': 'Київська', '35': 'Кіровоградська',
+  '46': 'Львівська', '48': 'Миколаївська', '51': 'Одеська', '53': 'Полтавська', '56': 'Рівненська', '59': 'Сумська',
+  '61': 'Тернопільська', '63': 'Харківська', '65': 'Херсонська', '68': 'Хмельницька', '71': 'Черкаська', '74': 'Чернігівська', '77': 'Чернівецька',
+};
+const CITY_UA: Record<string, string> = { Synelnykove: 'Синельникове', Dnipro: 'Дніпро', Kyiv: 'Київ', Lviv: 'Львів', Kharkiv: 'Харків', Odesa: 'Одеса',
+  Zaporizhzhia: 'Запоріжжя', Pavlohrad: 'Павлоград', Kamianske: "Кам'янське", 'Kryvyi Rih': 'Кривий Ріг', Samar: 'Самар', Novomoskovsk: 'Самар', Poltava: 'Полтава' };
+const DEVICE_UA: Record<string, string> = { Mobile: 'телефон', Desktop: "комп'ютер", Tablet: 'планшет' };
+const statsReport = async (days: number) => {
+  const { data: s, error } = await db.rpc('visitor_stats', { p_days: days });
+  if (error || !s) return 'Не вдалося отримати статистику. Спробуйте пізніше.';
+  const t = s.totals || {};
+  const top = (rows: any[], n: number, name = (x: string) => x) => (rows || []).slice(0, n).map((r: any) => `${esc(name(r.name))} — ${r.n}`).join(', ') || '—';
+  const list = (rows: any[], n: number) => (rows || []).slice(0, n).map((r: any, i: number) => `${i + 1}. ${esc(String(r.name).slice(0, 60))} — ${r.n}`).join('\n') || '—';
+  const period = days === 1 ? 'за добу' : `за ${days} дн.`;
+  const ord = s.orders || {};
+  return [
+    `<b>👥 Відвідувачі сайту ${period}</b>`,
+    `Людей: <b>${t.visitors || 0}</b> · переглядів сторінок: ${t.page_views || 0}`,
+    `Дивилися товари: ${t.viewers || 0} · клали в кошик: ${t.carters || 0} · замовили: ${t.buyers || 0}`,
+    `Замовлень: <b>${ord.count || 0}</b>${ord.sum ? ` на ${money(Number(ord.sum))}` : ''}`,
+    '',
+    `<b>📍 Області:</b> ${top(s.regions, 6, (c) => UA_REGIONS[c] || c)}`,
+    `<b>🏙 Міста:</b> ${top(s.cities, 8, (c) => CITY_UA[c] || c)}`,
+    `<b>📱 Пристрої:</b> ${top(s.devices, 3, (d) => DEVICE_UA[d] || d)}`,
+    `<b>↪️ Звідки прийшли:</b> ${top(s.sources, 5, (x) => x || 'прямий вхід')}`,
+    '',
+    `<b>🔥 Чим цікавляться (розділи):</b>\n${list(s.interests, 8)}`,
+    '',
+    `<b>👀 Що дивляться (товари):</b>\n${list(s.viewed, 5)}`,
+    '',
+    `<b>🔎 Що шукають на сайті:</b>\n${list(s.searched, 8)}`,
+    '',
+    `Інший період: /stats 1 · /stats 7 · /stats 30. Стать і вік — у Google Analytics.`,
+  ].join('\n');
+};
+
 const HELP_STAFF = [
   '<b>Що вміє бот</b>',
   '/orders — нові та підтверджені замовлення',
@@ -281,7 +322,7 @@ const HELP_STAFF = [
   '',
   'Під кожним замовленням є кнопки: підтвердити, відправлено, ТТН, коментар.',
 ];
-const HELP_OWNER = [...HELP_STAFF, '', '<b>Для власника</b>', '/today — замовлення і виручка за сьогодні', '/week — за 7 днів', '/team — хто має доступ до бота', '/forum — форум: нові теми, відповіді, люди', '/reviews — відгуки: нові і ті, що чекають перевірки', '', 'Про кожен новий відгук приходить повідомлення з кнопками: опублікувати, відповісти, видалити.', 'Щовечора о 20:00 — підсумок дня.'];
+const HELP_OWNER = [...HELP_STAFF, '', '<b>Для власника</b>', '/today — замовлення і виручка за сьогодні', '/week — за 7 днів', '/stats — відвідувачі сайту: звідки, що дивляться і шукають (/stats 30 — за місяць)', '/team — хто має доступ до бота', '/forum — форум: нові теми, відповіді, люди', '/reviews — відгуки: нові і ті, що чекають перевірки', '', 'Про кожен новий відгук приходить повідомлення з кнопками: опублікувати, відповісти, видалити.', 'Щовечора о 20:00 — підсумок дня.'];
 const HELP_FORUM = [
   '<b>Бот модератора форуму</b>',
   'Сюди приходять нові теми й відповіді на форумі. Під кожним повідомленням є кнопки «Сховати» і «Видалити».',
@@ -373,6 +414,8 @@ const onMessage = async (msg: any) => {
       return owner ? send(chatId, await summary(todayStart(), '📊 Сьогодні', true)) : send(chatId, 'Лише для власника.');
     case '/reviews':
       return owner ? reviewsReport(chatId) : send(chatId, 'Лише для власника.');
+    case '/stats': case '/visitors':
+      return owner ? send(chatId, await statsReport(Math.min(365, Math.max(1, Number(arg.replace(/\D/g, '')) || 7)))) : send(chatId, 'Лише для власника.');
     case '/week':
       return owner ? send(chatId, await summary(new Date(Date.now() - 7 * 864e5).toISOString(), '📊 Останні 7 днів', true)) : send(chatId, 'Лише для власника.');
     case '/team': {
@@ -468,6 +511,7 @@ const setup = async () => {
     { command: 'order', description: 'Показати замовлення за номером' },
     { command: 'today', description: 'Підсумок дня (власник)' },
     { command: 'week', description: 'Підсумок тижня (власник)' },
+    { command: 'stats', description: 'Відвідувачі сайту (власник)' },
     { command: 'team', description: 'Хто має доступ (власник)' },
     { command: 'reviews', description: 'Відгуки покупців (власник)' },
     { command: 'forum', description: 'Форум: теми, відповіді, люди' },

@@ -156,7 +156,7 @@ const InfoPages: React.FC<{ page: InfoPage; onBack: () => void }> = ({ page, onB
           </Card>
           {reviewLink && (
             <a href={reviewLink} target="_blank" rel="noopener noreferrer" className="md:col-span-2 flex items-center gap-3 bg-zinc-900 border border-[#FFC300]/40 hover:border-[#FFC300] rounded-2xl p-4">
-              <span className="text-2xl text-[#FFC300]" aria-hidden>★★★★★</span>
+              <span className="w-11 h-11 rounded-xl bg-[#FFC300]/10 text-[#FFC300] text-2xl flex items-center justify-center shrink-0" aria-hidden>★</span>
               <span className="flex-1"><span className="block text-white font-black">Залиште відгук про нас у Google</span><span className="block text-zinc-400 text-sm">Відкриється наш магазин на Google Картах — натисніть «Написати відгук». Дякуємо!</span></span>
             </a>
           )}

@@ -160,15 +160,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ state, set, setAttr, o
         );
       })}
 
-      {options.brands.length > 0 && (
-        <div>
-          <label className={labelCls}>Бренд</label>
-          <select value={state.filterBrand} onChange={e => set('filterBrand', e.target.value)} className={selectCls}>
-            <option value="">Усі бренди</option>
-            {options.brands.map(v => <option key={v} value={v}>{v}</option>)}
-          </select>
-        </div>
-      )}
+      {options.brands.length > 0 && <BrandPicker brands={options.brands} value={state.filterBrand} onChange={v => set('filterBrand', v)} labelCls={labelCls} />}
 
       <button
         type="button"
@@ -207,6 +199,37 @@ interface SearchBarProps {
   onOpenFilters: () => void;
 }
 
+const SORT_LABELS: Record<string, string> = { recommended: 'Рекомендовані', newest: 'Новинки', price_asc: 'Найдешевші', price_desc: 'Найдорожчі', with_photo: 'Тільки з фото' };
+
+/** Brand: a field to find it by its first letters (there can be 600+ brands), and the list of matches. */
+const BrandPicker: React.FC<{ brands: string[]; value: string; onChange: (v: string) => void; labelCls: string }> = ({ brands, value, onChange, labelCls }) => {
+  const [q, setQ] = useState('');
+  const norm = (v: string) => v.toLowerCase().replace(/[^0-9a-zа-яіїєґ]/gi, '');
+  const nq = norm(q);
+  const shown = nq ? brands.filter(b => norm(b).includes(nq)).sort((a, b) => Number(!norm(a).startsWith(nq)) - Number(!norm(b).startsWith(nq))) : brands;
+  const item = (v: string, label: string) => (
+    <button key={v || '_all'} type="button" onClick={() => { onChange(v); setQ(''); }}
+      className={`w-full text-left px-3 py-2 rounded-lg text-sm font-bold ${value === v ? 'bg-[#FFC300] text-black' : 'text-zinc-200 hover:bg-zinc-800'}`}>{label}</button>
+  );
+  return (
+    <div>
+      <label className={labelCls}>Бренд{value ? <span className="normal-case text-[#FFC300]"> · {value}</span> : null}</label>
+      <div className="relative">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder={`Знайти бренд (усього ${brands.length})`} aria-label="Знайти бренд"
+          className="w-full h-10 bg-black border border-zinc-700 rounded-xl pl-8 pr-8 text-sm text-white outline-none focus:border-[#FFC300]" />
+        {q && <button type="button" onClick={() => setQ('')} aria-label="Очистити" className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-500"><X size={14} /></button>}
+      </div>
+      <div className="mt-1.5 max-h-52 overflow-y-auto overscroll-contain rounded-xl border border-zinc-800 p-1 bg-zinc-950">
+        {!nq && item('', 'Усі бренди')}
+        {shown.slice(0, 80).map(b => item(b, b))}
+        {!shown.length && <p className="px-3 py-2 text-xs text-zinc-500">Такого бренду тут немає</p>}
+        {shown.length > 80 && <p className="px-3 py-2 text-[11px] text-zinc-500">…ще {shown.length - 80} — почніть писати назву</p>}
+      </div>
+    </div>
+  );
+};
+
 /** Compact bar: search + "Фільтри" (mobile/tablet) + sort. Sticky under the site header. */
 export const SearchBar: React.FC<SearchBarProps> = ({ searchQuery, setSearchQuery, onSearch, activeSort, setActiveSort, activeFilters, totalCount, onOpenFilters }) => {
   return (
@@ -233,13 +256,13 @@ export const SearchBar: React.FC<SearchBarProps> = ({ searchQuery, setSearchQuer
 
       <button
         onClick={onOpenFilters}
-        className={`lg:hidden relative flex items-center gap-1.5 px-3 rounded-xl border font-bold text-xs transition-all active:scale-95 ${
+        className={`lg:hidden relative min-w-[60px] flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-2 sm:px-3 rounded-xl border font-bold transition-all active:scale-95 ${
           activeFilters ? 'bg-[#FFC300] text-black border-[#FFC300]' : 'bg-zinc-900 text-zinc-200 border-zinc-800'
         }`}
         aria-label="Фільтри"
       >
         <SlidersHorizontal size={16} />
-        <span className="hidden sm:inline">Фільтри</span>
+        <span className="text-[10px] sm:text-xs leading-none">Фільтри</span>
         {activeFilters > 0 && (
           <span className="absolute -top-1.5 -right-1.5 sm:static min-w-[18px] h-[18px] px-1 rounded-full bg-black text-[#FFC300] text-[11px] font-black flex items-center justify-center">
             {activeFilters}
@@ -247,19 +270,17 @@ export const SearchBar: React.FC<SearchBarProps> = ({ searchQuery, setSearchQuer
         )}
       </button>
 
-      <div className="relative">
-        <ArrowUpDown size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+      {/* the order of goods: a visible label with the icon, the real list on top of it (opens the phone's own picker) */}
+      <div className="relative min-w-[60px] flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-2 sm:px-3 rounded-xl border border-zinc-800 bg-zinc-900 text-[#FFC300] font-bold">
+        <ArrowUpDown size={16} />
+        <span className="text-[10px] sm:text-xs leading-none text-zinc-200 sm:text-[#FFC300]"><span className="sm:hidden">Порядок</span><span className="hidden sm:inline">{SORT_LABELS[activeSort] || 'Порядок'}</span></span>
         <select
           value={activeSort}
           onChange={e => setActiveSort(e.target.value as SortValue)}
-          className="h-full bg-zinc-900 text-[#FFC300] pl-8 pr-2 sm:pr-3 rounded-xl border border-zinc-800 text-xs font-bold appearance-none cursor-pointer outline-none focus:border-[#FFC300] w-[44px] sm:w-auto text-transparent sm:text-[#FFC300]"
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
           aria-label="Сортування"
         >
-          <option value="recommended">Рекомендовані</option>
-          <option value="newest">Новинки</option>
-          <option value="price_asc">Найдешевші</option>
-          <option value="price_desc">Найдорожчі</option>
-          <option value="with_photo">Тільки з фото</option>
+          {Object.entries(SORT_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
       </div>
     </div>

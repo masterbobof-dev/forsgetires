@@ -84,6 +84,24 @@ const sortCats = (a: ProductCategory, b: ProductCategory) =>
  * Shop pages show only categories that have goods in stock (with their subcategories),
  * the biggest first. If the counts can't be loaded, all categories are shown.
  */
+/** what menus and lists need of a section (no descriptions, FAQ or Google texts) */
+const LIST_COLUMNS = 'id, name, slug, parent_id, icon, sort_order, is_active, kind, vehicle_type, filter_preset, noindex';
+let listCache: Promise<{ data: any; error: any }> | null = null;
+const textCache = new Map<number, Promise<Partial<ProductCategory> | null>>();
+
+/** The long texts of one section (description under the list, questions and answers, its Google title). */
+export const useCategoryTexts = (id: number | undefined) => {
+  const [texts, setTexts] = useState<Partial<ProductCategory> | null>(null);
+  useEffect(() => {
+    if (!id || id < 0) { setTexts(null); return; }
+    let on = true;
+    if (!textCache.has(id)) textCache.set(id, Promise.resolve(supabase.from('product_categories').select('description, faq, seo_title, seo_description').eq('id', id).maybeSingle()).then(r => r.data as any).catch(() => null));
+    textCache.get(id)!.then(t => { if (on) setTexts(t); });
+    return () => { on = false; };
+  }, [id]);
+  return texts;
+};
+
 type CountRow = { category_id: number; n: number; with_photo: number; n_all?: number };
 let countsCache: Promise<CountRow[] | null> | null = null;
 const loadCounts = (): Promise<CountRow[] | null> => (countsCache ??= Promise.resolve(supabase.rpc('category_counts')).then(({ data, error }) => (error ? null : (data as any[]))).catch(() => null));
@@ -124,7 +142,11 @@ export const useCategories = (opts: { includeInactive?: boolean } = {}) => {
     setLoading(true);
     // the shop needs both the sections and their counts: ask for them at the same time, not one after another
     if (!opts.includeInactive) loadCounts();
-    const { data, error } = await supabase.from('product_categories').select('*');
+    // the shop gets the sections without their long texts (descriptions are ~300 KB in all) and only once per page;
+    // the text of the open section comes separately (useCategoryTexts)
+    const { data, error } = opts.includeInactive
+      ? await supabase.from('product_categories').select('*')
+      : await (listCache ??= Promise.resolve(supabase.from('product_categories').select(LIST_COLUMNS)).then(r => (r.error ? (listCache = null, r) : r)));
     if (error || !data) {
       setCategories(FALLBACK_CATEGORIES);
       setDbReady(false);

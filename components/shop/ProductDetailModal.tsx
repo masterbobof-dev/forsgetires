@@ -1,5 +1,6 @@
 
 import { safeParsePrice } from './shopUtils';
+import { listPhoto } from '../../photoUrl';
 import StockAlertForm from './StockAlertForm';
 import React, { useState, useEffect, useRef } from 'react';
 import NoPhoto from './NoPhoto';
@@ -128,7 +129,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
   const relatedCard = (t: TyreProduct) => {
     const reason = (t as TyreProduct & { reason?: string; cross?: boolean }).reason || ((t as { cross?: boolean }).cross ? 'cross' : '');
     const badge = REASON_BADGE[reason];
-    const img = t.image_thumb_url || t.image_url;
+    const img = listPhoto(t, 300);
     const Icon = iconFor ? iconFor(t) : undefined;
     return (
       <div key={t.id} className="snap-start shrink-0 w-[118px] md:w-[150px] bg-zinc-950 border border-zinc-800 hover:border-zinc-600 rounded-2xl overflow-hidden flex flex-col transition-colors">
@@ -150,7 +151,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
   const analogRow = (t: TyreProduct) => {
     const reason = (t as TyreProduct & { reason?: string }).reason || '';
     const badge = REASON_BADGE[reason];
-    const img = t.image_thumb_url || t.image_url;
+    const img = listPhoto(t, 300);
     const Icon = iconFor ? iconFor(t) : undefined;
     const askPrice = t.on_order && !t.supplier_offer_id;
     return (
@@ -404,7 +405,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                     if (data && onSimilarClick) onSimilarClick(data as TyreProduct);
                   }} className="shrink-0 w-[200px] bg-zinc-950/60 border border-zinc-800 p-2 rounded-xl flex items-center gap-2 text-left hover:border-[#FFC300] transition-colors">
                     <span className={`w-12 h-12 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden ${(t.image_thumb_url || t.image_url) ? 'bg-white' : 'bg-zinc-800'}`}>
-                      {(t.image_thumb_url || t.image_url) ? <img src={t.image_thumb_url || t.image_url} className="w-full h-full object-contain" alt="" loading="lazy" /> : <NoPhoto icon={iconFor ? iconFor(t as TyreProduct) : undefined} size={20} />}
+                      {(t.image_thumb_url || t.image_url) ? <img src={listPhoto(t, 120)} className="w-full h-full object-contain" alt="" loading="lazy" /> : <NoPhoto icon={iconFor ? iconFor(t as TyreProduct) : undefined} size={20} />}
                     </span>
                     <span className="min-w-0">
                       <span className="block text-[11px] text-white font-bold line-clamp-2 leading-tight">{t.title}</span>

@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { listPhoto } from '../../photoUrl';
 import { formatUaPhone } from '../../phone';
 import { X, ShoppingBag, Trash2, Minus, Plus, Truck, MapPin, Loader2, CheckCircle, ArrowLeft } from 'lucide-react';
 import { CartItem } from '../../types';
@@ -134,7 +135,7 @@ const CartDrawer: React.FC<CartDrawerProps> = (props) => {
                           <input type="checkbox" checked={on} onChange={() => toggle(item.id)} aria-label="Замовити цей товар" className="w-6 h-6 accent-[#FFC300] cursor-pointer" />
                         </div>
                         <div className="w-20 h-20 bg-white rounded-xl overflow-hidden flex-shrink-0">
-                          <img src={item.image_thumb_url || item.image_url || '/favicon.svg'} alt={item.title} className="w-full h-full object-contain p-1" referrerPolicy="no-referrer" />
+                          <img src={listPhoto(item, 160) || '/favicon.svg'} alt={item.title} className="w-full h-full object-contain p-1" referrerPolicy="no-referrer" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-[11px] font-bold text-zinc-500 truncate">

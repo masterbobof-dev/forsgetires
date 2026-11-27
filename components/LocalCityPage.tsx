@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { listPhoto } from '../photoUrl';
 import { MapPin, Truck, Store, Phone, ChevronRight, HelpCircle } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { CITIES, cityFromPath, cityPath, cityTexts } from '../api/_cities.js';
@@ -81,7 +82,7 @@ const LocalCityPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {goods.map(p => (
               <a key={p.id} href={productPath(p)} onClick={linkClick(productPath(p))} className="bg-zinc-900 border border-zinc-800 hover:border-[#FFC300] rounded-2xl overflow-hidden">
-                <div className="aspect-square bg-white"><img src={p.image_thumb_url || p.image_url} alt={p.title} loading="lazy" className="w-full h-full object-contain p-3" /></div>
+                <div className="aspect-square bg-white"><img src={listPhoto(p)} alt={p.title} loading="lazy" className="w-full h-full object-contain p-3" /></div>
                 <div className="p-3"><p className="text-xs font-bold text-white line-clamp-2 min-h-[2.5em]">{p.title}</p><p className="text-[#FFC300] font-black mt-1">{Math.round(parseFloat(p.price || '0'))} грн</p></div>
               </a>
             ))}

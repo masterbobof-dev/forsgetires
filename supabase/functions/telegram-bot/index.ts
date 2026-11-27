@@ -253,15 +253,22 @@ const daily = async () => {
 const findGoods = async (q: string) => {
   const words = q.trim().split(/\s+/).filter(w => w.length >= 2).slice(0, 4);
   if (!words.length) return 'Напишіть, що шукати: /find фільтр ланос';
-  let query = db.from('tyres').select('id, title, price, stock_quantity, in_stock, on_order, catalog_number').neq('in_stock', false);
+  let query = db.from('tyres').select('id, title, price, stock_quantity, in_stock, on_order, supplier_offer_id, lead_days, catalog_number').neq('in_stock', false);
   for (const w of words) {
     const s = w.replace(/[,()%]/g, '');
     query = query.or(`title.ilike.%${s}%,catalog_number.ilike.%${s}%,search_numbers.ilike.%${s.toUpperCase().replace(/[^0-9A-ZА-ЯІЇЄҐ]/g, '') || s}%`);
   }
-  const { data } = await query.order('stock_quantity', { ascending: false }).limit(10);
+  // own stock first, then partner goods (GPL, Omega), then "on order, ask the price"
+  const { data } = await query.order('list_rank', { ascending: true }).order('stock_quantity', { ascending: false }).limit(12);
   if (!data?.length) return `Нічого не знайдено за запитом «${esc(q)}».`;
-  return `<b>🔎 ${esc(q)}</b>\n\n` + data.map((p: any) =>
-    `• ${esc(p.title)}\n   ${p.on_order ? 'під замовлення' : `${money(num(p.price))} · в наявності: ${p.stock_quantity ?? '?'} шт`}${p.catalog_number ? ` · <code>${esc(p.catalog_number)}</code>` : ''}`).join('\n');
+  const line = (p: any) => {
+    const code = p.catalog_number ? ` · <code>${esc(p.catalog_number)}</code>` : '';
+    if (p.supplier_offer_id) return `${money(num(p.price))} · 🚚 під замовлення${p.lead_days ? `, ${esc(p.lead_days)} дн.` : ''} (партнер)${code}`;
+    if (p.on_order) return `під замовлення, ціну уточнити${code}`;
+    return `${money(num(p.price))} · ✅ в наявності: ${p.stock_quantity ?? '?'} шт${code}`;
+  };
+  const link = (p: any) => `<a href="${SITE}/p/${p.id}">${esc(p.title)}</a>`;
+  return `<b>🔎 ${esc(q)}</b>\n\n` + data.map((p: any) => `• ${link(p)}\n   ${line(p)}`).join('\n');
 };
 
 // ---------- people ----------

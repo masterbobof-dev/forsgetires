@@ -1,0 +1,5 @@
+-- Applied live with apply_migration; this file is the record (stage 7: bot).
+-- 1) private.site_problems(): the program exchange is one clear line (how long, why in plain words, prices as of when)
+--    instead of minutes + a raw error; answers of the program exchange are not counted again as "server failures".
+-- 2) private.weekly_report(): revenue of the week, reviews (and how many wait for a check), forum topics/answers,
+--    partner goods on the site (with a warning when not updated for a day); minor background failures explained.

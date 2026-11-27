@@ -89,6 +89,19 @@ const people = async (browser, url) => {
     await until(async () => assert.ok(await page.locator('div.bg-\\[\\#FFC300\\]', { hasText: 'Nokian, взимку їде добре' }).isVisible(), 'my message in the conversation'));
   });
 
+  await step(shop, S, 'answers to me are counted and listed', async () => {
+    fake.rpc.forum_replies_unread = () => (calls.some((c) => c[0] === 'seen') ? 0 : 1);
+    fake.rpc.forum_replies = () => [{ id: 10, topic_id: 1, topic: 'Які шини на Ланос?', author: 'Магазин', body: 'Беріть 175/70 R13', at: T0, unread: true, to_my_message: false }];
+    fake.rpc.forum_replies_seen = () => { calls.push(['seen']); return null; };
+    await ui.goto(`${url}/forum`);
+    await until(async () => assert.ok(await page.getByRole('link', { name: /Відповіді вам/ }).getByText('1').isVisible()));
+    await ui.click(page.getByRole('link', { name: /Відповіді вам/ }));
+    await expectPath(page, '/forum/replies');
+    await until(async () => assert.ok(await page.getByText('Беріть 175/70 R13').isVisible()));
+    assert.ok(await page.getByText('нове', { exact: true }).isVisible());
+    await until(async () => assert.ok(calls.some((c) => c[0] === 'seen'), 'opening the list marks them seen'));
+  });
+
   await shop.context.close();
 };
 
@@ -185,6 +198,13 @@ const owner = async (browser, url) => {
     });
     await until(async () => assert.ok((fake.inserted['forum_topics:update'] || []).some((u) => Array.isArray(u.set.images) && u.set.images.length === 1)), 'the pasted photo is saved to the topic');
     assert.equal(await page.getByRole('button', { name: 'Прибрати фото' }).count(), 1);
+  });
+
+  await step(shop, S, 'a reply is edited in place too', async () => {
+    const reply = page.getByLabel('Текст відповіді').first();
+    await until(async () => assert.ok(await reply.isVisible()));
+    await ui.fill(reply, 'Беріть 175/70 R13, Nokian або Michelin');
+    await until(async () => assert.ok((fake.inserted['forum_posts:update'] || []).some((u) => u.set.body === 'Беріть 175/70 R13, Nokian або Michelin')));
   });
 
   await step(shop, S, 'hiding needs a confirmation', async () => {

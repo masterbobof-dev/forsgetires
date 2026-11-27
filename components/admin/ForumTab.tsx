@@ -10,6 +10,7 @@ import {
 } from '../../forum';
 import { MessageForm, SectionSelect, Body, Photos, Author, when } from '../forum/forumParts';
 import LiveTopic from '../forum/LiveTopic';
+import LivePost from '../forum/LivePost';
 
 const btn = 'h-9 px-3 rounded-lg border text-xs font-bold flex items-center gap-1.5 shrink-0';
 const btnGrey = `${btn} border-zinc-700 text-zinc-300 hover:border-zinc-500`;
@@ -219,20 +220,10 @@ const TopicAdmin: React.FC<{ t: ForumTopic; sections: ForumSection[]; userId: st
           <LiveTopic topic={topic} sections={sections} userId={userId} onChanged={setTopic} onDeleted={onChanged} />
           <a href={forumPath(topic)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-[#FFC300]"><ExternalLink size={14} /> Подивитися на сайті</a>
           <h4 className="text-xs font-black uppercase text-zinc-500 pt-2">Відповіді</h4>
-          {!posts ? <Loader2 className="animate-spin text-[#FFC300]" /> : posts.map(p => edit === p.id ? (
-            <MessageForm key={p.id} userId={userId} initial={p} submitLabel="Зберегти" onCancel={() => setEdit(null)}
-              onSubmit={v => act(async () => { await updatePost(p.id, { body: v.body, images: v.images }); setEdit(null); })} />
-          ) : (
-            <div key={p.id} className={`border rounded-xl p-3 ${p.is_hidden ? 'border-red-900/60 opacity-60' : 'border-zinc-800'}`}>
-              <Author name={p.author_name} shop={p.is_shop} date={p.created_at} edited={p.edited_at} avatar={p.author_avatar} />
-              <div className="mt-2 text-sm"><Body text={p.body} /></div>
-              <Photos urls={p.images} />
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                <button onClick={() => setEdit(p.id)} className={btnGrey}><Pencil size={14} /> Правити</button>
-                <button onClick={() => act(() => updatePost(p.id, { is_hidden: !p.is_hidden }), p.is_hidden ? undefined : 'Сховати цю відповідь від відвідувачів?')} className={btnGrey}>{p.is_hidden ? <Eye size={14} /> : <EyeOff size={14} />} {p.is_hidden ? 'Показати' : 'Сховати'}</button>
-                <button onClick={() => act(() => deletePost(p.id), 'Видалити цю відповідь?')} className={btnRed}><Trash2 size={14} /> Видалити</button>
-              </div>
-            </div>
+          {!posts ? <Loader2 className="animate-spin text-[#FFC300]" /> : posts.map(p => (
+            <LivePost key={p.id} post={p} userId={userId}
+              onChanged={np => setPosts(list => (list || []).map(x => (x.id === np.id ? np : x)))}
+              onDeleted={() => loadPosts()} />
           ))}
           {posts && <MessageForm userId={userId} submitLabel={asShop ? 'Відповісти від магазину' : 'Відповісти'} onSubmit={v => act(() => createPost({ topic_id: t.id, body: v.body, images: v.images }))} />}
         </div>

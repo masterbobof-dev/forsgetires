@@ -7,12 +7,14 @@ import { linkClick, navigateTo } from '../../navigation';
 import { supabase } from '../../supabaseClient';
 import {
   forumPath, forumRoute, fetchSections, fetchSectionStats, fetchTopics, fetchTopic, createTopic, createPost, updateTopic, updatePost,
-  deleteTopic, deletePost, fetchOwnIds, postTree, fetchMe, fetchUnread, userPath, messagesPath, rootSections, childSections, sectionChain, sectionSlugs, sectionName,
+  deleteTopic, deletePost, fetchOwnIds, postTree, fetchMe, fetchUnread, fetchRepliesUnread, repliesPath, userPath, messagesPath, rootSections, childSections, sectionChain, sectionSlugs, sectionName,
   type ForumSection, type ForumTopic, type ForumPost,
 } from '../../forum';
 import { Body, Photos, Author, Avatar, AvatarPicker, MessageForm, when, whenShort } from './forumParts';
 import { ProfileView, MessagesView } from './ForumPeople';
+import RepliesView from './RepliesView';
 import LiveTopic from './LiveTopic';
+import LivePost from './LivePost';
 
 const sectionHref = (slug: string) => `/forum?c=${slug}`;
 
@@ -99,10 +101,11 @@ const ForumPage: React.FC<{ auth: AuthState; isStaff: boolean; onBack: () => voi
   // my profile number and unread private messages (top bar)
   const [myPid, setMyPid] = useState<number | null>(null);
   const [unread, setUnread] = useState(0);
+  const [newReplies, setNewReplies] = useState(0);
   useEffect(() => {
-    if (!userId) { setMyPid(null); setUnread(0); return; }
+    if (!userId) { setMyPid(null); setUnread(0); setNewReplies(0); return; }
     fetchMe().then(m => setMyPid(m?.pid || null), () => undefined);
-    const tick = () => fetchUnread().then(setUnread, () => undefined);
+    const tick = () => { fetchUnread().then(setUnread, () => undefined); fetchRepliesUnread().then(setNewReplies, () => undefined); };
     tick();
     const t = setInterval(() => { if (document.visibilityState === 'visible') tick(); }, 30000);
     window.addEventListener('forum-unread', tick);
@@ -125,7 +128,7 @@ const ForumPage: React.FC<{ auth: AuthState; isStaff: boolean; onBack: () => voi
     try {
       const all = await fetchSections();
       setSections(all);
-      if (route === 'messages' || (route && typeof route === 'object')) {
+      if (route === 'messages' || route === 'replies' || (route && typeof route === 'object')) {
         // profile and messages load themselves
       } else if (typeof route === 'number') {
         const r = await fetchTopic(route, !quiet);
@@ -184,6 +187,8 @@ const ForumPage: React.FC<{ auth: AuthState; isStaff: boolean; onBack: () => voi
   let content: React.ReactNode;
   if (route && typeof route === 'object') {
     content = <ProfileView pid={route.user} userId={userId} onLogin={() => auth.openAuthModal('login')} />;
+  } else if (route === 'replies') {
+    content = <RepliesView userId={userId} onLogin={() => auth.openAuthModal('login')} />;
   } else if (route === 'messages') {
     content = <MessagesView key={qs} userId={userId} onLogin={() => auth.openAuthModal('login')} />;
   } else if (route === 'new') {
@@ -240,7 +245,13 @@ const ForumPage: React.FC<{ auth: AuthState; isStaff: boolean; onBack: () => voi
         <h2 className="text-lg font-black uppercase pt-2">Відповіді ({posts.filter(p => !p.is_hidden).length})</h2>
         {postTree(posts).map(({ post: p, depth, replyTo: parent }) => (
           <div key={p.id} style={{ marginLeft: `${Math.min(depth, 3) * 14}px` }} className={depth ? 'border-l-2 border-zinc-800 pl-2 md:pl-3' : ''}>
-            {editing === p.id && userId ? (
+            {isStaff && userId ? (
+              // the shop and moderators edit a reply right where it is
+              <LivePost post={p} userId={userId} replyTo={parent?.author_name}
+                onChanged={np => setPosts(list => list.map(x => (x.id === np.id ? np : x)))}
+                onDeleted={() => load(true)}
+                actions={!p.is_hidden ? <Tool onClick={() => setReplyTo(replyTo === p.id ? null : p.id)} icon={<Reply size={14} />} label="Відповісти" /> : null} />
+            ) : editing === p.id && userId ? (
               <MessageForm userId={userId} initial={p} submitLabel="Зберегти" onCancel={() => setEditing(null)}
                 onSubmit={v => act(() => updatePost(p.id, { body: v.body, images: v.images }))} />
             ) : (
@@ -353,6 +364,9 @@ const ForumPage: React.FC<{ auth: AuthState; isStaff: boolean; onBack: () => voi
   const peopleBar = userId && (
     <div className="flex flex-wrap gap-2 justify-end -mt-2 mb-4">
       {myPid && <a href={userPath(myPid)} onClick={linkClick(userPath(myPid))} className="h-9 px-3 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-200 text-xs font-bold flex items-center gap-1.5 hover:border-[#FFC300]"><UserRound size={14} /> Мій профіль і гараж</a>}
+      <a href={repliesPath} onClick={linkClick(repliesPath)} className="h-9 px-3 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-200 text-xs font-bold flex items-center gap-1.5 hover:border-[#FFC300]">
+        <Reply size={14} /> Відповіді вам{newReplies > 0 && <span className="min-w-5 h-5 px-1 rounded-full bg-[#FFC300] text-black text-[11px] font-black flex items-center justify-center">{newReplies}</span>}
+      </a>
       <a href={messagesPath()} onClick={linkClick(messagesPath())} className="h-9 px-3 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-200 text-xs font-bold flex items-center gap-1.5 hover:border-[#FFC300]">
         <MessageCircle size={14} /> Повідомлення{unread > 0 && <span className="min-w-5 h-5 px-1 rounded-full bg-[#FFC300] text-black text-[11px] font-black flex items-center justify-center">{unread}</span>}
       </a>

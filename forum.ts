@@ -29,12 +29,13 @@ export const forumPath = (t?: Pick<ForumTopic, 'id' | 'title'> | null) => {
   const s = slugify(t.title).slice(0, 60);
   return `/forum/${t.id}${s ? `-${s}` : ''}`;
 };
-/** /forum/123-... → 123; /forum/new → 'new'; /forum/messages → 'messages'; /forum/user-5 → { user: 5 }; /forum → null */
-export type ForumRoute = number | 'new' | 'messages' | { user: number } | null;
+/** /forum/123-... → 123; /forum/new → 'new'; /forum/messages → 'messages'; /forum/replies → 'replies'; /forum/user-5 → { user: 5 }; /forum → null */
+export type ForumRoute = number | 'new' | 'messages' | 'replies' | { user: number } | null;
 export const forumRoute = (path = window.location.pathname): ForumRoute => {
   const u = path.match(/^\/forum\/user-(\d+)/);
   if (u) return { user: Number(u[1]) };
   if (/^\/forum\/messages/.test(path)) return 'messages';
+  if (/^\/forum\/replies/.test(path)) return 'replies';
   const m = path.match(/^\/forum\/(new|\d+)/);
   return !m ? null : m[1] === 'new' ? 'new' : Number(m[1]);
 };
@@ -241,6 +242,13 @@ export const fetchInbox = () => rpc<InboxRow[]>('forum_inbox');
 export const fetchThread = (pid: number) => rpc<Thread | null>('forum_thread', { p_pid: pid });
 export const sendMessage = (pid: number, body: string) => rpc<number>('forum_send', { p_pid: pid, p_body: body });
 export const fetchUnread = () => rpc<number>('forum_unread');
+
+/** answers to my topics and to my messages («вам відповіли») */
+export interface ReplyNote { id: number; topic_id: number; topic: string; author: string; body: string; at: string; unread: boolean; to_my_message: boolean }
+export const repliesPath = '/forum/replies';
+export const fetchReplies = () => rpc<ReplyNote[]>('forum_replies', { p_limit: 40 });
+export const fetchRepliesUnread = () => rpc<number>('forum_replies_unread');
+export const markRepliesSeen = () => rpc<null>('forum_replies_seen');
 
 export const fetchMyCars = async () => {
   const { data, error } = await supabase.from('user_cars').select('id, make, model, year, engine, nickname, about, photos').order('sort_order').order('id');

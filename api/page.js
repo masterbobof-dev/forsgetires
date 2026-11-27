@@ -138,8 +138,8 @@ async function build(pathname, query) {
       };
     }
     // people's profiles and private messages: shown by the website itself, not for search engines
-    if (/^\/forum\/(user-\d+|messages)\/?$/.test(pathname)) {
-      const msgs = pathname.startsWith('/forum/messages');
+    if (/^\/forum\/(user-\d+|messages|replies)\/?$/.test(pathname)) {
+      const msgs = pathname.startsWith('/forum/messages') || pathname.startsWith('/forum/replies');
       return { noindex: true, title: `${msgs ? 'Повідомлення' : 'Профіль учасника'} — форум «${SHOP_NAME}»`, description: 'Форум автомобілістів магазину «Форсаж»: профілі учасників, гараж, особисті повідомлення.', url: SITE_URL + pathname,
         content: `<h1>${msgs ? 'Повідомлення' : 'Профіль учасника форуму'}</h1><p>${link('/forum', 'Усі теми форуму')}</p>` };
     }

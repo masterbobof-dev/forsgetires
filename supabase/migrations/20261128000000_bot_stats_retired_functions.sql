@@ -1,0 +1,4 @@
+-- Applied live (visitor_stats_for_bot): visitor_stats may also be read by the service role (Telegram /stats).
+-- Edge functions retired on 2026-11-27 (AI and photo search now live in the shop program; nothing called them since 26.11):
+--   seo-ai, photo-finder, photo-audit, ai-proxy, admin-ai-keys, image-migrate, foto, super-endpoint ("proxy").
+--   Each was redeployed as a closed stub answering 410 «Функцію вимкнено» (the API offers no delete); their code is removed from the repository.

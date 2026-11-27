@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { jsonLd } from '../jsonLd';
 import { listPhoto } from '../photoUrl';
 import { MapPin, Truck, Store, Phone, ChevronRight, HelpCircle } from 'lucide-react';
 import { supabase } from '../supabaseClient';
@@ -46,8 +47,8 @@ const LocalCityPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
   return (
     <article className="max-w-6xl mx-auto px-4 py-6 md:py-10 pb-28 animate-in fade-in duration-300">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={jsonLd(ld)} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={jsonLd(faqLd)} />
       <nav className="text-xs text-zinc-500 mb-4 flex items-center gap-1"><a href="/" onClick={e => { e.preventDefault(); onBack(); }} className="hover:text-white">Головна</a><ChevronRight size={12} /><span>{t.h1}</span></nav>
       <h1 className="text-3xl md:text-5xl font-black uppercase italic tracking-tighter mb-3">{t.h1}</h1>
       <p className="text-zinc-300 max-w-3xl leading-relaxed">{t.intro}</p>

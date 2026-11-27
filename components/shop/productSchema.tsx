@@ -1,4 +1,5 @@
 import React from 'react';
+import { jsonLd } from '../../jsonLd';
 import type { TyreProduct } from '../../types';
 import { SITE_URL } from '../../constants';
 import { productPath } from '../../productUrl';
@@ -27,5 +28,5 @@ export const renderProductSchema = (product: TyreProduct) => {
       "itemCondition": "https://schema.org/NewCondition"
     }
   };
-  return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />;
+  return <script type="application/ld+json" dangerouslySetInnerHTML={jsonLd(schema)} />;
 };

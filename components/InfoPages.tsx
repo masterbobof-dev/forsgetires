@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { jsonLd } from '../jsonLd';
 import { ArrowLeft, Truck, Store, Wallet, ShieldCheck, RotateCcw, Phone, MapPin, MessageCircle, Send, Mail, HelpCircle, ChevronDown, Info } from 'lucide-react';
 import { supabase } from '../supabaseClient';
+import { useReviewLink } from '../reviewLink';
 import { settingsRows } from '../publicSettings';
 import { PHONE_NUMBER_1, PHONE_NUMBER_2, PHONE_LINK_1, PHONE_LINK_2, TELEGRAM_LINK, VIBER_LINK } from '../constants';
 import { linkClick } from '../navigation';
@@ -40,6 +41,7 @@ const InfoPages: React.FC<{ page: InfoPage; onBack: () => void }> = ({ page, onB
   const meta = INFO_PAGES[page];
   const [phones, setPhones] = useState({ p1: PHONE_NUMBER_1, p2: PHONE_NUMBER_2, l1: PHONE_LINK_1, l2: PHONE_LINK_2 });
   const [email, setEmail] = useState('');
+  const reviewLink = useReviewLink();
   const [open, setOpen] = useState<number | null>(0);
   // text edited in the shop program (table site_pages) replaces the built-in text
   const [custom, setCustom] = useState<{ title: string; content: string } | null>(null);
@@ -152,6 +154,12 @@ const InfoPages: React.FC<{ page: InfoPage; onBack: () => void }> = ({ page, onB
             </div>
             {email && <a href={`mailto:${email}`} className="flex items-center gap-2 mt-2 text-zinc-300 hover:text-white"><Mail size={16} /> {email}</a>}
           </Card>
+          {reviewLink && (
+            <a href={reviewLink} target="_blank" rel="noopener noreferrer" className="md:col-span-2 flex items-center gap-3 bg-zinc-900 border border-[#FFC300]/40 hover:border-[#FFC300] rounded-2xl p-4">
+              <span className="text-2xl text-[#FFC300]" aria-hidden>★★★★★</span>
+              <span className="flex-1"><span className="block text-white font-black">Залиште відгук про нас у Google</span><span className="block text-zinc-400 text-sm">Відкриється наш магазин на Google Картах — натисніть «Написати відгук». Дякуємо!</span></span>
+            </a>
+          )}
           <div className="md:col-span-2 bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
             <iframe
               src="https://www.google.com/maps?q=%D0%B2%D1%83%D0%BB%D0%B8%D1%86%D1%8F%20%D0%9A%D0%B2%D1%96%D1%82%D0%BD%D0%B5%D0%B2%D0%B0%209%2C%20%D0%A1%D0%B8%D0%BD%D0%B5%D0%BB%D1%8C%D0%BD%D0%B8%D0%BA%D0%BE%D0%B2%D0%B5%2C%20%D0%94%D0%BD%D1%96%D0%BF%D1%80%D0%BE%D0%BF%D0%B5%D1%82%D1%80%D0%BE%D0%B2%D1%81%D1%8C%D0%BA%D0%B0%20%D0%BE%D0%B1%D0%BB%D0%B0%D1%81%D1%82%D1%8C&z=17&hl=uk&output=embed"

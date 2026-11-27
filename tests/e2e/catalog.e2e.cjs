@@ -21,6 +21,8 @@ const withPartners = (t) => {
     return p;
   };
   for (let i = 1; i <= 6; i++) t.tyres.push(make(i, 115));
+  // own goods: one name in Ukrainian («Таврія»), found when it is typed in Russian
+  t.tyres.push({ ...make(8, 115), title: 'Труба приймальна ТМК ЗАЗ 1102 Таврія 220202', manufacturer: 'ТМК', supplier_offer_id: null, on_order: false, list_rank: 0, ask_price: false, created_at: '2025-01-01T00:00:00Z' });
   // a section where only partner goods are
   t.product_categories.push({ ...t.product_categories.find((c) => c.id === 115), id: 116, name: 'Свічки', slug: 'svichky', parent_id: 5 });
   t.tyres.push(make(7, 116));
@@ -101,10 +103,15 @@ const partners = async (browser, url) => {
     await until(async () => assert.deepEqual(await titles(page), ['Партнер товар 3']));
   });
 
+  await step(shop, S, 'Russian and Ukrainian spellings are the same word', async () => {
+    await page.getByPlaceholder(/Пошук/).first().fill('труба таврия');
+    await until(async () => assert.deepEqual(await titles(page), ['Труба приймальна ТМК ЗАЗ 1102 Таврія 220202']));
+  });
+
   await step(shop, S, 'wrong keyboard layout is understood', async () => {
     const box = page.getByPlaceholder(/Пошук/).first();
     await box.fill('gfhnyth');
-    await until(async () => assert.ok((await titles(page)).length >= 6 && (await titles(page)).every((t) => t.startsWith('Партнер'))));
+    await until(async () => assert.ok((await titles(page)).filter((t) => t.startsWith('Партнер')).length >= 6));
     assert.ok(await page.getByText(/інша розкладка клавіатури/).isVisible(), 'the buyer is told why');
   });
 

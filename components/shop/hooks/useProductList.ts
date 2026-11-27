@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../../../supabaseClient';
 import type { TyreProduct } from '../../../types';
 import { type ProductCategory, buildCategoryFilter } from '../../../categories';
-import { parseSearch, searchFilters, swapLayout } from '../../../searchQuery';
+import { parseSearch, searchFilters, swapLayout, looseWord } from '../../../searchQuery';
 import { logAnalyticsEvent } from '../../admin/analytics';
 import type { CategorySelection } from '../CategoryNav';
 import type { SortValue } from '../FilterToolbar';
@@ -75,7 +75,11 @@ export const useProductList = (q: ProductListParams) => {
           : range ? query.in(`attributes->>${key}`, range.values)
           : query.eq(`attributes->>${key}`, value);
       }
-      if (q.filterBrand) query = query.eq('manufacturer', q.filterBrand);
+      if (q.filterBrand) {
+        // the brand, and goods without a brand whose name has it («… Таврия, Славута Тернополь»)
+        const b = q.filterBrand.replace(/["\\*]/g, '');
+        query = query.or(`manufacturer.ilike."${b}",and(manufacturer.is.null,title.ilike."*${looseWord(b.toLowerCase())}*")`);
+      }
       if (q.filterRadius) query = query.eq('radius', q.filterRadius);
       if (q.filterWidth) query = query.ilike('title', `%${q.filterWidth}%`);
       if (q.filterHeight) query = query.ilike('title', `%/${q.filterHeight}%`);

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../../../supabaseClient';
 import type { TyreProduct } from '../../../types';
 import { type ProductCategory, buildCategoryFilter } from '../../../categories';
-import { parseSearch, searchFilters, swapLayout, looseWord, brandFamily } from '../../../searchQuery';
+import { parseSearch, searchFilters, swapLayout, looseWord, brandFamily, brandKey } from '../../../searchQuery';
 import { logAnalyticsEvent } from '../../admin/analytics';
 import type { CategorySelection } from '../CategoryNav';
 import type { SortValue } from '../FilterToolbar';
@@ -85,7 +85,8 @@ export const useProductList = (q: ProductListParams) => {
           const titles = family.map(r => `title.ilike."*${r}*"`).join(',');
           query = query.or(`${names},and(manufacturer.is.null,or(${titles}))`);
         } else {
-          query = query.or(`manufacturer.ilike."${b}",and(manufacturer.is.null,title.ilike."*${looseWord(b.toLowerCase())}*")`);
+          // «Elring» and «ELRING», «K2» and «K-2» are one brand
+          query = query.or(`brand_key.eq."${brandKey(b)}",and(manufacturer.is.null,title.ilike."*${looseWord(b.toLowerCase())}*")`);
         }
       }
       if (q.filterRadius) query = query.eq('radius', q.filterRadius);

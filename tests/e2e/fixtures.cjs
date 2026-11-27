@@ -39,6 +39,7 @@ const product = (id, title, price, extra = {}) => {
   p.price_num = Number(p.price);
   // generated columns of the real table: the order of goods in lists
   p.ask_price = !!p.on_order && !p.supplier_offer_id;
+  p.brand_key = String(p.manufacturer || '').toLowerCase().replace(/[^0-9a-zа-яіїєґ]/gi, '') || null;
   p.list_rank = p.ask_price ? 3 : p.supplier_offer_id ? 1 : p.has_photo ? 0 : 2;
   return p;
 };

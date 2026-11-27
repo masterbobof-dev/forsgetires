@@ -1,0 +1,9 @@
+-- Applied live with apply_migration; this file is the record (stage 2: clean-up and safety).
+-- 1) private.tyre_orders_sanitize(): a partner product (on order, with a real price) kept price 0 in the order;
+--    now only own "on order, ask the price" goods get 0 (case when t.on_order and t.supplier_offer_id is null).
+-- 2) private.product_reviews_guard() before insert on product_reviews: one review per product per person,
+--    max 5 an hour per person and 30 per 10 minutes on the whole site, text up to 2000 letters, new reviews wait for a check.
+-- 3) private.forum_clean, private.reset_thumb, private.offer_codes: fixed search_path.
+-- 4) every row rule in public: auth.uid() → (select auth.uid()) (asked once per query, not per row).
+-- 5) duplicate index idx_tyres_search_numbers_arr dropped; indexes on forum_messages.sender, forum_posts.user_id,
+--    forum_sections.parent_id, forum_topics.user_id, product_reviews.user_id, tyre_orders.tyre_id, tyres.supplier_id.

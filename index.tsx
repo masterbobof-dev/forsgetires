@@ -36,7 +36,7 @@ if (boot) {
   const done = () => { boot.style.opacity = '0'; setTimeout(() => boot.remove(), 300); };
   const check = () => {
     const drawn = rootElement.firstElementChild && !rootElement.firstElementChild.classList.contains('ssr');
-    if (drawn && (rootElement.querySelector('header') || Date.now() - started > 2500)) done();
+    if (drawn && (rootElement.querySelector('header, [data-app-ready]') || Date.now() - started > 2500)) done();
     else if (Date.now() - started > 12000) done();
     else requestAnimationFrame(check);
   };

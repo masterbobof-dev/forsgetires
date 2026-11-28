@@ -8,7 +8,9 @@
  *   barracks 4 (soldiers), factory 6 (tanks), market 6 (+2 gold), house 3 (+1 gold), hospital 4 (heals units around it).
  * - Units: soldier 3 (1 hp, walks 2, hits next to it), light tank 6 (3 hp, drives 3, shoots 2 away for 2),
  *   heavy tank 10 (6 hp, drives 2, shoots 3 away for 3).
- * - The land: rocks (nobody passes, no dots, shots do not fly through), forest (tanks do not pass).
+ * - The land: rocks (nobody passes, no dots, shots do not fly through), forest (tanks do not pass), gold deposits:
+ *   a mine (5) on a deposit the player holds (his points or units within 2) digs 3 gold a turn.
+ * - Building takes turns (tower 1 … citadel 3); an unfinished building does not work.
  *   A unit moves OR attacks once per turn; it passes through its own wall dots (gates) but not between enemy dots.
  * - A broken wall: at the start of the owner's turn the city fights back. If the defence near it (towers, own units)
  *   is at least as strong as the attackers, the wall is rebuilt around the city; if the enemy is stronger, the city
@@ -19,7 +21,7 @@
  *
  * The game is a list of actions; every screen replays it the same way.
  */
-export type BuildKind = 'tower' | 'barracks' | 'market' | 'house' | 'factory' | 'hospital' | 'citadel';
+export type BuildKind = 'tower' | 'barracks' | 'market' | 'house' | 'factory' | 'hospital' | 'citadel' | 'mine';
 export type UnitKind = 'soldier' | 'tank' | 'heavy';
 export type Action =
   | { t: 'dot'; i: number; p?: number }
@@ -43,9 +45,13 @@ export type FxEvent =
   | { k: 'shrink'; cells: number[]; p: number }
   | { k: 'repair'; cells: number[]; p: number }
   | { k: 'score'; i: number; p: number; pts: number }
-  | { k: 'heal'; i: number; p: number };
+  | { k: 'heal'; i: number; p: number }
+  | { k: 'built'; i: number; p: number }
+  | { k: 'mined'; i: number; p: number; gold: number };
 
-export interface Building { id: number; k: BuildKind; p: number; i: number; hp: number }
+export interface Building { id: number; k: BuildKind; p: number; i: number; hp: number; left?: number }
+/** a building works only when it is finished (as in real-time strategies, building takes time) */
+export const ready = (b: Building) => !b.left;
 export interface Unit { id: number; k: UnitKind; p: number; i: number; hp: number; acted: boolean }
 export interface FState {
   n: number; w: number; h: number;
@@ -66,19 +72,23 @@ export interface FState {
   fresh?: FxEvent[];  // makeReplayer: what happened in the actions that just came
 }
 
-export const COST = { tower: 5, barracks: 4, market: 6, house: 3, factory: 6, hospital: 4, citadel: 10, soldier: 3, tank: 6, heavy: 10 } as const;
-export const HP = { tower: 3, barracks: 2, market: 2, house: 2, factory: 3, hospital: 2, citadel: 6, soldier: 1, tank: 3, heavy: 6 } as const;
+export const COST = { tower: 5, barracks: 4, market: 6, house: 3, factory: 6, hospital: 4, citadel: 10, mine: 5, soldier: 3, tank: 6, heavy: 10 } as const;
+export const HP = { tower: 3, barracks: 2, market: 2, house: 2, factory: 3, hospital: 2, citadel: 6, mine: 3, soldier: 1, tank: 3, heavy: 6 } as const;
+/** turns a building takes to build */
+export const BUILD_TURNS: Record<BuildKind, number> = { tower: 1, barracks: 1, market: 1, house: 1, factory: 2, hospital: 1, citadel: 3, mine: 2 };
+/** gold a mine digs every turn */
+export const MINE_GOLD = 3;
 export const MOVE = { soldier: 2, tank: 3, heavy: 2 } as const;
 export const RANGE = { soldier: 1, tank: 2, heavy: 3 } as const;
 export const DMG = { soldier: 1, tank: 2, heavy: 3 } as const;
 export const POWER = { soldier: 1, tank: 3, heavy: 5 } as const;
 export const NAMES_UA = {
-  tower: 'башта', barracks: 'казарма', market: 'ринок', house: 'житло', factory: 'завод', hospital: 'шпиталь', citadel: 'цитадель',
+  tower: 'башта', barracks: 'казарма', market: 'ринок', house: 'житло', factory: 'завод', hospital: 'шпиталь', citadel: 'цитадель', mine: 'шахта',
   soldier: 'воїн', tank: 'легкий танк', heavy: 'важкий танк',
 } as const;
 /** which building a unit is hired at: soldiers at the barracks, tanks at the factory */
 export const HIRED_AT: Record<UnitKind, BuildKind> = { soldier: 'barracks', tank: 'factory', heavy: 'factory' };
-export const ROCK = 1, FOREST = 2;
+export const ROCK = 1, FOREST = 2, GOLD = 3;
 /** points for destroying or capturing a unit */
 export const KILL: Record<UnitKind, number> = { soldier: 2, tank: 4, heavy: 6 };
 export const WIN_SCORE = 30, MAX_ROUNDS = 40, ACTIONS = 2;
@@ -112,6 +122,15 @@ export const makeGround = (w: number, h: number, n: number): Uint8Array => {
       if (c >= size) break;
     }
   }
+  // gold deposits: one beside every home and a couple in the middle (to fight for); rocks around them are cleared
+  const put = (x: number, y: number) => {
+    if (x < 1 || y < 1 || x >= w - 1 || y >= h - 1) return;
+    g[y * w + x] = GOLD;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (g[(y + dy) * w + x + dx] === ROCK) g[(y + dy) * w + x + dx] = 0;
+  };
+  for (const [hx, hy] of homes) put(hx + (hx < w / 2 ? 5 : -5), hy + (hy < h / 2 ? 1 : -1));
+  const cx = Math.floor(w / 2), cy = Math.floor(h / 2);
+  if (n === 2) { put(3, cy); put(w - 4, cy); } else { put(cx, cy); put(3, cy); put(w - 4, cy); }
   return g;
 };
 const groundCache = new Map<string, Uint8Array>();
@@ -342,11 +361,25 @@ export const targets = (s: FState, u: Unit): number[] => {
 /** free points next to the building where this kind of unit is hired (soldiers: barracks, tanks: factory) */
 export const hireSpots = (s: FState, p: number, k: UnitKind = 'soldier'): number[] => {
   const out = new Set<number>();
-  for (const b of s.buildings) if (b.p === p && b.k === HIRED_AT[k]) for (const j of n8(s, b.i)) if (empty(s, j) && passable(s, k, j)) out.add(j);
+  for (const b of s.buildings) if (b.p === p && b.k === HIRED_AT[k] && ready(b)) for (const j of n8(s, b.i)) if (empty(s, j) && passable(s, k, j)) out.add(j);
   return [...out];
 };
-export const canDot = (s: FState, p: number, i: number) => empty(s, i) && s.ground[i] !== ROCK && (!s.inside[i] || s.inside[i] === p);
-export const canBuild = (s: FState, p: number, k: BuildKind, i: number) => empty(s, i) && !s.ground[i] && s.inside[i] === p && s.gold[p] >= COST[k];
+export const canDot = (s: FState, p: number, i: number) => empty(s, i) && s.ground[i] !== ROCK && s.ground[i] !== GOLD && (!s.inside[i] || s.inside[i] === p);
+/** p holds the point: his city, or his points or units within two steps */
+const holds = (s: FState, p: number, i: number) => {
+  if (s.inside[i] === p) return true;
+  const x0 = i % s.w, y0 = Math.floor(i / s.w);
+  for (let y = Math.max(0, y0 - 2); y <= Math.min(s.h - 1, y0 + 2); y++) for (let x = Math.max(0, x0 - 2); x <= Math.min(s.w - 1, x0 + 2); x++) {
+    const j = y * s.w + x; if (s.dot[j] === p || unitAt(s, j)?.p === p) return true;
+  }
+  return false;
+};
+/** buildings stand inside the own closed city; a mine — on a gold deposit that p holds (not inside someone else's city) */
+export const canBuild = (s: FState, p: number, k: BuildKind, i: number) => {
+  if (!empty(s, i) || s.gold[p] < COST[k]) return false;
+  if (k === 'mine') return s.ground[i] === GOLD && (!s.inside[i] || s.inside[i] === p) && holds(s, p, i);
+  return !s.ground[i] && s.inside[i] === p;
+};
 
 /** cells inside the closed cities of p */
 export const landOf = (s: FState, p: number) => { let n = 0; for (let i = 0; i < s.inside.length; i++) if (s.inside[i] === p) n++; return n; };
@@ -354,8 +387,9 @@ export const LAND_PER_POINT = 12;
 
 export const income = (s: FState, p: number) => {
   let inner = 0; for (let i = 0; i < s.inside.length; i++) if (s.inside[i] === p) inner++;
-  const has = (k: BuildKind) => s.buildings.filter(b => b.p === p && b.k === k && s.inside[b.i] === p).length;
-  return 1 + Math.floor(inner / 4) + has('market') * 2 + has('house');
+  const has = (k: BuildKind) => s.buildings.filter(b => b.p === p && b.k === k && ready(b) && s.inside[b.i] === p).length;
+  const mines = s.buildings.filter(b => b.p === p && b.k === 'mine' && ready(b)).length;
+  return 1 + Math.floor(inner / 4) + has('market') * 2 + has('house') + mines * MINE_GOLD;
 };
 
 /** the cities of p whose wall is broken: rebuilt if the defence holds, else they shrink by one row */
@@ -369,7 +403,7 @@ const settleCities = (s: FState, p: number) => {
     const near = (c: number) => region.some(r => dist(s, r, c) <= 2);
     let attack = 0, defence = 1;
     for (const u of s.units) if (near(u.i)) { if (u.p === p) defence += POWER[u.k]; else attack += POWER[u.k]; }
-    for (const b of s.buildings) if (b.p === p && region.includes(b.i)) defence += b.k === 'citadel' ? 4 : b.k === 'tower' ? 2 : 0;
+    for (const b of s.buildings) if (b.p === p && ready(b) && region.includes(b.i)) defence += b.k === 'citadel' ? 4 : b.k === 'tower' ? 2 : 0;
     const inRegion = new Set(region);
     if (defence >= attack) {
       // rebuild the wall around the whole city
@@ -435,7 +469,7 @@ const endTurn = (s: FState) => {
   }
   // towers and citadels of a closed city shoot: the nearest enemy unit, else a dot of an enemy wall nearby
   // (not through rocks); a citadel shoots further and harder
-  for (const t of s.buildings.filter(b => b.p === p && (b.k === 'tower' || b.k === 'citadel') && s.inside[b.i] === p)) {
+  for (const t of s.buildings.filter(b => b.p === p && (b.k === 'tower' || b.k === 'citadel') && ready(b) && s.inside[b.i] === p)) {
     const range = t.k === 'citadel' ? TOWER_RANGE + 1 : TOWER_RANGE;
     let best = -1, bd = 99;
     for (const u of s.units) if (u.p !== p) { const d = dist(s, t.i, u.i); if (d <= range && d < bd && clearShot(s, t.i, u.i)) { bd = d; best = u.i; } }
@@ -457,13 +491,16 @@ const endTurn = (s: FState) => {
     }
   }
   settleCities(s, next);
+  // building goes on: one turn less for every unfinished building of the next player
+  for (const b of s.buildings) if (b.p === next && b.left) { b.left--; if (!b.left) s.events.push({ k: 'built', i: b.i, p: next }); }
   s.gold[next] += income(s, next);
+  for (const b of s.buildings) if (b.p === next && b.k === 'mine' && ready(b)) s.events.push({ k: 'mined', i: b.i, p: next, gold: MINE_GOLD });
   // land is worth points too: +1 for every full LAND_PER_POINT cells of closed city, every turn
   const land = landOf(s, next);
   if (land >= LAND_PER_POINT && !s.winner) { s.score[next] += Math.floor(land / LAND_PER_POINT); checkWin(s); }
   for (const u of s.units) if (u.p === next) u.acted = false;
   // wounded soldiers and tanks inside their own closed city or next to their hospital get +1 health a turn
-  const hospitals = s.buildings.filter(b => b.p === next && b.k === 'hospital');
+  const hospitals = s.buildings.filter(b => b.p === next && b.k === 'hospital' && ready(b));
   for (const u of s.units) if (u.p === next && u.hp < HP[u.k] && (s.inside[u.i] === next || hospitals.some(h => dist(s, h.i, u.i) <= 2))) { u.hp++; s.events.push({ k: 'heal', i: u.i, p: next }); }
 };
 
@@ -483,7 +520,7 @@ export const apply = (s: FState, a: Action): boolean => {
       s.dot[a.i] = p; s.last = [a.i]; s.events.push({ k: 'dot', i: a.i, p }); break;
     case 'build':
       if (!canBuild(s, p, a.k, a.i)) return false;
-      s.gold[p] -= COST[a.k]; s.buildings.push({ id: s.nextId++, k: a.k, p, i: a.i, hp: HP[a.k] }); s.last = [a.i]; s.events.push({ k: 'build', i: a.i, p }); break;
+      s.gold[p] -= COST[a.k]; s.buildings.push({ id: s.nextId++, k: a.k, p, i: a.i, hp: HP[a.k], left: BUILD_TURNS[a.k] }); s.last = [a.i]; s.events.push({ k: 'build', i: a.i, p }); break;
     case 'hire':
       if (s.gold[p] < COST[a.k] || !hireSpots(s, p, a.k).includes(a.i)) return false;
       s.gold[p] -= COST[a.k]; s.units.push({ id: s.nextId++, k: a.k, p, i: a.i, hp: HP[a.k], acted: true }); s.last = [a.i]; s.events.push({ k: 'hire', i: a.i, p, unit: a.k }); break;
@@ -619,6 +656,10 @@ export const botAction = (s: FState): Action => {
     const walls = (i: number) => n8(s, i).filter(j => s.dot[j] === p).length;
     return spots.reduce((a, b) => ((pref === 'edge' ? walls(b) > walls(a) : walls(b) < walls(a)) ? b : a));
   };
+  // a gold deposit it holds: a mine there pays off fast
+  if (s.gold[p] >= COST.mine && mine('mine') < 3) {
+    for (let i = 0; i < s.ground.length; i++) if (s.ground[i] === GOLD && canBuild(s, p, 'mine', i)) return { t: 'build', k: 'mine', i };
+  }
   if (spots.length) {
     if ((mine('tower') === 0 || (enemyUnitsNear && mine('tower') < 3) || (s.gold[p] >= 20 && mine('tower') < 4)) && s.gold[p] >= COST.tower) return { t: 'build', k: 'tower', i: pickSpot('edge') };
     if (mine('house') === 0 && s.gold[p] >= COST.house) return { t: 'build', k: 'house', i: pickSpot('middle') };

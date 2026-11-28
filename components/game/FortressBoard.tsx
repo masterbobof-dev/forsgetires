@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Flag, HelpCircle, Volume2, VolumeX, X, Plus, Minus, Maximize2, Crosshair } from 'lucide-react';
 import {
-  makeReplayer, wallEdges, closedSquares, innerDot, march, canAct, dist, canDot, canBuild, reach, targets, hireSpots, income, buildingAt, unitAt, home, players,
+  makeReplayer, GOLD, wallEdges, closedSquares, innerDot, march, canAct, dist, canDot, canBuild, reach, targets, hireSpots, income, buildingAt, unitAt, home, players,
   COST, HP, HIRED_AT, NAMES_UA, WIN_SCORE, MAX_ROUNDS, LAND_PER_POINT, type Action, type BuildKind, type UnitKind, type FState,
 } from './fortress';
 import { buildFx, useFx, unitPose, aimAt, dropOffset, appearScale, shakeOffset, Tank, HeavyTank, Soldier, FxLayer, HealthBar } from './fortressFx';
 import { play, unlockSound, soundOn, setSoundOn } from './sound';
+import { OreDeposit, MineSite, Scaffold, MineIcon } from './paperMine';
 
 /**
  * The board of «Точки: Фортеці» drawn like a school notebook: blue squares, a red margin, walls and dots in ballpoint
@@ -21,7 +22,7 @@ const TOOLS: { k: Tool; label: string }[] = [
   { k: 'dot', label: 'Точка' },
   { k: 'tower', label: 'Башта' }, { k: 'citadel', label: 'Цитадель' },
   { k: 'barracks', label: 'Казарма' }, { k: 'factory', label: 'Завод' },
-  { k: 'house', label: 'Житло' }, { k: 'market', label: 'Ринок' }, { k: 'hospital', label: 'Шпиталь' },
+  { k: 'mine', label: 'Шахта' }, { k: 'house', label: 'Житло' }, { k: 'market', label: 'Ринок' }, { k: 'hospital', label: 'Шпиталь' },
   { k: 'soldier', label: 'Воїн' }, { k: 'tank', label: 'Легкий танк' }, { k: 'heavy', label: 'Важкий танк' },
 ];
 const isBuild = (t: Tool): t is BuildKind => t !== 'dot' && t !== 'soldier' && t !== 'tank' && t !== 'heavy';
@@ -38,13 +39,17 @@ const GROUND_PIC: Record<number, { src: string; w: number; h: number }[]> = {
 const BPIC: Record<BuildKind, { w: number; h: number; dy: number }> = {
   tower: { w: 16, h: 27.9, dy: 9 }, barracks: { w: 19.5, h: 15.3, dy: 8 }, market: { w: 19.5, h: 14.3, dy: 8 },
   house: { w: 18, h: 11.6, dy: 7 }, factory: { w: 20, h: 11.7, dy: 7 }, hospital: { w: 20, h: 10.5, dy: 7 }, citadel: { w: 23, h: 14.4, dy: 8 },
+  mine: { w: 22, h: 26, dy: 8 },
 };
-export const Building: React.FC<{ x: number; y: number; color: string; k: BuildKind; p: number }> = ({ x, y, color, k, p }) => {
+/** a building; an unfinished one stands in wooden scaffolding, half-transparent, with the turns left */
+export const Building: React.FC<{ x: number; y: number; color: string; k: BuildKind; p: number; left?: number }> = ({ x, y, color, k, p, left }) => {
   const b = BPIC[k];
+  if (k === 'mine') return <><MineSite x={x} y={y} color={color} working={!left} />{!!left && <Scaffold x={x} y={y + 2} w={24} h={28} left={left} />}</>;
   return (
     <>
       <ellipse cx={x} cy={y + 5.5} rx={9.5} ry={3.6} fill={color} opacity={0.35} stroke={color} strokeWidth={1.2} />
-      <image href={k === 'tower' ? `/game/tower${p}.webp` : `/game/${k}.webp`} x={x - b.w / 2} y={y + b.dy - b.h} width={b.w} height={b.h} />
+      <image href={k === 'tower' ? `/game/tower${p}.webp` : `/game/${k}.webp`} x={x - b.w / 2} y={y + b.dy - b.h} width={b.w} height={b.h} opacity={left ? 0.5 : 1} />
+      {!!left && <Scaffold x={x} y={y} w={b.w * 0.85} h={b.h} left={left} />}
     </>
   );
 };
@@ -244,6 +249,7 @@ const FortressBoard: React.FC<{
   // walls: every closed figure of points (even a small square) and the rings of the cities
   const segs = useMemo(() => wallEdges(s), [s]);
   const squares = useMemo(() => closedSquares(s), [s]);
+  const buildSpots = useMemo(() => { if (!isBuild(tool) || !myTurn) return []; const out: number[] = []; for (let i = 0; i < s.dot.length; i++) if (canBuild(s, me, tool, i)) out.push(i); return out; }, [s, tool, me, myTurn]);
   const groundCells = useMemo(() => { const out: number[] = []; for (let i = 0; i < s.ground.length; i++) if (s.ground[i]) out.push(i); return out.sort((a, b) => a - b); }, [s.ground]);
 
   const status = s.winner
@@ -300,7 +306,8 @@ const FortressBoard: React.FC<{
           {/* cities: hatched like in a notebook (darker where the wall is closed) */}
           {Array.from(s.terr).map((p, i) => (p ? <rect key={`a${i}`} x={pos(i).x - STEP / 2} y={pos(i).y - STEP / 2} width={STEP} height={STEP} fill={`url(#hatch${p})`} opacity={s.inside[i] === p ? 1 : 0.45} /> : null))}
           {/* the land: rocks and forest */}
-          {groundCells.map(i => { const v = GROUND_PIC[s.ground[i]]; const g = v[(i * 7 + (i % 13)) % v.length]; const { x, y } = pos(i);
+          {groundCells.map(i => { if (s.ground[i] === GOLD) return buildingAt(s, i) ? null : <OreDeposit key={`g${i}`} x={pos(i).x} y={pos(i).y} />;
+            const v = GROUND_PIC[s.ground[i]]; const g = v[(i * 7 + (i % 13)) % v.length]; const { x, y } = pos(i);
             return <image key={`g${i}`} href={g.src} x={x - g.w / 2} y={y + 5 - g.h} width={g.w} height={g.h} />; })}
           {squares.map(({ i, p }) => <rect key={`sq${i}`} x={pos(i).x} y={pos(i).y} width={STEP} height={STEP} fill={`url(#hatch${p})`} />)}
           {/* city walls: the owner's colour drawn in ink underneath, the stone wall on top */}
@@ -326,15 +333,15 @@ const FortressBoard: React.FC<{
             </g>
           ) : null))}
           {[...hireSet].map(i => <circle key={`hs${i}`} cx={pos(i).x} cy={pos(i).y} r={4.5} fill="#22c55e" opacity={0.55} />)}
-          {isBuild(tool) && myTurn && Array.from(s.inside).map((p, i) => (p === me && !s.dot[i] && !s.ground[i] && !buildingAt(s, i) && !unitAt(s, i) ? <circle key={`bs${i}`} cx={pos(i).x} cy={pos(i).y} r={3.5} fill="#22c55e" opacity={0.55} /> : null))}
+          {isBuild(tool) && myTurn && buildSpots.map(i => <circle key={`bs${i}`} cx={pos(i).x} cy={pos(i).y} r={tool === 'mine' ? 6 : 3.5} fill="#22c55e" opacity={0.55} />)}
           {[...reachSet].map(i => <circle key={`r${i}`} cx={pos(i).x} cy={pos(i).y} r={3.5} fill="#eab308" opacity={0.75} />)}
           <FxLayer fx={fx} now={now} ground />
           {s.buildings.map(b => {
             const { x } = pos(b.i); const y = pos(b.i).y + dropOffset(fx, now, b.i);
             return (
               <g key={`b${b.id}`}>
-                <Building x={x} y={y} color={PCOLORS[b.p]} k={b.k} p={b.p} />
-                <HealthBar x={x} y={y - (b.k === 'tower' ? 22 : 12)} hp={b.hp} max={HP[b.k]} w={14} />
+                <Building x={x} y={y} color={PCOLORS[b.p]} k={b.k} p={b.p} left={b.left} />
+                <HealthBar x={x} y={y - (b.k === 'mine' ? 30 : b.k === 'tower' ? 22 : 12)} hp={b.hp} max={HP[b.k]} w={14} />
               </g>
             );
           })}
@@ -393,7 +400,7 @@ const FortressBoard: React.FC<{
           <button key={t.k} onClick={() => { setTool(t.k); setSel(null); }} disabled={!myTurn || !toolOk(t.k)}
             className={`shrink-0 w-[64px] rounded-xl pt-1 pb-1 flex flex-col items-center border text-[10px] font-bold leading-tight disabled:opacity-35 ${tool === t.k ? 'bg-[#FFC300] text-black border-[#FFC300]' : 'bg-[#fdfdf8] text-zinc-800 border-zinc-300'}`}>
             <span className="h-8 w-full flex items-center justify-center">
-              <img src={toolPic(t.k, mine)} alt="" className={`max-h-8 max-w-[52px] object-contain ${t.k === 'tank' ? 'rotate-90 max-h-[52px] max-w-8' : ''}`} />
+              {t.k === 'mine' ? <MineIcon /> : <img src={toolPic(t.k, mine)} alt="" className={`max-h-8 max-w-[52px] object-contain ${t.k === 'tank' ? 'rotate-90 max-h-[52px] max-w-8' : ''}`} />}
             </span>
             <span className="text-center px-0.5">{t.label}</span>
             {t.k !== 'dot' && <span className="opacity-70">{COST[t.k as keyof typeof COST]}💰</span>}
@@ -406,6 +413,7 @@ const FortressBoard: React.FC<{
           : unit ? `${NAMES_UA[unit.k]}: жовті точки — куди їхати, червоні кола — по кому бити. Далека точка — піде туди за кілька ходів.`
           : isUnit(tool) ? (tool === 'soldier' ? 'Зелені точки — де з’явиться біля казарми' : 'Зелені точки — де з’явиться біля заводу')
           : tool === 'dot' ? 'Торкніться перехрестя — точка. Торкніться свого бійця — хід ним. Поле рухається пальцем, два пальці — масштаб.'
+          : tool === 'mine' ? 'Зелені кола — золото, яке ви тримаєте: ваші точки чи бійці поруч (до 2 клітинок)'
           : 'Зелені точки — де можна будувати (всередині вашого міста)'}
       </p>
       <div className="flex justify-center gap-2 mt-2 flex-wrap">
@@ -422,6 +430,8 @@ const FortressBoard: React.FC<{
             <p>• <b>Будівлі</b> (тільки всередині свого замкненого міста): <b>башта</b> (5) стріляє наприкінці ходу; <b>цитадель</b> (10) — міцна, стріляє далі й сильніше, тримає оборону міста; <b>казарма</b> (4) — наймає воїнів; <b>завод</b> (6) — наймає танки; <b>ринок</b> (6) — +2 золота; <b>житло</b> (3) — +1 золото; <b>шпиталь</b> (4) — лікує бійців поруч.</p>
             <p>• <b>Бійці</b>: <b>воїн</b> (3) — ходить на 2, б'є поруч; <b>легкий танк</b> (6) — швидкий, стріляє на 2; <b>важкий танк</b> (10) — повільний, дуже міцний, стріляє на 3, башта повертається окремо від корпусу.</p>
             <p>• <b>Місцевість</b>: через <b>скелі</b> не пройти, на них не ставлять точки, і крізь них не стріляють. Через <b>ліс</b> проходять лише воїни — танкам треба об'їжджати.</p>
+            <p>• <b>Золото</b>: на мапі є тріщини з самородками. <b>Шахту</b> (5) можна поставити на золото, якщо поруч (до 2 клітинок) ваші точки чи бійці — навіть поза містом. Шахта копає прямо в аркуші і дає <b>+3 золота</b> щоходу. Чужу шахту можна захопити, обвівши її кільцем.</p>
+            <p>• <b>Будівництво триває</b>: башта, казарма, ринок, житло, шпиталь — 1 хід, завод і шахта — 2, цитадель — 3. Поки стоять риштування, будівля не працює.</p>
             <p>• Бійці проходять крізь свою стіну, а чужу — пробивають.</p>
             <p>• <b>Накази бійцям не забирають 2 дії ходу</b>: кожен танк і воїн за хід може раз походити або вистрілити. Кнопка <b>«Загін»</b> або <b>«Усі бійці»</b>, потім точка на полі — загін іде туди сам, хід за ходом, і стріляє по ворогах дорогою. Бійці без наказу наприкінці ходу самі стріляють у ворога поруч. У режимі «Загін» бійців можна обвести рамкою пальцем.</p>
             <p>• Поранені бійці всередині свого замкненого міста <b>лікуються</b>: +1 здоров'я за хід. Смужка над бійцем чи будівлею показує, скільки здоров'я залишилося.</p>

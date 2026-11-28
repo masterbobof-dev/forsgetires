@@ -56,6 +56,19 @@ export const buildFx = (events: FxEvent[], pos: (i: number) => P, colors: string
         out.push({ k: 'burst', t0: t, t1: t + 450, at, parts: inkSplash(at, colors[e.p]), flash: 0, ring: colors[e.p], sound: 'click' });
         break;
       }
+      case 'built': {
+        const at = pos(e.i);
+        out.push({ k: 'burst', t0: t, t1: t + 700, at, parts: inkSplash(at, colors[e.p]), flash: 0, ring: colors[e.p], sound: 'build' });
+        out.push({ k: 'text', t0: t, t1: t + 1100, at, text: '✔', color: colors[e.p] });
+        break;
+      }
+      case 'mined': {
+        const at = pos(e.i);
+        // the mine digs: paper scraps and dust fly out of the hole, the gold floats up
+        out.push({ k: 'burst', t0: t, t1: t + 900, at, parts: debris(at, 6, ['#f5f1e4', '#d6d3d1', '#fbbf24'], 0.06, 2), flash: 0, ring: null, sound: 'click' });
+        out.push({ k: 'text', t0: t + 100, t1: t + 1300, at, text: `+${e.gold}💰`, color: '#b45309' });
+        break;
+      }
       case 'heal': {
         const at = pos(e.i);
         out.push({ k: 'text', t0: t, t1: t + 1100, at, text: '+❤', color: '#16a34a', sound: 'heal' });

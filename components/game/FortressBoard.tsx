@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Flag, HelpCircle, Volume2, VolumeX, X, Plus, Minus, Maximize2, Crosshair } from 'lucide-react';
 import {
-  makeReplayer, wallEdges, closedSquares, march, canAct, dist, canDot, canBuild, reach, targets, hireSpots, income, buildingAt, unitAt, home, players,
-  COST, HP, NAMES_UA, WIN_SCORE, MAX_ROUNDS, LAND_PER_POINT, type Action, type BuildKind, type UnitKind, type FState,
+  makeReplayer, wallEdges, closedSquares, innerDot, march, canAct, dist, canDot, canBuild, reach, targets, hireSpots, income, buildingAt, unitAt, home, players,
+  COST, HP, HIRED_AT, NAMES_UA, WIN_SCORE, MAX_ROUNDS, LAND_PER_POINT, type Action, type BuildKind, type UnitKind, type FState,
 } from './fortress';
-import { buildFx, useFx, unitPose, aimAt, dropOffset, appearScale, shakeOffset, Tank, Soldier, FxLayer, HealthBar } from './fortressFx';
+import { buildFx, useFx, unitPose, aimAt, dropOffset, appearScale, shakeOffset, Tank, HeavyTank, Soldier, FxLayer, HealthBar } from './fortressFx';
 import { play, unlockSound, soundOn, setSoundOn } from './sound';
 
 /**
@@ -16,18 +16,28 @@ export const PCOLORS = ['', '#dc2626', '#2563eb', '#16a34a', '#ca8a04'];
 export const PNAMES = ['', 'Червоні', 'Сині', 'Зелені', 'Жовті'];
 const STEP = 20, PAD = 12;
 type Tool = 'dot' | BuildKind | UnitKind;
-const TOOLS: { k: Tool; label: string; icon: string }[] = [
-  { k: 'dot', label: 'Точка', icon: '•' },
-  { k: 'tower', label: 'Башта', icon: '🗼' },
-  { k: 'barracks', label: 'Казарма', icon: '⛺' },
-  { k: 'market', label: 'Ринок', icon: '💰' },
-  { k: 'soldier', label: 'Воїн', icon: '🪖' },  // the soldier and tank buttons show the owner's pictures
-  { k: 'tank', label: 'Танк', icon: '🛡️' },
+/** the bar below the board: the same pictures as on the map */
+const TOOLS: { k: Tool; label: string }[] = [
+  { k: 'dot', label: 'Точка' },
+  { k: 'tower', label: 'Башта' }, { k: 'citadel', label: 'Цитадель' },
+  { k: 'barracks', label: 'Казарма' }, { k: 'factory', label: 'Завод' },
+  { k: 'house', label: 'Житло' }, { k: 'market', label: 'Ринок' }, { k: 'hospital', label: 'Шпиталь' },
+  { k: 'soldier', label: 'Воїн' }, { k: 'tank', label: 'Легкий танк' }, { k: 'heavy', label: 'Важкий танк' },
 ];
+const isBuild = (t: Tool): t is BuildKind => t !== 'dot' && t !== 'soldier' && t !== 'tank' && t !== 'heavy';
+const isUnit = (t: Tool): t is UnitKind => t === 'soldier' || t === 'tank' || t === 'heavy';
+const toolPic = (t: Tool, p: number) => (t === 'dot' ? '/game/pillar.webp' : t === 'tower' ? `/game/tower${p}.webp` : t === 'soldier' ? `/game/soldier${p}.webp`
+  : t === 'tank' ? `/game/tank${p}.webp` : t === 'heavy' ? `/game/heavy${p}.webp` : `/game/${t}.webp`);
+/** rocks and forest of the map (pictures by the owner), one picture per point, chosen by the point */
+const GROUND_PIC: Record<number, { src: string; w: number; h: number }[]> = {
+  1: [{ src: '/game/rock1.webp', w: 22, h: 13.8 }, { src: '/game/rock2.webp', w: 17, h: 13.3 }, { src: '/game/rock3.webp', w: 13, h: 10.5 }],
+  2: [{ src: '/game/tree1.webp', w: 18, h: 20.6 }, { src: '/game/pine.webp', w: 13, h: 21.3 }, { src: '/game/tree2.webp', w: 15, h: 19 }, { src: '/game/bush.webp', w: 15, h: 13.5 }],
+};
 
 /** buildings (drawn by the owner): the tower flies the player's flag, the others stand on a base of his colour */
 const BPIC: Record<BuildKind, { w: number; h: number; dy: number }> = {
   tower: { w: 16, h: 27.9, dy: 9 }, barracks: { w: 19.5, h: 15.3, dy: 8 }, market: { w: 19.5, h: 14.3, dy: 8 },
+  house: { w: 18, h: 11.6, dy: 7 }, factory: { w: 20, h: 11.7, dy: 7 }, hospital: { w: 20, h: 10.5, dy: 7 }, citadel: { w: 23, h: 14.4, dy: 8 },
 };
 export const Building: React.FC<{ x: number; y: number; color: string; k: BuildKind; p: number }> = ({ x, y, color, k, p }) => {
   const b = BPIC[k];
@@ -61,6 +71,8 @@ const FortressBoard: React.FC<{
   const [sound, setSound] = useState(soundOn);
   const svgRef = useRef<SVGSVGElement>(null);
   const heading = useRef(new Map<number, number>());
+  const hullDir = useRef(new Map<number, number>());
+  const turretDir = useRef(new Map<number, number>());
   const boxRef = useRef<HTMLDivElement>(null);
   const myTurn = !!me && s.turn === me && !s.winner && joined;
   const unit = sel != null ? s.units.find(u => u.id === sel && u.p === me && !u.acted) : undefined;
@@ -195,7 +207,7 @@ const FortressBoard: React.FC<{
 
   const reachSet = useMemo(() => new Set(unit ? reach(s, unit) : []), [s, unit]);
   const targetSet = useMemo(() => new Set(unit ? targets(s, unit) : []), [s, unit]);
-  const hireSet = useMemo(() => new Set(myTurn && (tool === 'soldier' || tool === 'tank') ? hireSpots(s, me) : []), [s, tool, me, myTurn]);
+  const hireSet = useMemo(() => new Set(myTurn && isUnit(tool) ? hireSpots(s, me, tool) : []), [s, tool, me, myTurn]);
 
   const tapAt = (clientX: number, clientY: number) => {
     if (!myTurn || busy) return;
@@ -225,22 +237,23 @@ const FortressBoard: React.FC<{
       setOrders(o => ({ ...o, [unit.id]: i })); setSel(null); return;
     }
     if (tool === 'dot' && canDot(s, me, i)) onAct({ t: 'dot', i });
-    else if ((tool === 'tower' || tool === 'barracks' || tool === 'market') && canBuild(s, me, tool, i)) { onAct({ t: 'build', k: tool, i }); setTool('dot'); }
-    else if ((tool === 'soldier' || tool === 'tank') && hireSet.has(i) && s.gold[me] >= COST[tool]) { onAct({ t: 'hire', k: tool, i }); setTool('dot'); }
+    else if (isBuild(tool) && canBuild(s, me, tool, i)) { onAct({ t: 'build', k: tool, i }); setTool('dot'); }
+    else if (isUnit(tool) && hireSet.has(i) && s.gold[me] >= COST[tool]) { onAct({ t: 'hire', k: tool, i }); setTool('dot'); }
   };
 
   // walls: every closed figure of points (even a small square) and the rings of the cities
   const segs = useMemo(() => wallEdges(s), [s]);
   const squares = useMemo(() => closedSquares(s), [s]);
+  const groundCells = useMemo(() => { const out: number[] = []; for (let i = 0; i < s.ground.length; i++) if (s.ground[i]) out.push(i); return out.sort((a, b) => a - b); }, [s.ground]);
 
   const status = s.winner
     ? (s.winner === 99 ? 'Нічия!' : s.winner === me ? 'Ви перемогли! 🎉' : `Перемогли ${PNAMES[s.winner].toLowerCase()}`)
     : !joined ? 'Чекаємо всіх гравців'
     : myTurn ? `Ваш хід · дій: ${s.actions}`
     : vsBot ? `Ходять ${PNAMES[s.turn].toLowerCase()} (бот)…` : `Ходять ${PNAMES[s.turn].toLowerCase()}…`;
-  const toolOk = (k: Tool) => k === 'dot' || (k === 'soldier' || k === 'tank'
-    ? s.buildings.some(b => b.p === me && b.k === 'barracks') && s.gold[me] >= COST[k]
-    : s.gold[me] >= COST[k as BuildKind]);
+  const toolOk = (k: Tool) => k === 'dot' || (isUnit(k)
+    ? s.buildings.some(b => b.p === me && b.k === HIRED_AT[k]) && s.gold[me] >= COST[k]
+    : s.gold[me] >= COST[k]);
   const mine = me || 1;
 
   return (
@@ -286,6 +299,9 @@ const FortressBoard: React.FC<{
           <line x1={-STEP * 0.6} y1={-STEP * 2} x2={-STEP * 0.6} y2={H + STEP * 2} stroke="#ef4444" strokeWidth={1} opacity={0.7} />
           {/* cities: hatched like in a notebook (darker where the wall is closed) */}
           {Array.from(s.terr).map((p, i) => (p ? <rect key={`a${i}`} x={pos(i).x - STEP / 2} y={pos(i).y - STEP / 2} width={STEP} height={STEP} fill={`url(#hatch${p})`} opacity={s.inside[i] === p ? 1 : 0.45} /> : null))}
+          {/* the land: rocks and forest */}
+          {groundCells.map(i => { const v = GROUND_PIC[s.ground[i]]; const g = v[(i * 7 + (i % 13)) % v.length]; const { x, y } = pos(i);
+            return <image key={`g${i}`} href={g.src} x={x - g.w / 2} y={y + 5 - g.h} width={g.w} height={g.h} />; })}
           {squares.map(({ i, p }) => <rect key={`sq${i}`} x={pos(i).x} y={pos(i).y} width={STEP} height={STEP} fill={`url(#hatch${p})`} />)}
           {/* city walls: the owner's colour drawn in ink underneath, the stone wall on top */}
           <g filter="url(#pen)">
@@ -301,14 +317,16 @@ const FortressBoard: React.FC<{
             );
           })}
           {/* every point is a stone pillar on a base of the player's colour */}
-          {Array.from(s.dot).map((p, i) => (p ? (
-            <g key={`d${i}`}>
+          {Array.from(s.dot).map((p, i) => (p ? (innerDot(s, i)
+            // a point deep inside the city is just city land
+            ? <rect key={`d${i}`} x={pos(i).x - STEP / 2} y={pos(i).y - STEP / 2} width={STEP} height={STEP} fill={`url(#hatch${p})`} />
+            : <g key={`d${i}`}>
               <ellipse cx={pos(i).x} cy={pos(i).y + 2.2} rx={4.6} ry={2.4} fill={PCOLORS[p]} opacity={0.9} />
               <image href="/game/pillar.webp" x={pos(i).x - 3.4} y={pos(i).y - 8.6} width={6.8} height={11.2} />
             </g>
           ) : null))}
           {[...hireSet].map(i => <circle key={`hs${i}`} cx={pos(i).x} cy={pos(i).y} r={4.5} fill="#22c55e" opacity={0.55} />)}
-          {(tool === 'tower' || tool === 'barracks' || tool === 'market') && myTurn && Array.from(s.inside).map((p, i) => (p === me && !s.dot[i] && !buildingAt(s, i) && !unitAt(s, i) ? <circle key={`bs${i}`} cx={pos(i).x} cy={pos(i).y} r={3.5} fill="#22c55e" opacity={0.55} /> : null))}
+          {isBuild(tool) && myTurn && Array.from(s.inside).map((p, i) => (p === me && !s.dot[i] && !s.ground[i] && !buildingAt(s, i) && !unitAt(s, i) ? <circle key={`bs${i}`} cx={pos(i).x} cy={pos(i).y} r={3.5} fill="#22c55e" opacity={0.55} /> : null))}
           {[...reachSet].map(i => <circle key={`r${i}`} cx={pos(i).x} cy={pos(i).y} r={3.5} fill="#eab308" opacity={0.75} />)}
           <FxLayer fx={fx} now={now} ground />
           {s.buildings.map(b => {
@@ -325,18 +343,22 @@ const FortressBoard: React.FC<{
             const { x, y } = pose.p || pos(u.i);
             const dir = pose.dir ?? heading.current.get(u.id) ?? (u.p === 1 || u.p === 4 ? -Math.PI / 2 : Math.PI / 2);
             const aim = pose.p ? null : aimAt(fx, now, pos(u.i));
-            heading.current.set(u.id, aim ? aim.dir : dir); // after a shot the tank stays turned to the enemy
+            heading.current.set(u.id, aim && u.k !== 'heavy' ? aim.dir : dir); // after a shot the tank stays turned to the enemy
+            // the heavy tank: the hull keeps the way it drove, the turret keeps looking where it shot
+            if (u.k === 'heavy') { if (pose.dir != null) hullDir.current.set(u.id, pose.dir); if (aim) turretDir.current.set(u.id, aim.dir); }
             const sc = appearScale(fx, now, u.i);
             return (
               <g key={`u${u.id}`} opacity={u.p === me && u.acted && myTurn && !pose.p ? 0.55 : 1}>
-                {u.k === 'tank'
+                {u.k === 'heavy'
+                  ? <g transform={sc !== 1 ? `translate(${x},${y}) scale(${Math.max(0, sc)}) translate(${-x},${-y})` : undefined}><HeavyTank x={x} y={y} p={u.p} dir={pose.dir ?? hullDir.current.get(u.id) ?? dir} aim={aim?.dir ?? turretDir.current.get(u.id)} kick={aim?.kick} hop={pose.hop} /></g>
+                  : u.k === 'tank'
                   ? <g transform={sc !== 1 ? `translate(${x},${y}) scale(${Math.max(0, sc)}) translate(${-x},${-y})` : undefined}><Tank x={x} y={y} p={u.p} dir={dir} aim={aim?.dir} kick={aim?.kick} hop={pose.hop} /></g>
                   : <Soldier x={x} y={y - pose.hop} p={u.p} dir={dir} run={pose.run} aim={aim?.dir} scale={Math.max(0, sc)} />}
-                <HealthBar x={x} y={y - (u.k === 'tank' ? 15 : 10)} hp={u.hp} max={HP[u.k]} w={u.k === 'tank' ? 13 : 10} />
+                <HealthBar x={x} y={y - (u.k === 'soldier' ? 10 : 15)} hp={u.hp} max={HP[u.k]} w={u.k === 'soldier' ? 10 : 13} />
               </g>
             );
           })}
-          <FxLayer fx={fx} now={now} drawGhost={(what, at, color) => what === 'tank' ? <Tank x={at.x} y={at.y} p={Math.max(1, PCOLORS.indexOf(color))} /> : what === 'soldier' ? <Soldier x={at.x} y={at.y} p={Math.max(1, PCOLORS.indexOf(color))} /> : <Building x={at.x} y={at.y} color={color} k={what} p={Math.max(1, PCOLORS.indexOf(color))} />} />
+          <FxLayer fx={fx} now={now} drawGhost={(what, at, color) => what === 'heavy' ? <HeavyTank x={at.x} y={at.y} p={Math.max(1, PCOLORS.indexOf(color))} /> : what === 'tank' ? <Tank x={at.x} y={at.y} p={Math.max(1, PCOLORS.indexOf(color))} /> : what === 'soldier' ? <Soldier x={at.x} y={at.y} p={Math.max(1, PCOLORS.indexOf(color))} /> : <Building x={at.x} y={at.y} color={color} k={what} p={Math.max(1, PCOLORS.indexOf(color))} />} />
           {[...targetSet].map(i => <circle key={`t${i}`} cx={pos(i).x} cy={pos(i).y} r={9} fill="none" stroke="#dc2626" strokeWidth={1.8} strokeDasharray="3 2" />)}
           {unit && <circle cx={pos(unit.i).x} cy={pos(unit.i).y} r={10} fill="none" stroke="#eab308" strokeWidth={2.2} />}
           {/* march orders: a dashed route and a flag where the squad goes */}
@@ -365,13 +387,15 @@ const FortressBoard: React.FC<{
           {Object.keys(orders).length > 0 && <button onClick={() => setOrders({})} className="h-9 px-3 rounded-xl text-xs font-black border bg-zinc-900 text-red-400 border-zinc-700">Стоп</button>}
         </div>
       )}
-      <div className="grid grid-cols-6 gap-1 mt-2">
+      {/* buildings and units: the same pictures as on the map; the bar scrolls sideways */}
+      <div className="flex gap-1 mt-2 overflow-x-auto pb-1 -mx-1 px-1" style={{ scrollbarWidth: 'none' }}>
         {TOOLS.map(t => (
           <button key={t.k} onClick={() => { setTool(t.k); setSel(null); }} disabled={!myTurn || !toolOk(t.k)}
-            className={`rounded-xl py-1.5 flex flex-col items-center border text-[10px] font-bold leading-tight disabled:opacity-35 ${tool === t.k ? 'bg-[#FFC300] text-black border-[#FFC300]' : 'bg-zinc-900 text-zinc-200 border-zinc-700'}`}>
-            {t.k === 'tank' || t.k === 'soldier'
-              ? <img src={t.k === 'tank' ? `/game/tank${mine}.webp` : `/game/soldier${mine}.webp`} alt="" className={`h-4 w-auto my-0.5 ${t.k === 'tank' ? 'rotate-90' : ''}`} />
-              : <span className="text-base leading-none">{t.icon}</span>}{t.label}
+            className={`shrink-0 w-[64px] rounded-xl pt-1 pb-1 flex flex-col items-center border text-[10px] font-bold leading-tight disabled:opacity-35 ${tool === t.k ? 'bg-[#FFC300] text-black border-[#FFC300]' : 'bg-[#fdfdf8] text-zinc-800 border-zinc-300'}`}>
+            <span className="h-8 w-full flex items-center justify-center">
+              <img src={toolPic(t.k, mine)} alt="" className={`max-h-8 max-w-[52px] object-contain ${t.k === 'tank' ? 'rotate-90 max-h-[52px] max-w-8' : ''}`} />
+            </span>
+            <span className="text-center px-0.5">{t.label}</span>
             {t.k !== 'dot' && <span className="opacity-70">{COST[t.k as keyof typeof COST]}💰</span>}
           </button>
         ))}
@@ -380,7 +404,7 @@ const FortressBoard: React.FC<{
         {squadMode ? (squad.length ? 'Тепер торкніться точки на полі: загін піде туди строєм і битиметься по дорозі. Можна ще обвести бійців рамкою.' : 'Торкніться своїх бійців або обведіть їх рамкою пальцем, щоб зібрати загін')
           : myTurn && s.actions <= 0 && unitsCanAct ? 'Дії скінчилися. Можна ще походити бійцями або натиснути «Кінець ходу».'
           : unit ? `${NAMES_UA[unit.k]}: жовті точки — куди їхати, червоні кола — по кому бити. Далека точка — піде туди за кілька ходів.`
-          : tool === 'soldier' || tool === 'tank' ? 'Зелені точки — де з’явиться біля казарми'
+          : isUnit(tool) ? (tool === 'soldier' ? 'Зелені точки — де з’явиться біля казарми' : 'Зелені точки — де з’явиться біля заводу')
           : tool === 'dot' ? 'Торкніться перехрестя — точка. Торкніться свого бійця — хід ним. Поле рухається пальцем, два пальці — масштаб.'
           : 'Зелені точки — де можна будувати (всередині вашого міста)'}
       </p>
@@ -395,7 +419,9 @@ const FortressBoard: React.FC<{
             <div className="flex justify-between items-center"><b className="text-white text-base">Правила «Фортеці»</b><button onClick={() => setHelp(false)} aria-label="Закрити"><X size={20} /></button></div>
             <p>• Грають 2–4 гравці по черзі. За хід — <b>2 дії</b>: точка, будівля, найм, хід або постріл бійця.</p>
             <p>• Замкнене коло з ваших точок — <b>місто</b> (заштриховане вашим кольором). Всередині можна будувати, місто щоходу дає <b>золото</b>.</p>
-            <p>• 🗼 <b>Башта</b> (5) стріляє наприкінці вашого ходу. ⛺ <b>Казарма</b> (4) — біля неї наймаються 🪖 <b>воїни</b> (3) і 🛡️ <b>танки</b> (7: міцні, стріляють на 2 клітинки, удар ×2). 💰 <b>Ринок</b> (6) — +2 золота.</p>
+            <p>• <b>Будівлі</b> (тільки всередині свого замкненого міста): <b>башта</b> (5) стріляє наприкінці ходу; <b>цитадель</b> (10) — міцна, стріляє далі й сильніше, тримає оборону міста; <b>казарма</b> (4) — наймає воїнів; <b>завод</b> (6) — наймає танки; <b>ринок</b> (6) — +2 золота; <b>житло</b> (3) — +1 золото; <b>шпиталь</b> (4) — лікує бійців поруч.</p>
+            <p>• <b>Бійці</b>: <b>воїн</b> (3) — ходить на 2, б'є поруч; <b>легкий танк</b> (6) — швидкий, стріляє на 2; <b>важкий танк</b> (10) — повільний, дуже міцний, стріляє на 3, башта повертається окремо від корпусу.</p>
+            <p>• <b>Місцевість</b>: через <b>скелі</b> не пройти, на них не ставлять точки, і крізь них не стріляють. Через <b>ліс</b> проходять лише воїни — танкам треба об'їжджати.</p>
             <p>• Бійці проходять крізь свою стіну, а чужу — пробивають.</p>
             <p>• <b>Накази бійцям не забирають 2 дії ходу</b>: кожен танк і воїн за хід може раз походити або вистрілити. Кнопка <b>«Загін»</b> або <b>«Усі бійці»</b>, потім точка на полі — загін іде туди сам, хід за ходом, і стріляє по ворогах дорогою. Бійці без наказу наприкінці ходу самі стріляють у ворога поруч. У режимі «Загін» бійців можна обвести рамкою пальцем.</p>
             <p>• Поранені бійці всередині свого замкненого міста <b>лікуються</b>: +1 здоров'я за хід. Смужка над бійцем чи будівлею показує, скільки здоров'я залишилося.</p>

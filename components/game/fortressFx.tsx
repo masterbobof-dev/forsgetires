@@ -11,7 +11,7 @@ interface Particle { floor?: number; x: number; y: number; vx: number; vy: numbe
 import type { Sfx } from './sound';
 export type Fx = { sound?: Sfx } & (
   | { k: 'move'; t0: number; t1: number; u: number; pts: P[]; unit: UnitKind }
-  | { k: 'shot'; t0: number; t1: number; from: P; to: P; by: UnitKind | 'tower'; color: string; shooter?: number }
+  | { k: 'shot'; t0: number; t1: number; from: P; to: P; by: UnitKind | 'tower' | 'citadel'; color: string; shooter?: number }
   | { k: 'burst'; t0: number; t1: number; at: P; parts: Particle[]; flash: number; ring: string | null }
   | { k: 'ghost'; t0: number; t1: number; at: P; what: UnitKind | BuildKind; color: string }
   | { k: 'drop'; t0: number; t1: number; i: number }
@@ -75,7 +75,7 @@ export const buildFx = (events: FxEvent[], pos: (i: number) => P, colors: string
       }
       case 'move': {
         const pts = e.path.map(pos);
-        const dur = Math.max(1, pts.length - 1) * (e.unit === 'tank' ? 190 : 140);
+        const dur = Math.max(1, pts.length - 1) * (e.unit === 'heavy' ? 240 : e.unit === 'tank' ? 190 : 140);
         out.push({ k: 'move', t0: t, t1: t + dur, u: e.u, pts, unit: e.unit });
         t += dur;
         break;
@@ -83,8 +83,9 @@ export const buildFx = (events: FxEvent[], pos: (i: number) => P, colors: string
       case 'shot': {
         const from = pos(e.from), to = pos(e.to);
         const dist = Math.hypot(to.x - from.x, to.y - from.y);
-        const dur = e.by === 'tank' ? 260 + dist * 6 : e.by === 'tower' ? 220 + dist * 5 : 140 + dist * 4;
-        out.push({ k: 'shot', t0: t + 120, t1: t + 120 + dur, from, to, by: e.by, color: colors[e.p], sound: e.by === 'tank' ? 'tank' : 'shot' });
+        const big = e.by === 'tank' || e.by === 'heavy' || e.by === 'citadel';
+        const dur = big ? 260 + dist * 6 : e.by === 'tower' ? 220 + dist * 5 : 140 + dist * 4;
+        out.push({ k: 'shot', t0: t + 120, t1: t + 120 + dur, from, to, by: e.by, color: colors[e.p], sound: big ? 'tank' : 'shot' });
         hitAt = t + 120 + dur;
         t = hitAt + 80;
         break;
@@ -103,9 +104,9 @@ export const buildFx = (events: FxEvent[], pos: (i: number) => P, colors: string
         out.push({ k: 'sprite', t0: hitAt, t1: hitAt + 650, src: '/game/boom.webp', at, w: e.big ? 30 : 22, h: e.big ? 23 : 17, grow: 0.6, rise: 0 });
         out.push({ k: 'sprite', t0: hitAt + 60, t1: hitAt + 6000, src: '/game/crater.webp', at: { x: at.x, y: at.y + 3 }, w: e.big ? 17 : 12, h: e.big ? 9.6 : 6.8, grow: 0, rise: 0 });
         out.push({ k: 'sprite', t0: hitAt + 250, t1: hitAt + 1900, src: '/game/smoke.webp', at, w: 16, h: 14, grow: 0.9, rise: 16 });
-        if (e.what === 'tower' || e.what === 'barracks' || e.what === 'market') out.push({ k: 'sprite', t0: hitAt + 100, t1: hitAt + 2600, src: '/game/rubble.webp', at, w: 18, h: 13.2, grow: 0, rise: 0 });
+        if (e.what && e.what !== 'soldier' && e.what !== 'tank' && e.what !== 'heavy') out.push({ k: 'sprite', t0: hitAt + 100, t1: hitAt + 2600, src: '/game/rubble.webp', at, w: 18, h: 13.2, grow: 0, rise: 0 });
         if (e.what === 'soldier') out.push({ k: 'sprite', t0: hitAt + 60, t1: hitAt + 1600, src: '/game/soldier-dead.webp', at, w: 17, h: 7.9, grow: 0, rise: 0 });
-        if (e.what === 'tank') out.push({ k: 'sprite', t0: hitAt + 120, t1: hitAt + 1700, src: '/game/wreck.webp', at, w: 20, h: 10.7, grow: 0, rise: 0 });
+        if (e.what === 'tank' || e.what === 'heavy') out.push({ k: 'sprite', t0: hitAt + 120, t1: hitAt + 1700, src: '/game/wreck.webp', at, w: 20, h: 10.7, grow: 0, rise: 0 });
         out.push({ k: 'shake', t0: hitAt, t1: hitAt + (e.big ? 450 : 250), power: e.big ? 3.2 : 1.6 });
         break;
       }
@@ -243,6 +244,27 @@ export const Tank: React.FC<{ x: number; y: number; p: number; dir?: number; aim
   );
 };
 
+/**
+ * The heavy tank (drawn by the owner in two parts): the hull turns where it drives, the turret on its own turns
+ * where it shoots and stays looking there; it kicks back with each shot.
+ */
+export const HeavyTank: React.FC<{ x: number; y: number; p: number; dir?: number; aim?: number; kick?: number; hop?: number; scale?: number }> = ({ x, y, p, dir = -Math.PI / 2, aim, kick = 0, hop = 0, scale = 1 }) => {
+  const L = 24, W = 12.2;            // hull
+  const TL = 16.4, TH = 7.9;         // turret; its pivot is at 70 % of the length, the barrel looks left
+  const hull = (dir * 180) / Math.PI - 180;
+  const turret = ((aim ?? dir) - dir) * 180 / Math.PI;
+  return (
+    <g transform={`translate(${x},${y + hop}) rotate(${hull}) scale(${scale})`}>
+      <ellipse cx={0.8} cy={1.2} rx={L / 2} ry={W / 2.2} fill="#000" opacity={0.18} />
+      <image href={`/game/hull${p}.webp`} x={-L / 2} y={-W / 2} width={L} height={W} />
+      <g transform={`translate(-0.7,0) rotate(${turret}) translate(${kick * 1.6},0)`}>
+        <image href={`/game/turret${p}.webp`} x={-TL * 0.7} y={-TH * 0.55} width={TL} height={TH} />
+        {kick > 0.35 && <image href="/game/boom.webp" x={-TL * 0.7 - 8} y={-3.5} width={8} height={7} opacity={kick} />}
+      </g>
+    </g>
+  );
+};
+
 /** the soldier (drawn by the owner): runs with his legs moving, turns where he goes, lies down to shoot */
 const RUN_W = [0.656, 0.719, 0.859, 0.734], STAND_W = 0.656, FIRE_W = 1.81;
 export const Soldier: React.FC<{ x: number; y: number; p: number; dir?: number; run?: number; aim?: number; scale?: number }> = ({ x, y, p, dir = -Math.PI / 2, run, aim, scale = 1 }) => {
@@ -296,17 +318,18 @@ export const FxLayer: React.FC<{ fx: Fx[]; now: number; ground?: boolean; drawGh
       }
       case 'shot': {
         const x = f.from.x + (f.to.x - f.from.x) * k;
-        const lift = f.by === 'tank' ? 22 : f.by === 'tower' ? 14 : 3; // a shell flies in an arc
+        const shell = f.by === 'tank' || f.by === 'heavy' || f.by === 'citadel';
+        const lift = shell ? (f.by === 'heavy' ? 28 : 22) : f.by === 'tower' ? 14 : 3; // a shell flies in an arc
         const y = f.from.y + (f.to.y - f.from.y) * k - Math.sin(k * Math.PI) * lift;
         const k0 = Math.max(0, k - 0.12);
         const x0 = f.from.x + (f.to.x - f.from.x) * k0, y0 = f.from.y + (f.to.y - f.from.y) * k0 - Math.sin(k0 * Math.PI) * lift;
         out.push(
           <g key={n}>
             <line x1={x0} y1={y0} x2={x} y2={y} stroke={f.by === 'soldier' ? '#facc15' : '#a8a29e'} strokeWidth={f.by === 'soldier' ? 1 : 1.6} strokeLinecap="round" opacity={0.7} />
-            {f.by === 'tank'
+            {shell
               ? <image href="/game/shell.webp" x={-9} y={-1.9} width={10} height={2.1} transform={`translate(${x},${y}) rotate(${(Math.atan2(y - y0, x - x0) * 180) / Math.PI})`} />
               : <circle cx={x} cy={y} r={f.by === 'tower' ? 2 : 1.2} fill={f.by === 'soldier' ? '#facc15' : '#1c1917'} />}
-            {dt < 90 && <circle cx={f.from.x} cy={f.from.y - (f.by === 'tower' ? 8 : 0)} r={4 * (1 - dt / 90) + 1} fill="#fde047" opacity={0.9} />}
+            {dt < 90 && <circle cx={f.from.x} cy={f.from.y - (f.by === 'tower' || f.by === 'citadel' ? 8 : 0)} r={4 * (1 - dt / 90) + 1} fill="#fde047" opacity={0.9} />}
           </g>,
         );
         break;

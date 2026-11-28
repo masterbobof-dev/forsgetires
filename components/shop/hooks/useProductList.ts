@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../../../supabaseClient';
 import type { TyreProduct } from '../../../types';
 import { type ProductCategory, buildCategoryFilter } from '../../../categories';
-import { parseSearch, searchFilters, swapLayout, looseWord, brandFamily, brandKey } from '../../../searchQuery';
+import { parseSearch, searchFilters, searchPatterns, fold, swapLayout, looseWord, brandFamily, brandKey } from '../../../searchQuery';
 import { logAnalyticsEvent } from '../../admin/analytics';
 import type { CategorySelection } from '../CategoryNav';
 import type { SortValue } from '../FilterToolbar';
@@ -36,6 +36,9 @@ interface ProductListParams {
   prepare: (p: TyreProduct) => TyreProduct;
 }
 
+/** how a search is done: the words as typed, inside words, one part number, or with typos */
+type SearchMode = 'words' | 'loose' | 'number' | 'mixed' | 'typo';
+
 /** The list of products of the current section with all filters applied, loaded page by page. */
 export const useProductList = (q: ProductListParams) => {
   const [tyres, setTyres] = useState<TyreProduct[]>([]);
@@ -55,6 +58,8 @@ export const useProductList = (q: ProductListParams) => {
   const [loadedKey, setLoadedKey] = useState('');
   /** the search was corrected: the other keyboard layout, or names close to what was typed */
   const [searchNote, setSearchNote] = useState('');
+  /** how the current search found its goods (the next pages are loaded the same way) */
+  const searchPlan = useRef<{ text: string; mode: SearchMode } | null>(null);
 
   const fetchTyres = async (pageIndex: number, isRefresh = false) => {
     const my = isRefresh ? ++reqNo.current : reqNo.current;
@@ -62,11 +67,22 @@ export const useProductList = (q: ProductListParams) => {
     try {
       if (isRefresh) setLoading(true); else setLoadingMore(true);
       const from = pageIndex * PAGE_SIZE, to = from + PAGE_SIZE - 1;
-      const build = (text = q.debouncedSearch) => {
-      let query = supabase.from('tyres').select('*', { count: 'exact' });
-
-      // smart search: sizes in any format, several words, Cyrillic brand names
-      for (const f of searchFilters(parseSearch(text))) query = query.or(f);
+      /**
+       * mode: 'words' — every typed word at the start of a word (the best match first);
+       * 'loose' — anywhere inside words; 'number' — the whole text as one part number.
+       */
+      const build = (text = q.debouncedSearch, mode: SearchMode = 'words') => {
+      const parsed = parseSearch(text);
+      const pat = mode === 'number' && parsed.partNumber
+        ? { norm: [fold(parsed.partNumber)], words: [fold(parsed.partNumber)] }
+        : searchPatterns(parsed, mode === 'typo' ? 'typo' : mode === 'loose' ? 'loose' : 'words', mode === 'mixed' || mode === 'typo');
+      // words are searched by the database function (Cyrillic/Latin look-alike letters, K-2 = K2, best match first);
+      // a size alone (205/55 R16) goes straight to the table
+      const ranked = pat.norm.length > 0;
+      let query: any = ranked
+        ? supabase.rpc(mode === 'typo' ? 'search_rank_skel' : 'search_rank', { p_norm: pat.norm, p_words: pat.words }, { count: 'exact' }).select('*')
+        : supabase.from('tyres').select('*', { count: 'exact' });
+      for (const f of searchFilters(parsed, true)) query = query.or(f);
       for (const [key, value] of Object.entries(q.attrFilters)) {
         if (!value) continue;
         const range = parseAttrRange(value);
@@ -109,7 +125,9 @@ export const useProductList = (q: ProductListParams) => {
       if (q.activeCategory === 'all' && !q.debouncedSearch.trim()) query = query.eq('ask_price', false);
       if (q.activeSort === 'with_photo') query = query.eq('has_photo', true);
 
-      if (q.activeSort === 'recommended' || q.activeSort === 'with_photo') {
+      if (ranked && q.activeSort === 'recommended') {
+        // the order of the search itself: what fits the words best, then own goods in stock with a photo
+      } else if (q.activeSort === 'recommended' || q.activeSort === 'with_photo') {
         // recommended in the program first; then own goods with a photo, partner goods, own goods without a photo,
         // and "on order, ask the price" at the end (list_rank)
         query = query.order('is_hot', { ascending: false }).order('list_rank', { ascending: true }).order('in_stock', { ascending: false }).order('created_at', { ascending: false });
@@ -125,6 +143,7 @@ export const useProductList = (q: ProductListParams) => {
       // otherwise the 20 000+ partner goods would come only after all own goods
       const mix = q.activeCategory === 'all' && !q.debouncedSearch.trim() && q.activeSort === 'recommended';
       let data: any[] | null, error: any, count: number | null, more: boolean;
+      let note = '';
       if (mix) {
         // each side keeps its own place; when one side runs out, the other fills the page
         if (isRefresh) mixAt.current = { own: 0, partner: 0 };
@@ -145,19 +164,41 @@ export const useProductList = (q: ProductListParams) => {
         count = (own.count || 0) + (partner.count || 0);
         more = at.own + i < (own.count || 0) || at.partner + j < (partner.count || 0);
       } else {
-        const r = await build().range(from, to);
-        data = r.data; error = r.error; count = r.count; more = (r.data || []).length === PAGE_SIZE;
+        if (isRefresh || !searchPlan.current) {
+          // the first page: ways of searching one after another; the one that finds something is kept for the next pages
+          const typed = q.debouncedSearch, parsed = parseSearch(typed);
+          const tries: { text: string; mode: SearchMode }[] = [];
+          // a part number as a whole («W712/75», «0 986 452 041»)
+          if (parsed.partNumber && !parsed.width) tries.push({ text: typed, mode: 'number' });
+          tries.push({ text: typed, mode: 'words' });
+          if (searchPatterns(parsed).norm.length) {
+            // inside words («фільтр» in «маслофільтр»)
+            tries.push({ text: typed, mode: 'loose' });
+            // the keyboard was in the other layout («ащкв» = «ford»): the whole text
+            const alt = typed.trim().length >= 3 ? swapLayout(typed.trim()) : '';
+            if (alt) tries.push({ text: alt, mode: 'words' });
+            // only some words in the other layout («фильтр ащкв»)
+            if (parsed.tokens.length > 1) tries.push({ text: typed, mode: 'mixed' });
+            // typos: words compared without vowels («калодки ланос», «амартизатор»)
+            tries.push({ text: typed, mode: 'typo' });
+          }
+          let r: any = null;
+          for (const t of tries) {
+            r = await build(t.text, t.mode).range(from, to);
+            searchPlan.current = t;
+            if (r.error || (r.data || []).length) break;
+          }
+          if ((r.data || []).length && searchPlan.current!.mode === 'typo') note = 'схожі назви';
+          else if ((r.data || []).length && searchPlan.current!.text !== typed) note = searchPlan.current!.text;
+          data = r.data; error = r.error; count = r.count; more = (r.data || []).length === PAGE_SIZE;
+        } else {
+          const r = await build(searchPlan.current.text, searchPlan.current.mode).range(from, to);
+          data = r.data; error = r.error; count = r.count; more = (r.data || []).length === PAGE_SIZE;
+        }
       }
-      // nothing found for the words typed: maybe the keyboard was in the other layout («ащкв» = «ford»),
-      // or there is a typo («амартизатор») — then show what is close and say so
-      let note = '';
+      // nothing found at all: maybe a typo («амартизатор») — then show what is close and say so
       const typed = q.debouncedSearch.trim();
       if (isRefresh && typed.length >= 3 && !error && !(data || []).length) {
-        const alt = swapLayout(typed);
-        if (alt) {
-          const r = await build(alt).range(from, to);
-          if ((r.data || []).length) { data = r.data; count = r.count; more = r.data!.length === PAGE_SIZE; note = alt; }
-        }
         if (!note) {
           const { data: near } = await supabase.rpc('search_similar', { p_q: typed, p_n: PAGE_SIZE });
           const ids = ((near as { id: number }[]) || []).map(x => x.id);

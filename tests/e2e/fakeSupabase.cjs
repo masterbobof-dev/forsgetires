@@ -171,7 +171,17 @@ const createFake = ({ tables = {}, rpc = {}, functions = {}, user = null } = {})
     if (fn) {
       const handler = fake.rpc[fn[1]];
       const args = method === 'GET' ? Object.fromEntries(url.searchParams) : (body || {});
-      return json(handler ? await handler(args, fake) : []);
+      const out = handler ? await handler(args, fake) : [];
+      // a function that returns table rows can be filtered, ordered and paged like a table (search_rank)
+      const listed = method === 'POST' && Array.isArray(out) && [...url.searchParams.keys()].length > 0;
+      if (!listed) return json(out);
+      const prefer = req.headers()['prefer'] || '';
+      const matches = out.filter(buildFilter(url.searchParams));
+      const sorted = url.searchParams.get('order') ? sortRows(matches, url.searchParams.get('order')) : matches;
+      const offset = Number(url.searchParams.get('offset') || 0);
+      const limit = url.searchParams.has('limit') ? Number(url.searchParams.get('limit')) : Infinity;
+      const page = pickColumns(sorted.slice(offset, offset + limit), url.searchParams.get('select'));
+      return json(page, 200, { 'content-range': `${page.length ? `${offset}-${offset + page.length - 1}` : '*'}/${prefer.includes('count=') ? matches.length : '*'}` });
     }
 
     // --- tables ---

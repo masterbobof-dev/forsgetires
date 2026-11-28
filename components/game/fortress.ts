@@ -39,7 +39,8 @@ export type FxEvent =
   | { k: 'capture'; cells: number[]; p: number }
   | { k: 'shrink'; cells: number[]; p: number }
   | { k: 'repair'; cells: number[]; p: number }
-  | { k: 'score'; i: number; p: number; pts: number };
+  | { k: 'score'; i: number; p: number; pts: number }
+  | { k: 'heal'; i: number; p: number };
 
 export interface Building { id: number; k: BuildKind; p: number; i: number; hp: number }
 export interface Unit { id: number; k: UnitKind; p: number; i: number; hp: number; acted: boolean }
@@ -351,6 +352,8 @@ const endTurn = (s: FState) => {
   const land = landOf(s, next);
   if (land >= LAND_PER_POINT && !s.winner) { s.score[next] += Math.floor(land / LAND_PER_POINT); checkWin(s); }
   for (const u of s.units) if (u.p === next) u.acted = false;
+  // wounded soldiers and tanks inside their own closed city get +1 health a turn
+  for (const u of s.units) if (u.p === next && u.hp < HP[u.k] && s.inside[u.i] === next) { u.hp++; s.events.push({ k: 'heal', i: u.i, p: next }); }
 };
 
 /** apply one action of the player whose turn it is; returns false (state unchanged) if it is not allowed */

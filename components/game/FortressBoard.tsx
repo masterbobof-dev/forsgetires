@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Flag, HelpCircle, X, Plus, Minus, Maximize2, Crosshair } from 'lucide-react';
 import {
   makeReplayer, canDot, canBuild, reach, targets, hireSpots, income, buildingAt, unitAt, home, players,
-  COST, NAMES_UA, WIN_SCORE, MAX_ROUNDS, type Action, type BuildKind, type UnitKind, type FState,
+  COST, NAMES_UA, WIN_SCORE, MAX_ROUNDS, LAND_PER_POINT, type Action, type BuildKind, type UnitKind, type FState,
 } from './fortress';
 import { buildFx, useFx, unitPose, aimAt, dropOffset, appearScale, shakeOffset, Tank, Soldier, FxLayer } from './fortressFx';
 
@@ -53,7 +53,7 @@ const FortressBoard: React.FC<{
   const s = useFortState(actions, n, size);
   const { fx, now, add, busyUntil } = useFx();
   // the pictures are loaded at once, so the first explosion is not empty
-  useEffect(() => { for (const f of ['boom', 'smoke', 'shell', 'wreck', 'soldier-dead', 'rubble', 'crater', 'market', 'barracks', ...players(s).flatMap(p => [`tank${p}`, `tower${p}`, `soldier${p}`, `soldier${p}-fire`, ...[0, 1, 2, 3].map(k => `soldier${p}-run${k}`)])]) new Image().src = `/game/${f}.webp`; }, []);
+  useEffect(() => { for (const f of ['wall', 'pillar', 'wallbroken', 'boom', 'smoke', 'shell', 'wreck', 'soldier-dead', 'rubble', 'crater', 'market', 'barracks', ...players(s).flatMap(p => [`tank${p}`, `tower${p}`, `soldier${p}`, `soldier${p}-fire`, ...[0, 1, 2, 3].map(k => `soldier${p}-run${k}`)])]) new Image().src = `/game/${f}.webp`; }, []);
   const [tool, setTool] = useState<Tool>('dot');
   const [sel, setSel] = useState<number | null>(null);
   const [help, setHelp] = useState(false);
@@ -162,7 +162,7 @@ const FortressBoard: React.FC<{
   };
 
   // ---- city walls: neighbouring dots of a player around his city, drawn as pen strokes
-  const lines: React.ReactNode[] = [];
+  const segs: { a: number; b: number; p: number }[] = [];
   const touches = (i: number, p: number) => {
     const x = i % s.w, y = Math.floor(i / s.w);
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
@@ -177,7 +177,7 @@ const FortressBoard: React.FC<{
     for (const [dx, dy] of [[1, 0], [0, 1], [1, 1], [-1, 1]]) {
       const nx = x + dx, ny = y + dy; if (nx < 0 || nx >= s.w || ny >= s.h) continue;
       const j = ny * s.w + nx;
-      if (s.dot[j] === p && touches(j, p)) { const a = pos(i), b = pos(j); lines.push(<line key={`l${i}-${j}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={PCOLORS[p]} strokeWidth={2.2} strokeLinecap="round" opacity={0.9} />); }
+      if (s.dot[j] === p && touches(j, p)) segs.push({ a: i, b: j, p });
     }
   }
 
@@ -231,10 +231,26 @@ const FortressBoard: React.FC<{
           <line x1={-STEP * 0.6} y1={-STEP * 2} x2={-STEP * 0.6} y2={H + STEP * 2} stroke="#ef4444" strokeWidth={1} opacity={0.7} />
           {/* cities: hatched like in a notebook (darker where the wall is closed) */}
           {Array.from(s.terr).map((p, i) => (p ? <rect key={`a${i}`} x={pos(i).x - STEP / 2} y={pos(i).y - STEP / 2} width={STEP} height={STEP} fill={`url(#hatch${p})`} opacity={s.inside[i] === p ? 1 : 0.45} /> : null))}
+          {/* city walls: the owner's colour drawn in ink underneath, the stone wall on top */}
           <g filter="url(#pen)">
-            {lines}
-            {Array.from(s.dot).map((p, i) => (p ? <circle key={`d${i}`} cx={pos(i).x} cy={pos(i).y} r={3.6} fill={PCOLORS[p]} /> : null))}
+            {segs.map(({ a, b, p }) => { const A = pos(a), B = pos(b); return <line key={`c${a}-${b}`} x1={A.x} y1={A.y + 2} x2={B.x} y2={B.y + 2} stroke={PCOLORS[p]} strokeWidth={3.4} strokeLinecap="round" opacity={0.85} />; })}
           </g>
+          {[...segs].sort((u, v) => Math.max(pos(u.a).y, pos(u.b).y) - Math.max(pos(v.a).y, pos(v.b).y)).map(({ a, b }) => {
+            const A = pos(a), B = pos(b); const len = Math.hypot(B.x - A.x, B.y - A.y) + 2;
+            const deg = (Math.atan2(B.y - A.y, B.x - A.x) * 180) / Math.PI;
+            return (
+              <g key={`w${a}-${b}`} transform={`translate(${(A.x + B.x) / 2},${(A.y + B.y) / 2}) rotate(${deg})`}>
+                <image href="/game/wall.webp" x={-len / 2} y={-5} width={len} height={len * 0.325} preserveAspectRatio="none" />
+              </g>
+            );
+          })}
+          {/* every point is a stone pillar on a base of the player's colour */}
+          {Array.from(s.dot).map((p, i) => (p ? (
+            <g key={`d${i}`}>
+              <ellipse cx={pos(i).x} cy={pos(i).y + 2.2} rx={4.6} ry={2.4} fill={PCOLORS[p]} opacity={0.9} />
+              <image href="/game/pillar.webp" x={pos(i).x - 3.4} y={pos(i).y - 8.6} width={6.8} height={11.2} />
+            </g>
+          ) : null))}
           {[...hireSet].map(i => <circle key={`hs${i}`} cx={pos(i).x} cy={pos(i).y} r={4.5} fill="#22c55e" opacity={0.55} />)}
           {(tool === 'tower' || tool === 'barracks' || tool === 'market') && myTurn && Array.from(s.inside).map((p, i) => (p === me && !s.dot[i] && !buildingAt(s, i) && !unitAt(s, i) ? <circle key={`bs${i}`} cx={pos(i).x} cy={pos(i).y} r={3.5} fill="#22c55e" opacity={0.55} /> : null))}
           {[...reachSet].map(i => <circle key={`r${i}`} cx={pos(i).x} cy={pos(i).y} r={3.5} fill="#eab308" opacity={0.75} />)}
@@ -311,7 +327,8 @@ const FortressBoard: React.FC<{
             <p>• <b>Пробите місто</b> на початку вашого ходу обороняється: якщо башти й ваші бійці поруч не слабші за ворога — стіна відновлюється; якщо ворог сильніший — місто <b>стискається</b>: крайній ряд стає новою стіною, будівлі там гинуть.</p>
             <p>• Обведіть кільцем чужі точки, будівлі, бійців чи місто — усе всередині ваше.</p>
             <p>• Поле рухається пальцем, два пальці — збільшити / зменшити. Кнопки праворуч: ближче, далі, усе поле, до мого міста.</p>
-            <p>• Перемога — <b>{WIN_SCORE} очок</b> або найбільше очок після {MAX_ROUNDS} раундів.</p>
+            <p>• <b>Земля дає очки</b>: щоходу +1 очко за кожні {LAND_PER_POINT} клітинок ваших замкнених міст. Чим більше місто — тим швидше ростуть очки.</p>
+            <p>• Перемога — <b>{WIN_SCORE} очок</b> або найбільше очок після {MAX_ROUNDS} раундів. Якщо очок порівну — перемагає той, у кого більше землі.</p>
           </div>
         </div>
       )}

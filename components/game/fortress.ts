@@ -239,6 +239,10 @@ export const hireSpots = (s: FState, p: number): number[] => {
 export const canDot = (s: FState, p: number, i: number) => empty(s, i) && (!s.inside[i] || s.inside[i] === p);
 export const canBuild = (s: FState, p: number, k: BuildKind, i: number) => empty(s, i) && s.inside[i] === p && s.gold[p] >= COST[k];
 
+/** cells inside the closed cities of p */
+export const landOf = (s: FState, p: number) => { let n = 0; for (let i = 0; i < s.inside.length; i++) if (s.inside[i] === p) n++; return n; };
+export const LAND_PER_POINT = 12;
+
 export const income = (s: FState, p: number) => {
   let inner = 0; for (let i = 0; i < s.inside.length; i++) if (s.inside[i] === p) inner++;
   const markets = s.buildings.filter(b => b.p === p && b.k === 'market' && s.inside[b.i] === p).length;
@@ -303,13 +307,18 @@ const endTurn = (s: FState) => {
   if (next === 1) {
     s.round++;
     if (s.round > MAX_ROUNDS && !s.winner) {
-      const best = Math.max(...players(s).map(q => s.score[q]));
-      const top = players(s).filter(q => s.score[q] === best);
+      // the most points wins; equal points — the bigger land; still equal — a draw
+      const key = (q: number) => s.score[q] * 1000 + landOf(s, q);
+      const best = Math.max(...players(s).map(key));
+      const top = players(s).filter(q => key(q) === best);
       s.winner = top.length > 1 ? 99 : top[0];
     }
   }
   settleCities(s, next);
   s.gold[next] += income(s, next);
+  // land is worth points too: +1 for every full LAND_PER_POINT cells of closed city, every turn
+  const land = landOf(s, next);
+  if (land >= LAND_PER_POINT && !s.winner) { s.score[next] += Math.floor(land / LAND_PER_POINT); checkWin(s); }
   for (const u of s.units) if (u.p === next) u.acted = false;
 };
 
@@ -392,7 +401,10 @@ export const botAction = (s: FState): Action => {
   const p = s.turn;
   if (s.actions <= 0) return { t: 'end' };
   const tryA = (a: Action) => { const c = clone(s); return apply(c, a) ? c : null; };
-  const gain = (c: FState | null) => (c ? c.score[p] - s.score[p] : -1);
+  // what an action brings: points, plus taken land (it brings points every turn later)
+  const worth = (c: FState) => c.score[p] + landOf(c, p) / LAND_PER_POINT;
+  const base = worth(s);
+  const gain = (c: FState | null) => (c ? worth(c) - base : -1);
   const isEnemy = (q: number) => q && q !== p;
 
   const free: number[] = [];
@@ -402,6 +414,26 @@ export const botAction = (s: FState): Action => {
   // 1. a dot that captures right now
   let bestA: Action | null = null, bestV = 0;
   for (const i of nearDots) { const v = gain(tryA({ t: 'dot', i })); if (v > bestV) { bestV = v; bestA = { t: 'dot', i }; } }
+  if (bestA && bestV >= 1) return bestA;
+
+  // 1b. two dots this turn that close a ring around someone else's dots, units or city
+  if (s.actions >= 2) {
+    const enemyNear = (i: number) => n8(s, i).filter(j => isEnemy(s.dot[j]) || isEnemy(s.terr[j]) || (unitAt(s, j)?.p ?? p) !== p).length;
+    const cand = nearDots.filter(i => enemyNear(i) > 0 || n8(s, i).some(j => n8(s, j).some(k => isEnemy(s.dot[k]))))
+      .sort((a, b) => enemyNear(b) - enemyNear(a)).slice(0, 22);
+    let pair: Action | null = null, pairV = 0;
+    for (const a of cand) {
+      const c1 = tryA({ t: 'dot', i: a }); if (!c1) continue;
+      for (const b of cand) {
+        if (b === a) continue;
+        const c2 = clone(c1);
+        if (!apply(c2, { t: 'dot', i: b })) continue;
+        const v = worth(c2) - base;
+        if (v > pairV) { pairV = v; pair = { t: 'dot', i: a }; }
+      }
+    }
+    if (pair && pairV >= 1) return pair;
+  }
   if (bestA) return bestA;
 
   // 2. units: hit what is in range (units first, then buildings, then wall dots), else drive to the nearest target
@@ -443,17 +475,18 @@ export const botAction = (s: FState): Action => {
     if (mine('barracks') === 0 && s.gold[p] >= COST.barracks) return { t: 'build', k: 'barracks', i: pickSpot('middle') };
   }
   const hs = hireSpots(s, p); const myUnits = s.units.filter(u => u.p === p).length;
-  if (hs.length && myUnits < 8) {
+  // an army that grows with the game: tanks when there is money, soldiers to start the siege earlier
+  if (hs.length && myUnits < 4 + Math.floor(s.round / 4)) {
     const enemyDot = s.dot.findIndex(d => isEnemy(d));
     const forward = enemyDot < 0 ? hs[0] : hs.reduce((a, b) => (dist(s, b, enemyDot) < dist(s, a, enemyDot) ? b : a));
     if (s.gold[p] >= COST.tank) return { t: 'hire', k: 'tank', i: forward };
-    if (s.gold[p] >= COST.soldier && myUnits < 2 && mine('market') > 0) return { t: 'hire', k: 'soldier', i: forward };
+    if (s.gold[p] >= COST.soldier && (myUnits < 2 || s.round >= 6)) return { t: 'hire', k: 'soldier', i: forward };
   }
   if (spots.length && mine('market') < 2 && s.gold[p] >= COST.market) return { t: 'build', k: 'market', i: pickSpot('middle') };
 
   // 5. build or grow a city: a diamond ring around the home point
   const [cx, cy] = home(s, p);
-  for (const r of [2, 3, 4]) {
+  for (const r of [2, 3, 4, 5, 6]) {
     const ring: number[] = [];
     for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) {
       if (x < 0 || y < 0 || x >= s.w || y >= s.h) continue;

@@ -23,11 +23,11 @@ const TOOLS: { k: Tool; label: string }[] = [
   { k: 'tower', label: 'Башта' }, { k: 'citadel', label: 'Цитадель' },
   { k: 'barracks', label: 'Казарма' }, { k: 'factory', label: 'Завод' },
   { k: 'mine', label: 'Шахта' }, { k: 'house', label: 'Житло' }, { k: 'market', label: 'Ринок' }, { k: 'hospital', label: 'Шпиталь' },
-  { k: 'soldier', label: 'Воїн' }, { k: 'tank', label: 'Легкий танк' }, { k: 'heavy', label: 'Важкий танк' },
+  { k: 'worker', label: 'Робітник' }, { k: 'soldier', label: 'Воїн' }, { k: 'tank', label: 'Легкий танк' }, { k: 'heavy', label: 'Важкий танк' },
 ];
 const isBuild = (t: Tool): t is BuildKind => t !== 'dot' && t !== 'soldier' && t !== 'tank' && t !== 'heavy';
-const isUnit = (t: Tool): t is UnitKind => t === 'soldier' || t === 'tank' || t === 'heavy';
-const toolPic = (t: Tool, p: number) => (t === 'dot' ? '/game/pillar.webp' : t === 'tower' ? `/game/tower${p}.webp` : t === 'soldier' ? `/game/soldier${p}.webp`
+const isUnit = (t: Tool): t is UnitKind => t === 'soldier' || t === 'tank' || t === 'heavy' || t === 'worker';
+const toolPic = (t: Tool, p: number) => (t === 'dot' ? '/game/pillar.webp' : t === 'tower' ? `/game/tower${p}.webp` : t === 'soldier' || t === 'worker' ? `/game/soldier${p}.webp`
   : t === 'tank' ? `/game/tank${p}.webp` : t === 'heavy' ? `/game/heavy${p}.webp` : `/game/${t}.webp`);
 /** rocks and forest of the map (pictures by the owner), one picture per point, chosen by the point */
 const GROUND_PIC: Record<number, { src: string; w: number; h: number }[]> = {
@@ -196,11 +196,15 @@ const FortressBoard: React.FC<{
   const onWheel = (e: React.WheelEvent) => { const q = toBoard(e.clientX, e.clientY); zoom(e.deltaY > 0 ? 1.15 : 1 / 1.15, q.x, q.y); };
 
   // ---- animation: what just happened is played out (each new action after the ones still playing)
+  const [tracks, setTracks] = useState<{ pts: { x: number; y: number }[]; unit: UnitKind; round: number }[]>([]);
   const seen = useRef<FState | null>(null);
   useEffect(() => {
     if (seen.current === s) return;
     seen.current = s;
     const ev = s.fresh || [];
+    // tracks on the paper: tanks leave two caterpillar lines, soldiers and workers a line of steps
+    const moves = ev.filter((e): e is Extract<typeof e, { k: 'move' }> => e.k === 'move');
+    if (moves.length) setTracks(tr => [...tr, ...moves.map(m => ({ pts: m.path.map(pos), unit: m.unit, round: s.round }))].slice(-80));
     if (!ev.length || calm || ev.length > 80) return;
     // a squad marches together: moves do not wait for other moves
     const list = buildFx(ev, pos, PCOLORS, busyUntil(ev.every(e => e.k === 'move')));
@@ -305,6 +309,21 @@ const FortressBoard: React.FC<{
           <line x1={-STEP * 0.6} y1={-STEP * 2} x2={-STEP * 0.6} y2={H + STEP * 2} stroke="#ef4444" strokeWidth={1} opacity={0.7} />
           {/* cities: hatched like in a notebook (darker where the wall is closed) */}
           {Array.from(s.terr).map((p, i) => (p ? <rect key={`a${i}`} x={pos(i).x - STEP / 2} y={pos(i).y - STEP / 2} width={STEP} height={STEP} fill={`url(#hatch${p})`} opacity={s.inside[i] === p ? 1 : 0.45} /> : null))}
+          {/* tracks of the last rounds, fading like pencil on paper */}
+          <g pointerEvents="none" fill="none" strokeLinecap="round">
+            {tracks.map((t, k) => {
+              const age = s.round - t.round; if (age > 2 || t.pts.length < 2) return null;
+              const o = age === 0 ? 0.5 : age === 1 ? 0.3 : 0.15;
+              const d = t.pts.map((q, j) => `${j ? 'L' : 'M'}${q.x},${q.y}`).join(' ');
+              if (t.unit === 'soldier' || t.unit === 'worker') return <path key={k} d={d} stroke="#57534e" strokeWidth={0.9} strokeDasharray="0.8 2.4" opacity={o} />;
+              const off = t.unit === 'heavy' ? 4.2 : 3.2;
+              return (
+                <g key={k} opacity={o}>
+                  {[-off, off].map(sh => <path key={sh} d={d} stroke="#57534e" strokeWidth={1.3} strokeDasharray="1.4 1" transform={`translate(${sh * Math.abs(Math.sign(t.pts[1].y - t.pts[0].y))},${sh * Math.abs(Math.sign(t.pts[1].x - t.pts[0].x))})`} />)}
+                </g>
+              );
+            })}
+          </g>
           {/* the land: rocks and forest */}
           {groundCells.map(i => { if (s.ground[i] === GOLD) return buildingAt(s, i) ? null : <OreDeposit key={`g${i}`} x={pos(i).x} y={pos(i).y} />;
             const v = GROUND_PIC[s.ground[i]]; const g = v[(i * 7 + (i % 13)) % v.length]; const { x, y } = pos(i);
@@ -360,12 +379,14 @@ const FortressBoard: React.FC<{
                   ? <g transform={sc !== 1 ? `translate(${x},${y}) scale(${Math.max(0, sc)}) translate(${-x},${-y})` : undefined}><HeavyTank x={x} y={y} p={u.p} dir={pose.dir ?? hullDir.current.get(u.id) ?? dir} aim={aim?.dir ?? turretDir.current.get(u.id)} kick={aim?.kick} hop={pose.hop} /></g>
                   : u.k === 'tank'
                   ? <g transform={sc !== 1 ? `translate(${x},${y}) scale(${Math.max(0, sc)}) translate(${-x},${-y})` : undefined}><Tank x={x} y={y} p={u.p} dir={dir} aim={aim?.dir} kick={aim?.kick} hop={pose.hop} /></g>
+                  : u.k === 'worker'
+                  ? <g><Soldier x={x} y={y - pose.hop} p={u.p} dir={dir} run={pose.run} scale={Math.max(0, sc) * 0.8} /><text x={x + 5} y={y - 3 - pose.hop} fontSize={7} pointerEvents="none">⛏️</text></g>
                   : <Soldier x={x} y={y - pose.hop} p={u.p} dir={dir} run={pose.run} aim={aim?.dir} scale={Math.max(0, sc)} />}
                 <HealthBar x={x} y={y - (u.k === 'soldier' ? 10 : 15)} hp={u.hp} max={HP[u.k]} w={u.k === 'soldier' ? 10 : 13} />
               </g>
             );
           })}
-          <FxLayer fx={fx} now={now} drawGhost={(what, at, color) => what === 'heavy' ? <HeavyTank x={at.x} y={at.y} p={Math.max(1, PCOLORS.indexOf(color))} /> : what === 'tank' ? <Tank x={at.x} y={at.y} p={Math.max(1, PCOLORS.indexOf(color))} /> : what === 'soldier' ? <Soldier x={at.x} y={at.y} p={Math.max(1, PCOLORS.indexOf(color))} /> : <Building x={at.x} y={at.y} color={color} k={what} p={Math.max(1, PCOLORS.indexOf(color))} />} />
+          <FxLayer fx={fx} now={now} drawGhost={(what, at, color) => what === 'heavy' ? <HeavyTank x={at.x} y={at.y} p={Math.max(1, PCOLORS.indexOf(color))} /> : what === 'tank' ? <Tank x={at.x} y={at.y} p={Math.max(1, PCOLORS.indexOf(color))} /> : what === 'soldier' || what === 'worker' ? <Soldier x={at.x} y={at.y} p={Math.max(1, PCOLORS.indexOf(color))} scale={what === 'worker' ? 0.8 : 1} /> : <Building x={at.x} y={at.y} color={color} k={what} p={Math.max(1, PCOLORS.indexOf(color))} />} />
           {[...targetSet].map(i => <circle key={`t${i}`} cx={pos(i).x} cy={pos(i).y} r={9} fill="none" stroke="#dc2626" strokeWidth={1.8} strokeDasharray="3 2" />)}
           {unit && <circle cx={pos(unit.i).x} cy={pos(unit.i).y} r={10} fill="none" stroke="#eab308" strokeWidth={2.2} />}
           {/* march orders: a dashed route and a flag where the squad goes */}
@@ -377,6 +398,22 @@ const FortressBoard: React.FC<{
           {s.last.map(i => <circle key={`last${i}`} cx={pos(i).x} cy={pos(i).y} r={10.5} fill="none" stroke="#1e293b" strokeWidth={0.9} strokeDasharray="2 2" />)}
           </g>
         </svg>
+        {/* the whole map in the corner: tap — the board moves there */}
+        <div className="absolute left-2 top-2 rounded-lg overflow-hidden border border-zinc-400/60 bg-[#fdfdf8]/90 shadow" style={{ width: 64, height: 64 * (H / W) }}
+          onPointerDown={e => e.stopPropagation()}
+          onClick={e => {
+            const r = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+            const bx = ((e.clientX - r.left) / r.width) * W, by = ((e.clientY - r.top) / r.height) * H;
+            setView(v => clampView({ ...v, x: bx - v.w / 2, y: by - (v.w * 1.25) / 2 }));
+          }}>
+          <svg viewBox={`0 0 ${s.w} ${s.h}`} width="100%" height="100%" preserveAspectRatio="none" aria-label="Мапа">
+            {groundCells.map(i => <rect key={i} x={i % s.w} y={Math.floor(i / s.w)} width={1} height={1} fill={s.ground[i] === GOLD ? '#f59e0b' : s.ground[i] === 1 ? '#78716c' : '#4d7c0f'} />)}
+            {Array.from(s.terr).map((p, i) => (p ? <rect key={`t${i}`} x={i % s.w} y={Math.floor(i / s.w)} width={1} height={1} fill={PCOLORS[p]} opacity={0.35} /> : null))}
+            {Array.from(s.dot).map((p, i) => (p ? <rect key={`d${i}`} x={i % s.w + 0.15} y={Math.floor(i / s.w) + 0.15} width={0.7} height={0.7} fill={PCOLORS[p]} /> : null))}
+            {s.units.map(u => <circle key={`u${u.id}`} cx={u.i % s.w + 0.5} cy={Math.floor(u.i / s.w) + 0.5} r={0.7} fill={PCOLORS[u.p]} stroke="#111" strokeWidth={0.25} />)}
+            <rect x={(view.x - PAD) / STEP + 0.5} y={(view.y - PAD) / STEP + 0.5} width={view.w / STEP} height={vh / STEP} fill="none" stroke="#111" strokeWidth={0.35} />
+          </svg>
+        </div>
         <div className="absolute right-2 bottom-2 flex flex-col gap-1.5" onPointerDown={e => e.stopPropagation()}>
           <button onClick={() => zoom(1 / 1.3)} aria-label="Ближче" className="w-9 h-9 rounded-full bg-white/90 shadow text-zinc-700 flex items-center justify-center"><Plus size={18} /></button>
           <button onClick={() => zoom(1.3)} aria-label="Далі" className="w-9 h-9 rounded-full bg-white/90 shadow text-zinc-700 flex items-center justify-center"><Minus size={18} /></button>
@@ -411,7 +448,7 @@ const FortressBoard: React.FC<{
         {squadMode ? (squad.length ? 'Тепер торкніться точки на полі: загін піде туди строєм і битиметься по дорозі. Можна ще обвести бійців рамкою.' : 'Торкніться своїх бійців або обведіть їх рамкою пальцем, щоб зібрати загін')
           : myTurn && s.actions <= 0 && unitsCanAct ? 'Дії скінчилися. Можна ще походити бійцями або натиснути «Кінець ходу».'
           : unit ? `${NAMES_UA[unit.k]}: жовті точки — куди їхати, червоні кола — по кому бити. Далека точка — піде туди за кілька ходів.`
-          : isUnit(tool) ? (tool === 'soldier' ? 'Зелені точки — де з’явиться біля казарми' : 'Зелені точки — де з’явиться біля заводу')
+          : isUnit(tool) ? (tool === 'soldier' ? 'Зелені точки — де з’явиться біля казарми' : tool === 'worker' ? 'Зелені точки — де з’явиться біля житла' : 'Зелені точки — де з’явиться біля заводу')
           : tool === 'dot' ? 'Торкніться перехрестя — точка. Торкніться свого бійця — хід ним. Поле рухається пальцем, два пальці — масштаб.'
           : tool === 'mine' ? 'Зелені кола — золото, яке ви тримаєте: ваші точки чи бійці поруч (до 2 клітинок)'
           : 'Зелені точки — де можна будувати (всередині вашого міста)'}
@@ -429,6 +466,7 @@ const FortressBoard: React.FC<{
             <p>• Замкнене коло з ваших точок — <b>місто</b> (заштриховане вашим кольором). Всередині можна будувати, місто щоходу дає <b>золото</b>.</p>
             <p>• <b>Будівлі</b> (тільки всередині свого замкненого міста): <b>башта</b> (5) стріляє наприкінці ходу; <b>цитадель</b> (10) — міцна, стріляє далі й сильніше, тримає оборону міста; <b>казарма</b> (4) — наймає воїнів; <b>завод</b> (6) — наймає танки; <b>ринок</b> (6) — +2 золота; <b>житло</b> (3) — +1 золото; <b>шпиталь</b> (4) — лікує бійців поруч.</p>
             <p>• <b>Бійці</b>: <b>воїн</b> (3) — ходить на 2, б'є поруч; <b>легкий танк</b> (6) — швидкий, стріляє на 2; <b>важкий танк</b> (10) — повільний, дуже міцний, стріляє на 3, башта повертається окремо від корпусу.</p>
+            <p>• <b>Робітник</b> (2, наймається біля житла) не воює, але працює: поруч із будовою будує вдвічі швидше, поруч із шахтою копає ще +1 золото (до двох робітників на шахту), біля лісу рубає дрова (+1 золото). Кожен робітник за хід робить одну справу.</p>
             <p>• <b>Місцевість</b>: через <b>скелі</b> не пройти, на них не ставлять точки, і крізь них не стріляють. Через <b>ліс</b> проходять лише воїни — танкам треба об'їжджати.</p>
             <p>• <b>Золото</b>: на мапі є тріщини з самородками. <b>Шахту</b> (5) можна поставити на золото, якщо поруч (до 2 клітинок) ваші точки чи бійці — навіть поза містом. Шахта копає прямо в аркуші і дає <b>+3 золота</b> щоходу. Чужу шахту можна захопити, обвівши її кільцем.</p>
             <p>• <b>Будівництво триває</b>: башта, казарма, ринок, житло, шпиталь — 1 хід, завод і шахта — 2, цитадель — 3. Поки стоять риштування, будівля не працює.</p>

@@ -62,6 +62,12 @@ export const buildFx = (events: FxEvent[], pos: (i: number) => P, colors: string
         out.push({ k: 'text', t0: t, t1: t + 1100, at, text: '✔', color: colors[e.p] });
         break;
       }
+      case 'chop': {
+        const at = pos(e.i);
+        out.push({ k: 'burst', t0: t, t1: t + 700, at, parts: debris(at, 4, ['#a16207', '#78350f', '#65a30d'], 0.05, 0), flash: 0, ring: null, sound: 'click' });
+        out.push({ k: 'text', t0: t + 80, t1: t + 1200, at, text: '+1🪓', color: '#a16207' });
+        break;
+      }
       case 'mined': {
         const at = pos(e.i);
         // the mine digs: paper scraps and dust fly out of the hole, the gold floats up
@@ -195,7 +201,7 @@ export const unitPose = (fx: Fx[], now: number, id: number): { p?: P; dir?: numb
   const k = ease((now - cur.t0) / (cur.t1 - cur.t0));
   const { p, dir } = along(cur.pts, k);
   const steps = cur.pts.length - 1;
-  const hop = cur.unit === 'soldier' ? Math.abs(Math.sin(k * steps * Math.PI * 2)) * 1.2 : Math.sin(k * steps * Math.PI * 6) * 0.4;
+  const hop = cur.unit === 'soldier' || cur.unit === 'worker' ? Math.abs(Math.sin(k * steps * Math.PI * 2)) * 1.2 : Math.sin(k * steps * Math.PI * 6) * 0.4;
   return { p, dir, hop, run: k * steps };
 };
 

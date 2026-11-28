@@ -101,7 +101,7 @@ const DotsGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     if (error) { setErr(error.message); load(game.id); return; }
     setErr(''); setGame(data as Game);
   };
-  // the computer plays its whole turn, one action every 0.6 s so it can be followed
+  // the computer plays its whole turn, one action at a time, slow enough to watch the tanks drive and shoot
   useEffect(() => {
     if (!vsBot || !fort || !game) return;
     const st = botReplay.current(game.moves as Action[], game.players || 2, [game.w, game.h]);
@@ -109,7 +109,7 @@ const DotsGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     const t = setTimeout(() => {
       const a = botAction(st);
       setGame(g => g && { ...g, moves: [...g.moves, { ...a, p: st.turn }] });
-    }, 450);
+    }, (st.fresh || []).some(e => e.k === 'move' || e.k === 'shot') ? 1000 : 650);
     return () => clearTimeout(t);
   }, [vsBot, fort, game]);
   const turn = game ? (game.moves.length % 2 === 0 ? 1 : 2) : 0;

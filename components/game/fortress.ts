@@ -26,6 +26,21 @@ export type Action =
   | { t: 'attack'; u: number; i: number; p?: number }
   | { t: 'end'; p?: number };
 
+/** what happened during an action — the screen turns these into animation */
+export type FxEvent =
+  | { k: 'dot'; i: number; p: number }
+  | { k: 'build'; i: number; p: number }
+  | { k: 'hire'; i: number; p: number; unit: UnitKind }
+  | { k: 'move'; u: number; path: number[]; p: number; unit: UnitKind }
+  | { k: 'shot'; from: number; to: number; by: UnitKind | 'tower'; p: number }
+  | { k: 'hit'; i: number }
+  | { k: 'boom'; i: number; big: boolean; p: number; what?: UnitKind | BuildKind }
+  | { k: 'wall'; i: number; p: number }
+  | { k: 'capture'; cells: number[]; p: number }
+  | { k: 'shrink'; cells: number[]; p: number }
+  | { k: 'repair'; cells: number[]; p: number }
+  | { k: 'score'; i: number; p: number; pts: number };
+
 export interface Building { id: number; k: BuildKind; p: number; i: number; hp: number }
 export interface Unit { id: number; k: UnitKind; p: number; i: number; hp: number; acted: boolean }
 export interface FState {
@@ -42,6 +57,8 @@ export interface FState {
   nextId: number;
   last: number[];     // points touched by the last action (highlight)
   log: string;        // what happened last (for the screen)
+  events: FxEvent[];  // what happened during the last action (for the animation)
+  fresh?: FxEvent[];  // makeReplayer: what happened in the actions that just came
 }
 
 export const COST = { tower: 5, barracks: 4, market: 6, soldier: 3, tank: 7 } as const;
@@ -62,13 +79,13 @@ export const newFortress = (n = 2, size?: [number, number]): FState => {
   return {
     n, w, h, dot: new Int8Array(w * h), terr: new Int8Array(w * h), inside: new Int8Array(w * h),
     gold: Array(n + 1).fill(3), score: Array(n + 1).fill(0), buildings: [], units: [],
-    turn: 1, actions: ACTIONS, round: 1, winner: 0, nextId: 1, last: [], log: '',
+    turn: 1, actions: ACTIONS, round: 1, winner: 0, nextId: 1, last: [], log: '', events: [],
   };
 };
 
 export const clone = (s: FState): FState => ({
   ...s, dot: s.dot.slice(), terr: s.terr.slice(), inside: s.inside.slice(), gold: [...s.gold], score: [...s.score],
-  buildings: s.buildings.map(b => ({ ...b })), units: s.units.map(u => ({ ...u })), last: [...s.last],
+  buildings: s.buildings.map(b => ({ ...b })), units: s.units.map(u => ({ ...u })), last: [...s.last], events: [],
 });
 
 const xy = (s: FState, i: number) => [i % s.w, Math.floor(i / s.w)];
@@ -125,6 +142,7 @@ const enclose = (s: FState, first: number) => {
   const order = [first, ...others(s, first)];
   for (const p of order) {
     for (const pocket of pockets(s, p)) {
+      const before = s.score[p]; let fresh = false;
       for (const c of pocket) {
         const d = s.dot[c];
         if (d && d !== p) { s.dot[c] = 0; s.score[p] += 1; }
@@ -132,7 +150,12 @@ const enclose = (s: FState, first: number) => {
         if (b && b.p !== p) { b.p = p; s.score[p] += 5; s.log = `Захоплено: ${NAMES_UA[b.k]}`; }
         const u = unitAt(s, c);
         if (u && u.p !== p) { s.units = s.units.filter(x => x !== u); s.score[p] += u.k === 'tank' ? 4 : 2; }
+        if (s.terr[c] !== p) fresh = true;
         s.terr[c] = p;
+      }
+      if (fresh || s.score[p] > before) {
+        s.events.push({ k: 'capture', cells: pocket, p });
+        if (s.score[p] > before) s.events.push({ k: 'score', i: pocket[Math.floor(pocket.length / 2)], p, pts: s.score[p] - before });
       }
     }
   }
@@ -143,17 +166,42 @@ const damage = (s: FState, attacker: number, i: number, dmg: number): boolean =>
   const u = unitAt(s, i);
   if (u && u.p !== attacker) {
     u.hp -= dmg;
-    if (u.hp <= 0) { s.units = s.units.filter(x => x !== u); s.score[attacker] += u.k === 'tank' ? 4 : 2; s.log = `Знищено: ${NAMES_UA[u.k]}`; }
+    if (u.hp <= 0) {
+      const pts = u.k === 'tank' ? 4 : 2;
+      s.units = s.units.filter(x => x !== u); s.score[attacker] += pts; s.log = `Знищено: ${NAMES_UA[u.k]}`;
+      s.events.push({ k: 'boom', i, big: u.k === 'tank', p: u.p, what: u.k }, { k: 'score', i, p: attacker, pts });
+    } else s.events.push({ k: 'hit', i });
     return true;
   }
   const b = buildingAt(s, i);
   if (b && b.p !== attacker) {
     b.hp -= dmg;
-    if (b.hp <= 0) { s.buildings = s.buildings.filter(x => x !== b); s.score[attacker] += 3; s.log = `Зруйновано: ${NAMES_UA[b.k]}`; }
+    if (b.hp <= 0) {
+      s.buildings = s.buildings.filter(x => x !== b); s.score[attacker] += 3; s.log = `Зруйновано: ${NAMES_UA[b.k]}`;
+      s.events.push({ k: 'boom', i, big: true, p: b.p, what: b.k }, { k: 'score', i, p: attacker, pts: 3 });
+    } else s.events.push({ k: 'hit', i });
     return true;
   }
-  if (s.dot[i] && s.dot[i] !== attacker) { s.dot[i] = 0; s.log = 'Стіну пробито'; return true; }
+  if (s.dot[i] && s.dot[i] !== attacker) { s.events.push({ k: 'wall', i, p: s.dot[i] }); s.dot[i] = 0; s.log = 'Стіну пробито'; return true; }
   return false;
+};
+
+/** the way a unit drives to a point (the same steps as reach), for the animation */
+export const pathTo = (s: FState, u: Unit, to: number): number[] => {
+  const prev = new Map<number, number>([[u.i, -1]]); const q = [u.i];
+  while (q.length) {
+    const c = q.shift()!;
+    if (c === to) break;
+    for (const j of n4(s, c)) {
+      if (prev.has(j)) continue;
+      const gate = s.dot[j] === u.p && !buildingAt(s, j) && !unitAt(s, j);
+      if (!empty(s, j) && !gate) continue;
+      prev.set(j, c); q.push(j);
+    }
+  }
+  if (!prev.has(to)) return [u.i, to];
+  const path: number[] = []; for (let c = to; c !== -1; c = prev.get(c)!) path.unshift(c);
+  return path;
 };
 
 /** points a unit can drive to this turn (up / down / left / right over free points; own wall dots are gates) */
@@ -212,19 +260,23 @@ const settleCities = (s: FState, p: number) => {
     const inRegion = new Set(region);
     if (defence >= attack) {
       // rebuild the wall around the whole city
-      for (const c of region) for (const j of n8(s, c)) if (!inRegion.has(j) && empty(s, j)) s.dot[j] = p;
+      const built: number[] = [];
+      for (const c of region) for (const j of n8(s, c)) if (!inRegion.has(j) && empty(s, j)) { s.dot[j] = p; built.push(j); }
       recountInside(s);
+      if (built.length) s.events.push({ k: 'repair', cells: built, p });
       if (region.every(c => s.inside[c] === p)) { msgs.push('Стіну відновлено'); continue; }
     }
     // the enemy is stronger (or the gap is blocked): the outer row of the city becomes the new wall
     const free = outside(s, p);
     const rim = region.filter(c => n4(s, c).some(j => free[j] && !inRegion.has(j)) || n4(s, c).length < 4);
+    const moved: number[] = [];
     for (const c of rim) {
       if (unitAt(s, c)) continue;
-      const b = buildingAt(s, c); if (b) s.buildings = s.buildings.filter(x => x !== b);
-      s.dot[c] = p; s.terr[c] = 0;
+      const b = buildingAt(s, c); if (b) { s.buildings = s.buildings.filter(x => x !== b); s.events.push({ k: 'boom', i: c, big: true, p, what: b.k }); }
+      s.dot[c] = p; s.terr[c] = 0; moved.push(c);
     }
     recountInside(s);
+    s.events.push({ k: 'shrink', cells: moved, p });
     msgs.push('Місто стискається під натиском');
   }
   if (msgs.length) s.log = msgs[0];
@@ -242,7 +294,7 @@ const endTurn = (s: FState) => {
     let best = -1, bd = 99;
     for (const u of s.units) if (u.p !== p) { const d = dist(s, t.i, u.i); if (d <= TOWER_RANGE && d < bd) { bd = d; best = u.i; } }
     if (best < 0) for (let i = 0; i < s.dot.length; i++) if (s.dot[i] && s.dot[i] !== p) { const d = dist(s, t.i, i); if (d <= 2 && d < bd) { bd = d; best = i; } }
-    if (best >= 0) { damage(s, p, best, 1); s.last.push(best); }
+    if (best >= 0) { s.events.push({ k: 'shot', from: t.i, to: best, by: 'tower', p }); damage(s, p, best, 1); s.last.push(best); }
   }
   enclose(s, p);
   checkWin(s);
@@ -266,28 +318,29 @@ export const apply = (s: FState, a: Action): boolean => {
   if (s.winner) return false;
   const p = s.turn;
   if (a.p && a.p !== p) return false;
-  s.last = []; s.log = '';
+  s.last = []; s.log = ''; s.events = [];
   if (a.t === 'end') { endTurn(s); return true; }
   if (s.actions <= 0) return false;
   switch (a.t) {
     case 'dot':
       if (!canDot(s, p, a.i)) return false;
-      s.dot[a.i] = p; s.last = [a.i]; break;
+      s.dot[a.i] = p; s.last = [a.i]; s.events.push({ k: 'dot', i: a.i, p }); break;
     case 'build':
       if (!canBuild(s, p, a.k, a.i)) return false;
-      s.gold[p] -= COST[a.k]; s.buildings.push({ id: s.nextId++, k: a.k, p, i: a.i, hp: HP[a.k] }); s.last = [a.i]; break;
+      s.gold[p] -= COST[a.k]; s.buildings.push({ id: s.nextId++, k: a.k, p, i: a.i, hp: HP[a.k] }); s.last = [a.i]; s.events.push({ k: 'build', i: a.i, p }); break;
     case 'hire':
       if (s.gold[p] < COST[a.k] || !hireSpots(s, p).includes(a.i)) return false;
-      s.gold[p] -= COST[a.k]; s.units.push({ id: s.nextId++, k: a.k, p, i: a.i, hp: HP[a.k], acted: true }); s.last = [a.i]; break;
+      s.gold[p] -= COST[a.k]; s.units.push({ id: s.nextId++, k: a.k, p, i: a.i, hp: HP[a.k], acted: true }); s.last = [a.i]; s.events.push({ k: 'hire', i: a.i, p, unit: a.k }); break;
     case 'move': {
       const u = s.units.find(x => x.id === a.u);
       if (!u || u.p !== p || u.acted || !reach(s, u).includes(a.i)) return false;
+      s.events.push({ k: 'move', u: u.id, path: pathTo(s, u, a.i), p, unit: u.k });
       u.i = a.i; u.acted = true; s.last = [a.i]; break;
     }
     case 'attack': {
       const u = s.units.find(x => x.id === a.u);
       if (!u || u.p !== p || u.acted || !targets(s, u).includes(a.i)) return false;
-      u.acted = true; damage(s, p, a.i, DMG[u.k]); s.last = [a.i]; break;
+      u.acted = true; s.events.push({ k: 'shot', from: u.i, to: a.i, by: u.k, p }); damage(s, p, a.i, DMG[u.k]); s.last = [a.i]; break;
     }
     default: return false;
   }
@@ -313,8 +366,11 @@ export const makeReplayer = () => {
     if (memo && memo.key === key && actions.length >= memo.len && (memo.len === 0 || JSON.stringify(actions[memo.len - 1]) === memo.lastJson)) {
       st = clone(memo.st); from = memo.len;
     } else st = newFortress(n, size);
-    for (let k = from; k < actions.length; k++) apply(st, actions[k]);
+    const fresh: FxEvent[] = [];
+    for (let k = from; k < actions.length; k++) { apply(st, actions[k]); fresh.push(...st.events); }
     memo = { key, len: actions.length, lastJson: actions.length ? JSON.stringify(actions[actions.length - 1]) : '', st };
+    // only the actions that just came are animated (a whole replay on opening shows the board still)
+    st.fresh = from > 0 ? fresh : [];
     return st;
   };
 };

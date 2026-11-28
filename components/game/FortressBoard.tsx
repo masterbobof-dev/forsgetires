@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Flag, HelpCircle, X, Plus, Minus, Maximize2, Crosshair } from 'lucide-react';
+import { Flag, HelpCircle, Volume2, VolumeX, X, Plus, Minus, Maximize2, Crosshair } from 'lucide-react';
 import {
   makeReplayer, march, canAct, dist, canDot, canBuild, reach, targets, hireSpots, income, buildingAt, unitAt, home, players,
-  COST, NAMES_UA, WIN_SCORE, MAX_ROUNDS, LAND_PER_POINT, type Action, type BuildKind, type UnitKind, type FState,
+  COST, HP, NAMES_UA, WIN_SCORE, MAX_ROUNDS, LAND_PER_POINT, type Action, type BuildKind, type UnitKind, type FState,
 } from './fortress';
-import { buildFx, useFx, unitPose, aimAt, dropOffset, appearScale, shakeOffset, Tank, Soldier, FxLayer } from './fortressFx';
+import { buildFx, useFx, unitPose, aimAt, dropOffset, appearScale, shakeOffset, Tank, Soldier, FxLayer, HealthBar } from './fortressFx';
+import { play, unlockSound, soundOn, setSoundOn } from './sound';
 
 /**
  * The board of «Точки: Фортеці» drawn like a school notebook: blue squares, a red margin, walls and dots in ballpoint
@@ -57,6 +58,7 @@ const FortressBoard: React.FC<{
   const [tool, setTool] = useState<Tool>('dot');
   const [sel, setSel] = useState<number | null>(null);
   const [help, setHelp] = useState(false);
+  const [sound, setSound] = useState(soundOn);
   const svgRef = useRef<SVGSVGElement>(null);
   const heading = useRef(new Map<number, number>());
   const boxRef = useRef<HTMLDivElement>(null);
@@ -69,6 +71,16 @@ const FortressBoard: React.FC<{
   const [squad, setSquad] = useState<number[]>([]);
   const [orders, setOrders] = useState<Record<number, number>>({});
   const myUnits = s.units.filter(u => u.p === me);
+  /** places around a point, nearest first: the point, then the ring around it, then the next ring */
+  const formation = (c: number, n: number) => {
+    const cx = c % s.w, cy = Math.floor(c / s.w); const out: number[] = [];
+    for (let r = 0; out.length < n && r < 6; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+      const x = cx + dx, y = cy + dy; if (x < 0 || y < 0 || x >= s.w || y >= s.h) continue;
+      const j = y * s.w + x; if (!s.dot[j] && !buildingAt(s, j)) out.push(j);
+    }
+    return out;
+  };
   // orders of units that are gone, or that have arrived, are dropped
   useEffect(() => {
     setOrders(prev => {
@@ -122,12 +134,15 @@ const FortressBoard: React.FC<{
 
   // ---- fingers: one moves the board (or taps a point), two zoom
   const ptrs = useRef(new Map<number, { x: number; y: number }>());
-  const gesture = useRef<{ moved: boolean; startX: number; startY: number; view: typeof view; dist?: number; mid?: { x: number; y: number } } | null>(null);
+  const gesture = useRef<{ moved: boolean; startX: number; startY: number; view: typeof view; dist?: number; mid?: { x: number; y: number }; box?: boolean } | null>(null);
+  // a frame drawn with a finger in the squad mode (as in real-time strategies): everybody inside joins the squad
+  const [frame, setFrame] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const onDown = (e: React.PointerEvent) => {
+    unlockSound();
     (e.target as Element).setPointerCapture?.(e.pointerId);
     ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const list = [...ptrs.current.values()];
-    if (list.length === 1) gesture.current = { moved: false, startX: e.clientX, startY: e.clientY, view };
+    if (list.length === 1) gesture.current = { moved: false, startX: e.clientX, startY: e.clientY, view, box: squadMode && myTurn };
     if (list.length === 2) {
       const [a, b] = list;
       gesture.current = { moved: true, startX: 0, startY: 0, view, dist: Math.hypot(a.x - b.x, a.y - b.y), mid: toBoard((a.x + b.x) / 2, (a.y + b.y) / 2) };
@@ -141,6 +156,7 @@ const FortressBoard: React.FC<{
     if (list.length === 1 && g.dist == null) {
       const dx = e.clientX - g.startX, dy = e.clientY - g.startY;
       if (!g.moved && Math.hypot(dx, dy) > 7) g.moved = true;
+      if (g.moved && g.box) { const a = toBoard(g.startX, g.startY), b = toBoard(e.clientX, e.clientY); setFrame({ x1: a.x, y1: a.y, x2: b.x, y2: b.y }); return; }
       if (g.moved) setView(clampView({ ...g.view, x: g.view.x - dx * perPx, y: g.view.y - dy * perPx }));
     } else if (list.length === 2 && g.dist && g.mid) {
       const [a, b] = list; const d = Math.hypot(a.x - b.x, a.y - b.y);
@@ -152,6 +168,12 @@ const FortressBoard: React.FC<{
     const g = gesture.current; const wasSingle = ptrs.current.size === 1;
     ptrs.current.delete(e.pointerId);
     if (wasSingle && g && !g.moved && g.dist == null) tapAt(e.clientX, e.clientY);
+    if (wasSingle && g?.box && g.moved && frame) {
+      const [x1, x2] = [Math.min(frame.x1, frame.x2), Math.max(frame.x1, frame.x2)], [y1, y2] = [Math.min(frame.y1, frame.y2), Math.max(frame.y1, frame.y2)];
+      const inside = s.units.filter(u => u.p === me && pos(u.i).x >= x1 && pos(u.i).x <= x2 && pos(u.i).y >= y1 && pos(u.i).y <= y2).map(u => u.id);
+      setSquad(q => [...new Set([...q, ...inside])]);
+    }
+    if (frame) setFrame(null);
     if (!ptrs.current.size) gesture.current = null;
   };
   const onWheel = (e: React.WheelEvent) => { const q = toBoard(e.clientX, e.clientY); zoom(e.deltaY > 0 ? 1.15 : 1 / 1.15, q.x, q.y); };
@@ -164,7 +186,10 @@ const FortressBoard: React.FC<{
     const ev = s.fresh || [];
     if (!ev.length || calm || ev.length > 80) return;
     // a squad marches together: moves do not wait for other moves
-    add(buildFx(ev, pos, PCOLORS, busyUntil(ev.every(e => e.k === 'move'))));
+    const list = buildFx(ev, pos, PCOLORS, busyUntil(ev.every(e => e.k === 'move')));
+    add(list);
+    const t = performance.now();
+    for (const f of list) if (f.sound) play(f.sound, f.t0 - t);
   }, [s]); // eslint-disable-line react-hooks/exhaustive-deps
   const shake = shakeOffset(fx, now);
 
@@ -183,7 +208,10 @@ const FortressBoard: React.FC<{
       // a squad: own units are added or removed; any other point is the order for the whole squad
       if (own && own.p === me) { setSquad(q => (q.includes(own.id) ? q.filter(x => x !== own.id) : [...q, own.id])); return; }
       if (squad.length) {
-        setOrders(o => { const n = { ...o }; for (const id of squad) n[id] = i; return n; });
+        // the squad stands in a formation around the flag, everybody gets his own place
+        const spots = formation(i, squad.length);
+        const byDist = [...squad].sort((a, b) => { const ua = s.units.find(u => u.id === a), ub = s.units.find(u => u.id === b); return (ua ? dist(s, ua.i, i) : 0) - (ub ? dist(s, ub.i, i) : 0); });
+        setOrders(o => { const n = { ...o }; byDist.forEach((id, k) => { n[id] = spots[k] ?? i; }); return n; });
         setSquad([]); setSquadMode(false);
       }
       return;
@@ -245,7 +273,10 @@ const FortressBoard: React.FC<{
       <div className="flex items-center justify-between gap-2 mb-1">
         <span className="text-[#FFC300] font-black text-sm">💰 {s.gold[mine]} <span className="text-zinc-500 font-bold text-xs">(+{income(s, mine)})</span></span>
         <span className={`text-sm font-bold ${myTurn ? 'text-[#FFC300]' : 'text-zinc-400'}`}>{status}</span>
-        <button onClick={() => setHelp(true)} aria-label="Правила" className="text-zinc-400"><HelpCircle size={20} /></button>
+        <span className="flex items-center gap-2">
+          <button onClick={() => { unlockSound(); setSoundOn(!sound); setSound(!sound); }} aria-label={sound ? 'Вимкнути звук' : 'Увімкнути звук'} className="text-zinc-400">{sound ? <Volume2 size={20} /> : <VolumeX size={20} />}</button>
+          <button onClick={() => setHelp(true)} aria-label="Правила" className="text-zinc-400"><HelpCircle size={20} /></button>
+        </span>
       </div>
       {s.log && <p className="text-center text-xs text-orange-300 mb-1">{s.log}</p>}
 
@@ -300,7 +331,7 @@ const FortressBoard: React.FC<{
             return (
               <g key={`b${b.id}`}>
                 <Building x={x} y={y} color={PCOLORS[b.p]} k={b.k} p={b.p} />
-                {b.hp > 1 && <text x={x + 8} y={y - 5} fontSize={6.5} fontWeight={900} fill={PCOLORS[b.p]}>{b.hp}</text>}
+                <HealthBar x={x} y={y - (b.k === 'tower' ? 22 : 12)} hp={b.hp} max={HP[b.k]} w={14} />
               </g>
             );
           })}
@@ -316,7 +347,7 @@ const FortressBoard: React.FC<{
                 {u.k === 'tank'
                   ? <g transform={sc !== 1 ? `translate(${x},${y}) scale(${Math.max(0, sc)}) translate(${-x},${-y})` : undefined}><Tank x={x} y={y} p={u.p} dir={dir} aim={aim?.dir} kick={aim?.kick} hop={pose.hop} /></g>
                   : <Soldier x={x} y={y - pose.hop} p={u.p} dir={dir} run={pose.run} aim={aim?.dir} scale={Math.max(0, sc)} />}
-                {u.hp > 1 && <text x={x + 7} y={y - 5} fontSize={6.5} fontWeight={900} fill="#1e293b">{u.hp}</text>}
+                <HealthBar x={x} y={y - (u.k === 'tank' ? 15 : 10)} hp={u.hp} max={HP[u.k]} w={u.k === 'tank' ? 13 : 10} />
               </g>
             );
           })}
@@ -327,6 +358,7 @@ const FortressBoard: React.FC<{
           {Object.entries(orders).map(([id, goal]) => { const u = s.units.find(x => x.id === +id); if (!u) return null; const A = pos(u.i), B = pos(goal);
             return <line key={`o${id}`} x1={A.x} y1={A.y} x2={B.x} y2={B.y} stroke={PCOLORS[me] || '#111'} strokeWidth={1.2} strokeDasharray="4 3" opacity={0.7} />; })}
           {[...new Set(Object.values(orders))].map(g => <text key={`f${g}`} x={pos(g).x + 1} y={pos(g).y - 2} fontSize={11} textAnchor="middle">🚩</text>)}
+          {frame && <rect x={Math.min(frame.x1, frame.x2)} y={Math.min(frame.y1, frame.y2)} width={Math.abs(frame.x2 - frame.x1)} height={Math.abs(frame.y2 - frame.y1)} fill="#06b6d4" fillOpacity={0.12} stroke="#06b6d4" strokeWidth={1} strokeDasharray="3 2" />}
           {squad.map(id => { const u = s.units.find(x => x.id === id); return u ? <circle key={`q${id}`} cx={pos(u.i).x} cy={pos(u.i).y} r={10} fill="none" stroke="#06b6d4" strokeWidth={2.2} /> : null; })}
           {s.last.map(i => <circle key={`last${i}`} cx={pos(i).x} cy={pos(i).y} r={10.5} fill="none" stroke="#1e293b" strokeWidth={0.9} strokeDasharray="2 2" />)}
           </g>
@@ -360,7 +392,7 @@ const FortressBoard: React.FC<{
         ))}
       </div>
       <p className="text-[11px] text-zinc-500 text-center mt-1">
-        {squadMode ? (squad.length ? 'Тепер торкніться точки на полі: загін піде туди і битиметься по дорозі' : 'Торкніться своїх бійців, щоб зібрати загін')
+        {squadMode ? (squad.length ? 'Тепер торкніться точки на полі: загін піде туди строєм і битиметься по дорозі. Можна ще обвести бійців рамкою.' : 'Торкніться своїх бійців або обведіть їх рамкою пальцем, щоб зібрати загін')
           : myTurn && s.actions <= 0 && unitsCanAct ? 'Дії скінчилися. Можна ще походити бійцями або натиснути «Кінець ходу».'
           : unit ? `${NAMES_UA[unit.k]}: жовті точки — куди їхати, червоні кола — по кому бити. Далека точка — піде туди за кілька ходів.`
           : tool === 'soldier' || tool === 'tank' ? 'Зелені точки — де з’явиться біля казарми'
@@ -380,7 +412,8 @@ const FortressBoard: React.FC<{
             <p>• Замкнене коло з ваших точок — <b>місто</b> (заштриховане вашим кольором). Всередині можна будувати, місто щоходу дає <b>золото</b>.</p>
             <p>• 🗼 <b>Башта</b> (5) стріляє наприкінці вашого ходу. ⛺ <b>Казарма</b> (4) — біля неї наймаються 🪖 <b>воїни</b> (3) і 🛡️ <b>танки</b> (7: міцні, стріляють на 2 клітинки, удар ×2). 💰 <b>Ринок</b> (6) — +2 золота.</p>
             <p>• Бійці проходять крізь свою стіну, а чужу — пробивають.</p>
-            <p>• <b>Накази бійцям не забирають 2 дії ходу</b>: кожен танк і воїн за хід може раз походити або вистрілити. Кнопка <b>«Загін»</b> або <b>«Усі бійці»</b>, потім точка на полі — загін іде туди сам, хід за ходом, і стріляє по ворогах дорогою. Бійці без наказу наприкінці ходу самі стріляють у ворога поруч.</p>
+            <p>• <b>Накази бійцям не забирають 2 дії ходу</b>: кожен танк і воїн за хід може раз походити або вистрілити. Кнопка <b>«Загін»</b> або <b>«Усі бійці»</b>, потім точка на полі — загін іде туди сам, хід за ходом, і стріляє по ворогах дорогою. Бійці без наказу наприкінці ходу самі стріляють у ворога поруч. У режимі «Загін» бійців можна обвести рамкою пальцем.</p>
+            <p>• Поранені бійці всередині свого замкненого міста <b>лікуються</b>: +1 здоров'я за хід. Смужка над бійцем чи будівлею показує, скільки здоров'я залишилося.</p>
             <p>• <b>Пробите місто</b> на початку вашого ходу обороняється: якщо башти й ваші бійці поруч не слабші за ворога — стіна відновлюється; якщо ворог сильніший — місто <b>стискається</b>: крайній ряд стає новою стіною, будівлі там гинуть.</p>
             <p>• Обведіть кільцем чужі точки, будівлі, бійців чи місто — усе всередині ваше.</p>
             <p>• Поле рухається пальцем, два пальці — збільшити / зменшити. Кнопки праворуч: ближче, далі, усе поле, до мого міста.</p>

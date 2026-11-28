@@ -8,7 +8,8 @@ import type { FxEvent, UnitKind, BuildKind } from './fortress';
  */
 type P = { x: number; y: number };
 interface Particle { floor?: number; x: number; y: number; vx: number; vy: number; g: number; r: number; color: string; spin: number; kind: 'chunk' | 'spark' | 'smoke' | 'ink' }
-export type Fx =
+import type { Sfx } from './sound';
+export type Fx = { sound?: Sfx } & (
   | { k: 'move'; t0: number; t1: number; u: number; pts: P[]; unit: UnitKind }
   | { k: 'shot'; t0: number; t1: number; from: P; to: P; by: UnitKind | 'tower'; color: string; shooter?: number }
   | { k: 'burst'; t0: number; t1: number; at: P; parts: Particle[]; flash: number; ring: string | null }
@@ -18,7 +19,7 @@ export type Fx =
   | { k: 'cells'; t0: number; t1: number; cells: P[]; color: string; strong: boolean }
   | { k: 'text'; t0: number; t1: number; at: P; text: string; color: string }
   | { k: 'shake'; t0: number; t1: number; power: number }
-  | { k: 'sprite'; t0: number; t1: number; src: string; at: P; w: number; h: number; grow: number; rise: number };
+  | { k: 'sprite'; t0: number; t1: number; src: string; at: P; w: number; h: number; grow: number; rise: number });
 
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 const G = 0.0006; // gravity, board units per ms²
@@ -52,17 +53,22 @@ export const buildFx = (events: FxEvent[], pos: (i: number) => P, colors: string
     switch (e.k) {
       case 'dot': {
         const at = pos(e.i);
-        out.push({ k: 'burst', t0: t, t1: t + 450, at, parts: inkSplash(at, colors[e.p]), flash: 0, ring: colors[e.p] });
+        out.push({ k: 'burst', t0: t, t1: t + 450, at, parts: inkSplash(at, colors[e.p]), flash: 0, ring: colors[e.p], sound: 'click' });
+        break;
+      }
+      case 'heal': {
+        const at = pos(e.i);
+        out.push({ k: 'text', t0: t, t1: t + 1100, at, text: '+❤', color: '#16a34a', sound: 'heal' });
         break;
       }
       case 'build':
-        out.push({ k: 'drop', t0: t, t1: t + 520, i: e.i });
+        out.push({ k: 'drop', t0: t, t1: t + 520, i: e.i, sound: 'build' });
         out.push({ k: 'burst', t0: t + 380, t1: t + 1100, at: pos(e.i), parts: debris({ ...pos(e.i), y: pos(e.i).y + 7 }, 0, [], 0.05, 5).map(p => ({ ...p, vy: rnd(-0.012, -0.004), vx: rnd(-0.04, 0.04), color: '#d6d3d1' })), flash: 0, ring: null });
         out.push({ k: 'shake', t0: t + 400, t1: t + 600, power: 1.2 });
         t += 300;
         break;
       case 'hire': {
-        out.push({ k: 'appear', t0: t, t1: t + 450, i: e.i });
+        out.push({ k: 'appear', t0: t, t1: t + 450, i: e.i, sound: 'hire' });
         out.push({ k: 'burst', t0: t, t1: t + 600, at: pos(e.i), parts: inkSplash(pos(e.i), '#a8a29e'), flash: 0, ring: colors[e.p] });
         t += 250;
         break;
@@ -78,14 +84,14 @@ export const buildFx = (events: FxEvent[], pos: (i: number) => P, colors: string
         const from = pos(e.from), to = pos(e.to);
         const dist = Math.hypot(to.x - from.x, to.y - from.y);
         const dur = e.by === 'tank' ? 260 + dist * 6 : e.by === 'tower' ? 220 + dist * 5 : 140 + dist * 4;
-        out.push({ k: 'shot', t0: t + 120, t1: t + 120 + dur, from, to, by: e.by, color: colors[e.p] });
+        out.push({ k: 'shot', t0: t + 120, t1: t + 120 + dur, from, to, by: e.by, color: colors[e.p], sound: e.by === 'tank' ? 'tank' : 'shot' });
         hitAt = t + 120 + dur;
         t = hitAt + 80;
         break;
       }
       case 'hit': {
         const at = pos(e.i);
-        out.push({ k: 'burst', t0: hitAt, t1: hitAt + 700, at, parts: debris(at, 5, ['#78716c', '#a8a29e'], 0.07, 2), flash: 7, ring: null });
+        out.push({ k: 'burst', t0: hitAt, t1: hitAt + 700, at, parts: debris(at, 5, ['#78716c', '#a8a29e'], 0.07, 2), flash: 7, ring: null, sound: 'hit' });
         out.push({ k: 'sprite', t0: hitAt, t1: hitAt + 450, src: '/game/boom.webp', at, w: 13, h: 10, grow: 0.4, rise: 0 });
         out.push({ k: 'shake', t0: hitAt, t1: hitAt + 180, power: 1 });
         break;
@@ -93,7 +99,7 @@ export const buildFx = (events: FxEvent[], pos: (i: number) => P, colors: string
       case 'boom': {
         const at = pos(e.i), c = colors[e.p] || '#57534e';
         if (e.what) out.push({ k: 'ghost', t0: Math.min(t, hitAt) - 5000, t1: hitAt, at, what: e.what, color: c });
-        out.push({ k: 'burst', t0: hitAt, t1: hitAt + 1500, at, parts: debris(at, e.big ? 16 : 9, [c, '#44403c', '#78716c'], e.big ? 0.16 : 0.11, e.big ? 7 : 4), flash: e.big ? 16 : 10, ring: '#f97316' });
+        out.push({ k: 'burst', t0: hitAt, t1: hitAt + 1500, at, parts: debris(at, e.big ? 16 : 9, [c, '#44403c', '#78716c'], e.big ? 0.16 : 0.11, e.big ? 7 : 4), flash: e.big ? 16 : 10, ring: '#f97316', sound: e.big ? 'bigboom' : 'boom' });
         out.push({ k: 'sprite', t0: hitAt, t1: hitAt + 650, src: '/game/boom.webp', at, w: e.big ? 30 : 22, h: e.big ? 23 : 17, grow: 0.6, rise: 0 });
         out.push({ k: 'sprite', t0: hitAt + 60, t1: hitAt + 6000, src: '/game/crater.webp', at: { x: at.x, y: at.y + 3 }, w: e.big ? 17 : 12, h: e.big ? 9.6 : 6.8, grow: 0, rise: 0 });
         out.push({ k: 'sprite', t0: hitAt + 250, t1: hitAt + 1900, src: '/game/smoke.webp', at, w: 16, h: 14, grow: 0.9, rise: 16 });
@@ -106,12 +112,12 @@ export const buildFx = (events: FxEvent[], pos: (i: number) => P, colors: string
       case 'wall': {
         const at = pos(e.i);
         out.push({ k: 'sprite', t0: hitAt, t1: hitAt + 2200, src: '/game/wallbroken.webp', at: { x: at.x, y: at.y - 2 }, w: 14, h: 8.7, grow: 0, rise: 0 });
-        out.push({ k: 'burst', t0: hitAt, t1: hitAt + 900, at, parts: debris(at, 8, [colors[e.p], '#1e293b'], 0.1, 2), flash: 8, ring: null });
+        out.push({ k: 'burst', t0: hitAt, t1: hitAt + 900, at, parts: debris(at, 8, [colors[e.p], '#1e293b'], 0.1, 2), flash: 8, ring: null, sound: 'hit' });
         out.push({ k: 'shake', t0: hitAt, t1: hitAt + 220, power: 1.3 });
         break;
       }
       case 'capture':
-        out.push({ k: 'cells', t0: Math.max(t, hitAt), t1: Math.max(t, hitAt) + 900, cells: e.cells.map(pos), color: colors[e.p], strong: true });
+        out.push({ k: 'cells', t0: Math.max(t, hitAt), t1: Math.max(t, hitAt) + 900, cells: e.cells.map(pos), color: colors[e.p], strong: true, sound: 'capture' });
         break;
       case 'shrink':
         out.push({ k: 'cells', t0: t, t1: t + 900, cells: e.cells.map(pos), color: '#7f1d1d', strong: true });
@@ -255,6 +261,18 @@ export const Soldier: React.FC<{ x: number; y: number; p: number; dir?: number; 
     <g transform={`translate(${x},${y}) rotate(${(dir * 180) / Math.PI + 90}) scale(${scale})`}>
       <ellipse cx={0.8} cy={1.5} rx={4.5} ry={5} fill="#000" opacity={0.15} />
       <image href={`/game/soldier${p}${f >= 0 ? `-run${f}` : ''}.webp`} x={-w / 2} y={-h / 2} width={w} height={h} />
+    </g>
+  );
+};
+
+/** a small health bar over a unit or a building (only when it is wounded) */
+export const HealthBar: React.FC<{ x: number; y: number; hp: number; max: number; w?: number }> = ({ x, y, hp, max, w = 12 }) => {
+  if (hp >= max) return null;
+  const k = Math.max(0, hp / max);
+  return (
+    <g pointerEvents="none">
+      <rect x={x - w / 2 - 0.5} y={y - 0.5} width={w + 1} height={3} rx={1.2} fill="#1c1917" opacity={0.75} />
+      <rect x={x - w / 2} y={y} width={w * k} height={2} rx={1} fill={k > 0.6 ? '#22c55e' : k > 0.3 ? '#f59e0b' : '#ef4444'} />
     </g>
   );
 };

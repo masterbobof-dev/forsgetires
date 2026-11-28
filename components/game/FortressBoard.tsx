@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Flag, HelpCircle, Volume2, VolumeX, X, Plus, Minus, Maximize2, Crosshair } from 'lucide-react';
 import {
-  makeReplayer, march, canAct, dist, canDot, canBuild, reach, targets, hireSpots, income, buildingAt, unitAt, home, players,
+  makeReplayer, wallEdges, closedSquares, march, canAct, dist, canDot, canBuild, reach, targets, hireSpots, income, buildingAt, unitAt, home, players,
   COST, HP, NAMES_UA, WIN_SCORE, MAX_ROUNDS, LAND_PER_POINT, type Action, type BuildKind, type UnitKind, type FState,
 } from './fortress';
 import { buildFx, useFx, unitPose, aimAt, dropOffset, appearScale, shakeOffset, Tank, Soldier, FxLayer, HealthBar } from './fortressFx';
@@ -229,25 +229,9 @@ const FortressBoard: React.FC<{
     else if ((tool === 'soldier' || tool === 'tank') && hireSet.has(i) && s.gold[me] >= COST[tool]) { onAct({ t: 'hire', k: tool, i }); setTool('dot'); }
   };
 
-  // ---- city walls: neighbouring dots of a player around his city, drawn as pen strokes
-  const segs: { a: number; b: number; p: number }[] = [];
-  const touches = (i: number, p: number) => {
-    const x = i % s.w, y = Math.floor(i / s.w);
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-      const nx = x + dx, ny = y + dy;
-      if (nx >= 0 && ny >= 0 && nx < s.w && ny < s.h && s.terr[ny * s.w + nx] === p) return true;
-    }
-    return false;
-  };
-  for (let i = 0; i < s.dot.length; i++) {
-    const p = s.dot[i]; if (!p || !touches(i, p)) continue;
-    const x = i % s.w, y = Math.floor(i / s.w);
-    for (const [dx, dy] of [[1, 0], [0, 1], [1, 1], [-1, 1]]) {
-      const nx = x + dx, ny = y + dy; if (nx < 0 || nx >= s.w || ny >= s.h) continue;
-      const j = ny * s.w + nx;
-      if (s.dot[j] === p && touches(j, p)) segs.push({ a: i, b: j, p });
-    }
-  }
+  // walls: every closed figure of points (even a small square) and the rings of the cities
+  const segs = useMemo(() => wallEdges(s), [s]);
+  const squares = useMemo(() => closedSquares(s), [s]);
 
   const status = s.winner
     ? (s.winner === 99 ? 'Нічия!' : s.winner === me ? 'Ви перемогли! 🎉' : `Перемогли ${PNAMES[s.winner].toLowerCase()}`)
@@ -302,6 +286,7 @@ const FortressBoard: React.FC<{
           <line x1={-STEP * 0.6} y1={-STEP * 2} x2={-STEP * 0.6} y2={H + STEP * 2} stroke="#ef4444" strokeWidth={1} opacity={0.7} />
           {/* cities: hatched like in a notebook (darker where the wall is closed) */}
           {Array.from(s.terr).map((p, i) => (p ? <rect key={`a${i}`} x={pos(i).x - STEP / 2} y={pos(i).y - STEP / 2} width={STEP} height={STEP} fill={`url(#hatch${p})`} opacity={s.inside[i] === p ? 1 : 0.45} /> : null))}
+          {squares.map(({ i, p }) => <rect key={`sq${i}`} x={pos(i).x} y={pos(i).y} width={STEP} height={STEP} fill={`url(#hatch${p})`} />)}
           {/* city walls: the owner's colour drawn in ink underneath, the stone wall on top */}
           <g filter="url(#pen)">
             {segs.map(({ a, b, p }) => { const A = pos(a), B = pos(b); return <line key={`c${a}-${b}`} x1={A.x} y1={A.y + 2} x2={B.x} y2={B.y + 2} stroke={PCOLORS[p]} strokeWidth={3.4} strokeLinecap="round" opacity={0.85} />; })}

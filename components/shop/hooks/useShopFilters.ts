@@ -9,9 +9,16 @@ import { type FilterState, type SortValue, countActiveFilters } from '../FilterT
 export const useShopFilters = () => {
   const [attrFilters, setAttrFilters] = useState<Record<string, string>>({});
   const [activeSort, setActiveSort] = useState<SortValue>('recommended');
-  const [searchQuery, setSearchQuery] = useState('');
+  // a link like /?q=стійка стабілізатора navara (from an article) opens the shop with that search
+  const urlQ = () => (typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('q') || '').slice(0, 100);
+  const [searchQuery, setSearchQuery] = useState(urlQ);
   // search runs 350 ms after the customer stops typing
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState(urlQ);
+  useEffect(() => {
+    const onPop = () => { const q = urlQ(); if (q) { setSearchQuery(q); setDebouncedSearch(q); } };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
   useEffect(() => { const t = setTimeout(() => setDebouncedSearch(searchQuery), 250); return () => clearTimeout(t); }, [searchQuery]);
   // statistics: what people search for
   useEffect(() => { if (debouncedSearch.trim().length >= 3) logAnalyticsEvent('search', undefined, debouncedSearch.trim()); }, [debouncedSearch]);

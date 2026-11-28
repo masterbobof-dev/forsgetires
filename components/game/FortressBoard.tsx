@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Flag, HelpCircle, X, Plus, Minus, Maximize2, Crosshair } from 'lucide-react';
 import {
-  makeReplayer, canDot, canBuild, reach, targets, hireSpots, income, buildingAt, unitAt, home, players,
+  makeReplayer, march, canAct, dist, canDot, canBuild, reach, targets, hireSpots, income, buildingAt, unitAt, home, players,
   COST, NAMES_UA, WIN_SCORE, MAX_ROUNDS, LAND_PER_POINT, type Action, type BuildKind, type UnitKind, type FState,
 } from './fortress';
 import { buildFx, useFx, unitPose, aimAt, dropOffset, appearScale, shakeOffset, Tank, Soldier, FxLayer } from './fortressFx';
@@ -63,11 +63,39 @@ const FortressBoard: React.FC<{
   const myTurn = !!me && s.turn === me && !s.winner && joined;
   const unit = sel != null ? s.units.find(u => u.id === sel && u.p === me && !u.acted) : undefined;
 
-  // ---- the turn ends by itself after the last action
-  const sentEnd = useRef(-1);
+  // ---- squads (as in real-time strategies): pick soldiers and tanks, show a point — they march there turn after turn,
+  // shooting enemies on the way. Orders to units do not use the two actions of the turn.
+  const [squadMode, setSquadMode] = useState(false);
+  const [squad, setSquad] = useState<number[]>([]);
+  const [orders, setOrders] = useState<Record<number, number>>({});
+  const myUnits = s.units.filter(u => u.p === me);
+  // orders of units that are gone, or that have arrived, are dropped
   useEffect(() => {
-    if (myTurn && s.actions <= 0 && sentEnd.current !== actions.length) { sentEnd.current = actions.length; onAct({ t: 'end' }); }
-  }, [myTurn, s.actions, actions.length]); // eslint-disable-line react-hooks/exhaustive-deps
+    setOrders(prev => {
+      const next: Record<number, number> = {};
+      for (const [id, goal] of Object.entries(prev)) { const u = s.units.find(x => x.id === +id && x.p === me); if (u && dist(s, u.i, goal) > 0) next[+id] = goal; }
+      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+    });
+    setSquad(prev => prev.filter(id => s.units.some(u => u.id === id && u.p === me)));
+  }, [s]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the orders are carried out by themselves, one unit after another
+  const lastSent = useRef(-1);
+  useEffect(() => {
+    if (!myTurn || busy || lastSent.current === actions.length) return;
+    for (const [id, goal] of Object.entries(orders)) {
+      const u = s.units.find(x => x.id === +id && x.p === me);
+      const a = u && march(s, u, goal);
+      if (a) { lastSent.current = actions.length; onAct(a); return; }
+    }
+  }, [s, myTurn, busy, orders]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ordersPending = myTurn && Object.entries(orders).some(([id, goal]) => { const u = s.units.find(x => x.id === +id && x.p === me); return !!(u && march(s, u, goal)); });
+
+  // ---- the turn ends by itself when the two actions are used and no soldier or tank can do anything more
+  const sentEnd = useRef(-1);
+  const unitsCanAct = myUnits.some(u => canAct(s, u));
+  useEffect(() => {
+    if (myTurn && s.actions <= 0 && !unitsCanAct && !ordersPending && sentEnd.current !== actions.length) { sentEnd.current = actions.length; onAct({ t: 'end' }); }
+  }, [myTurn, s.actions, actions.length, unitsCanAct, ordersPending]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setSel(null); }, [s.turn]);
 
   // ---- view: which part of the board is shown (zoom and move)
@@ -135,7 +163,8 @@ const FortressBoard: React.FC<{
     seen.current = s;
     const ev = s.fresh || [];
     if (!ev.length || calm || ev.length > 80) return;
-    add(buildFx(ev, pos, PCOLORS, busyUntil()));
+    // a squad marches together: moves do not wait for other moves
+    add(buildFx(ev, pos, PCOLORS, busyUntil(ev.every(e => e.k === 'move'))));
   }, [s]); // eslint-disable-line react-hooks/exhaustive-deps
   const shake = shakeOffset(fx, now);
 
@@ -150,11 +179,22 @@ const FortressBoard: React.FC<{
     if (x < 0 || y < 0 || x >= s.w || y >= s.h) return;
     const i = y * s.w + x;
     const own = unitAt(s, i);
+    if (squadMode) {
+      // a squad: own units are added or removed; any other point is the order for the whole squad
+      if (own && own.p === me) { setSquad(q => (q.includes(own.id) ? q.filter(x => x !== own.id) : [...q, own.id])); return; }
+      if (squad.length) {
+        setOrders(o => { const n = { ...o }; for (const id of squad) n[id] = i; return n; });
+        setSquad([]); setSquadMode(false);
+      }
+      return;
+    }
     if (own && own.p === me && !own.acted) { setSel(own.id === sel ? null : own.id); return; }
     if (unit) {
+      setOrders(o => { const n = { ...o }; delete n[unit.id]; return n; });
       if (targetSet.has(i)) { onAct({ t: 'attack', u: unit.id, i }); setSel(null); return; }
       if (reachSet.has(i)) { onAct({ t: 'move', u: unit.id, i }); setSel(null); return; }
-      setSel(null); return;
+      // further than one turn: the unit marches there over the next turns
+      setOrders(o => ({ ...o, [unit.id]: i })); setSel(null); return;
     }
     if (tool === 'dot' && canDot(s, me, i)) onAct({ t: 'dot', i });
     else if ((tool === 'tower' || tool === 'barracks' || tool === 'market') && canBuild(s, me, tool, i)) { onAct({ t: 'build', k: tool, i }); setTool('dot'); }
@@ -283,6 +323,11 @@ const FortressBoard: React.FC<{
           <FxLayer fx={fx} now={now} drawGhost={(what, at, color) => what === 'tank' ? <Tank x={at.x} y={at.y} p={Math.max(1, PCOLORS.indexOf(color))} /> : what === 'soldier' ? <Soldier x={at.x} y={at.y} p={Math.max(1, PCOLORS.indexOf(color))} /> : <Building x={at.x} y={at.y} color={color} k={what} p={Math.max(1, PCOLORS.indexOf(color))} />} />
           {[...targetSet].map(i => <circle key={`t${i}`} cx={pos(i).x} cy={pos(i).y} r={9} fill="none" stroke="#dc2626" strokeWidth={1.8} strokeDasharray="3 2" />)}
           {unit && <circle cx={pos(unit.i).x} cy={pos(unit.i).y} r={10} fill="none" stroke="#eab308" strokeWidth={2.2} />}
+          {/* march orders: a dashed route and a flag where the squad goes */}
+          {Object.entries(orders).map(([id, goal]) => { const u = s.units.find(x => x.id === +id); if (!u) return null; const A = pos(u.i), B = pos(goal);
+            return <line key={`o${id}`} x1={A.x} y1={A.y} x2={B.x} y2={B.y} stroke={PCOLORS[me] || '#111'} strokeWidth={1.2} strokeDasharray="4 3" opacity={0.7} />; })}
+          {[...new Set(Object.values(orders))].map(g => <text key={`f${g}`} x={pos(g).x + 1} y={pos(g).y - 2} fontSize={11} textAnchor="middle">🚩</text>)}
+          {squad.map(id => { const u = s.units.find(x => x.id === id); return u ? <circle key={`q${id}`} cx={pos(u.i).x} cy={pos(u.i).y} r={10} fill="none" stroke="#06b6d4" strokeWidth={2.2} /> : null; })}
           {s.last.map(i => <circle key={`last${i}`} cx={pos(i).x} cy={pos(i).y} r={10.5} fill="none" stroke="#1e293b" strokeWidth={0.9} strokeDasharray="2 2" />)}
           </g>
         </svg>
@@ -294,6 +339,15 @@ const FortressBoard: React.FC<{
         </div>
       </div>
 
+      {myTurn && myUnits.length > 0 && (
+        <div className="flex gap-1.5 mt-2">
+          <button onClick={() => { setSquadMode(m => !m); setSel(null); }}
+            className={`flex-1 h-9 rounded-xl text-xs font-black border ${squadMode ? 'bg-cyan-500 text-black border-cyan-400' : 'bg-zinc-900 text-white border-zinc-700'}`}>⚔️ Загін{squad.length ? ` (${squad.length})` : ''}</button>
+          <button onClick={() => { setSquad(myUnits.map(u => u.id)); setSquadMode(true); setSel(null); }}
+            className="flex-1 h-9 rounded-xl text-xs font-black border bg-zinc-900 text-white border-zinc-700">Усі бійці ({myUnits.length})</button>
+          {Object.keys(orders).length > 0 && <button onClick={() => setOrders({})} className="h-9 px-3 rounded-xl text-xs font-black border bg-zinc-900 text-red-400 border-zinc-700">Стоп</button>}
+        </div>
+      )}
       <div className="grid grid-cols-6 gap-1 mt-2">
         {TOOLS.map(t => (
           <button key={t.k} onClick={() => { setTool(t.k); setSel(null); }} disabled={!myTurn || !toolOk(t.k)}
@@ -306,13 +360,15 @@ const FortressBoard: React.FC<{
         ))}
       </div>
       <p className="text-[11px] text-zinc-500 text-center mt-1">
-        {unit ? `${NAMES_UA[unit.k]}: жовті точки — куди їхати, червоні кола — по кому бити`
+        {squadMode ? (squad.length ? 'Тепер торкніться точки на полі: загін піде туди і битиметься по дорозі' : 'Торкніться своїх бійців, щоб зібрати загін')
+          : myTurn && s.actions <= 0 && unitsCanAct ? 'Дії скінчилися. Можна ще походити бійцями або натиснути «Кінець ходу».'
+          : unit ? `${NAMES_UA[unit.k]}: жовті точки — куди їхати, червоні кола — по кому бити. Далека точка — піде туди за кілька ходів.`
           : tool === 'soldier' || tool === 'tank' ? 'Зелені точки — де з’явиться біля казарми'
           : tool === 'dot' ? 'Торкніться перехрестя — точка. Торкніться свого бійця — хід ним. Поле рухається пальцем, два пальці — масштаб.'
           : 'Зелені точки — де можна будувати (всередині вашого міста)'}
       </p>
       <div className="flex justify-center gap-2 mt-2 flex-wrap">
-        {myTurn && <button onClick={() => onAct({ t: 'end' })} className="h-10 px-3 rounded-xl bg-zinc-800 text-white font-bold text-sm flex items-center gap-1 whitespace-nowrap"><Flag size={16} /> Кінець ходу</button>}
+        {myTurn && <button onClick={() => onAct({ t: 'end' })} className={`h-10 px-3 rounded-xl font-bold text-sm flex items-center gap-1 whitespace-nowrap ${s.actions <= 0 ? 'bg-[#FFC300] text-black' : 'bg-zinc-800 text-white'}`}><Flag size={16} /> Кінець ходу</button>}
         {footer}
       </div>
 
@@ -324,6 +380,7 @@ const FortressBoard: React.FC<{
             <p>• Замкнене коло з ваших точок — <b>місто</b> (заштриховане вашим кольором). Всередині можна будувати, місто щоходу дає <b>золото</b>.</p>
             <p>• 🗼 <b>Башта</b> (5) стріляє наприкінці вашого ходу. ⛺ <b>Казарма</b> (4) — біля неї наймаються 🪖 <b>воїни</b> (3) і 🛡️ <b>танки</b> (7: міцні, стріляють на 2 клітинки, удар ×2). 💰 <b>Ринок</b> (6) — +2 золота.</p>
             <p>• Бійці проходять крізь свою стіну, а чужу — пробивають.</p>
+            <p>• <b>Накази бійцям не забирають 2 дії ходу</b>: кожен танк і воїн за хід може раз походити або вистрілити. Кнопка <b>«Загін»</b> або <b>«Усі бійці»</b>, потім точка на полі — загін іде туди сам, хід за ходом, і стріляє по ворогах дорогою. Бійці без наказу наприкінці ходу самі стріляють у ворога поруч.</p>
             <p>• <b>Пробите місто</b> на початку вашого ходу обороняється: якщо башти й ваші бійці поруч не слабші за ворога — стіна відновлюється; якщо ворог сильніший — місто <b>стискається</b>: крайній ряд стає новою стіною, будівлі там гинуть.</p>
             <p>• Обведіть кільцем чужі точки, будівлі, бійців чи місто — усе всередині ваше.</p>
             <p>• Поле рухається пальцем, два пальці — збільшити / зменшити. Кнопки праворуч: ближче, далі, усе поле, до мого міста.</p>

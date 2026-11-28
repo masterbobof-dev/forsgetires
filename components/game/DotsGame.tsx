@@ -63,7 +63,8 @@ const DotsGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   // news from the other player
   useEffect(() => {
     if (!id) return;
-    const t = setInterval(() => { if (!document.hidden) load(id); }, 1500);
+    // not while our own orders are on the way (the answer would hide them for a moment)
+    const t = setInterval(() => { if (!document.hidden && !actPending.current) load(id); }, 1500);
     return () => clearInterval(t);
   }, [id, load]);
 
@@ -92,14 +93,24 @@ const DotsGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const state = useMemo(() => (game && !fort ? computeDots(game.w, game.h, game.moves) : null), [game, fort]);
 
   // «Фортеці»: one action of this player (against the computer — on the phone; with a friend — through the server)
+  const actChain = useRef<Promise<void>>(Promise.resolve());
+  const actPending = useRef(0);
   const act = async (a: Action) => {
     if (!game || !seat) return;
     if (vsBot) { setGame(g => g && { ...g, moves: [...g.moves, { ...a, p: 1 }] }); return; }
     if (!seat.token) return;
     setGame(g => g && { ...g, moves: [...g.moves, { ...a, p: seat.player }] });
-    const { data, error } = await supabase.rpc('fort_act', { p_id: game.id, p_token: seat.token, p_action: a });
-    if (error) { setErr(error.message); load(game.id); return; }
-    setErr(''); setGame(data as Game);
+    // one after another: a squad sends several orders in a row, the server must get them in this order
+    const id = game.id, token = seat.token;
+    actPending.current++;
+    actChain.current = actChain.current.then(async () => {
+      const { data, error } = await supabase.rpc('fort_act', { p_id: id, p_token: token, p_action: a });
+      actPending.current--;
+      if (error) { setErr(error.message); load(id); return; }
+      // the answer to an older order would hide the newer ones shown already: take only the last answer
+      setErr(''); if (!actPending.current) setGame(data as Game);
+    });
+    await actChain.current;
   };
   // the computer plays its whole turn, one action at a time, slow enough to watch the tanks drive and shoot
   useEffect(() => {
@@ -109,7 +120,8 @@ const DotsGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     const t = setTimeout(() => {
       const a = botAction(st);
       setGame(g => g && { ...g, moves: [...g.moves, { ...a, p: st.turn }] });
-    }, (st.fresh || []).some(e => e.k === 'move' || e.k === 'shot') ? 1000 : 650);
+    // the army marches almost together; shots and the rest slower, so they can be watched
+    }, (st.fresh || []).every(e => e.k === 'move') && (st.fresh || []).length ? 300 : (st.fresh || []).some(e => e.k === 'shot') ? 900 : 650);
     return () => clearTimeout(t);
   }, [vsBot, fort, game]);
   const turn = game ? (game.moves.length % 2 === 0 ? 1 : 2) : 0;

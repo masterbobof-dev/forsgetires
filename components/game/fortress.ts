@@ -291,8 +291,39 @@ const checkWin = (s: FState) => {
   if (best >= WIN_SCORE) s.winner = players(s).find(p => s.score[p] === best)!;
 };
 
+/** what a unit shoots at first: units, then buildings, then wall points */
+const targetRank = (s: FState, i: number) => (unitAt(s, i) ? 3 : buildingAt(s, i) ? 2 : 1);
+export const bestTarget = (s: FState, u: Unit): number | null => {
+  const t = targets(s, u);
+  return t.length ? t.reduce((a, b) => (targetRank(s, b) > targetRank(s, a) ? b : a)) : null;
+};
+/** a unit can still do something this turn */
+export const canAct = (s: FState, u: Unit) => !u.acted && (reach(s, u).length > 0 || targets(s, u).length > 0);
+/**
+ * One step of a march order (as in real-time strategies): shoot an enemy unit in range, else go towards the goal;
+ * near the goal — shoot whatever is in range. null when there is nothing to do.
+ */
+export const march = (s: FState, u: Unit, goal: number): Action | null => {
+  if (u.acted) return null;
+  const t = bestTarget(s, u);
+  if (t != null && (unitAt(s, t) || dist(s, u.i, goal) <= RANGE[u.k] + 1)) return { t: 'attack', u: u.id, i: t };
+  const r = reach(s, u);
+  if (r.length && u.i !== goal) {
+    const to = r.reduce((a, b) => (dist(s, b, goal) < dist(s, a, goal) || (dist(s, b, goal) === dist(s, a, goal) && pathTo(s, u, b).length < pathTo(s, u, a).length) ? b : a));
+    if (dist(s, to, goal) < dist(s, u.i, goal)) return { t: 'move', u: u.id, i: to };
+  }
+  if (t != null) return { t: 'attack', u: u.id, i: t };
+  return null;
+};
+
 const endTurn = (s: FState) => {
   const p = s.turn;
+  // soldiers and tanks that did nothing this turn fire at the nearest enemy in range by themselves
+  for (const u of s.units.filter(x => x.p === p && !x.acted)) {
+    const t = bestTarget(s, u);
+    if (t == null) continue;
+    u.acted = true; s.events.push({ k: 'shot', from: u.i, to: t, by: u.k, p }); damage(s, p, t, DMG[u.k]); s.last.push(t);
+  }
   // towers of a closed city shoot: the nearest enemy unit, else a dot of an enemy wall nearby
   for (const t of s.buildings.filter(b => b.p === p && b.k === 'tower' && s.inside[b.i] === p)) {
     let best = -1, bd = 99;
@@ -329,7 +360,9 @@ export const apply = (s: FState, a: Action): boolean => {
   if (a.p && a.p !== p) return false;
   s.last = []; s.log = ''; s.events = [];
   if (a.t === 'end') { endTurn(s); return true; }
-  if (s.actions <= 0) return false;
+  // orders to soldiers and tanks do not use the player's actions: every unit moves or shoots once a turn
+  const unitOrder = a.t === 'move' || a.t === 'attack';
+  if (!unitOrder && s.actions <= 0) return false;
   switch (a.t) {
     case 'dot':
       if (!canDot(s, p, a.i)) return false;
@@ -353,7 +386,7 @@ export const apply = (s: FState, a: Action): boolean => {
     }
     default: return false;
   }
-  s.actions--;
+  if (!unitOrder) s.actions--;
   enclose(s, p);
   checkWin(s);
   // the turn passes only with an explicit {t:'end'} (the screen sends it by itself after the last action)
@@ -399,7 +432,6 @@ export const home = (s: FState, p: number): [number, number] => {
 /** the best next action for the player whose turn it is (one action at a time) */
 export const botAction = (s: FState): Action => {
   const p = s.turn;
-  if (s.actions <= 0) return { t: 'end' };
   const tryA = (a: Action) => { const c = clone(s); return apply(c, a) ? c : null; };
   // what an action brings: points, plus taken land (it brings points every turn later)
   const worth = (c: FState) => c.score[p] + landOf(c, p) / LAND_PER_POINT;
@@ -410,6 +442,22 @@ export const botAction = (s: FState): Action => {
   const free: number[] = [];
   for (let i = 0; i < s.dot.length; i++) if (canDot(s, p, i)) free.push(i);
   const nearDots = free.filter(i => n8(s, i).some(j => s.dot[j]) || s.units.some(u => dist(s, u.i, i) <= 1));
+
+  // 0. the army: every unit marches on the nearest enemy building or city wall, shooting on the way
+  const unitStep = (): Action | null => {
+    for (const u of s.units.filter(x => x.p === p && !x.acted)) {
+      const goals: number[] = [];
+      for (const b of s.buildings) if (b.p !== p) goals.push(b.i);
+      for (const e of s.units) if (e.p !== p) goals.push(e.i);
+      for (let i = 0; i < s.dot.length; i++) if (isEnemy(s.dot[i]) && n8(s, i).some(j => s.terr[j] === s.dot[i])) goals.push(i);
+      if (!goals.length) for (let i = 0; i < s.dot.length; i++) if (isEnemy(s.dot[i])) goals.push(i);
+      const goal = goals.length ? goals.reduce((a, b) => (dist(s, u.i, b) < dist(s, u.i, a) ? b : a)) : u.i;
+      const a = march(s, u, goal);
+      if (a) return a;
+    }
+    return null;
+  };
+  if (s.actions <= 0) return unitStep() || { t: 'end' };
 
   // 1. a dot that captures right now
   let bestA: Action | null = null, bestV = 0;
@@ -436,22 +484,9 @@ export const botAction = (s: FState): Action => {
   }
   if (bestA) return bestA;
 
-  // 2. units: hit what is in range (units first, then buildings, then wall dots), else drive to the nearest target
-  for (const u of s.units.filter(x => x.p === p && !x.acted)) {
-    const rank = (i: number) => (unitAt(s, i) ? 3 : buildingAt(s, i) ? 2 : 1);
-    const t = targets(s, u).sort((a, b) => rank(b) - rank(a));
-    if (t.length) return { t: 'attack', u: u.id, i: t[0] };
-    const goals: number[] = [];
-    for (const b of s.buildings) if (b.p !== p) goals.push(b.i);
-    for (let i = 0; i < s.dot.length; i++) if (isEnemy(s.dot[i]) && n8(s, i).some(j => s.terr[j] === s.dot[i])) goals.push(i);
-    if (!goals.length) for (let i = 0; i < s.dot.length; i++) if (isEnemy(s.dot[i])) goals.push(i);
-    const r = reach(s, u);
-    if (goals.length && r.length) {
-      const score = (i: number) => Math.min(...goals.map(g => dist(s, i, g)));
-      const to = r.reduce((a, b) => (score(b) < score(a) ? b : a));
-      if (score(to) < score(u.i)) return { t: 'move', u: u.id, i: to };
-    }
-  }
+  // 2. the army moves (free: it does not use the two actions)
+  const us = unitStep();
+  if (us) return us;
 
   // 3. danger: another player could capture with his next dot — put ours there first
   let threatI = -1, threatV = 0;

@@ -17,7 +17,8 @@ export type Fx =
   | { k: 'appear'; t0: number; t1: number; i: number }
   | { k: 'cells'; t0: number; t1: number; cells: P[]; color: string; strong: boolean }
   | { k: 'text'; t0: number; t1: number; at: P; text: string; color: string }
-  | { k: 'shake'; t0: number; t1: number; power: number };
+  | { k: 'shake'; t0: number; t1: number; power: number }
+  | { k: 'sprite'; t0: number; t1: number; src: string; at: P; w: number; h: number; grow: number; rise: number };
 
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 const G = 0.0006; // gravity, board units per ms²
@@ -85,6 +86,7 @@ export const buildFx = (events: FxEvent[], pos: (i: number) => P, colors: string
       case 'hit': {
         const at = pos(e.i);
         out.push({ k: 'burst', t0: hitAt, t1: hitAt + 700, at, parts: debris(at, 5, ['#78716c', '#a8a29e'], 0.07, 2), flash: 7, ring: null });
+        out.push({ k: 'sprite', t0: hitAt, t1: hitAt + 450, src: '/game/boom.webp', at, w: 13, h: 10, grow: 0.4, rise: 0 });
         out.push({ k: 'shake', t0: hitAt, t1: hitAt + 180, power: 1 });
         break;
       }
@@ -92,6 +94,12 @@ export const buildFx = (events: FxEvent[], pos: (i: number) => P, colors: string
         const at = pos(e.i), c = colors[e.p] || '#57534e';
         if (e.what) out.push({ k: 'ghost', t0: Math.min(t, hitAt) - 5000, t1: hitAt, at, what: e.what, color: c });
         out.push({ k: 'burst', t0: hitAt, t1: hitAt + 1500, at, parts: debris(at, e.big ? 16 : 9, [c, '#44403c', '#78716c'], e.big ? 0.16 : 0.11, e.big ? 7 : 4), flash: e.big ? 16 : 10, ring: '#f97316' });
+        out.push({ k: 'sprite', t0: hitAt, t1: hitAt + 650, src: '/game/boom.webp', at, w: e.big ? 30 : 22, h: e.big ? 23 : 17, grow: 0.6, rise: 0 });
+        out.push({ k: 'sprite', t0: hitAt + 60, t1: hitAt + 6000, src: '/game/crater.webp', at: { x: at.x, y: at.y + 3 }, w: e.big ? 17 : 12, h: e.big ? 9.6 : 6.8, grow: 0, rise: 0 });
+        out.push({ k: 'sprite', t0: hitAt + 250, t1: hitAt + 1900, src: '/game/smoke.webp', at, w: 16, h: 14, grow: 0.9, rise: 16 });
+        if (e.what === 'tower' || e.what === 'barracks' || e.what === 'market') out.push({ k: 'sprite', t0: hitAt + 100, t1: hitAt + 2600, src: '/game/rubble.webp', at, w: 18, h: 13.2, grow: 0, rise: 0 });
+        if (e.what === 'soldier') out.push({ k: 'sprite', t0: hitAt + 60, t1: hitAt + 1600, src: '/game/soldier-dead.webp', at, w: 17, h: 7.9, grow: 0, rise: 0 });
+        if (e.what === 'tank') out.push({ k: 'sprite', t0: hitAt + 120, t1: hitAt + 1700, src: '/game/wreck.webp', at, w: 20, h: 10.7, grow: 0, rise: 0 });
         out.push({ k: 'shake', t0: hitAt, t1: hitAt + (e.big ? 450 : 250), power: e.big ? 3.2 : 1.6 });
         break;
       }
@@ -156,7 +164,7 @@ const along = (pts: P[], k: number): { p: P; dir: number } => {
 };
 
 /** where a unit is drawn right now (it may still be driving), its heading, and how much it bounces */
-export const unitPose = (fx: Fx[], now: number, id: number): { p?: P; dir?: number; hop: number } => {
+export const unitPose = (fx: Fx[], now: number, id: number): { p?: P; dir?: number; hop: number; run?: number } => {
   const mv = fx.filter((f): f is Extract<Fx, { k: 'move' }> => f.k === 'move' && f.u === id);
   if (!mv.length) return { hop: 0 };
   const cur = mv.find(f => now >= f.t0 && now < f.t1) || mv.find(f => now < f.t0);
@@ -165,8 +173,8 @@ export const unitPose = (fx: Fx[], now: number, id: number): { p?: P; dir?: numb
   const k = ease((now - cur.t0) / (cur.t1 - cur.t0));
   const { p, dir } = along(cur.pts, k);
   const steps = cur.pts.length - 1;
-  const hop = cur.unit === 'soldier' ? Math.abs(Math.sin(k * steps * Math.PI * 2)) * 3 : Math.sin(k * steps * Math.PI * 6) * 0.4;
-  return { p, dir, hop };
+  const hop = cur.unit === 'soldier' ? Math.abs(Math.sin(k * steps * Math.PI * 2)) * 1.2 : Math.sin(k * steps * Math.PI * 6) * 0.4;
+  return { p, dir, hop, run: k * steps };
 };
 
 /** a shot that a unit at this point fires now or soon (to turn the turret and kick the barrel back) */
@@ -212,31 +220,60 @@ export const shakeOffset = (fx: Fx[], now: number): P => {
   return { x, y };
 };
 
-/** the tank: body turned to where it drives, turret to where it shoots */
-export const Tank: React.FC<{ x: number; y: number; color: string; dir?: number; aim?: number; kick?: number; hop?: number }> = ({ x, y, color, dir = 0, aim, kick = 0, hop = 0 }) => {
-  const body = (dir * 180) / Math.PI, turret = (((aim ?? dir) - dir) * 180) / Math.PI;
+/** the tank (drawn by the owner, one per player colour): turned to where it drives, and to where it shoots */
+export const TANK_W = 12, TANK_H = 22.8;
+export const Tank: React.FC<{ x: number; y: number; p: number; dir?: number; aim?: number; kick?: number; hop?: number; scale?: number }> = ({ x, y, p, dir = -Math.PI / 2, aim, kick = 0, hop = 0, scale = 1 }) => {
+  const a = aim ?? dir;
+  const deg = (a * 180) / Math.PI + 90; // the picture looks up
+  const back = kick * 1.6;              // recoil: the whole tank jerks back a little
   return (
-    <g transform={`translate(${x},${y + hop}) rotate(${body})`}>
-      <rect x={-8} y={-7.5} width={16} height={3.2} rx={1.5} fill="#334155" />
-      <rect x={-8} y={4.3} width={16} height={3.2} rx={1.5} fill="#334155" />
-      <rect x={-7} y={-5} width={14} height={10} rx={2} fill={color} stroke="#1e293b" strokeWidth={1} />
-      <g transform={`rotate(${turret})`}>
-        <line x1={2} y1={0} x2={10 - kick * 3} y2={0} stroke="#1e293b" strokeWidth={2} strokeLinecap="round" />
-        <circle cx={0} cy={0} r={3.3} fill={color} stroke="#1e293b" strokeWidth={1} />
-        {kick > 0.5 && <circle cx={12} cy={0} r={2.5 + kick * 2} fill="#fde047" opacity={kick} />}
+    <g transform={`translate(${x - Math.cos(a) * back},${y + hop - Math.sin(a) * back}) rotate(${deg}) scale(${scale})`}>
+      <ellipse cx={0.6} cy={1.2} rx={TANK_W / 2} ry={TANK_H / 2.3} fill="#000" opacity={0.18} />
+      <image href={`/game/tank${p}.webp`} x={-TANK_W / 2} y={-TANK_H / 2 - 2.5} width={TANK_W} height={TANK_H} />
+      {kick > 0.35 && <image href="/game/boom.webp" x={-5} y={-TANK_H / 2 - 9} width={10} height={8} opacity={kick} />}
+    </g>
+  );
+};
+
+/** the soldier (drawn by the owner): runs with his legs moving, turns where he goes, lies down to shoot */
+const RUN_W = [0.656, 0.719, 0.859, 0.734], STAND_W = 0.656, FIRE_W = 1.81;
+export const Soldier: React.FC<{ x: number; y: number; p: number; dir?: number; run?: number; aim?: number; scale?: number }> = ({ x, y, p, dir = -Math.PI / 2, run, aim, scale = 1 }) => {
+  if (aim != null) {
+    // the picture shoots to the right; to the left it is mirrored so he is never upside down
+    const h = 11, w = h * FIRE_W, left = Math.cos(aim) < 0;
+    return (
+      <g transform={`translate(${x},${y}) rotate(${(aim * 180) / Math.PI}) scale(${scale},${left ? -scale : scale})`}>
+        <image href={`/game/soldier${p}-fire.webp`} x={-w * 0.3} y={-h / 2} width={w} height={h} />
       </g>
+    );
+  }
+  const f = run != null ? Math.floor(run * 4) % 4 : -1;
+  const h = 15, w = h * (f >= 0 ? RUN_W[f] : STAND_W);
+  return (
+    <g transform={`translate(${x},${y}) rotate(${(dir * 180) / Math.PI + 90}) scale(${scale})`}>
+      <ellipse cx={0.8} cy={1.5} rx={4.5} ry={5} fill="#000" opacity={0.15} />
+      <image href={`/game/soldier${p}${f >= 0 ? `-run${f}` : ''}.webp`} x={-w / 2} y={-h / 2} width={w} height={h} />
     </g>
   );
 };
 
 /** everything that flies: shells, debris, smoke, flashes, rings, points */
-export const FxLayer: React.FC<{ fx: Fx[]; now: number; drawGhost: (what: UnitKind | BuildKind, at: P, color: string) => React.ReactNode }> = ({ fx, now, drawGhost }) => {
+export const FxLayer: React.FC<{ fx: Fx[]; now: number; ground?: boolean; drawGhost?: (what: UnitKind | BuildKind, at: P, color: string) => React.ReactNode }> = ({ fx, now, ground, drawGhost }) => {
   const out: React.ReactNode[] = [];
   fx.forEach((f, n) => {
     if (now < f.t0 || now > f.t1) return;
+    // craters lie on the paper under the units; everything else flies above them
+    const onGround = f.k === 'sprite' && f.src.includes('crater');
+    if (!!ground !== onGround) return;
     const dt = now - f.t0, k = dt / (f.t1 - f.t0);
     switch (f.k) {
-      case 'ghost': out.push(<g key={n}>{drawGhost(f.what, f.at, f.color)}</g>); break;
+      case 'ghost': if (drawGhost) out.push(<g key={n}>{drawGhost(f.what, f.at, f.color)}</g>); break;
+      case 'sprite': {
+        const sc = 1 + f.grow * Math.min(1, k * 2.5), w = f.w * sc, h = f.h * sc;
+        const o = /crater/.test(f.src) ? (k < 0.8 ? 0.9 : (1 - k) * 4.5) : /wreck|rubble|dead/.test(f.src) ? (k < 0.7 ? 1 : (1 - k) / 0.3) : k < 0.15 ? k / 0.15 : (1 - k) / 0.85;
+        out.push(<image key={n} href={f.src} x={f.at.x - w / 2} y={f.at.y - h / 2 - f.rise * k} width={w} height={h} opacity={o} />);
+        break;
+      }
       case 'shot': {
         const x = f.from.x + (f.to.x - f.from.x) * k;
         const lift = f.by === 'tank' ? 22 : f.by === 'tower' ? 14 : 3; // a shell flies in an arc
@@ -246,7 +283,9 @@ export const FxLayer: React.FC<{ fx: Fx[]; now: number; drawGhost: (what: UnitKi
         out.push(
           <g key={n}>
             <line x1={x0} y1={y0} x2={x} y2={y} stroke={f.by === 'soldier' ? '#facc15' : '#a8a29e'} strokeWidth={f.by === 'soldier' ? 1 : 1.6} strokeLinecap="round" opacity={0.7} />
-            <circle cx={x} cy={y} r={f.by === 'tank' ? 2.4 : f.by === 'tower' ? 2 : 1.2} fill={f.by === 'soldier' ? '#facc15' : '#1c1917'} />
+            {f.by === 'tank'
+              ? <image href="/game/shell.webp" x={-9} y={-1.9} width={10} height={2.1} transform={`translate(${x},${y}) rotate(${(Math.atan2(y - y0, x - x0) * 180) / Math.PI})`} />
+              : <circle cx={x} cy={y} r={f.by === 'tower' ? 2 : 1.2} fill={f.by === 'soldier' ? '#facc15' : '#1c1917'} />}
             {dt < 90 && <circle cx={f.from.x} cy={f.from.y - (f.by === 'tower' ? 8 : 0)} r={4 * (1 - dt / 90) + 1} fill="#fde047" opacity={0.9} />}
           </g>,
         );

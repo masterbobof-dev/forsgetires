@@ -4,15 +4,15 @@ import {
   makeReplayer, canDot, canBuild, reach, targets, hireSpots, income, buildingAt, unitAt, home, players,
   COST, NAMES_UA, WIN_SCORE, MAX_ROUNDS, type Action, type BuildKind, type UnitKind, type FState,
 } from './fortress';
-import { buildFx, useFx, unitPose, aimAt, dropOffset, appearScale, shakeOffset, Tank, FxLayer } from './fortressFx';
+import { buildFx, useFx, unitPose, aimAt, dropOffset, appearScale, shakeOffset, Tank, Soldier, FxLayer } from './fortressFx';
 
 /**
  * The board of «Точки: Фортеці» drawn like a school notebook: blue squares, a red margin, walls and dots in ballpoint
  * ink, cities hatched with the player's colour. One finger moves the board, two fingers (or the buttons) zoom.
  * The rules live in fortress.ts.
  */
-export const PCOLORS = ['', '#dc2626', '#2563eb', '#16a34a', '#9333ea'];
-export const PNAMES = ['', 'Червоні', 'Сині', 'Зелені', 'Фіолетові'];
+export const PCOLORS = ['', '#dc2626', '#2563eb', '#16a34a', '#ca8a04'];
+export const PNAMES = ['', 'Червоні', 'Сині', 'Зелені', 'Жовті'];
 const STEP = 20, PAD = 12;
 type Tool = 'dot' | BuildKind | UnitKind;
 const TOOLS: { k: Tool; label: string; icon: string }[] = [
@@ -20,23 +20,23 @@ const TOOLS: { k: Tool; label: string; icon: string }[] = [
   { k: 'tower', label: 'Башта', icon: '🗼' },
   { k: 'barracks', label: 'Казарма', icon: '⛺' },
   { k: 'market', label: 'Ринок', icon: '💰' },
-  { k: 'soldier', label: 'Воїн', icon: '🪖' },
+  { k: 'soldier', label: 'Воїн', icon: '🪖' },  // the soldier and tank buttons show the owner's pictures
   { k: 'tank', label: 'Танк', icon: '🛡️' },
 ];
 
-const Soldier: React.FC<{ x: number; y: number; color: string; scale?: number }> = ({ x, y, color, scale = 1 }) => (
-  <g transform={`translate(${x},${y}) scale(${scale})`}>
-    <circle r={7} fill={color} stroke="#1e293b" strokeWidth={1} />
-    <text y={3.5} textAnchor="middle" fontSize={9}>🪖</text>
-  </g>
-);
-const BIcon = { tower: '🗼', barracks: '⛺', market: '💰' } as const;
-const Building: React.FC<{ x: number; y: number; color: string; k: BuildKind }> = ({ x, y, color, k }) => (
-  <>
-    <rect x={x - 8} y={y - 8} width={16} height={16} rx={3} fill="#fff" stroke={color} strokeWidth={1.8} />
-    <text x={x} y={y + 4.5} textAnchor="middle" fontSize={11}>{BIcon[k]}</text>
-  </>
-);
+/** buildings (drawn by the owner): the tower flies the player's flag, the others stand on a base of his colour */
+const BPIC: Record<BuildKind, { w: number; h: number; dy: number }> = {
+  tower: { w: 16, h: 27.9, dy: 9 }, barracks: { w: 19.5, h: 15.3, dy: 8 }, market: { w: 19.5, h: 14.3, dy: 8 },
+};
+export const Building: React.FC<{ x: number; y: number; color: string; k: BuildKind; p: number }> = ({ x, y, color, k, p }) => {
+  const b = BPIC[k];
+  return (
+    <>
+      <ellipse cx={x} cy={y + 5.5} rx={9.5} ry={3.6} fill={color} opacity={0.35} stroke={color} strokeWidth={1.2} />
+      <image href={k === 'tower' ? `/game/tower${p}.webp` : `/game/${k}.webp`} x={x - b.w / 2} y={y + b.dy - b.h} width={b.w} height={b.h} />
+    </>
+  );
+};
 const calm = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 /** the game state, replayed once and then moved forward only by the new actions */
@@ -52,6 +52,8 @@ const FortressBoard: React.FC<{
 }> = ({ actions, n, size, me, vsBot, joined, busy, onAct, footer }) => {
   const s = useFortState(actions, n, size);
   const { fx, now, add, busyUntil } = useFx();
+  // the pictures are loaded at once, so the first explosion is not empty
+  useEffect(() => { for (const f of ['boom', 'smoke', 'shell', 'wreck', 'soldier-dead', 'rubble', 'crater', 'market', 'barracks', ...players(s).flatMap(p => [`tank${p}`, `tower${p}`, `soldier${p}`, `soldier${p}-fire`, ...[0, 1, 2, 3].map(k => `soldier${p}-run${k}`)])]) new Image().src = `/game/${f}.webp`; }, []);
   const [tool, setTool] = useState<Tool>('dot');
   const [sel, setSel] = useState<number | null>(null);
   const [help, setHelp] = useState(false);
@@ -236,11 +238,12 @@ const FortressBoard: React.FC<{
           {[...hireSet].map(i => <circle key={`hs${i}`} cx={pos(i).x} cy={pos(i).y} r={4.5} fill="#22c55e" opacity={0.55} />)}
           {(tool === 'tower' || tool === 'barracks' || tool === 'market') && myTurn && Array.from(s.inside).map((p, i) => (p === me && !s.dot[i] && !buildingAt(s, i) && !unitAt(s, i) ? <circle key={`bs${i}`} cx={pos(i).x} cy={pos(i).y} r={3.5} fill="#22c55e" opacity={0.55} /> : null))}
           {[...reachSet].map(i => <circle key={`r${i}`} cx={pos(i).x} cy={pos(i).y} r={3.5} fill="#eab308" opacity={0.75} />)}
+          <FxLayer fx={fx} now={now} ground />
           {s.buildings.map(b => {
             const { x } = pos(b.i); const y = pos(b.i).y + dropOffset(fx, now, b.i);
             return (
               <g key={`b${b.id}`}>
-                <Building x={x} y={y} color={PCOLORS[b.p]} k={b.k} />
+                <Building x={x} y={y} color={PCOLORS[b.p]} k={b.k} p={b.p} />
                 {b.hp > 1 && <text x={x + 8} y={y - 5} fontSize={6.5} fontWeight={900} fill={PCOLORS[b.p]}>{b.hp}</text>}
               </g>
             );
@@ -249,19 +252,19 @@ const FortressBoard: React.FC<{
             const pose = unitPose(fx, now, u.id);
             const { x, y } = pose.p || pos(u.i);
             const dir = pose.dir ?? heading.current.get(u.id) ?? (u.p === 1 || u.p === 4 ? -Math.PI / 2 : Math.PI / 2);
-            heading.current.set(u.id, dir);
             const aim = pose.p ? null : aimAt(fx, now, pos(u.i));
+            heading.current.set(u.id, aim ? aim.dir : dir); // after a shot the tank stays turned to the enemy
             const sc = appearScale(fx, now, u.i);
             return (
               <g key={`u${u.id}`} opacity={u.p === me && u.acted && myTurn && !pose.p ? 0.55 : 1}>
                 {u.k === 'tank'
-                  ? <g transform={sc !== 1 ? `translate(${x},${y}) scale(${Math.max(0, sc)}) translate(${-x},${-y})` : undefined}><Tank x={x} y={y} color={PCOLORS[u.p]} dir={dir} aim={aim?.dir} kick={aim?.kick} hop={pose.hop} /></g>
-                  : <Soldier x={x + (aim ? Math.cos(aim.dir) * -aim.kick * 2 : 0)} y={y - pose.hop} color={PCOLORS[u.p]} scale={Math.max(0, sc)} />}
+                  ? <g transform={sc !== 1 ? `translate(${x},${y}) scale(${Math.max(0, sc)}) translate(${-x},${-y})` : undefined}><Tank x={x} y={y} p={u.p} dir={dir} aim={aim?.dir} kick={aim?.kick} hop={pose.hop} /></g>
+                  : <Soldier x={x} y={y - pose.hop} p={u.p} dir={dir} run={pose.run} aim={aim?.dir} scale={Math.max(0, sc)} />}
                 {u.hp > 1 && <text x={x + 7} y={y - 5} fontSize={6.5} fontWeight={900} fill="#1e293b">{u.hp}</text>}
               </g>
             );
           })}
-          <FxLayer fx={fx} now={now} drawGhost={(what, at, color) => what === 'tank' ? <Tank x={at.x} y={at.y} color={color} /> : what === 'soldier' ? <Soldier x={at.x} y={at.y} color={color} /> : <Building x={at.x} y={at.y} color={color} k={what} />} />
+          <FxLayer fx={fx} now={now} drawGhost={(what, at, color) => what === 'tank' ? <Tank x={at.x} y={at.y} p={Math.max(1, PCOLORS.indexOf(color))} /> : what === 'soldier' ? <Soldier x={at.x} y={at.y} p={Math.max(1, PCOLORS.indexOf(color))} /> : <Building x={at.x} y={at.y} color={color} k={what} p={Math.max(1, PCOLORS.indexOf(color))} />} />
           {[...targetSet].map(i => <circle key={`t${i}`} cx={pos(i).x} cy={pos(i).y} r={9} fill="none" stroke="#dc2626" strokeWidth={1.8} strokeDasharray="3 2" />)}
           {unit && <circle cx={pos(unit.i).x} cy={pos(unit.i).y} r={10} fill="none" stroke="#eab308" strokeWidth={2.2} />}
           {s.last.map(i => <circle key={`last${i}`} cx={pos(i).x} cy={pos(i).y} r={10.5} fill="none" stroke="#1e293b" strokeWidth={0.9} strokeDasharray="2 2" />)}
@@ -279,7 +282,9 @@ const FortressBoard: React.FC<{
         {TOOLS.map(t => (
           <button key={t.k} onClick={() => { setTool(t.k); setSel(null); }} disabled={!myTurn || !toolOk(t.k)}
             className={`rounded-xl py-1.5 flex flex-col items-center border text-[10px] font-bold leading-tight disabled:opacity-35 ${tool === t.k ? 'bg-[#FFC300] text-black border-[#FFC300]' : 'bg-zinc-900 text-zinc-200 border-zinc-700'}`}>
-            <span className="text-base leading-none">{t.icon}</span>{t.label}
+            {t.k === 'tank' || t.k === 'soldier'
+              ? <img src={t.k === 'tank' ? `/game/tank${mine}.webp` : `/game/soldier${mine}.webp`} alt="" className={`h-4 w-auto my-0.5 ${t.k === 'tank' ? 'rotate-90' : ''}`} />
+              : <span className="text-base leading-none">{t.icon}</span>}{t.label}
             {t.k !== 'dot' && <span className="opacity-70">{COST[t.k as keyof typeof COST]}💰</span>}
           </button>
         ))}

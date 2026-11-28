@@ -23,6 +23,11 @@ const withPartners = (t) => {
   for (let i = 1; i <= 6; i++) t.tyres.push(make(i, 115));
   // own goods: one name in Ukrainian («Таврія»), found when it is typed in Russian
   t.tyres.push({ ...make(8, 115), title: 'Труба приймальна ТМК ЗАЗ 1102 Таврія 220202', manufacturer: 'ТМК', supplier_offer_id: null, on_order: false, list_rank: 0, ask_price: false, created_at: '2025-01-01T00:00:00Z' });
+  // the same maker written with a Cyrillic «К» and a Latin «K»; a lamp whose code only contains «K2»
+  t.tyres.push({ ...make(10, 115), title: 'Очисник пластику К2 OSKAR 750ml', manufacturer: null, supplier_offer_id: null, on_order: false, list_rank: 0 });
+  t.tyres.push({ ...make(11, 115), title: 'Полироль кузова K-2 TURBO 250 гр', manufacturer: 'K-2', supplier_offer_id: null, on_order: false, list_rank: 0 });
+  t.tyres.push({ ...make(12, 115), title: 'Автолампа H3 12V 55W PK22S OSRAM', manufacturer: null, supplier_offer_id: null, on_order: false, list_rank: 0, catalog_number: 'LMP-1', search_numbers: 'LMP1' });
+  t.tyres.push({ ...make(13, 115), title: 'Колодки гальмівні передні Ланос', manufacturer: null, supplier_offer_id: null, on_order: false, list_rank: 0, catalog_number: 'BRK-1', search_numbers: 'BRK1' });
   // a section where only partner goods are
   t.product_categories.push({ ...t.product_categories.find((c) => c.id === 115), id: 116, name: 'Свічки', slug: 'svichky', parent_id: 5 });
   t.tyres.push(make(7, 116));
@@ -118,6 +123,24 @@ const partners = async (browser, url) => {
     await box.fill('gfhnyth');
     await until(async () => assert.ok((await titles(page)).filter((t) => t.startsWith('Партнер')).length >= 6));
     assert.ok(await page.getByText(/інша розкладка клавіатури/).isVisible(), 'the buyer is told why');
+  });
+
+  await step(shop, S, '«k2» and «к2» find the maker K2 / K-2, not codes with K2 inside', async () => {
+    const box = page.getByPlaceholder(/Пошук/).first();
+    const want = ['Очисник пластику К2 OSKAR 750ml', 'Полироль кузова K-2 TURBO 250 гр'];
+    for (const q of ['k2', 'к2', 'K-2']) {
+      await box.fill(q);
+      await until(async () => assert.deepEqual((await titles(page)).sort(), [...want].sort()));
+    }
+  });
+
+  await step(shop, S, 'Russian words find Ukrainian names, a mistyped word and the other layout too', async () => {
+    const box = page.getByPlaceholder(/Пошук/).first();
+    const want = ['Колодки гальмівні передні Ланос'];
+    for (const q of ['тормозные колодки', 'калодки ланос', 'rjkjlrb ланос']) {
+      await box.fill(q);
+      await until(async () => assert.deepEqual(await titles(page), want, q));
+    }
   });
 
   await step(shop, S, 'a typo shows close names', async () => {

@@ -49,6 +49,33 @@ const TWINS: string[][] = [
   ['клемм', 'клем'], ['компресс', 'компрес'], ['полирол', 'полірол'], ['вонючк', 'ароматиз'], ['антифриз', 'тосол'], ['домкрат', 'домкрат'],
   // one maker under two names: ТМК is the Ternopil exhaust plant
   ['тернопол', 'тернопіл', 'тмк'],
+  // Russian ↔ Ukrainian names of the same thing (the catalogue is mostly Ukrainian, buyers often type Russian)
+  ['подвеск', 'підвіск'], ['суппорт', 'супорт'], ['наконечник', 'накінечник'], ['ось', 'вісь'], ['металл', 'метал'],
+  ['черн', 'чорн'], ['красн', 'червон'], ['белый', 'белая', 'белое', 'білий', 'біла', 'біле'], ['серый', 'серая', 'серое', 'сірий', 'сіра', 'сіре'], ['желт', 'жовт'],
+  ['левый', 'левая', 'левое', 'левой', 'лівий', 'ліва', 'ліве', 'лівої'], ['правый', 'правая', 'правое', 'правой', 'правий', 'права', 'праве', 'правої'],
+  ['поликлинов', 'поліклінов', 'поліклин'], ['стеклоочист', 'склоочис'], ['очищувач', 'очисник', 'очистител'],
+  ['гидравлич', 'гідравліч'], ['приемн', 'приймальн'], ['накал', 'розжарюв'], ['привод', 'привідн', 'привод'],
+  ['коллектор', 'колектор'], ['набор', 'набір'], ['фонар', 'ліхтар'], ['наруж', 'зовніш', 'зовн'], ['внутрен', 'внутріш'],
+  ['шариков', 'кульков'], ['сборе', 'зборі', 'сбор', 'збор'], ['средств', 'засіб', 'засоб'], ['перчатк', 'рукавичк'],
+  ['рессор', 'ресор'], ['руль', 'руля', 'кермо', 'керма'], ['бутылк', 'пляшк'], ['катушк', 'котушк'], ['размер', 'розмір'],
+  ['направляющ', 'направляюч'], ['металлическ', 'металев'], ['очистк', 'очищен'], ['новый', 'новая', 'нового', 'новий', 'нова'],
+  ['рабоч', 'робоч'], ['выпускн', 'випускн'], ['вкладыш', 'вкладиш'], ['коленвал', 'колінвал', 'колінчаст'],
+  ['нержавеющ', 'нержавіюч'], ['шрус', 'шркш', 'граната'], ['креплен', 'кріплен'], ['уплотн', 'ущільн'], ['мойк', 'мийк', 'миття', 'мыть'],
+  ['канистр', 'каністр'], ['крестовин', 'хрестовин'], ['отбойник', 'відбійник'], ['полировк', 'полірув'], ['угольн', 'вугільн'],
+  ['эконом', 'економ'], ['давлен', 'тиск'], ['защит', 'захист'], ['отопител', 'обігрівач', 'печк', 'пічк', 'опален'],
+  ['литиев', 'літієв'], ['микрофибр', 'мікрофібр'], ['лента', 'ленты', 'стрічк'], ['коррози', 'корозі'], ['освежител', 'освіжувач'],
+  ['пистолет', 'пістолет'], ['зимн', 'зимов'], ['летн', 'літн'], ['грунт', 'ґрунт'], ['катализатор', 'каталізатор'],
+  ['распредвал', 'розподільч', 'розпредвал'], ['скребок', 'шкребок'], ['напряжен', 'напруг'], ['гильз', 'гільз'],
+  ['двусторон', 'двобічн', 'двосторон'], ['растворител', 'розчинник'], ['палец', 'пальц', 'палець'], ['обводн', 'обвідн'],
+  ['обивк', 'оббивк'], ['корзин', 'кошик'], ['звездочк', 'зірочк'], ['шестерн', 'шестірн'], ['колпак', 'ковпак'], ['колпачк', 'ковпачк'],
+  ['противотуман', 'протитуман'], ['огнетушител', 'вогнегасник'], ['аварийн', 'аварійн'], ['ведро', 'відро'], ['салфетк', 'серветк'],
+  ['тряпк', 'ганчірк'], ['воск', 'віск', 'воском'], ['чернител', 'чорнител'], ['изолент', 'ізострічк', 'ізолент'],
+  ['воздух', 'повітря'], ['поршн', 'поршен', 'поршн'], ['сиден', 'сидін'], ['ремкомплект', 'ремкомплект', 'рем.к'],
+  ['омыв', 'омив'], ['крыл', 'крил'], ['порог', 'поріг'],
+  ['ручник', 'ручне гальмо', 'ручного гальма'], ['выжимн', 'вижимн'], ['мост', 'міст'], ['цилиндр', 'циліндр'],
+  ['трансмиссион', 'трансмісійн'], ['синтетик', 'синтетич', 'синтетичн'], ['полусинтет', 'напівсинтет'],
+  ['минеральн', 'мінеральн'], ['кондиционер', 'кондиціонер'], ['шпаклевк', 'шпаклівк'], ['эмаль', 'емаль'],
+  ['шумоизол', 'шумоізол'], ['виброизол', 'віброізол'], ['фаркоп', 'фаркоп', 'буксирн'],
   ['буксир', 'трос'], ['прикуриват', 'прикурюв', 'прикурив'], ['зарядн', 'зарядн'], ['пружин', 'пружин'], ['опор', 'опор'], ['прокладк', 'прокладк'],
 ];
 /** Makers that come under several names (roots). Choosing one in the brand filter shows all of them. */
@@ -114,8 +141,62 @@ export const looseWord = (w: string): string => {
   return w.replace(/[иіїыйеєэёгґъ'’ь]/gi, '_').replace(/о/gi, (m, i) => (w.length >= 6 && i > 1 && i < w.length - 1 ? '_' : m));
 };
 
-/** PostgREST "or" filters (each must match) for a parsed search. */
-export const searchFilters = (s: ParsedSearch): string[] => {
+// ---------- one spelling for search (the same as public.search_fold in the database) ----------
+const HOMO_FROM = 'авекмнорстухіё', HOMO_TO = 'abekmhopctyxie';
+/**
+ * Letters that look the same in Cyrillic and Latin become Latin («К2» = «K2», «СТ142» = «CT142»), «K-2» = «K2»,
+ * «5W-30» = «5W30», punctuation becomes a space. '_' (any one letter, from looseWord) is kept.
+ */
+export const fold = (text: string): string => {
+  let r = '';
+  for (const ch of text.toLowerCase()) { const i = HOMO_FROM.indexOf(ch); r += i >= 0 ? HOMO_TO[i] : ch; }
+  return r.replace(/['’ʼ`]/g, '').replace(/([a-zа-яіїєґ])-(?=[0-9])/g, '$1').replace(/[^0-9a-zа-яіїєґ._]+/g, ' ').trim();
+};
+
+/** typos: a folded word without vowels and doubled letters («калодки» = «колодки» = «клдк»), as public.search_skel */
+export const skel = (w: string): string => w.replace(/[aeiouyаеиіїоуыэюяєёйьъ]/g, '').replace(/([^ ])\1+/g, '$1').replace(/ +/g, ' ').trim();
+
+/** a folded word → a piece of a regular expression ('.' is a dot, '_' is any one letter) */
+const rx = (w: string) => w.replace(/\./g, '[.]').replace(/_/g, '.');
+
+/**
+ * Patterns for public.search_rank: one per typed word, every one must be found in the product's search line
+ * (name, brand and numbers). A word is looked for at the start of a word («фільтр» finds «фільтри», but «k2»
+ * does not find «PK22S»); very short words («k2», «16») only as a whole word. `loose`: anywhere inside words
+ * (the second try when nothing was found). `swap`: each word may also be typed in the other keyboard layout
+ * («фильтр ащкв» = «фильтр ford»). `typo`: compared without vowels.
+ */
+export const searchPatterns = (s: ParsedSearch, mode: 'words' | 'loose' | 'typo' = 'words', swap = false): { norm: string[]; words: string[] } => {
+  const loose = mode === 'loose';
+  const norm: string[] = [], words: string[] = [];
+  for (const t of s.tokens) {
+    const main = fold(t);
+    if (!main.replace(/[._ ]/g, '')) continue;
+    // the word typed in the other keyboard layout counts too («ащкв» = «ford», «cvfprf» = «смазка»)
+    const swapped = !swap || /\d/.test(t) ? '' : swapLayout(t);
+    words.push(main.replace(/_/g, ''), ...(swapped ? [fold(swapped)] : []));
+    let alts = [...new Set([main, fold(looseWord(t)), ...twinsOf(t).map(fold), ...(swapped ? [fold(swapped)] : [])].filter(Boolean))];
+    if (mode === 'typo') {
+      // compared without vowels (search_rank_skel): the start of a word
+      alts = [...new Set([main, ...(swapped ? [fold(swapped)] : [])].map(a => skel(a.replace(/_/g, ''))).filter(Boolean))];
+      norm.push(alts.map(a => (a.length <= 2 ? `(^| )${rx(a)}( |$)` : `(^| )${rx(a)}`)).join('|'));
+      continue;
+    }
+    const parts = alts.map(a => {
+      if (loose) return rx(a);
+      const short = a.replace(/[._]/g, '').length <= 2;
+      return short ? `(^| )${rx(a)}( |$)` : `(^| )${rx(a)}`;
+    });
+    // a long number may sit inside another number («452041» in «0986452041»)
+    const compact = main.replace(/[^0-9a-zа-яіїєґ]/g, '');
+    if (!loose && compact.length >= 5 && (compact.match(/\d/g) || []).length >= 3) parts.push(compact);
+    norm.push(parts.join('|'));
+  }
+  return { norm, words };
+};
+
+/** PostgREST "or" filters (each must match) for a parsed search. `sizeOnly`: the words are searched by search_rank. */
+export const searchFilters = (s: ParsedSearch, sizeOnly = false): string[] => {
   const filters: string[] = [];
   // values are quoted so spaces and dots are safe inside PostgREST "or(...)"
   const like = (col: string, v: string) => `${col}.ilike."*${v.replace(/["\\*]/g, '')}*"`;
@@ -129,7 +210,7 @@ export const searchFilters = (s: ParsedSearch): string[] => {
       words.length > 1 ? `and(${words.join(',')})` : words[0]].filter(Boolean).join(','));
     return filters;
   }
-  for (const t of s.tokens) {
+  for (const t of sizeOnly ? [] : s.tokens) {
     const lw = looseWord(t);
     filters.push([like('title', t), ...(lw !== t ? [like('title', lw), like('manufacturer', lw)] : []), ...twinsOf(t).map(r => like('title', r)), like('manufacturer', t), like('catalog_number', t), like('product_number', t), like('search_numbers', t.toUpperCase().replace(/[^0-9A-ZА-ЯІЇЄҐ]/g, '') || t)].join(','));
   }

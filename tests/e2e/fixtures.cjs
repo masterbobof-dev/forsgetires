@@ -110,7 +110,23 @@ const tables = () => ({
 });
 
 const light = (p) => ({ id: p.id, title: p.title, slug: p.slug, price: p.price, image_url: p.image_url, image_thumb_url: p.image_thumb_url, on_order: p.on_order, radius: p.radius, manufacturer: p.manufacturer });
+// the same as public.search_fold / search_line / search_skel in the database
+const HOMO_FROM = 'авекмнорстухіё', HOMO_TO = 'abekmhopctyxie';
+const fold = (t) => {
+  let r = '';
+  for (const ch of String(t || '').toLowerCase()) { const i = HOMO_FROM.indexOf(ch); r += i >= 0 ? HOMO_TO[i] : ch; }
+  return r.replace(/['’ʼ`]/g, '').replace(/([a-zа-яіїєґ])-(?=[0-9])/g, '$1').replace(/[^0-9a-zа-яіїєґ.]+/g, ' ').trim();
+};
+const compact = (v) => String(v || '').replace(/[^0-9A-Za-zА-Яа-яІіЇїЄєҐґ]/g, '');
+const searchLine = (p) => `${fold(`${p.title || ''} ${p.manufacturer || ''}`)} ${fold(`${p.search_numbers || ''} ${compact(p.catalog_number)} ${compact(p.product_number)}`)}`;
+const skel = (t) => t.replace(/[aeiouyаеиіїоуыэюяєёйьъ]/g, '').replace(/([^ ])\1+/g, '$1').replace(/ +/g, ' ').trim();
+const ranked = (rows, patterns, line) => rows
+  .filter((p) => patterns.every((rx) => new RegExp(rx).test(line(p))))
+  .sort((a, b) => (b.in_stock !== false) - (a.in_stock !== false) || a.id - b.id);
+
 const rpc = {
+  search_rank: ({ p_norm }, fake) => ranked(fake.tables.tyres, p_norm || [], searchLine),
+  search_rank_skel: ({ p_norm }, fake) => ranked(fake.tables.tyres, p_norm || [], (p) => skel(searchLine(p))),
   category_counts: (_args, fake) => {
     const by = {};
     for (const p of fake.tables.tyres) {

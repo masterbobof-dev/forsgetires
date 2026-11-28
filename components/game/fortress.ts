@@ -133,6 +133,53 @@ const pockets = (s: FState, p: number): number[][] => {
   return out;
 };
 
+/**
+ * What is drawn as a wall: neighbouring points of one player that are part of a closed figure (any ring of points,
+ * even a small square with nothing inside) or that stand next to his city. A diagonal is drawn only where the square
+ * has no corner of the same player (otherwise the wall would cross itself). Loose tails of points are not walls.
+ */
+export const wallEdges = (s: FState): { a: number; b: number; p: number }[] => {
+  const own = (i: number, p: number) => s.dot[i] === p;
+  const touches = (i: number, p: number) => n8(s, i).some(j => s.terr[j] === p);
+  const cand: { a: number; b: number; p: number }[] = [];
+  for (let i = 0; i < s.dot.length; i++) {
+    const p = s.dot[i]; if (!p) continue;
+    const x = i % s.w, y = Math.floor(i / s.w);
+    for (const [dx, dy] of [[1, 0], [0, 1], [1, 1], [-1, 1]]) {
+      const nx = x + dx, ny = y + dy; if (nx < 0 || nx >= s.w || ny >= s.h) continue;
+      const j = ny * s.w + nx; if (!own(j, p)) continue;
+      if (dx && dy && (own(y * s.w + nx, p) || own(ny * s.w + x, p))) continue;
+      cand.push({ a: i, b: j, p });
+    }
+  }
+  // an edge is in a closed figure if its ends stay connected without it
+  const adj = new Map<number, number[]>();
+  for (const e of cand) { (adj.get(e.a) || adj.set(e.a, []).get(e.a)!).push(e.b); (adj.get(e.b) || adj.set(e.b, []).get(e.b)!).push(e.a); }
+  const inRing = (e: { a: number; b: number }) => {
+    const seen = new Set([e.a]); const q = [e.a];
+    while (q.length) {
+      const c = q.pop()!;
+      for (const d of adj.get(c) || []) {
+        if ((c === e.a && d === e.b) || (c === e.b && d === e.a) || seen.has(d)) continue;
+        if (d === e.b) return true;
+        seen.add(d); q.push(d);
+      }
+    }
+    return false;
+  };
+  return cand.filter(e => (touches(e.a, e.p) && touches(e.b, e.p)) || inRing(e));
+};
+
+/** small closed squares of four points of one player (nothing inside, but it is a closed part of the fortress) */
+export const closedSquares = (s: FState): { i: number; p: number }[] => {
+  const out: { i: number; p: number }[] = [];
+  for (let y = 0; y < s.h - 1; y++) for (let x = 0; x < s.w - 1; x++) {
+    const i = y * s.w + x, p = s.dot[i];
+    if (p && s.dot[i + 1] === p && s.dot[i + s.w] === p && s.dot[i + s.w + 1] === p) out.push({ i, p });
+  }
+  return out;
+};
+
 const recountInside = (s: FState) => {
   s.inside.fill(0);
   for (const p of players(s)) for (const pocket of pockets(s, p)) for (const c of pocket) if (s.terr[c] === p) s.inside[c] = p;

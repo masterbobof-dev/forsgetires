@@ -105,6 +105,7 @@ export const buildFx = (events: FxEvent[], pos: (i: number) => P, colors: string
       }
       case 'wall': {
         const at = pos(e.i);
+        out.push({ k: 'sprite', t0: hitAt, t1: hitAt + 2200, src: '/game/wallbroken.webp', at: { x: at.x, y: at.y - 2 }, w: 14, h: 8.7, grow: 0, rise: 0 });
         out.push({ k: 'burst', t0: hitAt, t1: hitAt + 900, at, parts: debris(at, 8, [colors[e.p], '#1e293b'], 0.1, 2), flash: 8, ring: null });
         out.push({ k: 'shake', t0: hitAt, t1: hitAt + 220, power: 1.3 });
         break;
@@ -263,14 +264,14 @@ export const FxLayer: React.FC<{ fx: Fx[]; now: number; ground?: boolean; drawGh
   fx.forEach((f, n) => {
     if (now < f.t0 || now > f.t1) return;
     // craters lie on the paper under the units; everything else flies above them
-    const onGround = f.k === 'sprite' && f.src.includes('crater');
+    const onGround = f.k === 'sprite' && /crater|wallbroken/.test(f.src);
     if (!!ground !== onGround) return;
     const dt = now - f.t0, k = dt / (f.t1 - f.t0);
     switch (f.k) {
       case 'ghost': if (drawGhost) out.push(<g key={n}>{drawGhost(f.what, f.at, f.color)}</g>); break;
       case 'sprite': {
         const sc = 1 + f.grow * Math.min(1, k * 2.5), w = f.w * sc, h = f.h * sc;
-        const o = /crater/.test(f.src) ? (k < 0.8 ? 0.9 : (1 - k) * 4.5) : /wreck|rubble|dead/.test(f.src) ? (k < 0.7 ? 1 : (1 - k) / 0.3) : k < 0.15 ? k / 0.15 : (1 - k) / 0.85;
+        const o = /crater|wallbroken/.test(f.src) ? (k < 0.8 ? 0.9 : (1 - k) * 4.5) : /wreck|rubble|dead/.test(f.src) ? (k < 0.7 ? 1 : (1 - k) / 0.3) : k < 0.15 ? k / 0.15 : (1 - k) / 0.85;
         out.push(<image key={n} href={f.src} x={f.at.x - w / 2} y={f.at.y - h / 2 - f.rise * k} width={w} height={h} opacity={o} />);
         break;
       }

@@ -150,7 +150,8 @@ export const useFx = () => {
     if (!raf.current) raf.current = requestAnimationFrame(tick);
   };
   /** when the effects already queued are over (the next ones wait for them) */
-  const busyUntil = () => list.current.reduce((m, f) => (f.k === 'ghost' ? m : Math.max(m, f.t1 - (f.k === 'burst' || f.k === 'text' || f.k === 'cells' ? 600 : 0))), performance.now());
+  // ignoreMoves: a move may start while other units are still driving (a squad marches together)
+  const busyUntil = (ignoreMoves = false) => list.current.reduce((m, f) => (f.k === 'ghost' || (ignoreMoves && f.k === 'move') ? m : Math.max(m, f.t1 - (f.k === 'burst' || f.k === 'text' || f.k === 'cells' ? 600 : 0))), performance.now());
   useEffect(() => () => cancelAnimationFrame(raf.current), []);
   return { fx: list.current, now, add, busyUntil };
 };
